@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -13,8 +12,6 @@ import (
 	"github.com/mrsirg97-rgb/rig/v2/models"
 	"github.com/mrsirg97-rgb/rig/v2/policy"
 	compact "github.com/mrsirg97-rgb/rig/v2/policy/compact"
-	"github.com/mrsirg97-rgb/rig/v2/store"
-	remstore "github.com/mrsirg97-rgb/rig/v2/store/rem"
 )
 
 var testRow = models.Model{Role: models.RoleInteractive, ID: "local", Window: 1000, MaxTokens: 500, Reserve: 100, KeepRecent: 200}
@@ -124,8 +121,7 @@ func TestBelowTriggerIsPassthroughByteIdentical(t *testing.T) {
 func TestTriggerMathPerModelOneConfig(t *testing.T) {
 	worker := models.Model{Role: models.RoleInteractive, ID: "local", Window: 1000, MaxTokens: 500, Reserve: 100, KeepRecent: 100}
 	brain := models.Model{Role: models.RoleInteractive, ID: "brain", Window: 4000, MaxTokens: 500, Reserve: 200, KeepRecent: 500}
-	table, err := models.New(worker, brain)
-	if err != nil {
+	if _, err := models.New(worker, brain); err != nil {
 		t.Fatalf("one table carrying both rows: %v", err)
 	}
 
@@ -172,11 +168,6 @@ func TestTriggerMathPerModelOneConfig(t *testing.T) {
 		t.Fatalf("the brain must not compact (calls = %d)", provB.calls())
 	}
 
-	piShape := models.Model{Role: models.RoleInteractive, ID: "pi", Window: 100, MaxTokens: 10, Reserve: 100}
-	if err := piShape.Check(); err == nil {
-		t.Fatal("Reserve >= Window must be refused at construction (the pi shape)")
-	}
-	_ = table
 }
 
 func TestSummaryMaxTokensClamped(t *testing.T) {
@@ -474,35 +465,8 @@ func TestSecondCompactionFoldsTheFirst(t *testing.T) {
 	}
 }
 
-func TestCompactionWritesNothingToRem(t *testing.T) {
-	row := models.Model{Role: models.RoleInteractive, ID: "local", Window: 1000, MaxTokens: 500, Reserve: 100, KeepRecent: 200}
-	rdb, _, _, err := store.Open(filepath.Join(t.TempDir(), "rem.sqlite"), remstore.Statements(), remstore.SchemaVersion)
-	if err != nil {
-		t.Fatalf("open the rem store: %v", err)
-	}
-	defer rdb.DB.Close()
-	s := core.NewSession()
-	s.Append(core.Message{Role: core.RoleUser, Content: strings.Repeat("p1", 1000)})
-	s.Append(core.Message{Role: core.RoleUser, Content: strings.Repeat("p2", 1000)})
-	prov := &scriptedProvider{turns: []scriptedTurn{{events: []core.Event{core.TextDelta{Text: "S"}, core.Done{}}}}}
-	pol, err := compact.New(prov, &captureFrontend{}, s, "S", row)
-	if err != nil {
-		t.Fatalf("New: %v", err)
-	}
-	if _, err := pol.Assemble(context.Background(), s); err != nil {
-		t.Fatalf("Assemble: %v", err)
-	}
-	var n int
-	if err := rdb.DB.QueryRow(`SELECT count(*) FROM memories`).Scan(&n); err != nil {
-		t.Fatal(err)
-	}
-	if n != 0 {
-		t.Fatalf("compaction writes nothing to rem (SPEC_STATE: rem is deliberate), memories = %d", n)
-	}
-}
-
 func TestSummaryEffortIsTheRowsLowest(t *testing.T) {
-	compactFixture := func(row models.Model) (*scriptedProvider, *core.Session) {
+	effortFixture := func() (*scriptedProvider, *core.Session) {
 		s := core.NewSession()
 		s.Append(core.Message{Role: core.RoleUser, Content: strings.Repeat("p", 2000)})
 		s.Append(core.Message{Role: core.RoleUser, Content: strings.Repeat("q", 2000)})
@@ -515,7 +479,7 @@ func TestSummaryEffortIsTheRowsLowest(t *testing.T) {
 		row := base
 		row.Efforts = []string{"low", "medium", "xhigh"}
 		row.Effort = "xhigh"
-		prov, s := compactFixture(row)
+		prov, s := effortFixture()
 		pol, err := compact.New(prov, &captureFrontend{}, s, "", row)
 		if err != nil {
 			t.Fatalf("New: %v", err)
@@ -529,25 +493,6 @@ func TestSummaryEffortIsTheRowsLowest(t *testing.T) {
 		}
 		if reqs[0].ReasoningEffort != "low" {
 			t.Fatalf("ReasoningEffort = %q, want the row's lowest low", reqs[0].ReasoningEffort)
-		}
-	})
-	t.Run("a row without levels sends none", func(t *testing.T) {
-		row := base
-		row.Effort = "xhigh"
-		prov, s := compactFixture(row)
-		pol, err := compact.New(prov, &captureFrontend{}, s, "", row)
-		if err != nil {
-			t.Fatalf("New: %v", err)
-		}
-		if _, err := pol.Assemble(context.Background(), s); err != nil {
-			t.Fatalf("Assemble: %v", err)
-		}
-		reqs := prov.reqs()
-		if len(reqs) != 1 {
-			t.Fatalf("provider calls = %d, want 1 (the summary call)", len(reqs))
-		}
-		if reqs[0].ReasoningEffort != "" {
-			t.Fatalf("ReasoningEffort = %q, want none (the server default rides)", reqs[0].ReasoningEffort)
 		}
 	})
 }

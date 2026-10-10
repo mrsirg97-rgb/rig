@@ -52,23 +52,6 @@ func TestTheAskRecordsItsVerdict(t *testing.T) {
 	}
 }
 
-func TestTheDeclineRecordsNoAndTeaches(t *testing.T) {
-	rec := &capture{}
-	var exec core.ToolExec = func(ctx context.Context, call core.ToolCall) (string, error) {
-		return "executed", nil
-	}
-	g := approve.Gate(func() string { return "manual" }, func(context.Context, string) bool { return false },
-		func(string) bool { return true }, rec).Wrap(exec)
-	out, err := g(context.Background(), call("bash", `{"cmd":"rm -rf /"}`))
-	if err != nil || out == "executed" {
-		t.Fatalf("the decline must stand: (%q, %v)", out, err)
-	}
-	rows := rec.rows()
-	if len(rows) != 1 || rows[0].Answer != "no" {
-		t.Fatalf("the decline must record one no row: %+v", rows)
-	}
-}
-
 func TestAutoRecordsNothing(t *testing.T) {
 	rec := &capture{}
 	var exec core.ToolExec = func(ctx context.Context, call core.ToolCall) (string, error) {

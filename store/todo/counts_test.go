@@ -4,7 +4,6 @@ import (
 	"context"
 	"testing"
 
-	"github.com/mrsirg97-rgb/rig/v2/store"
 	todostore "github.com/mrsirg97-rgb/rig/v2/store/todo"
 )
 
@@ -34,7 +33,7 @@ func TestTodoCountsFromTheFold(t *testing.T) {
 	if _, err := todostore.Fail(ctx, db, p, broken, sessB, false); err != nil {
 		t.Fatalf("fail: %v", err)
 	}
-	before := countEvents(t, db)
+	before := eventCount(t, db)
 	counts, err := todostore.Counts(ctx, db, p)
 	if err != nil {
 		t.Fatalf("counts: %v", err)
@@ -42,7 +41,7 @@ func TestTodoCountsFromTheFold(t *testing.T) {
 	if counts.Pending != 2 || counts.Review != 0 || counts.Done != 1 || counts.Failed != 1 {
 		t.Fatalf("counts = %+v, want pending 2 review 0 done 1 failed 1", counts)
 	}
-	if got := countEvents(t, db); got != before {
+	if got := eventCount(t, db); got != before {
 		t.Fatalf("the read wrote %d events (before %d)", got-before, before)
 	}
 }
@@ -56,21 +55,4 @@ func TestTodoCountsEmptyQueue(t *testing.T) {
 	if counts != (todostore.QueueCounts{}) {
 		t.Fatalf("an empty queue counts zero: %+v", counts)
 	}
-}
-
-func countEvents(t *testing.T, db store.DB) int {
-	t.Helper()
-	rows, err := db.DB.Query(`SELECT COUNT(*) FROM events`)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer rows.Close()
-	if !rows.Next() {
-		t.Fatal("no count row")
-	}
-	var n int
-	if err := rows.Scan(&n); err != nil {
-		t.Fatal(err)
-	}
-	return n
 }

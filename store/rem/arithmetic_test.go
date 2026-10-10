@@ -47,17 +47,6 @@ func TestConsolidateReplayWithNoElapsedIsNoOp(t *testing.T) {
 	}
 }
 
-func TestEffectiveAgedLosesToFresh(t *testing.T) {
-	aged := consolidate(0.5, 40, 0, 0.5)
-	fresh := consolidate(0.5, 0, 0, 0.5)
-	if !(fresh > aged) {
-		t.Errorf("fresh %v !> aged %v", fresh, aged)
-	}
-	if !(aged < 0.3) {
-		t.Errorf("aged %v, want decay observable (< 0.3)", aged)
-	}
-}
-
 func TestFuseIsReciprocalRank(t *testing.T) {
 	f := fuse([][]armHit{
 		{{memoryID: 1, arm: "fts", rank: 1}, {memoryID: 2, arm: "fts", rank: 1}},

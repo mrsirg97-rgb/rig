@@ -409,29 +409,6 @@ func TestCancellationTearsDownTheStream(t *testing.T) {
 	}
 }
 
-func TestUsageWhenPresent(t *testing.T) {
-	body := strings.Join([]string{
-		`data: {"choices":[{"delta":{"content":"x"}}],"usage":{"prompt_tokens":3,"completion_tokens":7}}`,
-		`data: {"choices":[{"delta":{},"finish_reason":"stop"}]}`,
-		`data: [DONE]`,
-		"",
-	}, "\n")
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		io.WriteString(w, body)
-	}))
-	defer srv.Close()
-
-	p := openai.New(srv.URL, "local")
-	events, err := drain(t, context.Background(), p, userReq())
-	if err != nil {
-		t.Fatalf("stream: %v", err)
-	}
-	done := events[len(events)-1].(core.Done)
-	if done.Usage.Prompt != 3 || done.Usage.Completion != 7 {
-		t.Fatalf("usage = %+v, want prompt=3 completion=7", done.Usage)
-	}
-}
-
 func TestToolSchemaGoesOverTheWireAsAnObject(t *testing.T) {
 	var captured json.RawMessage
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

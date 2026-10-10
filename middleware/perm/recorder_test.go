@@ -28,7 +28,7 @@ func (c *capture) rows() []decision.Final {
 
 func TestADenialRecordsAFinalRow(t *testing.T) {
 	rec := &capture{}
-	calls, content, err := run(t, perm.AllowlistWithDoor([]string{"bash"}, nil, rec), "file")
+	calls, content, err := pluginCall(t, perm.AllowlistWithDoor([]string{"bash"}, nil, rec), "file", `{}`)
 	if err == nil || calls != 0 {
 		t.Fatalf("the denial must stand: (%q, %v)", content, err)
 	}
@@ -46,7 +46,7 @@ func TestADenialRecordsAFinalRow(t *testing.T) {
 
 func TestAnAllowedCallRecordsNothing(t *testing.T) {
 	rec := &capture{}
-	calls, _, err := run(t, perm.AllowlistWithDoor([]string{"bash"}, nil, rec), "bash")
+	calls, _, err := pluginCall(t, perm.AllowlistWithDoor([]string{"bash"}, nil, rec), "bash", `{}`)
 	if err != nil || calls != 1 {
 		t.Fatalf("the allowed call must run: %v", err)
 	}

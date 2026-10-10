@@ -11,20 +11,8 @@ import (
 	"github.com/mrsirg97-rgb/rig/v2/middleware/guard"
 )
 
-type countingExec struct {
-	mu    sync.Mutex
-	total int
-}
-
-func (e *countingExec) Exec(ctx context.Context, call core.ToolCall) (string, error) {
-	e.mu.Lock()
-	defer e.mu.Unlock()
-	e.total++
-	return "ran", nil
-}
-
 func TestRoundCapRefusesTheNextCallWithTheVoice(t *testing.T) {
-	e := &countingExec{}
+	e := newStub("ran", nil)
 	var exec core.ToolExec = func(ctx context.Context, call core.ToolCall) (string, error) {
 		return e.Exec(ctx, call)
 	}
@@ -59,7 +47,7 @@ func TestRoundCapRefusesTheNextCallWithTheVoice(t *testing.T) {
 }
 
 func TestAlternatingCallsHitTheRoundCap(t *testing.T) {
-	e := &countingExec{}
+	e := newStub("ran", nil)
 	var exec core.ToolExec = func(ctx context.Context, call core.ToolCall) (string, error) {
 		return e.Exec(ctx, call)
 	}
@@ -91,7 +79,7 @@ func TestRoundCapClearsAtTheTurnBoundary(t *testing.T) {
 	if !ok {
 		t.Fatal("the round cap must implement TurnObserver (the loop fans it out)")
 	}
-	e := &countingExec{}
+	e := newStub("ran", nil)
 	exec := mw.Wrap(func(ctx context.Context, call core.ToolCall) (string, error) {
 		return e.Exec(ctx, call)
 	})
@@ -116,7 +104,7 @@ func TestRoundCapClearsAtTheTurnBoundary(t *testing.T) {
 }
 
 func TestRoundCapCountsAConcurrentRunRaceFree(t *testing.T) {
-	e := &countingExec{}
+	e := newStub("ran", nil)
 	var inner core.ToolExec = func(ctx context.Context, call core.ToolCall) (string, error) {
 		return e.Exec(ctx, call)
 	}
@@ -141,7 +129,7 @@ func TestRoundCapCountsAConcurrentRunRaceFree(t *testing.T) {
 }
 
 func TestRoundCapZeroIsUnbounded(t *testing.T) {
-	e := &countingExec{}
+	e := newStub("ran", nil)
 	exec := guard.Rounds(0).Wrap(func(ctx context.Context, call core.ToolCall) (string, error) {
 		return e.Exec(ctx, call)
 	})

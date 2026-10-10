@@ -6,7 +6,6 @@ import (
 	"errors"
 	"io"
 	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 
@@ -16,43 +15,8 @@ import (
 	"github.com/mrsirg97-rgb/rig/v2/store/state/domain"
 )
 
-func openState(t *testing.T) store.DB {
-	t.Helper()
-	db, _, _, err := store.Open(filepath.Join(t.TempDir(), "sessions.sqlite"), state.Statements(), state.SchemaVersion)
-	if err != nil {
-		t.Fatalf("open: %v", err)
-	}
-	return db
-}
-
-func TestRecorderLandsResultsFromTheEvent(t *testing.T) {
-	db := openState(t)
-	sid := "rec-event"
-	session := core.NewSession()
-	rec := state.NewRecorder(&scripted{inputs: []string{"do it"}}, db, "/tmp/wt", "model-x", "0.1.0", sid, session)
-
-	ctx := context.Background()
-	if _, err := rec.Input(ctx); err != nil {
-		t.Fatal(err)
-	}
-	rec.Notify(core.ToolCallEvent{Call: core.ToolCall{ID: "c1", Name: "bash", Args: json.RawMessage(`{"cmd":"ls"}`)}})
-	rec.Notify(core.Done{StopReason: "end_turn"})
-
-	rec.Notify(core.ToolResult{ID: "c1", Content: "out-1", Err: nil})
-	if err := rec.Close("ok"); err != nil {
-		t.Fatal(err)
-	}
-
-	tc := mustRead(t, db, func(c context.Context) (any, error) {
-		return domain.NewToolCallDomain().GetToolCall(c, sid, 2, "c1").Row()
-	}).(*domain.ToolCall)
-	if tc.Result == nil || *tc.Result != "out-1" || tc.Err != nil {
-		t.Fatalf("the event-sourced result not landed: %+v", tc)
-	}
-}
-
 func TestRecorderLandsGuardedFailuresFromTheEvent(t *testing.T) {
-	db := openState(t)
+	db := openStore(t)
 	sid := "rec-fail"
 	rec := state.NewRecorder(&scripted{}, db, "/tmp/wt", "model-x", "0.1.0", sid, core.NewSession())
 	_ = state.RecordSession(context.Background(), db, sid, "/tmp/wt", "model-x", "0.1.0")
@@ -71,7 +35,7 @@ func TestRecorderLandsGuardedFailuresFromTheEvent(t *testing.T) {
 }
 
 func TestRecorderTurnEndDiscardsTheUnlandedPartial(t *testing.T) {
-	db := openState(t)
+	db := openStore(t)
 	rec := state.NewRecorder(&scripted{}, db, "/tmp/wt", "model-x", "0.1.0", "rec-turnend", core.NewSession())
 	rec.Notify(core.TextDelta{Text: "PARTIAL "})
 	rec.Notify(core.ReasoningDelta{Text: "PARTIAL thinking "})
@@ -99,7 +63,7 @@ func TestRecorderTurnEndDiscardsTheUnlandedPartial(t *testing.T) {
 }
 
 func TestRecorderLandsReasoning(t *testing.T) {
-	db := openState(t)
+	db := openStore(t)
 	rec := state.NewRecorder(&scripted{}, db, "/tmp/wt", "model-x", "0.1.0", "rec-reason", core.NewSession())
 	rec.Notify(core.ReasoningDelta{Text: "thinking "})
 	rec.Notify(core.ReasoningDelta{Text: "done"})
@@ -120,7 +84,7 @@ func TestRecorderLandsReasoning(t *testing.T) {
 }
 
 func TestRecorderLandsCacheUsage(t *testing.T) {
-	db := openState(t)
+	db := openStore(t)
 	rec := state.NewRecorder(&scripted{}, db, "/tmp/wt", "model-x", "0.1.0", "rec-cache", core.NewSession())
 	rec.Notify(core.TextDelta{Text: "x"})
 	rec.Notify(core.Done{StopReason: "end_turn", Usage: core.Usage{Prompt: 922, Completion: 10, CacheRead: 918, CacheWrite: 4}})
@@ -139,7 +103,7 @@ func TestRecorderLandsCacheUsage(t *testing.T) {
 }
 
 func TestRecorderUpsertsFilesAtTheBoundary(t *testing.T) {
-	db := openState(t)
+	db := openStore(t)
 	sid := "rec-files"
 	session := core.NewSession()
 	session.Files["/tmp/a.txt"] = core.FileState{Hash: "h1", Mtime: 100}
@@ -184,7 +148,7 @@ func TestRecorderUpsertsFilesAtTheBoundary(t *testing.T) {
 }
 
 func TestRecorderEventErrorsStayLoud(t *testing.T) {
-	db := openState(t)
+	db := openStore(t)
 	rec := state.NewRecorder(&scripted{}, db, "/tmp/wt", "model-x", "0.1.0", "rec-loud2", core.NewSession())
 	_ = state.RecordSession(context.Background(), db, "rec-loud2", "/tmp/wt", "model-x", "0.1.0")
 	if err := db.DB.Close(); err != nil {
@@ -208,7 +172,7 @@ func TestRecorderEventErrorsStayLoud(t *testing.T) {
 }
 
 func TestRecorderForwardsTheHardeningEventsIntact(t *testing.T) {
-	db := openState(t)
+	db := openStore(t)
 	inner := &scripted{}
 	rec := state.NewRecorder(inner, db, "/tmp/wt", "model-x", "0.1.0", "rec-fwd2", core.NewSession())
 	rec.Notify(core.ToolStart{Call: core.ToolCall{ID: "c1", Name: "bash"}})
@@ -264,7 +228,7 @@ func seedSession(t *testing.T, db store.DB, sid string) {
 }
 
 func TestResumeRebuildsTheTranscript(t *testing.T) {
-	db := openState(t)
+	db := openStore(t)
 	seedSession(t, db, "resume-full")
 
 	sess, err := state.Resume(context.Background(), db, "resume-full")
@@ -317,7 +281,7 @@ func TestResumeRebuildsTheTranscript(t *testing.T) {
 }
 
 func TestResumeDanglingCallSurvives(t *testing.T) {
-	db := openState(t)
+	db := openStore(t)
 	seedSession(t, db, "resume-dangle")
 
 	sess, err := state.Resume(context.Background(), db, "resume-dangle")
@@ -351,7 +315,7 @@ func TestResumeDanglingCallSurvives(t *testing.T) {
 }
 
 func TestResumeUnknownIdFailsLoud(t *testing.T) {
-	db := openState(t)
+	db := openStore(t)
 	seedSession(t, db, "resume-known")
 
 	_, err := state.Resume(context.Background(), db, "nope")

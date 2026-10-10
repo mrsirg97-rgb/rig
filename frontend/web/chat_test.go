@@ -48,13 +48,6 @@ func newChatServer(t *testing.T) (*Server, string) {
 	return srv, tok
 }
 
-func originHdr(tok string) http.Header {
-	h := bearer(tok)
-	h.Set("Origin", "http://127.0.0.1:7777")
-	h.Set("Content-Type", "application/json")
-	return h
-}
-
 func frames(t *testing.T, base, tok string, since string, want int, within time.Duration) []map[string]any {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), within)
@@ -100,11 +93,11 @@ func kinds(fs []map[string]any) string {
 func TestChatPromptQueuesAndInputTakesIt(t *testing.T) {
 	srv, tok := newChatServer(t)
 	h := srv.Handler()
-	rec := doReq(t, h, "POST", "/api/chat", strings.NewReader(`{"text":"hello there"}`), originHdr(tok))
+	rec := doReq(t, h, "POST", "/api/chat", strings.NewReader(`{"text":"hello there"}`), jsonHdr(tok))
 	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"queued"`) {
 		t.Fatalf("send: %d %s", rec.Code, rec.Body.String())
 	}
-	rec = doReq(t, h, "POST", "/api/chat", strings.NewReader(`{"text":"second"}`), originHdr(tok))
+	rec = doReq(t, h, "POST", "/api/chat", strings.NewReader(`{"text":"second"}`), jsonHdr(tok))
 	if rec.Code != http.StatusConflict {
 		t.Fatalf("a second prompt before the turn starts must be a 409, got %d", rec.Code)
 	}
@@ -155,15 +148,15 @@ func TestChatEventsReplayCoalesceAndLive(t *testing.T) {
 func TestChatCommandDispatchesNowAndPublishes(t *testing.T) {
 	srv, tok := newChatServer(t)
 	h := srv.Handler()
-	rec := doReq(t, h, "POST", "/api/chat", strings.NewReader(`{"text":"/echo hi there"}`), originHdr(tok))
+	rec := doReq(t, h, "POST", "/api/chat", strings.NewReader(`{"text":"/echo hi there"}`), jsonHdr(tok))
 	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"text":"said hi there"`) {
 		t.Fatalf("command reply: %d %s", rec.Code, rec.Body.String())
 	}
-	rec = doReq(t, h, "POST", "/api/chat", strings.NewReader(`{"text":"/echo fail"}`), originHdr(tok))
+	rec = doReq(t, h, "POST", "/api/chat", strings.NewReader(`{"text":"/echo fail"}`), jsonHdr(tok))
 	if !strings.Contains(rec.Body.String(), `"err":"echo: refused"`) {
 		t.Fatalf("command error rides the reply: %s", rec.Body.String())
 	}
-	rec = doReq(t, h, "POST", "/api/chat", strings.NewReader(`{"text":"/nope"}`), originHdr(tok))
+	rec = doReq(t, h, "POST", "/api/chat", strings.NewReader(`{"text":"/nope"}`), jsonHdr(tok))
 	if !strings.Contains(rec.Body.String(), "unknown command: nope (known: echo)") {
 		t.Fatalf("unknown command names the known set: %s", rec.Body.String())
 	}
@@ -184,11 +177,11 @@ func TestChatSteerWhileLiveCancelsAndQueues(t *testing.T) {
 	turn, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	ctx := core.WithInterrupt(turn, cancel)
-	doReq(t, h, "POST", "/api/chat", strings.NewReader(`{"text":"first"}`), originHdr(tok))
+	doReq(t, h, "POST", "/api/chat", strings.NewReader(`{"text":"first"}`), jsonHdr(tok))
 	if line, err := srv.Input(ctx); err != nil || line != "first" {
 		t.Fatalf("Input = %q, %v", line, err)
 	}
-	rec := doReq(t, h, "POST", "/api/chat", strings.NewReader(`{"text":"actually, stop"}`), originHdr(tok))
+	rec := doReq(t, h, "POST", "/api/chat", strings.NewReader(`{"text":"actually, stop"}`), jsonHdr(tok))
 	if !strings.Contains(rec.Body.String(), `"kind":"steer"`) {
 		t.Fatalf("a prompt during a live turn steers: %s", rec.Body.String())
 	}
@@ -224,7 +217,7 @@ func TestChatAskRoundTrip(t *testing.T) {
 	if id == "" {
 		t.Fatal("no ask frame published")
 	}
-	rec := doReq(t, h, "POST", "/api/chat/answer", strings.NewReader(`{"id":"`+id+`","yes":true}`), originHdr(tok))
+	rec := doReq(t, h, "POST", "/api/chat/answer", strings.NewReader(`{"id":"`+id+`","yes":true}`), jsonHdr(tok))
 	if rec.Code != http.StatusOK {
 		t.Fatalf("answer: %d %s", rec.Code, rec.Body.String())
 	}
@@ -236,7 +229,7 @@ func TestChatAskRoundTrip(t *testing.T) {
 	case <-time.After(2 * time.Second):
 		t.Fatal("Ask did not return")
 	}
-	if rec = doReq(t, h, "POST", "/api/chat/answer", strings.NewReader(`{"id":"999","yes":true}`), originHdr(tok)); rec.Code != http.StatusNotFound {
+	if rec = doReq(t, h, "POST", "/api/chat/answer", strings.NewReader(`{"id":"999","yes":true}`), jsonHdr(tok)); rec.Code != http.StatusNotFound {
 		t.Fatalf("an unknown question is a 404, got %d", rec.Code)
 	}
 }
@@ -250,7 +243,7 @@ func TestChatWalls(t *testing.T) {
 	if rec := doReq(t, h, "GET", "/api/chat", nil, bearer(tok)); rec.Code != http.StatusMethodNotAllowed {
 		t.Fatalf("GET chat: %d", rec.Code)
 	}
-	if rec := doReq(t, h, "POST", "/api/chat", strings.NewReader(`{"text":"  "}`), originHdr(tok)); rec.Code != http.StatusBadRequest {
+	if rec := doReq(t, h, "POST", "/api/chat", strings.NewReader(`{"text":"  "}`), jsonHdr(tok)); rec.Code != http.StatusBadRequest {
 		t.Fatalf("empty text: %d", rec.Code)
 	}
 	if rec := doReq(t, h, "POST", "/api/chat/interrupt", nil, bearer(tok)); rec.Code != http.StatusForbidden {

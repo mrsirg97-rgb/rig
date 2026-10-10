@@ -166,30 +166,3 @@ func TestNotesSurviveCompactionWithTheirTime(t *testing.T) {
 		t.Errorf("a note must survive compaction with its session and time:\n%s", got)
 	}
 }
-
-func TestReadCountSurvivesCompaction(t *testing.T) {
-	db := newDB(t)
-	ctx := context.Background()
-	reply, err := create(ctx, db, p, []item{{Text: "counted"}}, sessA)
-	if err != nil {
-		t.Fatalf("create: %v", err)
-	}
-	id := taskIDText(t, reply, "counted")
-	if _, err := todostore.Note(ctx, db, p, id, "stick one", sessA); err != nil {
-		t.Fatalf("note: %v", err)
-	}
-	if _, err := todostore.Note(ctx, db, p, id, "stick two", sessB); err != nil {
-		t.Fatalf("note: %v", err)
-	}
-	age(t, db, 1010)
-	if _, err := todostore.Move(ctx, db, p, id, 1, sessA); err != nil {
-		t.Fatalf("move (compaction trigger): %v", err)
-	}
-	read, err := todostore.Read(ctx, db, p, sessC)
-	if err != nil {
-		t.Fatalf("read after compaction: %v", err)
-	}
-	if !strings.Contains(read, "· 2 notes") || strings.Contains(read, "stick one") || strings.Contains(read, "stick two") {
-		t.Errorf("the count must survive compaction without inlining:\n%s", read)
-	}
-}

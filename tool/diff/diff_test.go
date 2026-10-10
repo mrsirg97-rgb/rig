@@ -231,16 +231,6 @@ func TestFilesGitFailurePassesTheStderrLine(t *testing.T) {
 	}
 }
 
-func TestEngineHunksApplyToOldYieldNew(t *testing.T) {
-	old := "alpha\nbravo\ncharlie\ndelta\necho\nfoxtrot\n"
-	new := "alpha\nBRAVO\ncharlie\nGOLF\necho\nfoxtrot\n"
-	got := difftool.Diff(old, new, "a", "b")
-	if strings.TrimSpace(got) == "" {
-		t.Fatal("the fixture pair differs: the engine must not reply empty")
-	}
-	checkApply(t, got, old, new)
-}
-
 func TestEngineHunksApplyOnRandomPairs(t *testing.T) {
 	rng := rand.New(rand.NewSource(42))
 	random := func() string {

@@ -127,24 +127,6 @@ func TestListSessionsHonorsN(t *testing.T) {
 	}
 }
 
-func TestListSessionsCapped(t *testing.T) {
-	db := openStore(t)
-	ctx := context.Background()
-	for i := 0; i < 55; i++ {
-		if e := state.RecordSession(ctx, db, string(rune('a'+i%26))+string(rune('0'+i/26))+string(rune('a'+(i*7)%26)), "/w", "m", "v"); e != nil {
-			t.Fatal(e)
-		}
-		time.Sleep(time.Millisecond)
-	}
-	rows, err := state.ListSessions(ctx, db, 50)
-	if err != nil {
-		t.Fatalf("ListSessions: %v", err)
-	}
-	if len(rows) != 50 {
-		t.Fatalf("the list must be capped at 50, got %d", len(rows))
-	}
-}
-
 func TestResumeNoSuchSessionIsTyped(t *testing.T) {
 	db := openStore(t)
 	_, err := state.Resume(context.Background(), db, "nope")

@@ -87,16 +87,25 @@ func TestResolveSeesASwapOnTheNextCall(t *testing.T) {
 	}
 }
 
-type recordingProvider struct {
-	stamped [][]core.ToolSpec
+type captureProvider struct {
+	mu       sync.Mutex
+	requests []core.Request
 }
 
-func (p *recordingProvider) Stream(ctx context.Context, req core.Request) (<-chan core.Event, error) {
-	p.stamped = append(p.stamped, append([]core.ToolSpec(nil), req.Tools...))
+func (p *captureProvider) Stream(ctx context.Context, req core.Request) (<-chan core.Event, error) {
+	p.mu.Lock()
+	p.requests = append(p.requests, req)
+	p.mu.Unlock()
 	ch := make(chan core.Event, 1)
 	ch <- core.Done{}
 	close(ch)
 	return ch, nil
+}
+
+func (p *captureProvider) stamped(i int) []core.ToolSpec {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return append([]core.ToolSpec(nil), p.requests[i].Tools...)
 }
 
 func names(specs []core.ToolSpec) []string {
@@ -111,7 +120,7 @@ func TestCarryStampsTheRequestPerCall(t *testing.T) {
 	bash := &stubTool{name: "bash"}
 	forged := &stubTool{name: "forged"}
 	tbl := New(bash)
-	inner := &recordingProvider{}
+	inner := &captureProvider{}
 	prov := Carry(tbl, inner)
 	ctx := context.Background()
 
@@ -122,7 +131,7 @@ func TestCarryStampsTheRequestPerCall(t *testing.T) {
 		for range ch {
 		}
 	}
-	if got := names(inner.stamped[0]); len(got) != 1 || got[0] != "bash" {
+	if got := names(inner.stamped(0)); len(got) != 1 || got[0] != "bash" {
 		t.Fatalf("the first call's array = %v, want the table's (bash)", got)
 	}
 
@@ -133,15 +142,15 @@ func TestCarryStampsTheRequestPerCall(t *testing.T) {
 		for range ch {
 		}
 	}
-	got := names(inner.stamped[1])
+	got := names(inner.stamped(1))
 	if len(got) != 2 || got[0] != "bash" || got[1] != "forged" {
 		t.Fatalf("the next call's array = %v, want the swapped list (bash, forged)", got)
 	}
-	if spec := inner.stamped[1][1]; spec.Description != "stub forged" {
+	if spec := inner.stamped(1)[1]; spec.Description != "stub forged" {
 		t.Fatalf("the spec carries the tool's description, got %q", spec.Description)
 	}
 
-	if got := names(inner.stamped[0]); len(got) != 1 || got[0] != "bash" {
+	if got := names(inner.stamped(0)); len(got) != 1 || got[0] != "bash" {
 		t.Fatalf("the earlier call's array changed after the swap: %v", got)
 	}
 }
@@ -204,17 +213,6 @@ func TestNativeSpecsExcludesPlugins(t *testing.T) {
 	}
 }
 
-func TestGetResolvesTheTable(t *testing.T) {
-	bash := &stubTool{name: "bash"}
-	tbl := New(bash)
-	if got, ok := tbl.Tool("bash"); !ok || got != bash {
-		t.Fatal("a live name must resolve to its tool")
-	}
-	if _, ok := tbl.Tool("nope"); ok {
-		t.Fatal("an absent name must resolve nil")
-	}
-}
-
 func TestPluginLookupRefusesNatives(t *testing.T) {
 	bash := &stubTool{name: "bash"}
 	forged := &stubTool{name: "forged"}
@@ -235,50 +233,25 @@ func TestPluginLookupRefusesNatives(t *testing.T) {
 	}
 }
 
-type captureProvider struct {
-	mu      sync.Mutex
-	request core.Request
-}
-
-func (p *captureProvider) Stream(ctx context.Context, req core.Request) (<-chan core.Event, error) {
-	p.mu.Lock()
-	p.request = req
-	p.mu.Unlock()
-	ch := make(chan core.Event, 1)
-	ch <- core.Done{}
-	close(ch)
-	return ch, nil
-}
-
-func menuNames(p *captureProvider) []string {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	out := make([]string, 0, len(p.request.Tools))
-	for _, spec := range p.request.Tools {
-		out = append(out, spec.Name)
-	}
-	return out
-}
-
 func TestTheMenuNarrowsToTheAllowList(t *testing.T) {
 	tbl := New(&stubTool{name: "bash"}, &stubTool{name: "todo"}, &stubTool{name: "rem"})
 	p := &captureProvider{}
 	ctx := context.Background()
 
 	Carry(tbl, p).Stream(ctx, core.Request{})
-	if got := menuNames(p); !reflect.DeepEqual(got, []string{"bash", "todo", "rem"}) {
+	if got := names(p.stamped(0)); !reflect.DeepEqual(got, []string{"bash", "todo", "rem"}) {
 		t.Fatalf("a menu without an allow list is the table = %v", got)
 	}
 	Carry(tbl, p, "rem", "bash").Stream(ctx, core.Request{})
-	if got := menuNames(p); !reflect.DeepEqual(got, []string{"bash", "rem"}) {
+	if got := names(p.stamped(1)); !reflect.DeepEqual(got, []string{"bash", "rem"}) {
 		t.Fatalf("the narrowed menu keeps the table's order = %v", got)
 	}
 	Carry(tbl, p, "plugin").Stream(ctx, core.Request{})
-	if got := menuNames(p); len(got) != 0 {
+	if got := names(p.stamped(2)); len(got) != 0 {
 		t.Fatalf("an allow list that keeps nothing narrows to no tools = %v", got)
 	}
 	Carry(tbl, p, []string{}...).Stream(ctx, core.Request{})
-	if got := menuNames(p); len(got) != 0 {
+	if got := names(p.stamped(3)); len(got) != 0 {
 		t.Fatalf("allow-none narrows to no tools = %v", got)
 	}
 }

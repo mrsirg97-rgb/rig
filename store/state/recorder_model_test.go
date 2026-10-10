@@ -3,11 +3,9 @@ package state_test
 import (
 	"context"
 	"errors"
-	"path/filepath"
 	"testing"
 
 	"github.com/mrsirg97-rgb/rig/v2/core"
-	"github.com/mrsirg97-rgb/rig/v2/store"
 	"github.com/mrsirg97-rgb/rig/v2/store/state"
 	"github.com/mrsirg97-rgb/rig/v2/store/state/domain"
 )
@@ -49,10 +47,7 @@ func TestRecorderStampsADiscardedTurnWithItsModel(t *testing.T) {
 }
 
 func TestRecorderStampsTheSummaryCallWithItsModel(t *testing.T) {
-	db, _, _, err := store.Open(filepath.Join(t.TempDir(), "sessions.sqlite"), state.Statements(), state.SchemaVersion)
-	if err != nil {
-		t.Fatal(err)
-	}
+	db := openStore(t)
 	sid := "rec-compact-model"
 	sess := core.NewSession()
 	sess.Append(core.Message{Role: core.RoleUser, Content: "[compaction] the summary"})

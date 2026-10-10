@@ -10,7 +10,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
-	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -600,13 +599,5 @@ func TestTheDataURLIsWellFormedForEveryAcceptedMime(t *testing.T) {
 		if _, err := base64.StdEncoding.DecodeString(strings.TrimPrefix(url, "data:"+mime+";base64,")); err != nil {
 			t.Fatalf("the base64 must decode: %v", err)
 		}
-	}
-}
-
-func TestTheBlobIsReadFromTheMarkersAddress(t *testing.T) {
-	dir := t.TempDir()
-	sha := writeBlob(t, dir, blobPayload)
-	if _, err := os.Stat(filepath.Join(dir, sha)); err != nil {
-		t.Fatalf("the fixture blob is not at the address the marker names: %v", err)
 	}
 }

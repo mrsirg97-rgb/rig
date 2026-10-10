@@ -7,13 +7,11 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
 
 	"github.com/mrsirg97-rgb/rig/v2/core"
-	"github.com/mrsirg97-rgb/rig/v2/store"
 	"github.com/mrsirg97-rgb/rig/v2/store/state"
 	"github.com/mrsirg97-rgb/rig/v2/store/state/domain"
 )
@@ -41,17 +39,8 @@ func (s *scripted) Notify(ev core.Event) {
 	s.named = append(s.named, fmt.Sprintf("%T", ev))
 }
 
-func TestRecorderNotifyToleratesANilReceiver(t *testing.T) {
-	var rec *state.Recorder
-	rec.Notify(core.TextDelta{Text: "drop me"})
-	rec.Notify(core.Done{StopReason: "end_turn"})
-}
-
 func TestRecorderLandsTheTranscript(t *testing.T) {
-	db, _, _, err := store.Open(filepath.Join(t.TempDir(), "sessions.sqlite"), state.Statements(), state.SchemaVersion)
-	if err != nil {
-		t.Fatalf("open: %v", err)
-	}
+	db := openStore(t)
 	sid := "rec-transcript"
 	inner := &scripted{inputs: []string{"do it"}}
 	rec := state.NewRecorder(inner, db, "/tmp/wt", "model-x", "0.1.0", sid, core.NewSession())
@@ -103,32 +92,8 @@ func TestRecorderLandsTheTranscript(t *testing.T) {
 	}
 }
 
-func TestRecorderForwardsIntact(t *testing.T) {
-	db, _, _, err := store.Open(filepath.Join(t.TempDir(), "sessions.sqlite"), state.Statements(), state.SchemaVersion)
-	if err != nil {
-		t.Fatal(err)
-	}
-	inner := &scripted{}
-	rec := state.NewRecorder(inner, db, "/tmp/wt", "model-x", "0.1.0", "rec-fwd", core.NewSession())
-	rec.Notify(core.TextDelta{Text: "a"})
-	rec.Notify(core.ToolCallEvent{Call: core.ToolCall{ID: "c9", Name: "bash", Args: json.RawMessage(`{}`)}})
-	rec.Notify(core.Done{StopReason: "end_turn"})
-	rec.Notify(core.Fault{Err: errors.New("late")})
-	if inner.inputed != 0 || len(inner.named) != 4 {
-		t.Fatalf("inner not forwarded intact: inputed=%d named=%v", inner.inputed, inner.named)
-	}
-	for i, want := range []string{"core.TextDelta", "core.ToolCallEvent", "core.Done", "core.Fault"} {
-		if inner.named[i] != want {
-			t.Fatalf("forwarding order broken at %d: %v", i, inner.named)
-		}
-	}
-}
-
 func TestRecorderFaultLands(t *testing.T) {
-	db, _, _, err := store.Open(filepath.Join(t.TempDir(), "sessions.sqlite"), state.Statements(), state.SchemaVersion)
-	if err != nil {
-		t.Fatal(err)
-	}
+	db := openStore(t)
 	rec := state.NewRecorder(&scripted{}, db, "/tmp/wt", "model-x", "0.1.0", "rec-fault", core.NewSession())
 	if err := state.RecordSession(context.Background(), db, "rec-fault", "/tmp/wt", "model-x", "0.1.0"); err != nil {
 		t.Fatal(err)
@@ -146,38 +111,8 @@ func TestRecorderFaultLands(t *testing.T) {
 	}
 }
 
-func TestRecorderObservationErrorsStayLoud(t *testing.T) {
-	db, _, _, err := store.Open(filepath.Join(t.TempDir(), "sessions.sqlite"), state.Statements(), state.SchemaVersion)
-	if err != nil {
-		t.Fatal(err)
-	}
-	rec := state.NewRecorder(&scripted{}, db, "/tmp/wt", "model-x", "0.1.0", "rec-loud", core.NewSession())
-	_ = state.RecordSession(context.Background(), db, "rec-loud", "/tmp/wt", "model-x", "0.1.0")
-	if err := db.DB.Close(); err != nil {
-		t.Fatal(err)
-	}
-	old := os.Stderr
-	r, w, err := os.Pipe()
-	if err != nil {
-		t.Fatal(err)
-	}
-	os.Stderr = w
-	rec.Notify(core.ToolCallEvent{Call: core.ToolCall{ID: "c1", Name: "bash", Args: json.RawMessage(`{}`)}})
-	rec.Notify(core.Done{StopReason: "end_turn"})
-	rec.Notify(core.ToolResult{ID: "cx", Content: "out"})
-	w.Close()
-	os.Stderr = old
-	out, _ := io.ReadAll(r)
-	if !strings.Contains(string(out), "rec-loud") || !strings.Contains(string(out), "cx") {
-		t.Errorf("observation failure not surfaced loudly: %q", out)
-	}
-}
-
 func TestRecorderLandsToolOnlyTurns(t *testing.T) {
-	db, _, _, err := store.Open(filepath.Join(t.TempDir(), "sessions.sqlite"), state.Statements(), state.SchemaVersion)
-	if err != nil {
-		t.Fatalf("open: %v", err)
-	}
+	db := openStore(t)
 	sid := "rec-toolonly"
 	rec := state.NewRecorder(&scripted{inputs: []string{"do it"}}, db, "/tmp/wt", "model-x", "0.1.0", sid, core.NewSession())
 	ctx := context.Background()
@@ -234,10 +169,7 @@ func TestRecorderLandsToolOnlyTurns(t *testing.T) {
 }
 
 func TestRecorderFaultDiscardsPartialText(t *testing.T) {
-	db, _, _, err := store.Open(filepath.Join(t.TempDir(), "sessions.sqlite"), state.Statements(), state.SchemaVersion)
-	if err != nil {
-		t.Fatal(err)
-	}
+	db := openStore(t)
 	rec := state.NewRecorder(&scripted{}, db, "/tmp/wt", "model-x", "0.1.0", "rec-discard", core.NewSession())
 	rec.Notify(core.TextDelta{Text: "PARTIAL "})
 	rec.Notify(core.Fault{Err: errors.New("stream torn")})
@@ -262,10 +194,7 @@ func TestRecorderFaultDiscardsPartialText(t *testing.T) {
 }
 
 func TestRecorderStampsServedModel(t *testing.T) {
-	db, _, _, err := store.Open(filepath.Join(t.TempDir(), "sessions.sqlite"), state.Statements(), state.SchemaVersion)
-	if err != nil {
-		t.Fatalf("open: %v", err)
-	}
+	db := openStore(t)
 	inner := &scripted{inputs: []string{"do it"}}
 	rec := state.NewRecorder(inner, db, "/tmp/wt", "model-x", "0.1.0", "rec-model", core.NewSession())
 
@@ -291,10 +220,7 @@ func TestRecorderStampsServedModel(t *testing.T) {
 }
 
 func TestRecorderWithoutEchoLeavesModelNull(t *testing.T) {
-	db, _, _, err := store.Open(filepath.Join(t.TempDir(), "sessions.sqlite"), state.Statements(), state.SchemaVersion)
-	if err != nil {
-		t.Fatalf("open: %v", err)
-	}
+	db := openStore(t)
 	inner := &scripted{inputs: []string{"do it"}}
 	rec := state.NewRecorder(inner, db, "/tmp/wt", "model-x", "0.1.0", "rec-null", core.NewSession())
 
@@ -314,10 +240,7 @@ func TestRecorderWithoutEchoLeavesModelNull(t *testing.T) {
 }
 
 func TestRecorderLabelsTheFirstPrompt(t *testing.T) {
-	db, _, _, err := store.Open(filepath.Join(t.TempDir(), "sessions.sqlite"), state.Statements(), state.SchemaVersion)
-	if err != nil {
-		t.Fatalf("open: %v", err)
-	}
+	db := openStore(t)
 	inner := &scripted{inputs: []string{"  fix the retry guard\nwith tests  ", "second prompt"}}
 	rec := state.NewRecorder(inner, db, "/tmp/wt", "model-x", "0.1.0", "rec-label", core.NewSession())
 

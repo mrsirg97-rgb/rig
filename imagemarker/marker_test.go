@@ -1,7 +1,6 @@
 package imagemarker_test
 
 import (
-	"encoding/hex"
 	"strings"
 	"testing"
 
@@ -26,12 +25,6 @@ func TestFormatPinsTheKeyOrderWithTheTolerantTailLast(t *testing.T) {
 	want := "[[rig:image sha256=" + goodSHA + " mime=image/png w=1568 h=882 orig=2560x1440 bytes=421888 src=/home/ng/shot.png]]"
 	if got != want {
 		t.Fatalf("Format = %q, want %q", got, want)
-	}
-}
-
-func TestFormatIsByteStable(t *testing.T) {
-	if a, b := imagemarker.Format(goodRef()), imagemarker.Format(goodRef()); a != b {
-		t.Fatalf("Format must be byte-stable across calls: %q vs %q", a, b)
 	}
 }
 
@@ -198,14 +191,5 @@ func TestBlobPathRefusesAnAddressShapedInput(t *testing.T) {
 		if got := imagemarker.BlobPath("/h/blobs", bad); got != "" {
 			t.Fatalf("BlobPath(%q) = %q, want refused", bad, got)
 		}
-	}
-}
-
-func TestParseAcceptsASHA256OfTheRightShape(t *testing.T) {
-	if _, err := hex.DecodeString(goodSHA); err != nil {
-		t.Fatalf("the fixture is not hex: %v", err)
-	}
-	if _, ok := imagemarker.Parse(imagemarker.Format(goodRef())); !ok {
-		t.Fatal("the well-formed marker must parse")
 	}
 }

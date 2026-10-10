@@ -118,18 +118,6 @@ func TestWithinRefusesASymlinkEscape(t *testing.T) {
 	}
 }
 
-func TestWithinRefusesAFile(t *testing.T) {
-	session := realRoot(t)
-	file := filepath.Join(session, "file")
-	if err := os.WriteFile(file, []byte("x"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	_, err := pathguard.Within(file, session, filepath.Join(session, "nowhere"))
-	if err == nil || !strings.Contains(err.Error(), "not a directory") {
-		t.Fatalf("a file must refuse naming the directory rule, got %v", err)
-	}
-}
-
 func TestWithinFailureNamesTheSpecificRuleUnderASymlinkedCwd(t *testing.T) {
 	root := realRoot(t)
 	real := filepath.Join(root, "real")

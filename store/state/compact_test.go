@@ -3,60 +3,15 @@ package state_test
 import (
 	"context"
 	"encoding/json"
-	"path/filepath"
 	"testing"
 
 	"github.com/mrsirg97-rgb/rig/v2/core"
-	"github.com/mrsirg97-rgb/rig/v2/store"
 	"github.com/mrsirg97-rgb/rig/v2/store/state"
 	"github.com/mrsirg97-rgb/rig/v2/store/state/domain"
 )
 
-func TestRecorderLandsCompactedSummary(t *testing.T) {
-	db, _, _, err := store.Open(filepath.Join(t.TempDir(), "sessions.sqlite"), state.Statements(), state.SchemaVersion)
-	if err != nil {
-		t.Fatal(err)
-	}
-	sid := "rec-compact-sum"
-	sess := core.NewSession()
-	sess.Append(core.Message{Role: core.RoleUser, Content: "[compaction] the summary"})
-	rec := state.NewRecorder(&scripted{}, db, "/tmp/wt", "model-x", "0.1.0", sid, sess)
-	if err := state.RecordSession(context.Background(), db, sid, "/tmp/wt", "model-x", "0.1.0"); err != nil {
-		t.Fatal(err)
-	}
-	rec.Notify(core.Compacted{
-		Summary: "[compaction] the summary",
-		Dropped: 100, Kept: 50,
-		Usage: core.Usage{Prompt: 3, Completion: 1},
-	})
-	rec.Notify(core.TextDelta{Text: "post"})
-	rec.Notify(core.Done{StopReason: "end_turn", Usage: core.Usage{Prompt: 9, Completion: 4}})
-
-	s := mustRead(t, db, func(c context.Context) (any, error) {
-		return domain.NewMessageDomain().GetMessage(c, 1).Row()
-	}).(*domain.Message)
-	if s.Role != "user" || s.Content != "[compaction] the summary" {
-		t.Fatalf("summary row not landed: %+v", s)
-	}
-	u := mustRead(t, db, func(c context.Context) (any, error) {
-		return domain.NewUsageDomain().GetUsage(c, 1).Row()
-	}).(*domain.Usage)
-	if u.Prompt != 3 || u.Completion != 1 {
-		t.Fatalf("summary usage not landed: %+v", u)
-	}
-	a := mustRead(t, db, func(c context.Context) (any, error) {
-		return domain.NewMessageDomain().GetMessage(c, 2).Row()
-	}).(*domain.Message)
-	if a.Role != "assistant" || a.Content != "post" {
-		t.Fatalf("the next Done must land the assistant after the summary: %+v", a)
-	}
-}
-
 func TestRecorderRelandsTheKeptTail(t *testing.T) {
-	db, _, _, err := store.Open(filepath.Join(t.TempDir(), "sessions.sqlite"), state.Statements(), state.SchemaVersion)
-	if err != nil {
-		t.Fatal(err)
-	}
+	db := openStore(t)
 	sid := "rec-rel-tail"
 	ctx := context.Background()
 	if err := state.RecordSession(ctx, db, sid, "/tmp/wt", "model-x", "0.1.0"); err != nil {
@@ -120,7 +75,7 @@ func TestRecorderRelandsTheKeptTail(t *testing.T) {
 }
 
 func TestResumeAfterCompactionRebuildsTheCompactedShape(t *testing.T) {
-	db := openState(t)
+	db := openStore(t)
 	sid := "resume-compact"
 	ctx := context.Background()
 	if err := state.RecordSession(ctx, db, sid, "/tmp/wt", "model-x", "0.1.0"); err != nil {

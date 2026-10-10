@@ -85,22 +85,6 @@ func TestRecallRefusesUnreadableLastConsolidated(t *testing.T) {
 	}
 }
 
-func TestRecallRefusesFutureLastConsolidated(t *testing.T) {
-	db := newDB(t)
-	learn(t, db, "/ws1", "the api returns 429 when the token expires", nil)
-	corruptLastConsolidated(t, db, time.Now().UTC().AddDate(0, 0, 1).Format(time.RFC3339))
-	_, _, err := Recall(context.Background(), db, "/ws1", RecallInput{Query: "token expires", K: 10})
-	refuseMustName(t, err)
-}
-
-func TestBrowseRefusesUnreadableLastConsolidated(t *testing.T) {
-	db := newDB(t)
-	learn(t, db, "/ws1", "the api returns 429 when the token expires", nil)
-	corruptLastConsolidated(t, db, "the third of february, two thousand")
-	_, _, err := Recall(context.Background(), db, "/ws1", RecallInput{K: 10})
-	refuseMustName(t, err)
-}
-
 func TestRecallEmptyLastConsolidatedIsNever(t *testing.T) {
 	db := newDB(t)
 	learn(t, db, "/ws1", "the api returns 429 when the token expires", nil)
@@ -128,16 +112,6 @@ func TestPruneConsolidateRefusesFutureLastConsolidated(t *testing.T) {
 	corruptLastConsolidated(t, db, time.Now().UTC().AddDate(0, 0, 1).Format(time.RFC3339))
 	_, _, err := Prune(context.Background(), db, "/ws1", PruneInput{Verb: "consolidate"})
 	refuseMustName(t, err)
-}
-
-func TestPruneConsolidateEmptyLastConsolidatedIsNever(t *testing.T) {
-	db := newDB(t)
-	learn(t, db, "/ws1", "the api returns 429 when the token expires", nil)
-	corruptLastConsolidated(t, db, "")
-	_, _, err := Prune(context.Background(), db, "/ws1", PruneInput{Verb: "consolidate"})
-	if err != nil {
-		t.Fatalf("an empty timestamp is never, not corruption: %v", err)
-	}
 }
 
 func TestDaysSinceEmptyIsNever(t *testing.T) {

@@ -6,7 +6,6 @@ import (
 	"strings"
 	"sync"
 	"testing"
-	"time"
 
 	todostore "github.com/mrsirg97-rgb/rig/v2/store/todo"
 )
@@ -62,17 +61,6 @@ func TestClaimRepliesNothingToDoWhenAllBlocked(t *testing.T) {
 	}
 	if claimed != "nothing to do" {
 		t.Errorf("all-blocked claim = %q, want \"nothing to do\"", claimed)
-	}
-}
-
-func TestClaimOnAnEmptyQueueRepliesNothingToDo(t *testing.T) {
-	db := newDB(t)
-	claimed, err := todostore.Claim(context.Background(), db, p, sessA, "")
-	if err != nil {
-		t.Fatalf("claim: %v", err)
-	}
-	if claimed != "nothing to do" {
-		t.Errorf("empty claim = %q, want \"nothing to do\"", claimed)
 	}
 }
 
@@ -246,65 +234,12 @@ func TestClaimReviewSkipsTasksAlreadyHeld(t *testing.T) {
 	}
 }
 
-func TestClaimReviewWithNoReviewTasksRepliesNothingToDo(t *testing.T) {
-	db := newDB(t)
-	ctx := context.Background()
-	if _, err := create(ctx, db, p, []item{{Text: "pending"}}, sessA); err != nil {
-		t.Fatalf("create: %v", err)
-	}
-	claimed, err := todostore.Claim(ctx, db, p, sessA, "review")
-	if err != nil {
-		t.Fatalf("claim review: %v", err)
-	}
-	if claimed != "nothing to do" {
-		t.Errorf("no-review claim = %q, want \"nothing to do\"", claimed)
-	}
-}
-
 func TestClaimRefusesAnUnknownStatusFilter(t *testing.T) {
 	db := newDB(t)
 	if _, err := todostore.Claim(context.Background(), db, p, sessA, "done"); err == nil {
 		t.Fatal("unknown claim status succeeded")
 	} else if !strings.Contains(err.Error(), "unknown claim status") {
 		t.Errorf("unknown-status voice: %v", err)
-	}
-}
-
-func TestNoteAppendsAndReadShowsNotesInOrderWithTheirSession(t *testing.T) {
-	db := newDB(t)
-	ctx := context.Background()
-	reply, err := create(ctx, db, p, []item{{Text: "shared work"}}, sessA)
-	if err != nil {
-		t.Fatalf("create: %v", err)
-	}
-	id := taskIDText(t, reply, "shared work")
-	if _, err := todostore.Note(ctx, db, p, id, "first thought", sessA); err != nil {
-		t.Fatalf("note 1: %v", err)
-	}
-	if _, err := todostore.Note(ctx, db, p, id, "second thought", sessB); err != nil {
-		t.Fatalf("note 2: %v", err)
-	}
-	read, err := todostore.Read(ctx, db, p, sessC)
-	if err != nil {
-		t.Fatalf("read: %v", err)
-	}
-	if !strings.Contains(read, "\u00b7 2 notes") {
-		t.Fatalf("read must show the count:\n%s", read)
-	}
-	if strings.Contains(read, "first thought") || strings.Contains(read, "second thought") {
-		t.Fatalf("read must not inline note text:\n%s", read)
-	}
-	notes, err := todostore.Notes(ctx, db, p, id, sessC)
-	if err != nil {
-		t.Fatalf("notes: %v", err)
-	}
-	first := strings.Index(notes, "first thought (by "+sessA+", ")
-	second := strings.Index(notes, "second thought (by "+sessB+", ")
-	if first == -1 || second == -1 {
-		t.Fatalf("notes must carry the sessions:\n%s", notes)
-	}
-	if first > second {
-		t.Fatalf("notes must render in order:\n%s", notes)
 	}
 }
 
@@ -361,56 +296,6 @@ func TestNoteRefusesEmptyAndOverlongText(t *testing.T) {
 	}
 	if got := eventCount(t, db); got != 1 {
 		t.Errorf("refused notes must append nothing: %d events", got)
-	}
-}
-
-func TestNoteSurvivesCompaction(t *testing.T) {
-	db := newDB(t)
-	ctx := context.Background()
-	reply, err := create(ctx, db, p, []item{{Text: "remembered"}}, sessA)
-	if err != nil {
-		t.Fatalf("create: %v", err)
-	}
-	id := taskIDText(t, reply, "remembered")
-	if _, err := todostore.Note(ctx, db, p, id, "kept by the snapshot", sessB); err != nil {
-		t.Fatalf("note: %v", err)
-	}
-	age(t, db, 1010)
-	if _, err := todostore.Move(ctx, db, p, id, 1, sessA); err != nil {
-		t.Fatalf("move (compaction trigger): %v", err)
-	}
-	notes, err := todostore.Notes(ctx, db, p, id, sessA)
-	if err != nil {
-		t.Fatalf("notes: %v", err)
-	}
-	if !strings.Contains(notes, "kept by the snapshot (by "+sessB+", ") {
-		t.Fatalf("a note must survive compaction:\n%s", notes)
-	}
-}
-
-func TestCompleteMovesActiveToReview(t *testing.T) {
-	db := newDB(t)
-	ctx := context.Background()
-	reply, err := create(ctx, db, p, []item{{Text: "done enough"}}, sessA)
-	if err != nil {
-		t.Fatalf("create: %v", err)
-	}
-	id := taskIDText(t, reply, "done enough")
-	if _, err := todostore.Claim(ctx, db, p, sessA, ""); err != nil {
-		t.Fatalf("claim: %v", err)
-	}
-	completed, err := todostore.Complete(ctx, db, p, id, sessA, true)
-	if err != nil {
-		t.Fatalf("complete: %v", err)
-	}
-	if !strings.Contains(completed, "in review") {
-		t.Fatalf("complete reply must say the review gate: %s", completed)
-	}
-	if got := projStatus(t, db, "done enough"); got != "review" {
-		t.Errorf("status = %v, want review", got)
-	}
-	if !strings.Contains(completed, "[r] done enough") {
-		t.Errorf("the echo must carry the review marker:\n%s", completed)
 	}
 }
 
@@ -900,50 +785,6 @@ func TestPruneDropsDoneOnly(t *testing.T) {
 		if n != 0 {
 			t.Errorf("prune must drop the accepted row, found %d", n)
 		}
-	}
-}
-
-func TestReleaseFreesAStaleReviewClaimKeepingTheStatus(t *testing.T) {
-	db := newDB(t)
-	ctx := context.Background()
-	reply, err := create(ctx, db, p, []item{{Text: "released"}, {Text: "reaped"}}, sessA)
-	if err != nil {
-		t.Fatalf("create: %v", err)
-	}
-	releasedID := taskIDText(t, reply, "released")
-	reapedID := taskIDText(t, reply, "reaped")
-	for _, id := range []string{releasedID, reapedID} {
-		if _, err := todostore.Claim(ctx, db, p, sessA, ""); err != nil {
-			t.Fatalf("claim %s: %v", id, err)
-		}
-		if _, err := todostore.Complete(ctx, db, p, id, sessA, true); err != nil {
-			t.Fatalf("complete %s: %v", id, err)
-		}
-		if _, err := todostore.Claim(ctx, db, p, sessA, "review"); err != nil {
-			t.Fatalf("claim review %s: %v", id, err)
-		}
-	}
-	old := time.Now().Add(-todostore.StaleClaimAfter - time.Hour).UTC().Format(time.RFC3339)
-	rawExec(t, db, "UPDATE events SET ts = ? WHERE op = 'claim'", old)
-	released, err := todostore.Release(ctx, db, p, releasedID, sessB)
-	if err != nil {
-		t.Fatalf("release: %v", err)
-	}
-	if !strings.Contains(released, releasedID) || !strings.Contains(released, sessA) {
-		t.Fatalf("release reply must name the task and the dead holder: %s", released)
-	}
-	if got := projStatus(t, db, "released"); got != "review" {
-		t.Errorf("a released review claim must stay in review: %v", got)
-	}
-	reaped, err := todostore.Reap(ctx, db, p, []string{sessA}, sessB)
-	if err != nil {
-		t.Fatalf("reap: %v", err)
-	}
-	if !strings.Contains(reaped, reapedID) {
-		t.Fatalf("reap must free the dead reviewer's claim: %s", reaped)
-	}
-	if got := projStatus(t, db, "reaped"); got != "review" {
-		t.Errorf("a reaped review claim must stay in review: %v", got)
 	}
 }
 

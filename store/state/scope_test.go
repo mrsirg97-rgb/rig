@@ -4,11 +4,11 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"github.com/mrsirg97-rgb/rig/v2/store"
 	"path/filepath"
 	"testing"
 
 	"github.com/mrsirg97-rgb/rig/v2/core"
-	"github.com/mrsirg97-rgb/rig/v2/store"
 	"github.com/mrsirg97-rgb/rig/v2/store/state"
 	"github.com/mrsirg97-rgb/rig/v2/store/state/domain"
 )
@@ -89,10 +89,7 @@ func TestToolCallReuseAcrossTurnsStaysScopedToItsMessage(t *testing.T) {
 }
 
 func TestRecorderMintsStorageIDsForDuplicateWireIDs(t *testing.T) {
-	db, _, _, err := store.Open(filepath.Join(t.TempDir(), "sessions.sqlite"), state.Statements(), state.SchemaVersion)
-	if err != nil {
-		t.Fatalf("open: %v", err)
-	}
+	db := openStore(t)
 	sid := "rec-dup"
 	rec := state.NewRecorder(&scripted{inputs: []string{"do it"}}, db, "/tmp/wt", "model-x", "0.1.0", sid, core.NewSession())
 	ctx := context.Background()
@@ -122,10 +119,7 @@ func TestRecorderMintsStorageIDsForDuplicateWireIDs(t *testing.T) {
 }
 
 func TestRecorderRelandAttributesDuplicateCallIDs(t *testing.T) {
-	db, _, _, err := store.Open(filepath.Join(t.TempDir(), "sessions.sqlite"), state.Statements(), state.SchemaVersion)
-	if err != nil {
-		t.Fatalf("open: %v", err)
-	}
+	db := openStore(t)
 	sid := "rec-rel-dup"
 	ctx := context.Background()
 	if err := state.RecordSession(ctx, db, sid, "/tmp/wt", "model-x", "0.1.0"); err != nil {
@@ -156,10 +150,7 @@ func TestRecorderRelandAttributesDuplicateCallIDs(t *testing.T) {
 }
 
 func TestRecorderRelandKeepsTheToolFailure(t *testing.T) {
-	db, _, _, err := store.Open(filepath.Join(t.TempDir(), "sessions.sqlite"), state.Statements(), state.SchemaVersion)
-	if err != nil {
-		t.Fatalf("open: %v", err)
-	}
+	db := openStore(t)
 	sid := "rec-rel-err"
 	ctx := context.Background()
 	if err := state.RecordSession(ctx, db, sid, "/tmp/wt", "model-x", "0.1.0"); err != nil {
@@ -194,10 +185,7 @@ func TestRecorderRelandKeepsTheToolFailure(t *testing.T) {
 }
 
 func TestRecorderEmptyCompletionDropsUsage(t *testing.T) {
-	db, _, _, err := store.Open(filepath.Join(t.TempDir(), "sessions.sqlite"), state.Statements(), state.SchemaVersion)
-	if err != nil {
-		t.Fatalf("open: %v", err)
-	}
+	db := openStore(t)
 	sid := "rec-empty"
 	rec := state.NewRecorder(&scripted{inputs: []string{"do it"}}, db, "/tmp/wt", "model-x", "0.1.0", sid, core.NewSession())
 	ctx := context.Background()
@@ -285,10 +273,7 @@ func TestMigrationBackfillsToolCallSessions(t *testing.T) {
 }
 
 func TestRecorderRelandAttributesErrorsToTheRightTurn(t *testing.T) {
-	db, _, _, err := store.Open(filepath.Join(t.TempDir(), "sessions.sqlite"), state.Statements(), state.SchemaVersion)
-	if err != nil {
-		t.Fatalf("open: %v", err)
-	}
+	db := openStore(t)
 	sid := "rec-rel-order"
 	ctx := context.Background()
 	if err := state.RecordSession(ctx, db, sid, "/tmp/wt", "model-x", "0.1.0"); err != nil {

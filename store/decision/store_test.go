@@ -449,18 +449,3 @@ func voice(t *testing.T) (broadcast.Member, <-chan string) {
 	})
 	return room.Add(0), said
 }
-
-func TestAStoredYesnoRowReadsAsABinary(t *testing.T) {
-	db := open(t)
-	if _, err := db.Exec(`INSERT INTO decisions (scope, site, state, question, answer, status, decider, ts, unsure) VALUES (?, ?, ?, ?, ?, 'pending', 'laya', '2026-10-04T00:00:00Z', 0)`,
-		"proj", decision.SiteBash, `{"command":"ls"}`, `{"id":"ok","kind":"yesno","prompt":"ok?"}`, "yes"); err != nil {
-		t.Fatal(err)
-	}
-	rows, err := decisionstore.Pending(context.Background(), db)
-	if err != nil || len(rows) != 1 {
-		t.Fatalf("one pending row: %d %v", len(rows), err)
-	}
-	if rows[0].Question.Kind != decision.KindBinary {
-		t.Fatalf("a row written as yesno reads as %q, want binary", rows[0].Question.Kind)
-	}
-}

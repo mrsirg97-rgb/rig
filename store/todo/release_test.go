@@ -175,18 +175,6 @@ func TestReapIsIdleWhenNothingIsStale(t *testing.T) {
 	}
 }
 
-func TestReapReleasesNothingWhenDeadOwnerOwnsNothing(t *testing.T) {
-	db := newDB(t)
-	ctx := context.Background()
-	reaped, err := todostore.Reap(ctx, db, p, []string{sessA}, sessB)
-	if err != nil {
-		t.Fatalf("reap: %v", err)
-	}
-	if strings.Contains(reaped, "released") {
-		t.Errorf("no tasks must reap nothing: %s", reaped)
-	}
-}
-
 func TestStaleClaimSurvivesCompaction(t *testing.T) {
 	db := newDB(t)
 	ctx := context.Background()

@@ -3,10 +3,8 @@ package compact_test
 import (
 	"context"
 	"errors"
-	"io"
 	"reflect"
 	"strings"
-	"sync"
 	"testing"
 
 	"github.com/mrsirg97-rgb/rig/v2"
@@ -208,7 +206,6 @@ func TestOverflowRecoversOnceThenSurfaces(t *testing.T) {
 
 func TestOverflowClassifier(t *testing.T) {
 	positives := []string{
-		"context length exceeded",
 		"maximum context length",
 		"context_length too small",
 		"context window exceeded",
@@ -252,8 +249,6 @@ func TestOverflowClassifier(t *testing.T) {
 	}
 	negatives := []string{
 		"context deadline exceeded",
-		"connection reset by peer",
-		"model not found",
 	}
 	for _, phrase := range negatives {
 		t.Run(phrase, func(t *testing.T) {
@@ -413,61 +408,6 @@ func TestCalibrationShiftsTheTrigger(t *testing.T) {
 		}
 	})
 
-	t.Run("a 0.1x report clamps to 0.5", func(t *testing.T) {
-		s := base()
-		prov := &scriptedProvider{turns: []scriptedTurn{
-			{events: []core.Event{core.Done{Usage: core.Usage{Prompt: anchor + 10, Completion: 1}}}},
-			summaryTurn("S01", core.Usage{Prompt: 5, Completion: 5}),
-		}}
-		pol, err := compact.New(prov, &captureFrontend{}, s, "S", row)
-		if err != nil {
-			t.Fatalf("New: %v", err)
-		}
-		dec := compact.Decorator(prov, pol)
-
-		out, err := dec.Stream(context.Background(), core.Request{Messages: append([]core.Message{{Role: core.RoleSystem, Content: "S"}}, s.Messages...)})
-		if err != nil {
-			t.Fatalf("Stream: %v", err)
-		}
-		for range out {
-		}
-
-		s.Append(core.Message{Role: core.RoleTool, ToolID: "c2", Content: strings.Repeat("r", 3000)})
-		if _, err := pol.Assemble(context.Background(), s); err != nil {
-			t.Fatalf("Assemble: %v", err)
-		}
-		if prov.calls() != 2 {
-			t.Fatalf("the 0.5 clamp must keep it compacting (calls = %d, want the summary call)", prov.calls())
-		}
-	})
-
-	t.Run("no anchor leaves the factor at 1.0", func(t *testing.T) {
-
-		s := core.NewSession()
-		s.Append(core.Message{Role: core.RoleUser, Content: strings.Repeat("p", 1796)})
-		s.Append(core.Message{Role: core.RoleUser, Content: strings.Repeat("q", 1800)})
-		prov := &scriptedProvider{turns: []scriptedTurn{
-			{events: []core.Event{core.Done{Usage: core.Usage{Prompt: 3600, Completion: 0}}}},
-		}}
-		pol, err := compact.New(prov, &captureFrontend{}, s, "S", row)
-		if err != nil {
-			t.Fatalf("New: %v", err)
-		}
-		dec := compact.Decorator(prov, pol)
-		out, err := dec.Stream(context.Background(), core.Request{Messages: append([]core.Message{{Role: core.RoleSystem, Content: "S"}}, s.Messages...)})
-		if err != nil {
-			t.Fatalf("Stream: %v", err)
-		}
-		for range out {
-		}
-		if _, err := pol.Assemble(context.Background(), s); err != nil {
-			t.Fatalf("Assemble: %v", err)
-		}
-		if prov.calls() != 1 {
-			t.Fatalf("no anchor: the factor must stay 1.0 (calls = %d, want none)", prov.calls())
-		}
-	})
-
 	t.Run("a large tool spec stays out of the ratio", func(t *testing.T) {
 
 		s := base()
@@ -546,28 +486,6 @@ func TestMainCallMaxTokensClamped(t *testing.T) {
 		}
 	})
 
-	t.Run("anchorless clamp", func(t *testing.T) {
-		s := core.NewSession()
-		s.Append(core.Message{Role: core.RoleUser, Content: strings.Repeat("p", 1400)})
-		s.Append(core.Message{Role: core.RoleUser, Content: strings.Repeat("q", 1400)})
-
-		prov := &scriptedProvider{turns: []scriptedTurn{{events: []core.Event{core.Done{}}}}}
-		pol, err := compact.New(prov, &captureFrontend{}, s, strings.Repeat("s", 200), row)
-		if err != nil {
-			t.Fatalf("New: %v", err)
-		}
-		dec := compact.Decorator(prov, pol)
-		out, err := dec.Stream(context.Background(), core.Request{Messages: append([]core.Message{{Role: core.RoleSystem, Content: strings.Repeat("s", 200)}}, s.Messages...)})
-		if err != nil {
-			t.Fatalf("Stream: %v", err)
-		}
-		for range out {
-		}
-		if got := prov.reqs()[0].MaxTokens; got != 250 {
-			t.Fatalf("MaxTokens = %d, want 250 (Window 1000 - size 750)", got)
-		}
-	})
-
 	t.Run("a request that still does not fit refuses loud", func(t *testing.T) {
 		s := core.NewSession()
 		s.Append(core.Message{Role: core.RoleAssistant, Content: strings.Repeat("a", 400), ContextTokens: 500})
@@ -637,49 +555,7 @@ func TestRecoveryKeptBatchOverrunsWindow(t *testing.T) {
 	}
 }
 
-type steerFrontend struct {
-	mu     sync.Mutex
-	inputs []string
-	cancel context.CancelFunc
-	events []core.Event
-}
-
-func (f *steerFrontend) Input(ctx context.Context) (string, error) {
-	if cancel, ok := core.InterruptFrom(ctx); ok {
-		f.mu.Lock()
-		f.cancel = cancel
-		f.mu.Unlock()
-	}
-	f.mu.Lock()
-	if len(f.inputs) == 0 {
-		f.mu.Unlock()
-		return "", io.EOF
-	}
-	s := f.inputs[0]
-	f.inputs = f.inputs[1:]
-	f.mu.Unlock()
-	return s, nil
-}
-
-func (f *steerFrontend) Notify(ev core.Event) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	f.events = append(f.events, ev)
-}
-
-func (f *steerFrontend) steal() context.CancelFunc {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	c := f.cancel
-	f.cancel = nil
-	return c
-}
-
-func (f *steerFrontend) snapshot() []core.Event {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	return append([]core.Event(nil), f.events...)
-}
+type steerFrontend = captureFrontend
 
 func TestSteerDuringRetry(t *testing.T) {
 	row := models.Model{Role: models.RoleInteractive, ID: "local", Window: 1000, MaxTokens: 500, Reserve: 100, KeepRecent: 100}

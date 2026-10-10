@@ -3,7 +3,6 @@ package state_test
 import (
 	"context"
 	"errors"
-	"path/filepath"
 	"testing"
 
 	"github.com/mrsirg97-rgb/rig/v2/core"
@@ -13,10 +12,7 @@ import (
 
 func openRecorder(t *testing.T, sid string, inputs []string) (*state.Recorder, store.DB) {
 	t.Helper()
-	db, _, _, err := store.Open(filepath.Join(t.TempDir(), "sessions.sqlite"), state.Statements(), state.SchemaVersion)
-	if err != nil {
-		t.Fatalf("open: %v", err)
-	}
+	db := openStore(t)
 	rec := state.NewRecorder(&scripted{inputs: inputs}, db, "/tmp/wt", "model-x", "1.3.4", sid, core.NewSession())
 	return rec, db
 }

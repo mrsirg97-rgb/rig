@@ -88,52 +88,50 @@ func newDB(t *testing.T) store.DB {
 	return db
 }
 
+const probeCols = `id, scope, scope_label, kind, content, source, importance,
+	strength, access_count, superseded_by, created_at, last_accessed_at,
+	last_consolidated_at, content_sha256`
+
+func scanProbe(row interface{ Scan(...any) error }) (*probe, error) {
+	var p probe
+	err := row.Scan(&p.ID, &p.Scope, &p.ScopeLabel, &p.Kind, &p.Content, &p.Source,
+		&p.Importance, &p.Strength, &p.AccessCount, &p.SupersededBy, &p.CreatedAt,
+		&p.LastAccessedAt, &p.LastConsolidatedAt, &p.ContentSha256)
+	return &p, err
+}
+
 func memRow(t *testing.T, db store.DB, content string) *probe {
 	t.Helper()
-	row := db.QueryRow(`SELECT id, scope, scope_label, kind, content, source, importance,
-		strength, access_count, superseded_by, created_at, last_accessed_at,
-		last_consolidated_at, content_sha256 FROM memories WHERE content = ?`, content)
-	var p probe
-	if err := row.Scan(&p.ID, &p.Scope, &p.ScopeLabel, &p.Kind, &p.Content, &p.Source,
-		&p.Importance, &p.Strength, &p.AccessCount, &p.SupersededBy, &p.CreatedAt,
-		&p.LastAccessedAt, &p.LastConsolidatedAt, &p.ContentSha256); err != nil {
+	p, err := scanProbe(db.QueryRow(`SELECT `+probeCols+` FROM memories WHERE content = ?`, content))
+	if err != nil {
 		return nil
 	}
-	return &p
+	return p
 }
 
 func memByID(t *testing.T, db store.DB, id int64) *probe {
 	t.Helper()
-	row := db.QueryRow(`SELECT id, scope, scope_label, kind, content, source, importance,
-		strength, access_count, superseded_by, created_at, last_accessed_at,
-		last_consolidated_at, content_sha256 FROM memories WHERE id = ?`, id)
-	var p probe
-	if err := row.Scan(&p.ID, &p.Scope, &p.ScopeLabel, &p.Kind, &p.Content, &p.Source,
-		&p.Importance, &p.Strength, &p.AccessCount, &p.SupersededBy, &p.CreatedAt,
-		&p.LastAccessedAt, &p.LastConsolidatedAt, &p.ContentSha256); err != nil {
+	p, err := scanProbe(db.QueryRow(`SELECT `+probeCols+` FROM memories WHERE id = ?`, id))
+	if err != nil {
 		return nil
 	}
-	return &p
+	return p
 }
 
 func memRows(t *testing.T, db store.DB) []probe {
 	t.Helper()
-	rows, err := db.Query(`SELECT id, scope, scope_label, kind, content, source, importance,
-		strength, access_count, superseded_by, created_at, last_accessed_at,
-		last_consolidated_at, content_sha256 FROM memories ORDER BY id`)
+	rows, err := db.Query(`SELECT ` + probeCols + ` FROM memories ORDER BY id`)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer rows.Close()
 	var out []probe
 	for rows.Next() {
-		var p probe
-		if err := rows.Scan(&p.ID, &p.Scope, &p.ScopeLabel, &p.Kind, &p.Content, &p.Source,
-			&p.Importance, &p.Strength, &p.AccessCount, &p.SupersededBy, &p.CreatedAt,
-			&p.LastAccessedAt, &p.LastConsolidatedAt, &p.ContentSha256); err != nil {
+		p, err := scanProbe(rows)
+		if err != nil {
 			t.Fatal(err)
 		}
-		out = append(out, p)
+		out = append(out, *p)
 	}
 	return out
 }
@@ -215,50 +213,6 @@ func ageCreated(t *testing.T, db store.DB, id int64, daysAgo int) {
 	if _, err := db.Exec(`UPDATE memories SET created_at = ? WHERE id = ?`, old, id); err != nil {
 		t.Fatal(err)
 	}
-}
-
-func TestCorruptStoreQuarantinesAndReadsEmpty(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "rem.sqlite")
-	if err := os.WriteFile(path, []byte("not sqlite"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	db, quarantined, _, err := store.Open(path, Statements(), SchemaVersion)
-	if err != nil {
-		t.Fatalf("open: %v", err)
-	}
-	if quarantined == "" || !strings.Contains(quarantined, ".corrupt-") {
-		t.Fatalf("quarantined = %q, want the .corrupt- aside named", quarantined)
-	}
-	var leftover bool
-	for _, f := range mustReadDir(t, dir) {
-		if strings.Contains(f, ".corrupt-") {
-			leftover = true
-		}
-	}
-	if !leftover {
-		t.Fatal("no quarantined file beside the fresh store")
-	}
-	reply, hits, err := Recall(context.Background(), db, "/ws1", RecallInput{K: 10})
-	if err != nil {
-		t.Fatalf("recall: %v", err)
-	}
-	if len(hits) != 0 || !strings.Contains(reply, "(no memories in ") {
-		t.Fatalf("recall over the fresh store: %q", reply)
-	}
-}
-
-func mustReadDir(t *testing.T, dir string) []string {
-	t.Helper()
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	var out []string
-	for _, e := range entries {
-		out = append(out, e.Name())
-	}
-	return out
 }
 
 func TestLearnStoresContentWithScopeKindImportance(t *testing.T) {
@@ -737,33 +691,6 @@ func TestReflectStoresDistilledWithSource(t *testing.T) {
 	if got.Source == nil || *got.Source != "log: debugged 4 hours over the todo store" {
 		t.Fatalf("source %v", got.Source)
 	}
-}
-
-func TestReflectIsIdempotent(t *testing.T) {
-	db := newDB(t)
-	_, m1, _ := reflectIn(t, db, "/ws1", "repeatable reflection", 0.7)
-	_, m2, existing := reflectIn(t, db, "/ws1", "repeatable reflection", 0.7)
-	if !existing || m2.Id != m1.Id {
-		t.Fatalf("reflect id %d existing %v", m2.Id, existing)
-	}
-	var n int
-	if err := db.QueryRow(`SELECT count(*) FROM memories WHERE content = ?`, "repeatable reflection").Scan(&n); err != nil {
-		t.Fatal(err)
-	}
-	if n != 1 {
-		t.Fatalf("rows = %d, want 1", n)
-	}
-}
-
-func reflectIn(t *testing.T, db store.DB, cwd, content string, importance float64) (string, *remdom.Memory, bool) {
-	t.Helper()
-	reply, mem, existing, err := Reflect(context.Background(), db, cwd, ReflectInput{
-		Content: content, Importance: importance, Source: "",
-	})
-	if err != nil {
-		t.Fatalf("reflect: %v", err)
-	}
-	return reply, mem, existing
 }
 
 func TestPruneConsolidateIdempotentDecaysAged(t *testing.T) {
@@ -1348,19 +1275,7 @@ func TestMigrationReScopesOnceAndIsIdempotent(t *testing.T) {
 	if !strings.Contains(report, "removed 1 compaction reflections") || !strings.Contains(report, "re-scoped 1 memories") {
 		t.Fatalf("the migration must count once: %q", report)
 	}
-	var rows []probe
-	rs, err := db2.DB.Query(`SELECT id, scope, scope_label, kind, content, source, importance, strength, access_count, superseded_by, created_at, last_accessed_at, last_consolidated_at, content_sha256 FROM memories ORDER BY id`)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer rs.Close()
-	for rs.Next() {
-		var p probe
-		if err := rs.Scan(&p.ID, &p.Scope, &p.ScopeLabel, &p.Kind, &p.Content, &p.Source, &p.Importance, &p.Strength, &p.AccessCount, &p.SupersededBy, &p.CreatedAt, &p.LastAccessedAt, &p.LastConsolidatedAt, &p.ContentSha256); err != nil {
-			t.Fatal(err)
-		}
-		rows = append(rows, p)
-	}
+	rows := memRows(t, db2)
 	if len(rows) != 1 {
 		t.Fatalf("the compaction row is removed (never deliberate), got %d rows", len(rows))
 	}

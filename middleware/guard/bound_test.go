@@ -13,24 +13,29 @@ import (
 	"github.com/mrsirg97-rgb/rig/v2/middleware/guard"
 )
 
-type failingExec struct {
-	mu    sync.Mutex
-	calls map[string]int
-	total int
+type stubExec struct {
+	mu      sync.Mutex
+	calls   map[string]int
+	total   int
+	content string
+	err     error
 }
 
-func (e *failingExec) Exec(ctx context.Context, call core.ToolCall) (string, error) {
+func newStub(content string, err error) *stubExec {
+	return &stubExec{calls: map[string]int{}, content: content, err: err}
+}
+
+func (e *stubExec) Exec(ctx context.Context, call core.ToolCall) (string, error) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	key := string(call.Args)
-	e.calls[key]++
+	e.calls[string(call.Args)]++
 	e.total++
-	return "fed back", errors.New("synthetic failure")
+	return e.content, e.err
 }
 
 func TestRepetitionIsBoundedWithoutSilentRetry(t *testing.T) {
 	for _, limit := range []int{1, 3, 5} {
-		e := &failingExec{calls: map[string]int{}}
+		e := newStub("fed back", errors.New("synthetic failure"))
 		var exec core.ToolExec = func(ctx context.Context, call core.ToolCall) (string, error) {
 			return e.Exec(ctx, call)
 		}

@@ -130,6 +130,9 @@ func TestUsageCacheAbsentReportsZero(t *testing.T) {
 		t.Fatalf("stream: %v", err)
 	}
 	done := events[len(events)-1].(core.Done)
+	if done.Usage.Prompt != 3 || done.Usage.Completion != 7 {
+		t.Fatalf("usage = %+v, want prompt=3 completion=7", done.Usage)
+	}
 	if done.Usage.CacheRead != 0 || done.Usage.CacheWrite != 0 {
 		t.Fatalf("absent cache fields must report zero, got %+v", done.Usage)
 	}

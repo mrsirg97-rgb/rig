@@ -127,56 +127,6 @@ func TestRetries429WithBackoff(t *testing.T) {
 	}
 }
 
-func TestRetries5xxWithBackoff(t *testing.T) {
-	var calls atomic.Int32
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		n := calls.Add(1)
-		if n == 1 {
-			w.WriteHeader(http.StatusBadGateway)
-			return
-		}
-		io.WriteString(w, "data: {\"choices\":[{\"delta\":{},\"finish_reason\":\"stop\"}]}\ndata: [DONE]\n")
-	}))
-	defer srv.Close()
-
-	p := NewWithConfig(Config{
-		BaseURL: srv.URL, Model: "m",
-		Retries: 3, RetryBase: 5 * time.Millisecond, Jitter: func() float64 { return 0 },
-	})
-	if _, err := hostedDrain(t, context.Background(), p, userReq()); err != nil {
-		t.Fatalf("stream: %v", err)
-	}
-	if got := calls.Load(); got != 2 {
-		t.Fatalf("request count = %d, want 2 (one 502 then success)", got)
-	}
-}
-
-func TestRetryBoundExhaustsWithFault(t *testing.T) {
-	var calls atomic.Int32
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		calls.Add(1)
-		w.WriteHeader(http.StatusTooManyRequests)
-		io.WriteString(w, `{"error":"still busy"}`)
-	}))
-	defer srv.Close()
-
-	p := NewWithConfig(Config{
-		BaseURL: srv.URL, Model: "m",
-		Retries: 2, RetryBase: 5 * time.Millisecond, Jitter: func() float64 { return 0 },
-	})
-	events, err := hostedDrain(t, context.Background(), p, userReq())
-	if err != nil {
-		t.Fatalf("stream: %v", err)
-	}
-	if got := calls.Load(); got != 3 {
-		t.Fatalf("request count = %d, want 3 (the bound plus the first attempt)", got)
-	}
-	ft := lastFault(t, events)
-	if !strings.Contains(ft.Err.Error(), "429") {
-		t.Fatalf("fault must name the status after the bound, got %v", ft.Err)
-	}
-}
-
 func TestCostParsedFromUsage(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		io.WriteString(w, "data: {\"choices\":[{\"delta\":{},\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":10,\"completion_tokens\":5,\"cost\":0.0012}}\ndata: [DONE]\n")

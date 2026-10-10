@@ -13,7 +13,7 @@ import (
 )
 
 func TestDriftingArgsEachGetAFreshStreak(t *testing.T) {
-	e := &failingExec{calls: map[string]int{}}
+	e := newStub("fed back", errors.New("synthetic failure"))
 	var exec core.ToolExec = func(ctx context.Context, call core.ToolCall) (string, error) {
 		return e.Exec(ctx, call)
 	}
@@ -41,7 +41,7 @@ func TestDriftingArgsEachGetAFreshStreak(t *testing.T) {
 }
 
 func TestChangedCallResetsTheCount(t *testing.T) {
-	e := &failingExec{calls: map[string]int{}}
+	e := newStub("fed back", errors.New("synthetic failure"))
 	var exec core.ToolExec = func(ctx context.Context, call core.ToolCall) (string, error) {
 		return e.Exec(ctx, call)
 	}
@@ -166,7 +166,7 @@ func TestNoteAloneWhenTheToolContentIsEmpty(t *testing.T) {
 }
 
 func TestBoundIsSafeUnderAConcurrentBatch(t *testing.T) {
-	e := &failingExec{calls: map[string]int{}}
+	e := newStub("fed back", errors.New("synthetic failure"))
 	var inner core.ToolExec = func(ctx context.Context, call core.ToolCall) (string, error) {
 		return e.Exec(ctx, call)
 	}

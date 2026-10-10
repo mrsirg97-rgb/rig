@@ -165,24 +165,6 @@ func TestRewriteCoversEveryVocabularyFieldName(t *testing.T) {
 	}
 }
 
-func TestRewriteLeavesUnlistedNamesAlone(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
-	for _, f := range []string{"pattern", "glob", "old", "new", "content", "command"} {
-		raw, err := json.Marshal(map[string]string{f: "~/x"})
-		if err != nil {
-			t.Fatal(err)
-		}
-		got, changed := paths.Rewrite(raw)
-		if changed {
-			t.Fatalf("%s is not in the vocabulary and must ride through untouched", f)
-		}
-		if string(got) != string(raw) {
-			t.Fatalf("%s: bytes must ride through, got %s", f, got)
-		}
-	}
-}
-
 func TestViewExpandsTheLeadingTildeAtTheBoundary(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)

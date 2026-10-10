@@ -158,15 +158,6 @@ func seedLegacy(t *testing.T, dir, hash string, texts []string) {
 	}
 }
 
-func eventsCount(t *testing.T, db store.DB) int {
-	t.Helper()
-	var n int
-	if err := db.QueryRow("SELECT count(*) FROM events").Scan(&n); err != nil {
-		t.Fatal(err)
-	}
-	return n
-}
-
 func TestFoldPreservesBothQueuesByteForByteAndIsNoOpOnSecondOpen(t *testing.T) {
 	dir := t.TempDir()
 	os.MkdirAll(dir, 0o755)
@@ -214,8 +205,8 @@ func TestFoldPreservesBothQueuesByteForByteAndIsNoOpOnSecondOpen(t *testing.T) {
 	if report2 != "" {
 		t.Fatalf("the fold must be a no-op on the second open, got %q", report2)
 	}
-	if eventsCount(t, db2) != 2 {
-		t.Fatalf("a second open must not fold again: %d events", eventsCount(t, db2))
+	if eventCount(t, db2) != 2 {
+		t.Fatalf("a second open must not fold again: %d events", eventCount(t, db2))
 	}
 }
 

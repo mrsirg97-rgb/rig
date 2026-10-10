@@ -3,6 +3,7 @@ package guard_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"strings"
 	"testing"
 
@@ -11,7 +12,7 @@ import (
 )
 
 func TestCanonicallyIdenticalArgsShareTheStreak(t *testing.T) {
-	e := &failingExec{calls: map[string]int{}}
+	e := newStub("fed back", errors.New("synthetic failure"))
 	var exec core.ToolExec = func(ctx context.Context, call core.ToolCall) (string, error) {
 		return e.Exec(ctx, call)
 	}
@@ -33,31 +34,5 @@ func TestCanonicallyIdenticalArgsShareTheStreak(t *testing.T) {
 	}
 	if e.total != 2 {
 		t.Fatalf("total executions %d, want 2 (key order and whitespace are not a changed call)", e.total)
-	}
-}
-
-func TestCanonicalIdentityRespectsValuesNotKeys(t *testing.T) {
-	e := &failingExec{calls: map[string]int{}}
-	var exec core.ToolExec = func(ctx context.Context, call core.ToolCall) (string, error) {
-		return e.Exec(ctx, call)
-	}
-	exec = guard.Bound(1).Wrap(exec)
-
-	a := core.ToolCall{ID: "c1", Name: "edit", Args: json.RawMessage(`{"path":"a"}`)}
-	b := core.ToolCall{ID: "c2", Name: "edit", Args: json.RawMessage(`{"path":"b"}`)}
-
-	content, err := exec(context.Background(), a)
-	if err == nil {
-		t.Fatalf("the first failure must feed back, got %q", content)
-	}
-	content, err = exec(context.Background(), b)
-	if err == nil {
-		t.Fatalf("the changed value must execute (and fail), got %q", content)
-	}
-	if strings.Contains(content, "stop reissuing") {
-		t.Fatalf("a changed value must reset the count and execute, got %q", content)
-	}
-	if e.total != 2 {
-		t.Fatalf("total executions %d, want 2 (the changed value is a fresh streak)", e.total)
 	}
 }

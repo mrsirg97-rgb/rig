@@ -11,8 +11,7 @@ import (
 var legal = models.Model{ID: "local", Window: 65536, MaxTokens: 8192, Reserve: 8192, KeepRecent: 16384, Role: models.RoleInteractive}
 
 func table() models.Table {
-	t, err := models.New(
-		models.Model{ID: "local", Window: 65536, MaxTokens: 8192, Reserve: 8192, KeepRecent: 16384, Role: models.RoleInteractive},
+	t, err := models.New(legal,
 		models.Model{ID: "qwen3.8-workers", Window: 65536, MaxTokens: 8192, Reserve: 8192, KeepRecent: 16384, Role: models.RoleWorker},
 	)
 	if err != nil {
@@ -240,14 +239,6 @@ func TestVisionDefaultsFalseAndSurvivesTheTable(t *testing.T) {
 	}
 	if m, _ := tbl.Get("local"); m.Vision {
 		t.Fatal("the flag is per row")
-	}
-}
-
-func TestVisionIsNotARowInvariant(t *testing.T) {
-	seeing := legal
-	seeing.Vision = true
-	if err := seeing.Check(); err != nil {
-		t.Fatalf("vision carries no invariant: %v", err)
 	}
 }
 

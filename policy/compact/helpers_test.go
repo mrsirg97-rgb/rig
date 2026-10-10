@@ -76,10 +76,27 @@ func (p *scriptedProvider) reqs() []core.Request {
 
 type captureFrontend struct {
 	mu     sync.Mutex
+	inputs []string
+	cancel context.CancelFunc
 	events []core.Event
 }
 
-func (f *captureFrontend) Input(context.Context) (string, error) { return "", io.EOF }
+func (f *captureFrontend) Input(ctx context.Context) (string, error) {
+	if cancel, ok := core.InterruptFrom(ctx); ok {
+		f.mu.Lock()
+		f.cancel = cancel
+		f.mu.Unlock()
+	}
+	f.mu.Lock()
+	if len(f.inputs) == 0 {
+		f.mu.Unlock()
+		return "", io.EOF
+	}
+	s := f.inputs[0]
+	f.inputs = f.inputs[1:]
+	f.mu.Unlock()
+	return s, nil
+}
 
 func (f *captureFrontend) Notify(ev core.Event) {
 	f.mu.Lock()
@@ -91,6 +108,14 @@ func (f *captureFrontend) snapshot() []core.Event {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return append([]core.Event(nil), f.events...)
+}
+
+func (f *captureFrontend) steal() context.CancelFunc {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	c := f.cancel
+	f.cancel = nil
+	return c
 }
 
 var overflowRow = models.Model{Role: models.RoleInteractive, ID: "local", Window: 4000, MaxTokens: 500, Reserve: 100, KeepRecent: 200}

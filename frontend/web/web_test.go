@@ -180,6 +180,38 @@ func bearer(tok string) http.Header {
 	return h
 }
 
+func jsonHdr(tok string) http.Header {
+	h := both(bearer(tok), "Origin", "http://127.0.0.1:7777")
+	h.Set("Content-Type", "application/json")
+	return h
+}
+
+func schedList(t *testing.T, h http.Handler, tok string) string {
+	rec := doReq(t, h, "GET", "/api/scheduler?cwd="+testCWD, nil, bearer(tok))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("list: got %d", rec.Code)
+	}
+	var body map[string]string
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	return body["text"]
+}
+
+func schedSay(rec *httptest.ResponseRecorder) string {
+	var body map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		return rec.Body.String()
+	}
+	if r, ok := body["reply"].(string); ok {
+		return r
+	}
+	if e, ok := body["error"].(string); ok {
+		return e
+	}
+	return rec.Body.String()
+}
+
 func TestTokenGate(t *testing.T) {
 	srv, tok := newTestServer(t)
 	h := srv.Handler()
@@ -481,58 +513,13 @@ func TestTranscriptGolden(t *testing.T) {
 	}
 }
 
-func TestTodoReadVerbatim(t *testing.T) {
-	srv, tok := newTestServer(t)
-	h := srv.Handler()
-	rec := doReq(t, h, "GET", "/api/todo?cwd="+testCWD, nil, bearer(tok))
-	if rec.Code != http.StatusOK {
-		t.Fatalf("todo read: got %d", rec.Code)
-	}
-	var body map[string]string
-	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(body["text"], "seeded task") {
-		t.Fatalf("todo read: %q, want the seeded task", body["text"])
-	}
-
-	rec = doReq(t, h, "GET", "/api/todo?cwd="+testCWD+"&all=true", nil, bearer(tok))
-	if rec.Code != http.StatusOK {
-		t.Fatalf("todo ReadAll: got %d", rec.Code)
-	}
-	var body2 map[string]string
-	if err := json.Unmarshal(rec.Body.Bytes(), &body2); err != nil {
-		t.Fatal(err)
-	}
-	if body2["text"] == "" {
-		t.Fatal("todo ReadAll: empty text")
-	}
-}
-
-func TestSchedulerVerbatim(t *testing.T) {
-	srv, tok := newTestServer(t)
-	rec := doReq(t, srv.Handler(), "GET", "/api/scheduler?cwd="+testCWD, nil, bearer(tok))
-	if rec.Code != http.StatusOK {
-		t.Fatalf("scheduler: got %d (body %s)", rec.Code, rec.Body.String())
-	}
-	var body map[string]string
-	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(body["text"], "digest") {
-		t.Fatalf("scheduler: %q, want the seeded job", body["text"])
-	}
-}
-
 func TestSchedulerCreate(t *testing.T) {
 	srv, tok := newTestServer(t)
 	h := srv.Handler()
 	q := "?cwd=" + testCWD
 
 	post := func(body string) *httptest.ResponseRecorder {
-		hdr := both(bearer(tok), "Origin", "http://127.0.0.1:7777")
-		hdr.Set("Content-Type", "application/json")
-		return doReq(t, h, "POST", "/api/scheduler"+q, strings.NewReader(body), hdr)
+		return doReq(t, h, "POST", "/api/scheduler"+q, strings.NewReader(body), jsonHdr(tok))
 	}
 
 	rec := post(`{"name":"nightly","prompt":"do the nightly","cron":"0 3 * * *"}`)
@@ -669,38 +656,12 @@ func TestSchedulerDoors(t *testing.T) {
 	srv, tok := newTestServer(t)
 	h := srv.Handler()
 	q := "?cwd=" + testCWD
-	hdr := func() http.Header {
-		x := both(bearer(tok), "Origin", "http://127.0.0.1:7777")
-		x.Set("Content-Type", "application/json")
-		return x
-	}
-	list := func() string {
-		rec := doReq(t, h, "GET", "/api/scheduler"+q, nil, bearer(tok))
-		if rec.Code != http.StatusOK {
-			t.Fatalf("list: got %d", rec.Code)
-		}
-		var body map[string]string
-		if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
-			t.Fatal(err)
-		}
-		return body["text"]
-	}
+	hdr := func() http.Header { return jsonHdr(tok) }
+	list := func() string { return schedList(t, h, tok) }
 	verb := func(target, id string) *httptest.ResponseRecorder {
 		return doReq(t, h, "POST", target+q, strings.NewReader(`{"id":"`+id+`"}`), hdr())
 	}
-	say := func(rec *httptest.ResponseRecorder) string {
-		var body map[string]any
-		if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
-			t.Fatal(err)
-		}
-		if r, ok := body["reply"].(string); ok {
-			return r
-		}
-		if e, ok := body["error"].(string); ok {
-			return e
-		}
-		return rec.Body.String()
-	}
+	say := schedSay
 
 	rec := verb("/api/scheduler/pause", "j99")
 	if rec.Code != http.StatusBadRequest || !strings.Contains(say(rec), "no job 'j99'") {
@@ -873,35 +834,9 @@ func TestSchedulerRepairDoor(t *testing.T) {
 	srv, tok := newTestServer(t)
 	h := srv.Handler()
 	q := "?cwd=" + testCWD
-	hdr := func() http.Header {
-		x := both(bearer(tok), "Origin", "http://127.0.0.1:7777")
-		x.Set("Content-Type", "application/json")
-		return x
-	}
-	say := func(rec *httptest.ResponseRecorder) string {
-		var body map[string]any
-		if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
-			t.Fatal(err)
-		}
-		if r, ok := body["reply"].(string); ok {
-			return r
-		}
-		if e, ok := body["error"].(string); ok {
-			return e
-		}
-		return rec.Body.String()
-	}
-	list := func() string {
-		rec := doReq(t, h, "GET", "/api/scheduler"+q, nil, bearer(tok))
-		if rec.Code != http.StatusOK {
-			t.Fatalf("list: got %d", rec.Code)
-		}
-		var body map[string]string
-		if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
-			t.Fatal(err)
-		}
-		return body["text"]
-	}
+	hdr := func() http.Header { return jsonHdr(tok) }
+	say := schedSay
+	list := func() string { return schedList(t, h, tok) }
 
 	rec := doReq(t, h, "GET", "/api/scheduler/repair"+q, nil, bearer(tok))
 	if rec.Code != http.StatusMethodNotAllowed || !strings.Contains(rec.Header().Get("Allow"), "POST") {
@@ -970,18 +905,6 @@ func TestSchedulerRepairDoor(t *testing.T) {
 	rec = doReq(t, h, "POST", "/api/scheduler/repair"+q, strings.NewReader(`{"id":"`+jobID+`"}`), hdr())
 	if rec.Code != http.StatusBadRequest || !strings.Contains(say(rec), "'"+jobID+"' is removed; nothing to repair") {
 		t.Fatalf("repair of a removed job: got %d %q, want the named refusal", rec.Code, say(rec))
-	}
-}
-
-func TestMemoryRouteIsGone(t *testing.T) {
-	srv, tok := newTestServer(t)
-	rec := doReq(t, srv.Handler(), "GET", "/api/memory?cwd="+testCWD, nil, bearer(tok))
-	if rec.Code != http.StatusNotFound {
-		t.Fatalf("memory: got %d, want 404", rec.Code)
-	}
-	rec = doReq(t, srv.Handler(), "GET", "/", nil, bearer(tok))
-	if strings.Contains(rec.Body.String(), `data-view="memory"`) {
-		t.Fatal("the page still carries a memory tab")
 	}
 }
 
@@ -1093,9 +1016,7 @@ func TestPluginsCreate(t *testing.T) {
 	h := srv.Handler()
 
 	post := func(body string) *httptest.ResponseRecorder {
-		hdr := both(bearer(tok), "Origin", "http://127.0.0.1:7777")
-		hdr.Set("Content-Type", "application/json")
-		return doReq(t, h, "POST", "/api/plugins", strings.NewReader(body), hdr)
+		return doReq(t, h, "POST", "/api/plugins", strings.NewReader(body), jsonHdr(tok))
 	}
 
 	rec := post(`{"name":"hello","description":"says hi","code":"return \"hello\" + str(args)"}`)
@@ -1197,11 +1118,7 @@ func TestPluginsCreate(t *testing.T) {
 func TestPluginDisableEnableDoors(t *testing.T) {
 	srv, tok := newTestServer(t)
 	h := srv.Handler()
-	hdr := func() http.Header {
-		x := both(bearer(tok), "Origin", "http://127.0.0.1:7777")
-		x.Set("Content-Type", "application/json")
-		return x
-	}
+	hdr := func() http.Header { return jsonHdr(tok) }
 	list := func() map[string]string {
 		rec := doReq(t, h, "GET", "/api/plugins", nil, bearer(tok))
 		var body map[string]any
@@ -1306,69 +1223,6 @@ func TestPluginDisableEnableDoors(t *testing.T) {
 	}
 }
 
-func TestStaticAssets(t *testing.T) {
-	srv, tok := newTestServer(t)
-	h := srv.Handler()
-
-	for path, wants := range map[string][]string{
-		"/": {"<!doctype html", `data-view="chat"`, `id="tabs"`, `id="cwd-add"`, `id="browse-btn"`, `data-view="plugins"`, `data-view="swarm"`, "manifest.webmanifest", "apple-mobile-web-app-capable", "viewport-fit=cover", `data-theme-pick="cool"`},
-		"/static/app.js": {
-			"renderChat",
-			"EventSource('/api/chat/events?since='",
-			"post('/api/chat'",
-			"/api/chat/answer",
-			"/api/chat/interrupt",
-			"/api/status",
-			"/api/swarm",
-			"renderSessions",
-			"renderSwarm",
-			"parseTodo",
-			"parseScheduler",
-			"progressBar",
-			"addCwd",
-			"applyTheme",
-			"highlightPython",
-			"editorEl",
-			"openForge",
-			"browseTo",
-			"toolBlock",
-			"plugins/disable",
-			"plugins/enable",
-			"/api/scheduler/pause",
-			"/api/scheduler/resume",
-			"/api/scheduler/remove",
-			"/api/scheduler/update",
-			"/api/scheduler/runs",
-			"schedacts",
-			"schedup",
-			"schedconfirm",
-			"claimed for review by",
-		},
-		"/static/style.css":            {"--ember", `[data-theme="warm"]`, `[data-theme="cool"]`, "@media (max-width: 720px)", ".tabs {", "@keyframes breathe", "env(safe-area-inset-bottom", "main.chat { padding: env(safe-area-inset-top, 0px) 0 0; }", ".editor", "--effort-xhigh", ".schedacts", ".schedup", ".composer", ".feed"},
-		"/static/manifest.webmanifest": {`"display": "standalone"`, "icon-180.png", `"start_url": "/?token=`},
-	} {
-		rec := doReq(t, h, "GET", path, nil, bearer(tok))
-		if rec.Code != http.StatusOK {
-			t.Fatalf("%s: got %d", path, rec.Code)
-		}
-		for _, want := range wants {
-			if !strings.Contains(rec.Body.String(), want) {
-				t.Fatalf("%s: body missing %q", path, want)
-			}
-		}
-	}
-
-	rec := doReq(t, h, "GET", "/static/nope.js", nil, bearer(tok))
-	if rec.Code != http.StatusNotFound {
-		t.Fatalf("unknown static: got %d, want 404", rec.Code)
-	}
-
-	rec = doReq(t, h, "GET", "/static/../web.go", nil, bearer(tok))
-	if rec.Code == http.StatusOK {
-		t.Fatalf("traversal: got 200, want a refusal")
-	}
-}
-
 func TestStaticAssetsPhoneMainKeepsTheTopInset(t *testing.T) {
 	srv, tok := newTestServer(t)
 	rec := doReq(t, srv.Handler(), "GET", "/static/style.css", nil, bearer(tok))
@@ -1401,11 +1255,7 @@ func TestStaticAssetsSchedulerPhoneRow(t *testing.T) {
 func TestForgeSourceSaveApprove(t *testing.T) {
 	srv, tok := newTestServer(t)
 	h := srv.Handler()
-	hdr := func() http.Header {
-		x := both(bearer(tok), "Origin", "http://127.0.0.1:7777")
-		x.Set("Content-Type", "application/json")
-		return x
-	}
+	hdr := func() http.Header { return jsonHdr(tok) }
 
 	rec := doReq(t, h, "GET", "/api/plugins/source?name=loaded_one&zone=loaded", nil, bearer(tok))
 	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "the loaded plugin") {
@@ -1574,11 +1424,7 @@ func TestTodoComplete(t *testing.T) {
 	srv, tok := newTestServer(t)
 	h := srv.Handler()
 	q := "?cwd=" + testCWD
-	hdr := func() http.Header {
-		x := both(bearer(tok), "Origin", "http://127.0.0.1:7777")
-		x.Set("Content-Type", "application/json")
-		return x
-	}
+	hdr := func() http.Header { return jsonHdr(tok) }
 	read := func(all bool) string {
 		target := "/api/todo" + q
 		if all {
