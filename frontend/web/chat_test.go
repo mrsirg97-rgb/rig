@@ -203,6 +203,19 @@ func TestChatSteerWhileLiveCancelsAndQueues(t *testing.T) {
 	}
 }
 
+func TestTheChatUnescapesThePromptOnBothDoors(t *testing.T) {
+	srv, tok := newChatServer(t)
+	h := srv.Handler()
+	doReq(t, h, "POST", "/api/chat", strings.NewReader(`{"text":"//home/ng/quiet"}`), originHdr(tok))
+	if line, err := srv.Input(context.Background()); err != nil || line != "/home/ng/quiet" {
+		t.Fatalf("the quiet prompt's escape = (%q, %v), want /home/ng/quiet", line, err)
+	}
+	doReq(t, h, "POST", "/api/chat", strings.NewReader(`{"text":"//home/ng/steered"}`), originHdr(tok))
+	if line, err := srv.Input(context.Background()); err != nil || line != "/home/ng/steered" {
+		t.Fatalf("the steered escape = (%q, %v), want /home/ng/steered", line, err)
+	}
+}
+
 func TestChatAskRoundTrip(t *testing.T) {
 	srv, tok := newChatServer(t)
 	h := srv.Handler()

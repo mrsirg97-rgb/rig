@@ -204,16 +204,15 @@ func (c *chat) Input(ctx context.Context) (string, error) {
 			if strings.TrimSpace(line) == "" {
 				continue
 			}
-			out := line
-			if strings.HasPrefix(line, "//") {
-				out = command.Unescape(line)
-			}
-			return c.take(ctx, out), nil
+			return c.take(ctx, line), nil
 		}
 	}
 }
 
 func (c *chat) take(ctx context.Context, line string) string {
+	if strings.HasPrefix(line, "//") {
+		line = command.Unescape(line)
+	}
 	c.mu.Lock()
 	c.turnCtx = ctx
 	c.steeredLive = false

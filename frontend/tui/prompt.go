@@ -187,12 +187,10 @@ func (t *tui) Input(ctx context.Context) (string, error) {
 			return block, nil
 		}
 		if line, ok := t.takeSlot(); ok {
-			if strings.TrimSpace(line) == "" {
-				continue
+			if out, delivered := t.consume(ctx, line); delivered {
+				return out, nil
 			}
-
-			t.startTurnLocked(ctx)
-			return line, nil
+			continue
 		}
 
 		select {
