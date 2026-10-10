@@ -23,7 +23,7 @@ alignment in the drift commit; the exception is named, not hidden).
   - `build`; `go build -o bin/rig ./cmd/rig`. The binary lands in a
     repo-local `bin/`, gitignored.
   - `install`; `build`, then copy `bin/rig` into `$(BINDIR)`.
-  - `test`; `go vet ./... && go test ./...`.
+  - `test`; `go vet ./... && go test -race ./...`.
   - `fmt`; `gofmt -w` over the repo.
   - `fmt-check`; `gofmt -l`; fails loud when anything is unformatted, the
     files listed in the output.
@@ -33,8 +33,10 @@ alignment in the drift commit; the exception is named, not hidden).
   else `~/.local/bin`; `BINDIR=...` overrides.
 - The CI jobs (`.github/workflows/ci.yml`): on `pull_request` and `push`
   to `main`, three Linux jobs. `build`: checkout, `setup-go` with
-  `go-version-file: go.mod` and the module cache, then `make test`,
-  `make fmt-check`, and `shellcheck install.sh scripts/wire-check`.
+  `go-version-file: go.mod` and the module cache, then the gate inline
+  (`go vet ./... && go test -race -p 2 ./...`), `make fmt-check`, the
+  measured-check (`scripts/readme-measured check`), and `shellcheck
+  install.sh scripts/wire-check`.
   `freeze`: a full-history checkout and `go run ./cmd/freeze -branch
   "$GITHUB_HEAD_REF"` (decision 6). `wire`: the same checkout and
   `scripts/wire-check` with the menu's two numbers as job env (decision
@@ -65,12 +67,12 @@ alignment in the drift commit; the exception is named, not hidden).
   numbers in the job's env — the one place that reads them.
 - The drift commit: one commit on this branch runs `make fmt` and carries
   only the formatting delta, so `fmt-check` goes green and stays the gate.
-- The documented install paths, three (decision 5):
-  the installer (`curl -fsSL https://mrsirg97-rgb.github.io/rig/install.sh
-  | sh`), the release binary (the same asset the installer fetches,
-  downloaded directly), and
-  `go install github.com/mrsirg97-rgb/rig/v2/cmd/rig@latest` (README
-  quickstart, `docs/SETUP.md` build section).
+- The documented install paths, five (decision 5):
+  the installer (`curl -fsSL https://tryrig.ai/install.sh | sh`), the
+  release binary (the same asset the installer fetches, downloaded
+  directly), `go install github.com/mrsirg97-rgb/rig/v2/cmd/rig@latest`,
+  `make install` from a checkout, and `rig -update` on an installed
+  binary (README quickstart, `docs/SETUP.md` build section).
 
 ## non-goals (the point)
 
@@ -173,19 +175,24 @@ over a live session keeps it running.
 
 `gofmt -l .` empty is green; non-empty is a failure that lists the
 offending files in its output; a red you can act on from the first line,
-not an exit code you must decode. CI runs it after `make test` on every
-pull request and every push to main, so the drift this branch pays is born
+not an exit code you must decode. CI runs it in the build job, after
+the inline vet+test, on every pull request and every push to main, so
+the drift this branch pays is born
 formatted: after the drift commit, a PR that lands unformatted code is red
 in the job, not a remark in the review.
 
 ### 4. The CI job
 
-One job, `ubuntu-latest`, on `pull_request` and `push` to `main`. The
-steps: `actions/checkout`, `actions/setup-go` with
-`go-version-file: go.mod` (the `go 1.26.6` module line is the toolchain's
-single source of truth; the workflow names no version) and the module
-cache, then `make test`, then `make fmt-check`, then `shellcheck
-install.sh`. No artifacts, no uploads, no secrets, no matrix. This job is
+Three jobs, `ubuntu-latest`, on `pull_request` and `push` to `main`
+(plus `workflow_dispatch`), the gate the goals describe: `build`,
+`freeze`, `wire`. The build job's steps: `actions/checkout`,
+`actions/setup-go` with `go-version-file: go.mod` (the `go 1.26.6`
+module line is the toolchain's single source of truth; the workflow
+names no version) and the module cache, then the test inline (`go vet
+./... && go test -race -p 2 ./...`), then `make fmt-check`, then the
+measured-check (`python3 scripts/readme-measured check`), then
+`shellcheck install.sh scripts/wire-check`. No artifacts, no uploads,
+no secrets, no matrix. This job is
 the PR gate; the release workflow runs only on tags.
 
 ### 5. Distribution
@@ -253,12 +260,16 @@ asset and a build whose `Version` has no release tag each say so rather
 than downgrading.
 
 **The site** (`site/`, published by `.github/workflows/pages.yml` on
-`push` to `main`). One static page: no build step, no JS framework, no
-external assets. The page carries the name, one line on what rig is
+`push` to `main` and `workflow_dispatch`). One static page: no JS
+framework, no external assets; the pages job is the page's build step —
+it seds the three placeholders (`{{RIG_VERSION}}` from the `Version`
+const, `{{RIG_COMMITS}}`, `{{RIG_LOOP_LINES}}`) into the artifact. The
+page carries the name, one line on what rig is
 (AGENTS.md's overview), the install line `curl -fsSL
-https://mrsirg97-rgb.github.io/rig/install.sh | sh`, the `go install
-github.com/mrsirg97-rgb/rig/v2/cmd/rig@latest` alternative, and links to the
-README, `specs/`, and the latest release. The pages job copies
+https://tryrig.ai/install.sh | sh`, the `go install
+github.com/mrsirg97-rgb/rig/v2/cmd/rig@latest` alternative, and links to
+github, the latest release, `docs/SETUP.md`, `specs/`, and
+`docs/EMBED.md` — the README is not among them. The pages job copies
 `install.sh` into the artifact so the site URL serves the same bytes as
 the repo root.
 

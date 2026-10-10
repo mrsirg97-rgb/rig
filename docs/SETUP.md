@@ -107,7 +107,7 @@ not find.
 | file              | purpose                                                                 |
 |-------------------|-------------------------------------------------------------------------|
 | `settings.json`   | the knobs below, flat, by their env names (lowerCamel, no `RIG_` prefix); `defaultJobModel` is retired (2.4.0): a present one is named once at start and ignored — move it to `model` by hand, then delete the key |
-| `models.json`     | the model table, one row per model: `id`, `window`, `maxTokens`, `reserve`, `keepRecent` (all four numerics required on every row), optional `role` (`worker`/`interactive`, default the latter), `effort` (the summary call's reasoning effort), `efforts` (the `/effort` dial's vocabulary), `vision` (registers `view` on that row), and the hosted run site — `remote`, `provider`, `baseUrl`, `apiKey`, `reasoning`, `providerPin`, `cacheControl`, `retries` — under "On hosted mode" below and `specs/SPEC_HOSTED.md` |
+| `models.json`     | the model table, one row per model: `id`, `window`, `maxTokens`, `reserve`, `keepRecent` (all four numerics required on every row), optional `role` (`worker`/`interactive`, default the latter), `effort` (the summary call's reasoning effort), `efforts` (the `/effort` dial's vocabulary), `vision` (registers `view` on that row), and the hosted run site — `remote`, `provider`, `baseUrl`, `apiKey`, `reasoning`, `providerPin`, `cacheControl`, `retries`; plus the retired `concurrency` row key (2.4.0: read and dropped with one start notice, like settings' `defaultJobModel`) — under "On hosted mode" below and `specs/SPEC_HOSTED.md` |
 | `workers.json`    | **retired (2.4.0)**: the fleet is the resident model. A present file is read, ignored, and named once at start; deleting it silences the line |
 | `AGENTS.md`       | global instructions; read before the project's `AGENTS.md` (the nearest one from the workspace up to the repo root) and placed between the system prompt and the participants' guidelines |
 | `theme.json`      | the terminal frontend's custom theme (`specs/SPEC_TUI.md` 7), the `/theme custom` preset: `base` (one of `warm`, `cool`, `paper`, `p1`, `p3`, or the legacy `oled`; required), optional `slots` (slot names → `#rrggbb`) and `glyphs` (`unicode` or `ascii`). Unknown keys refuse; the TUI owns the schema. The dial itself is settings.json's `theme` key |
@@ -331,8 +331,10 @@ every turn's end. The piped CLI is unchanged and is the reference: pipe,
   settings.json's `theme` key; the TUI repaints at once. `custom` is
   `~/.rig/theme.json`, three keys: `base` (the shipped palette: `warm`,
   `cool`, `paper`, `p1`, `p3`; `oled` is the legacy alias of `warm`),
-  `slots` (any of `accent`, `dim`, `error`, `reasoning`, `rule`,
-  `success`, `text`, `warn`, mapped to `#rrggbb`), `glyphs` (`unicode`,
+  `slots` (any of `accent`, `dim`, `ember`, `error`, `reasoning`, `rule`,
+  `success`, `text`, `warn`, and the seven effort levels `effortOff`,
+  `effortMinimal`, `effortLow`, `effortMedium`, `effortHigh`,
+  `effortXhigh`, `effortMax`, mapped to `#rrggbb`), `glyphs` (`unicode`,
   the default, or `ascii` for the bracket/`>`/`#` set). Color depth is
   the terminal's, not yours: `COLORTERM` 24-bit → truecolor, else the
   nearest 256 index. A malformed file refuses at start, naming the file

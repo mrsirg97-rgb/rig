@@ -48,6 +48,10 @@ The three dense contracts are trimmed to the shape:
 - `tool/todo`'s description drops the state machine, the claim rules,
   the auto-start, the compaction sentence, and the batching sentence:
   each already rides an error or an echo the model reads on contact
+  (the claim rule has since crept back into the standing guidelines —
+  "`claim` takes the next pending task with no unfinished `requires`
+  or `blocks` link" — where the trim never put it; the state machine,
+  compaction and batching sentences are still absent)
   (`is claimed by X; fail it first to take over`, `auto-started and
   completed`, `requires tN`).
 - `tool/scheduler`'s description and guidelines de-duplicate: the cron
@@ -55,8 +59,9 @@ The three dense contracts are trimmed to the shape:
   the scope list, and the drift note each appear once. SPEC_CONFIG 5's
   named clause (`Default model:`) rides the new `(default: X)` phrase.
 - `tool/rem` drops the search-engine internals (fuzzy/semantic) and
-  keeps the verbs, the scope rule, the k cap, and the session-start
-  note.
+  keeps the verbs and the scope rule; the session-start note is gone
+  from the words, and the k cap survives as the schema property `k`,
+  not in them.
 
 `bash`, `read`, `write`, `edit` are already at
 shape and stay.
@@ -177,11 +182,12 @@ seam, SPEC_PLUGINS 8's harness):**
   the result rides back verbatim; the following request carries the
   name in the door's enum.
 
-**Goldens (cmd/rig):**
+**The wire bodies (cmd/rig):**
 
-- The three pinned request bodies carry the trimmed descriptions and
-  the door's self-heal line; the fixtures are regenerated in place, the
-  SPEC_PLUGINS 8 precedent.
+- The three request bodies carry the trimmed descriptions and
+  the door's self-heal line; `scripts/wire-check` renders them at the
+  merge-base and head and posts the diff (2.12.3 retired the stored
+  fixtures and the `-update` flag; there is no `cmd/rig/testdata/`).
 
 ## scope
 
@@ -192,10 +198,12 @@ seam, SPEC_PLUGINS 8's harness):**
   template; the root's wiring.
 - `tool/todo`, `tool/scheduler`, `tool/rem`: the trimmed descriptions;
   `tool/scheduler`'s guidelines de-duplicated.
-- `cmd/rig/testdata/golden_020`: regenerated in place.
+- The request bodies' render: `scripts/wire-check` (2.12.3;
+  `cmd/rig/testdata/` is gone).
 - The description-pinned test surfaces follow the new voice:
-  `tool/scheduler`, `tool/rem`, `cmd/rig`'s config test, and
-  `frontend/tui`'s freeze allowlist (the tool/scheduler line).
+  `tool/scheduler`, `tool/rem`, and `cmd/rig`'s config test; the
+  scheduler words also ride the wire job (`frontend/tui` has no
+  description allowlist to pin them).
 - `PACKAGE.md`: store/todo, plugins, tool/todo.
 - `docs/USAGE.md`, `docs/SETUP.md`: the dance's tail, named.
 - `CHANGELOG.md`: the 0.9.2 entry: the version 0.9.2.

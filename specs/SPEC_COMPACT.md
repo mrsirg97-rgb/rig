@@ -331,8 +331,11 @@ wire in both shapes the server families read: top-level
 `reasoning_effort` (OpenAI-shaped servers) and
 `chat_template_kwargs.reasoning_effort` (llama.cpp, whose Qwen3 template
 ignores the top-level field; measured on the swap, only the kwargs entry
-changes the think length); present in both when set, absent in both when
-empty, the wire-shape test asserts both. The summary prompt is
+changes the think length); present in both when the effort is set on a
+local row, absent from both when empty — and a remote row carries the
+top-level shape only, the llama.cpp-shaped `chat_template_kwargs`
+entry built only when the row is not remote (the deliberate gate the
+hosted wire tests pin twice). The summary prompt is
 one file, not an inline string:
 `policy/compact/summary_prompt.txt`, embedded with `go:embed` (stdlib),
 reviewed and diffed as one document. Its contract: a compact factual
@@ -356,7 +359,8 @@ has left for this request: `min(MaxTokens, Window - est(prompt + older)
 * factor)`; the calibrated estimate (4); nothing follows in the summary
 call, so `Window - est` is the honest budget, and the reserve is not
 subtracted twice (the main-call clamp in 8 is the same shape). If the
-budget is under the summary floor (`min(Reserve/4, 256)`, the same
+budget is under the summary floor (`min(Reserve/4, 256)`, floored at one
+token so a Reserve-0 row cannot demand an impossible fit, the same
 threshold the main-call clamp uses: room for a summary, not a token):
 the input does not fit the window (an older prefix that itself exceeds
 the summary window when the transcript is far past the trigger; one
@@ -531,8 +535,10 @@ compact action itself emits the cue to the frontend it holds, once,
 just before the summary call, on both doors (the trigger path and the
 forced verb); the exactly-once rule above governs `Compacted`, the
 transcript event; the cue is progress, not transcript, and the recorder
-ignores it. The CLI prints one line (`⧉ compacting…`); the TUI shows a
-`compacting` phase in the activity row (placed for the duration on the
+ignores it. The CLI prints one line (`⧉ compacting…`); the TUI shows the
+phase in the activity row — named `summarizing`, the word the policy
+opens and the activity row renders, `core.Compacting` gating the row's
+liveness (placed for the duration on the
 verb's door, where no turn is live) and drops it with the `Compacted`
 commit or a `Fault`; one-shot ignores it. Named test:
 `TestCompactingCueOrder` (the cue precedes `Compacted`; the passthrough
@@ -834,7 +840,7 @@ in `t.TempDir()` where a case names it.
 - `TestCalibrationShiftsTheTrigger`: a scripted `Done` reporting
   `anchor + 2*estimate(delta)`: the next trigger decision doubles only the
   delta (a transcript under the raw trigger compacts; the inverse, a
-  reported 0.5x, named); a reported ratio outside `[0.5, 4.0]` is
+  reported 0.5x, named); a reported ratio outside `[0.5, 2.0]` is
   clamped; a request with no anchor leaves the factor at 1.0 (the
   whole-request ratio carries the system+spec constant, 4); a call
   carrying a large tool spec keeps the factor at the delta ratio:

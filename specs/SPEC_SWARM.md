@@ -100,16 +100,16 @@ count behind the keyword so `swarm stop` and `swarm start` parse apart).
 Each drain worker owns one identity (a minted session id, stable for its
 life), and loops:
 
-1. `todo claim` — the first pending task whose dependency is done; a
-   reviewer claims `status=review` (the 1.3.9 filter) instead. The claim
-   is attributed to the drain worker's identity, so the queue shows the
-   in-flight task and its holder, and the architect's own claims never
-   collide with the swarm's.
-2. `nothing to do` three times in a row ends the worker; an empty claim
-   while any other drain worker is mid-task does not count (a review is
-   in flight, the queue is transiently empty). Between empty claims it
-   sleeps a short poll (`Poll`, default 2s), so the workers do not wake
-   together and do not spin on an empty queue.
+1. The router claims — one `todo claim` for each idle worker, the first
+   pending task whose dependency is done; a reviewer's role takes
+   `status=review` (the 1.3.9 filter). The claim is attributed to the
+   drain worker's identity, so the queue shows the in-flight task and
+   its holder, and the architect's own claims never collide with the
+   swarm's. Workers never read the queue (2.6.0).
+2. An idle worker waits on the router's handoff: no exit count, no poll
+   (the `nothing to do` three-strikes and the 2s `Poll` went with the
+   router), the router runs on events — the start, a task created or
+   completed, a worker finishing.
 3. Otherwise it spawns a one-shot worker through the delegate path for the
    claimed task: the task brief (id, text, notes) as the prompt, the
    drain worker's model, a fresh worker session id (the resumable
@@ -145,13 +145,14 @@ Each task worker spawns through `sched.Delegate` with the delegate's
 socket proxy, `WorkerCmd`, the state-store bind, the explicit worker
 session id, the ad-hoc run record (`scheduler runs` shows each task
 worker beside cron runs), the allow-list minus `delegate`, and
-`RIG_DELEGATE=1`. The delegate input gains four fields, all defaulted to
+`RIG_DELEGATE=1`. The delegate input gains three fields, all defaulted to
 today's behavior:
 
-- `WaitBusy` (default false): with it, a busy GPU is waited on instead of
-  refused — the busy check polls `busyState` on a short interval until the
-  model runs or the context ends. This is the swarm's parallelism: the GPU
-  slots, not the worker count. A busy-check failure still fails closed.
+- `Timeout` (the swarm passes `noTimeout`): no wrapper deadline and no
+  stall for a drain worker — a worker queued at the server writes
+  nothing, and a silence or spend kill would shoot it; the worker's
+  session context is the only bound (2.6.0 retired `WaitBusy` and
+  `Stall` with the slot read).
 - `Member` (default nil): the worker's member in the session's room
   (2.11.0, replacing the `Observe` byte observer): the child heartbeats
   on the fleet pipe (fd 3, `RIG_FLEET`) and `Delegate` publishes each
@@ -160,17 +161,12 @@ today's behavior:
 - `SpawnCtx` (default Background): the base context the spawn timeout
   wraps, so `/swarm stop` kills the in-flight task worker's process tree
   instead of leaving it to its timeout.
-- `Stall` (default 0) with the swarm's `Timeout` 2h: the silence window,
-  the scheduler's stall kill at the delegate seam. A worker writing
-  nothing for 10 minutes is killed as hung; one still writing keeps its
-  slot for the full 2h spend ceiling, never killed at the old 30-minute
-  wall. The interactive delegate stays unset (today's plain timeout)
-  unless the caller sets `stallMs`.
 
 The swarm's spawn passes the drain worker's identity as the delegate's
-`Session` with `Slots: 1`, so the per-session slot flock is a no-op: one
-task worker in flight per drain worker is the loop's own shape. The
-fleet's `slots` gate stays the delegate's; the swarm's gate is the GPU.
+`Session` — one task worker in flight per drain worker is the loop's own
+shape (the per-session slot flock is gone with the slot read, 2.6.0, and
+`DelegateInput` carries no `Slots`); the swarm's gate is the GPU's busy
+gate.
 
 Every abnormal end of a spawned worker is recorded as the run's reason,
 never only as a log marker: `killed after timeout` (the spend ceiling),
@@ -219,9 +215,10 @@ owns every concrete type; the command owns only the vocabulary.
   architect can spin up a reviewer when the first task lands in review.
   It bounds `n` (1..`MaxWorkers` 16, the induced work cap), validates
   the role vocabulary, and resolves an unknown `model=` against the
-  runtime models table by name. With no `model=`, a worker uses the
-  fleet's `model`; a reviewer uses `workers.json`'s `reviewer` when
-  configured, else the fleet's. The reply is one phrasing whether the
+  runtime models table by name. With no `model=`, every member — worker
+  and reviewer alike — uses the fleet's `model` (resident → per-task at
+  spawn; the workers.json `reviewer` key went with the file, 2.4.0).
+  The reply is one phrasing whether the
   swarm was empty or running: `swarm: added N agents (role X · model
   M)` (`agent` for one, `agents` for more; never `started`). The
   controller's context derives from the start command's session context,

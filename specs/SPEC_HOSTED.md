@@ -47,15 +47,15 @@ in the usage column, and swarms and scheduled jobs take dollar budgets.
 
 `models.Model` gains: `Remote bool` (`remote`), `Provider string`
 (`provider`; a non-empty name implies remote), `BaseURL string`
-(`baseUrl`), `APIKey string` (`apiKey`), `Concurrency int`
-(`concurrency`, default 1 for remote rows), `Reasoning string`
+(`baseUrl`), `APIKey string` (`apiKey`), `Reasoning string`
 (`reasoning`; `reasoning_content` default, `reasoning` for OpenRouter),
 `ProviderPin []string` (`providerPin`, a string or array),
 `CacheControl bool` (`cacheControl`), `Retries int` (`retries`,
-default 3).
+default 3). The row's `concurrency` is a retired key with a startup
+notice (2.4.0) — no field on the row, no default, no column.
 
 - `Check` refuses a remote row without `baseUrl` (a remote endpoint
-  cannot borrow the swap's URL), a `concurrency` below 1, a
+  cannot borrow the swap's URL), a
   `providerPin` or `cacheControl` on a row whose provider is not
   `openrouter`, and a `reasoning` value outside the two names.
 - The env overlay gains `RIG_MODEL_BASE_URL`, `RIG_MODEL_API_KEY`,
@@ -70,8 +70,8 @@ default 3).
   `RIG_MODEL_PROVIDER`.)
 - `config/modelsfile.go` accepts the new keys and merges them by id
   like the rest. A key that is not in the row's file is never
-  rendered: `command/models` shows remote, provider, baseUrl, and
-  concurrency but never the key.
+  rendered: `command/models` shows remote, provider, and baseUrl —
+  the retired `concurrency` rides no column.
 
 ### 2. The provider's hosted behavior
 
@@ -119,7 +119,7 @@ constructors delegate with defaults and local-row behavior unchanged
 
 `core.Usage.Cost` rides every usage-bearing event (`Done`, `EmptyTurn`,
 `Compacted`). The state store's `usage` table gains `cost REAL NOT NULL
-DEFAULT 0` (schema v4, presence-keyed migration); `RecordUsage` and
+DEFAULT 0` (schema v5, presence-keyed migration); `RecordUsage` and
 `AddUsage` take it; `UsageRow.Cost` and `SessionUsage` return it.
 `SessionCost(ctx, db, sessionID)` sums one session's cost column, and
 the sessions list and the TUI footer show the session's dollars.
@@ -132,14 +132,15 @@ the endpoint's own 429 retry is the backpressure. A remote delegate
 skips the gate entirely (the swap is never consulted — not even for
 the names a failure would name). The rest stands.
 
-`DelegateInput` gains `Remote bool` and `Concurrency int`. A remote
-delegate skips `delegateBusy` entirely (the swap is never consulted —
-not even for the names a failure would name) and acquires the row's
-concurrency token flock (`delegate:model:<id>:<n>` in the scheduler
-home) beside the per-session slot flock. `tool/delegate` resolves the
+`DelegateInput` gains `Remote bool`. A remote delegate skips
+`delegateBusy` entirely (the swap is never consulted — not even for
+the names a failure would name) and carries no flock: the row's
+concurrency token (`delegate:model:<id>:<n>`) and the per-session
+slot flock both retired with the slot read (SPEC_WORKERS 2.6.0).
+`tool/delegate` resolves the
 requested model row through a `Models` seam; the swarm resolves the
 worker's row from its table. `RunJob`'s model path does the same for a
-remote job row: no busy probe, the row's token flock, and the worker
+remote job row: no busy probe, no flock, and the worker
 spawned with `-session-id` so its cost is readable after the fire.
 
 The worker process resolves the row from the shared `models.json`: a
@@ -166,7 +167,7 @@ and the runner keep passing the swap URL and the worker ignores it.
 `cmd/rig` resolves the active row's hosted fields into the provider
 Config at `buildProvider`; the swarm's `Start` resolves each worker
 row; `tool/delegate` and `RunJob` resolve through the models table
-seam. The scheduler's `runs` table gains `cost` (schema v6,
+seam. The scheduler's `runs` table gains `cost` (schema v7,
 presence-keyed migration) and `jobs` gains `budget`.
 
 ## non-goals

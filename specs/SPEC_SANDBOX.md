@@ -178,8 +178,9 @@ Creation is separated from installation:
 **The voices, named (PR B).** The path rule's refusal: `permission
 denied: <path> is in plugins/ outside plugins/pending/ (plugins install
 by the operator's /plugins approve; write to plugins/pending/)`.
-`/plugins pending` is `plugins: N pending` with rows
-`  <name>: <DESCRIPTION> (<file>)`; each file's top-level DESCRIPTION
+`/plugins pending` is `plugins: N pending plugins` with the list
+shape's rows (2.8.3) `  <name>  [ ] <DESCRIPTION> (<file>)`; each
+file's top-level DESCRIPTION
 string literal, read without running the file (a pending file is
 untrusted, and the read is not the moment to execute it; a file without
 one shows `(no DESCRIPTION)`), and `plugins: no pending plugins` for
@@ -201,8 +202,9 @@ discovery loads it at the next start`). The zone is a fact of the
 home: created at startup, silent and idempotent; the write tool makes
 no directories, so the model's first pending write must not depend on
 the operator's mkdir. Usage: `plugins: usage: plugins | plugins
-pending | plugins approve <name> | plugins reload | plugins create
-<text>`.
+pending | plugins disabled | plugins approve <name> | plugins reload |
+plugins create <text> | plugins enable <name> | plugins disable
+<name>`.
 
 ### 3. The egress split
 

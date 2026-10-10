@@ -37,7 +37,7 @@ For scripts, run `rig -p "the task"`.
 
 - **tools**: the menu below; results capped, refusals named.
 - **the queue**: `todo` is the project's present (worktrees share one board); `claim` takes the next unblocked task, `complete` lands it, tasks link with `requires`/`blocks`.
-- **memory**: `rem learn`/`recall`/`reflect`/`prune` at the project's scope.
+- **memory**: `rem learn`/`recall`/`reflect`/`prune`, plus `index`/`pack` over the project's code map, at the project's scope.
 - **schedules**: `scheduler` puts a job on the crontab; a job is a one-shot `rig -p` in its own cwd, jailed by default.
 - **the swarm**: `swarm start 2` drains the queue (the count rides start, capped at 16; `budget=5` caps the spend): workers claim, run one-shot, and submit; reviewers accept or reject.
 - **resume**: `sessions` lists the vitals; `rig --resume <id>` replays a session from the state store in one read-only transaction.
@@ -183,7 +183,7 @@ the core is frozen.
 <!-- measured:begin (scripts/readme-measured; do not hand-edit) -->
 Numbers, not adjectives — and each one names its mechanism. The block is computed: `scripts/readme-measured` reads the stores and the tree, CI refuses drift, so it cannot go stale on you. One SQL read of the state store: the store is the receipt.
 
-**98.3% of 5.2 billion prompt tokens served from cache**, across 2,343 sessions and 48,155 recorded turns — the earliest on v0.2.0. The ratio is `cache_read / prompt`, the arithmetic `sessions summary` runs; the byte-stable prefix is why the provider can reuse so much of it. Cost per turn, era by era:
+**98.3% of 5.3 billion prompt tokens served from cache**, across 2,346 sessions and 48,282 recorded turns — the earliest on v0.2.0. The ratio is `cache_read / prompt`, the arithmetic `sessions summary` runs; the byte-stable prefix is why the provider can reuse so much of it. Cost per turn, era by era:
 
 | era | turns | new tokens / turn | completion / turn | cache |
 |---------|--------|------|------|--------|
@@ -191,7 +191,7 @@ Numbers, not adjectives — and each one names its mechanism. The block is compu
 | 1.0–1.3 | 7,440 | 933 | 676 | 99.13% |
 | 1.4–1.9 | 10,045 | 962 | 525 | 99.26% |
 | 2.0–2.9 | 7,360 | 906 | 503 | 99.09% |
-| 2.10.x | 9,304 | 4,674 | 600 | 94.86% |
+| 2.10.x | 9,431 | 4,627 | 598 | 94.93% |
 
 The 2.1.x consolidation rethought the system prompt and the toolset and kept the machinery — the kink is visible. The 2.10.x row is the fleet's own traffic: swarm workers and delegates are short-lived sessions whose first turns cannot hit a cache that does not exist yet, and the models rotate; the interactive sessions of that era hold the ~98% line.
 
@@ -232,7 +232,7 @@ them with `--allow`:
 | `python` | a persistent IPython kernel; variables and imports survive |
 | `web` | search a local SearXNG, or fetch a URL as readable text; private addresses refused |
 | `todo` | the task queue, scoped to the project (a repo's worktrees share one); tasks link with `requires`/`blocks` |
-| `rem` | memory across sessions: learn, recall, reflect, prune; scoped to the project |
+| `rem` | memory across sessions: learn, recall, reflect, prune, and `index`/`pack` over the project's code map; scoped to the project |
 | `scheduler` | background jobs on your crontab, run in a bubblewrap jail |
 | `delegate` | a headless worker for a bounded subtask, handed off and returned on a later turn; wired where a second request can run (a remote row, or a readable swap) |
 | `sessions` | vitals of the session store (an older store is migrated on open) |

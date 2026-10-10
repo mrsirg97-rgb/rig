@@ -311,7 +311,9 @@ criteria}}, expected}` — under the rig home's `decision/train/<run>/`
 as `rig-train.jsonl` and `rig-heldout.jsonl`.
 
 The split is stratified and deterministic: rows grouped by question id
-and gold label, each group ordered by (ts, id), every fifth row
+and gold label, each group ordered by id — minted max+1 in insertion
+order, so the id alone is the ordering key and the split stays
+deterministic without reading the insert clock — every fifth row
 (zero-based) held out, the rest training. Same rows in, same split out;
 no seed, no shuffle.
 

@@ -39,12 +39,21 @@ stdio; no third-party Go client.
 
 ```
 tool/python/
-  python.go         the tool surface + the kernel client (queue, protocol,
-                    death semantics), stdlib only
+  boot.go           the bootstrap: the venv materialization, the named
+                    failure ("needs python3 + network"), the step bounds
+  host.go           the interpreter and host resolution (the venv's
+                    pane path, else the rig home's kernel_host.py)
+  kernel.go         the kernel client: the queue, the protocol, the
+                    death semantics
+  proc.go           the child process plumbing (group kill, wait delay)
+  render.go         the reply rendering
+  tool.go           the tool surface (the Python interface, the schema,
+                    the exec), stdlib only
   kernel_host.py    the embedded host: pane's kernel/kernel_host.py,
                     verbatim (MAX_OUT clip, new_shell, vars, reset, ping)
   python_test.go    pane's named cases, in pane's order, against a real
                     kernel; fake-host cases need no IPython
+  interrupt_test.go the interrupt tears down the busy kernel
 ```
 
 `core/`, `loop/`, `middleware/`, `policy/`, `provider/`: untouched.
@@ -57,12 +66,13 @@ lifecycle method the root calls on the way out; pane's
 `session_shutdown` hook with no hook yet:
 
 ```go
-type Tool struct{ /* owns one kernel */ }
-func New() *Tool                      // pane's defaults: venv interpreter, host, lazy bootstrap
-func NewWith(python, host string) *Tool  // the injection seam (pane's constructor opts): no bootstrap
-func DefaultHost() string             // the host resolution, named (RIG_PYTHON pairs with it)
-func (t *Tool) Host() string          // which host a session runs on; the root logs it
-func (t *Tool) Close()                // teardown: group kill, bounded wait
+type Python interface{ /* tool.Definition + Exec, plus the kernel's five */ }
+func New(cwd ...string) Python                        // pane's defaults: venv interpreter, host, lazy bootstrap
+func NewWith(python, host string, cwd ...string) Python // the injection seam (pane's constructor opts): no bootstrap
+func DefaultHost() string                 // the host resolution, named (RIG_PYTHON pairs with it)
+// the concrete is the unexported pyTool (tool.Definition + one kernel);
+// Host() is which host a session runs on (the root logs it), Close() is
+// teardown: group kill, bounded wait
 ```
 
 `NewWith` is what pane's constructor options are for: tests drive it with

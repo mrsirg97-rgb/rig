@@ -1,4 +1,66 @@
 # Changelog
+## [2.14.13]: the specs read the tree again
+
+The 2.14.10 audit's remaining spec/doc findings, amended in place
+against the code — no Go moved but the version. The specs named rows
+and shapes the code had outgrown: a model switch that writes the row
+it was said not to touch, a settings block listing ten of twenty-five
+fields, fixtures two generations of tooling retired, and the words
+2.4.0 through 2.13.1 amended elsewhere but never here.
+
+- **the row follows the switch** (SPEC_COMMANDS): `models <id>` writes
+  the session row's `model` column — the "historical record" claim was
+  never amended — and the usage-line refusals, the `sessions show`
+  tool-row bullet, and decision 2's struct sketches are shape-current.
+- **the settings block carries the keys it has** (SPEC_CONFIG): all 25
+  fields listed; decision 3 tells the workers.json-era story the code
+  tells (presence-only read, the `defaultJobModel` notice, nothing
+  mints); decision 6's system-prompt formula carries the role segment
+  `command.RoleProse` always emits; the layout names `parse.go` and
+  `embed.go`, and the embedded JSON carries no `model` key.
+- **the build spec describes the gate as built** (SPEC_BUILD): the
+  documented install line (`tryrig.ai`) and its five paths; the CI
+  decision names the inline vet+test, the measured-check, shellcheck
+  over both files, and the three jobs; the pages job's build step and
+  `workflow_dispatch` are named.
+- **the wire block carries what crosses** (SPEC_CORE, SPEC_EVT):
+  `EmptyTurn.Model`, `Compacted.Model`, and the `Compacting` event;
+  the retry guard sits mid-chain as SPEC_HARDENING says; the layout
+  names `policy/operator/`; the menu pin is `TestWireDump`'s
+  arithmetic plus the wire-check wall; the engine options list
+  `WithCapacity`.
+- **the fleet-era words land** (SPEC_SWARM, SPEC_DELEGATE,
+  SPEC_WORKERS): the router owns claiming (no worker poll), the
+  `Stall`/`Slots`/`WaitBusy` fields are retired by name, model
+  resolution is resident → default, the delegate's status rides the
+  fleet pipe rather than a stream `Observe`, the no-recursion voice
+  carries its em dash, and the graph tap is the chain's outermost
+  link.
+- **the gestures and the queue** (SPEC_TUI, SPEC_UX): the Esc stop is
+  the two-step arm with its 2-second window; the layout names the
+  package's 25 files; `create` is one item per call (`added tN` /
+  `tN already there`) with the empty create refused at both doors;
+  bash's trailing line names the workspace.
+- **the counts and caps** (SPEC_PLUGINS, SPEC_SANDBOX, SPEC_HOSTED,
+  SPEC_COMPACT, SPEC_DECISION): the native set is 15 with
+  `plugins.max` named; the `/plugins` voices are the 2.8.3 list shape;
+  the concurrency claims that survived their own 2.4.0 amendment are
+  struck and the schema labels read v5/v7; the effort wire claim names
+  the remote carve-out, the calibration clamp is `[0.5, 2.0]`, the
+  summary floor carries its one-token guard, the phase the TUI shows
+  is `summarizing`, the pack grammar describes the hand-pack fallback,
+  the split orders by id, and the door's schema names its six actions
+  with the toolset's `Tool`/`Plugin` seam.
+- **the leaves name the shipped surface** (SPEC_SERVE, SPEC_WEB,
+  SPEC_PYTHON, SPEC_DIFF, SPEC_STREAMLINE, SPEC_GROWTH): the phase-2
+  no-fleet claims yield to the 2.4.0 amendment; the web const is
+  `defaultMaxChars`; python's layout and interfaces name the shipped
+  `Python` surface; diff's engine shape and the wire job replace the
+  retired goldens; streamline's testing names the wire-check render.
+- **the docs** (docs/SETUP.md, README.md): the theme slots carry
+  `ember` and the seven effort levels; the models.json row names the
+  retired `concurrency` key; the rem rows carry `index`/`pack`.
+
 ## [2.14.12]: the escape the steering slot skipped
 
 The 2.14.10 audit's findings shipped as fixes: one escape one path

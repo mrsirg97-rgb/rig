@@ -61,8 +61,8 @@ specs/
 docs/
   SETUP.md, USAGE.md, CHANGELOG.md, ROADMAP.md   the surface follows
 middleware/toolset/
-  toolset.go            +NativeSpecs, +PluginNames, +Get; Carry stamps
-                        natives + the door (9)
+  toolset.go            +NativeSpecs, +PluginNames, +Tool, +Plugin; Carry
+                        stamps natives + the door (9)
 plugins/
   plugins.go            +the plugin door's Exec (a native over the
                         table), +PluginNames/PluginSchema surfaces
@@ -146,9 +146,11 @@ before it can act. The fix is a **door**, not nesting: the plugins stay
 real `core.Tool`s in the table, and the request carries natives plus one
 `plugin` door.
 
-**The door.** A new native tool `plugin`, schema `{"action": "run"|"schema",
+**The door.** A new native tool `plugin`, schema `{"action":
+"run"|"schema"|"list"|"create"|"delete"|"reload",
 "name": string, "args": object}` (amended: the `plugin_schema` native is
-folded into the `schema` arm): `Exec` resolves the named plugin in the
+folded into the `schema` arm, and the ecosystem arms ride the same door,
+owned downstream — SPEC_PLUGINS 9): `Exec` resolves the named plugin in the
 live table and calls it (run) or returns its description and schema
 verbatim (schema; the model fetches the args it needs when it calls a
 non-trivial plugin). Both arms are non-mutating. An unknown name is a
@@ -239,14 +241,16 @@ existing leaves.
 - `TestNativeSpecsExcludesPlugins`: the table with a native and a
   plugin: `NativeSpecs()` carries the native's spec only; `PluginNames()`
   carries the plugin's name; a swap updates both.
-- `TestGetResolvesTheTable`: `Get` returns the table's tool for a
-  live name and nil for an absent one (the door's exec).
+- `TestGetResolvesTheTable`: `Tool` returns the table's tool for a
+  live name and nil for an absent one (the door's exec; the test name
+  keeps the seam's old word).
 
 **plugins (the leaf, fake kernel; no python required):**
 
 - `TestDoorSurfacesAreTheNativeContract`: `plugin` is a native: Name,
   the small schema, the description naming the door; `plugin`'s schema
-  carries the `action` enum (run, schema) and the live names' enum.
+  carries the `action` enum (run, schema, list, create, delete,
+  reload) and the live names' enum.
 - `TestDoorExecResolvesAndCalls`: `plugin` with `{action: run, name,
   args}` calls the named plugin's Exec (args verbatim, result verbatim);
   `{action: schema, name}` returns the description and schema verbatim;
@@ -289,8 +293,8 @@ schema; the no-plugins wire is natives + the two doors).
   this spec rides; the goals, the non-goals, decision 7's cross-reference.
 - **SPEC_CONFIG**: `settings.json` gains the `plugins` object (`enabled`,
   `max`); the enablement's config layer.
-- **`middleware/toolset`**: `NativeSpecs`, `PluginNames`, `Get`;
-  `Carry` stamps natives + the door.
+- **`middleware/toolset`**: `NativeSpecs`, `PluginNames`, `Tool`,
+  `Plugin`; `Carry` stamps natives + the door.
 - **`plugins`**: the door's `Exec` and `PluginSchema`, the `PluginNames`
   surface the door's enum reads.
 - **`command`**: the `enable <name>` / `disable <name>` verbs (8's door).

@@ -277,7 +277,9 @@ process, after the python tool is built and **before any store is
 opened** (a collision or a dead discovery refuses loud before the
 stores, as the malformed config does), and the loaded tools are
 registered through the existing `WithTools`; appended after the
-native set, in file order. The loop sees `core.Tool` instances and
+native set, in file order, under the `plugins.max` cap (2.13.1): the
+number is read at startup, and an over-cap load is skipped naming the
+cap in its skip reason. The loop sees `core.Tool` instances and
 nothing else; the middleware chain (the allow-list, the guard) applies
 to them as to any tool (7).
 
@@ -542,7 +544,8 @@ The pieces:
   actions `list`, `create`, `delete`, `reload`, beside `run` and
   `schema`; one tool, one menu entry): re-runs
   the discovery over `~/.rig/plugins/`; the same loud skips, the same
-  collision refusal, removal free (the list rebuilds from disk), and
+  collision refusal, the same `plugins.max` cap (the reload inherits
+  it), removal free (the list rebuilds from disk), and
   swaps the kernel's tool list at the root, the models-switch
   semantics exactly: **next-turn**, never mid-turn (the current turn's
   request already carries its list). The reload imports into the
@@ -837,7 +840,7 @@ on a usable python as the plugin suite's):
   state swapped, the command's listing follows).
 - the no-plugins wire (the golden pin's companion): the native
   set — the enabled entries of `tool/registry.json` in file order
-  (13, `plugin` among them; the conditional `decide` and `verdict`
+  (15, `plugin` among them; the conditional `decide` and `verdict`
   when registered) — and the golden fixtures regenerated in place
   (the directory is the 0.2.0 wire baseline, the bytes the current
   native set; the pin moves with the set, as the earlier releases'

@@ -93,6 +93,22 @@ frontend/tui/         NEW package, main module (decision 10 names the
                       (unicode, ascii), theme.json schema and merge,
                       the one-dial resolution, repaint.go's live swap
   ansi.go             escape helpers: color, cursor, clear-line
+  keys.go             the key router: the Esc ladder (menu, prompt
+                      clear, the live-turn interrupt), the idle-stop
+                      arm and its window, the menu navigation keys
+  prompt.go           the input line's painter and the consume point
+                      (Enter, steer; the `//` escape)
+  paint.go            the input line's cells (display, column slicing)
+  menu.go             the completion menu's candidates, lines, painter
+  markdown.go         decision 11's markdown rendering
+  pager.go            decision 1's pager
+  pending.go          the pending-approval rows
+  phasepreview.go     the open phase's preview rows
+  repaint.go          the full repaint (theme swap, resize)
+  swarm.go            the delegate and swarm band painters (3a)
+  width.go            display width (SGR-stripped, runewidth)
+  worker.go           the worker inbox drain and the return line
+  wrap.go             the cell wrap for row painting
   *_test.go           golden blocks per theme at 50 and 100 columns,
                       escape-capture live-region cases, both-doors
                       byte-equality, theme.json schema cases
@@ -959,12 +975,15 @@ pager; else a menu open closes the menu (the input keeps its text);
 else Esc cancels the prompt whole, as before.
 
 Amended again (2.14.0, SPEC_DELEGATE 8): the interrupt rung gains a step
-below the turn. On an empty prompt with no turn live, Esc stops every
-running delegated worker — the gesture the operator reaches for when the
-thing still working is not the thing they interrupted — and falls back to
-clearing the prompt when the session has no delegate to stop. It is not
-a quit: a second Esc does nothing further, and the worker's own return
-still arrives, naming the interrupt as its exit.
+below the turn. On an empty prompt with no turn live, one Esc arms the
+stop — the status row shows `esc again to stop N workers` — and the
+second Esc inside the arm's 2-second window (2.14.7) stops every
+running delegated worker: the gesture the operator reaches for when the
+thing still working is not the thing they interrupted. The arm expires
+on the frame ticks and the gesture falls back to clearing the prompt
+(the default rung) when the session has no delegate to stop. It is not
+a quit: the worker's own return still arrives, naming the interrupt as
+its exit. A live turn keeps the one-Esc interrupt.
 
 Command lines get completion while being typed, one machinery for the
 name and its arguments. The candidates are the known command names
