@@ -260,11 +260,11 @@ store/state/      CanonicalArgs (the one function, decision 3),
   so the tool took no session argument.)
 - The freeze holds: `core/` and `loop/` byte-identical: no
   middleware, no new loop events, no command.
-- The tool description text is part of the wire and is pinned by a
-  golden: the `golden_020` fixtures carry the request bodies
-  byte-exact (description + schema), and PR B regenerates them with
-  the diff entry. A description change is a wire change, and the
-  goldens change with it.
+- The tool description text is part of the wire and is pinned by the
+  wire job: `scripts/wire-check` renders the request bodies at the
+  merge-base and head and posts the diff (2.12.3 retired the stored
+  `golden_020` fixtures). A description change is a wire change, and
+  the diff names it.
 - `go.mod` is unchanged: stdlib only. git is an environment
   dependency, named in the description, and of the `files` verb only.
 - No loop, no middleware, no new event, no new store file. The state
@@ -359,8 +359,10 @@ type Observation struct {
 }
 func RecentToolCalls(ctx context.Context, db store.DB, sessionID, name, args string, n int) ([]Observation, error)
 
-// tool/diff: the tool surface, registered at the root (decision 7).
-func New(db store.DB) core.Tool
+// tool/diff: the engine behind tool/file's edit and read (decision 7's
+// amendment: no diff.New, no root registration).
+func Diff(old, new string, oldLabel, newLabel string) string
+func Files(ctx context.Context, ref string, paths []string) (string, error)
 ```
 
 The query (the n=1 base, verbatim; `n` generalizes to `LIMIT n + 1`,
@@ -500,9 +502,9 @@ last:
 
 the wire:
 
-- the `golden_020` fixtures (oneshot, repl, runjob) carry the diff
-  entry, description and schema byte-exact; a one-byte description
-  change fails the golden
+- the wire job's rendered bodies (oneshot, repl, runjob, tools.json)
+  carry the diff entry, description and schema; a one-byte description
+  change shows in the posted diff
 
 the TUI (only if decision 6's table entry is taken):
 

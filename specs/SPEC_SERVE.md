@@ -60,10 +60,18 @@ shell, and the plugin forge.
 
 ```
 frontend/web/            NEW: the dashboard leaf
-  web.go                 Options, Server, New, Handler, Serve, Close
+  web.go                 Options, Server, New, Handler, ListenAndServe, Close
   auth.go                the serve.token mint/read and the bearer+cookie gate
-  router.go              the allow-list router and the view handlers
+  router.go              the allow-list router and the verb dispatch
+  reads.go               the view handlers (sessions, transcript, todo
+                         reads, scheduler, models, plugins)
   stores.go              cwd -> store path resolution and the open cache
+  browse.go              the browse view handler
+  forge.go               the plugin source read and save (the forge's door)
+  inbox.go               the chat's inbox drain
+  plumbing.go            the per-request plumbing: the read context, the
+                         state-file gate, the Origin check
+  shape.go               the wire shapes (message JSON, todo projects)
   plugins.go             the loaded + pending listing, the DESCRIPTION read
   static.go              the go:embed of static/
   static/
@@ -361,9 +369,10 @@ TUI; each view renders the way the TUI renders that tool's output.
   keeps it, and a body that names none stores the unnamed job (the
   fire resolves the resident model, else the settings' model;
   SPEC_STATE). The verb's reply is shown verbatim, the
-  list re-read after. With no fleet (`workers.json` absent), the POST
-  refuses by name (400, the command's voice); the view says the same
-  instead of offering the form (the view's refusal, below).
+  list re-read after. The POST carries no fleet gate (2.4.0's
+  amendment, below): with `workers.json` absent or present it rides
+  `sched.Create` with session `dashboard` the same way, and the view
+  says so instead of offering the form (the view's refusal, below).
 - **The plugin create.** `POST /api/plugins` writes one file into the
   pending zone (`plugins/pending/<name>.py`), the provenance rule's
   landing zone (SPEC_SANDBOX 2): the operator's creation is reviewable,
@@ -445,10 +454,10 @@ seeded temp home):
   lands; a duplicate name in the same scope is a named refusal; a bad
   cron is the verb's refusal; a no-Origin or foreign-Origin write is a
   403; an over-cap body is a 400; `DELETE /api/scheduler` is a 405 with
-  `Allow` naming POST. With no fleet, the POST is a 400 by the command's
-  voice (the same string the `/scheduler` command refuses with), and the
-  `GET` reply's `worker` field is empty (the view's refusal renders in
-  place of the form).
+  `Allow` naming POST. With no fleet, the POST is the same create (the
+  2.4.0 amendment: no fleet gate to ride), and the
+  `GET` reply's `worker` field carries the one constant `resident`
+  (the view's stance row shows it).
 - **The plugin create.** A same-Origin `POST /api/plugins` with
   name/description/code writes `plugins/pending/<name>.py` carrying the
   `DESCRIPTION`, a `SCHEMA` object, and a `def run(args):`; the pending

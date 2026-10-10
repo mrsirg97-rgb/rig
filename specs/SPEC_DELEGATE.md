@@ -122,10 +122,11 @@ carries the rule and the evidence.
   under the session's workspace or the rig home; anything else refuses by name. The
   requested path and both allowed roots resolve symlinks before the
   containment check, so a lexical child cannot escape through a link.
-- `model` (default the workers file's `model`: SPEC_CONFIG 12's
-  fleet): the worker row, exactly as `scheduler create` defaults. The
-  fleet's model is a row of the operator's models table; there is no
-  fallback baked into the binary.
+- `model` (default the resident row, else the session's default — the
+  workers file retired in 2.4.0): the worker row, exactly as
+  `scheduler create` resolves. Named → resident (id or alias) → the
+  session's wired default; nothing resident and no default wired
+  refuses by name.
 - The tool has no clock (2.12.7). `timeoutMs` is off the schema, the
   seam takes no default, and the spawn takes a caller-supplied context —
   the turn's until 2.14.0, the session's since (decision 8): a worker
@@ -324,17 +325,19 @@ one line and never the answer:
   worker to. The seam has no silence window: `Stall` left it with the
   2.6.0 retirement above, and the silence kill is the runner's per-job
   `stall`, which no delegate sets.
-- **The status Observe (SPEC_SWARM 7)**: the tool gains an optional
+- **The status snapshot (SPEC_SWARM 7)**: the tool gains an optional
   `Notify` seam (nil = silent, today's behavior); with it, an
   interactive delegate emits a `core.SwarmStatus` snapshot on start,
-  on the spawn's stream bytes (the same Observe), and on exit — one
-  worker row, the queue counts zero, throttled to a few per second
-  with the exit's last frame always landing. The TUI then shows the
-  delegate's worker row only; CLI/oneshot ignore the event.
+  on each heartbeat (the child's frames ride the fleet pipe, fd 3 —
+  `Observe` left the seam in 2.11.0, the spawn's observer is nil), and
+  on exit — the snapshot carries the delegate's own workers, throttled
+  to a few per second with the exit's last frame always landing. The
+  TUI renders the delegate's band from it (SPEC_TUI 3a); CLI/oneshot
+  ignore the event.
 - **No recursion**: the delegate sets `RIG_DELEGATE=1` on the worker's
   spawn (the `RIG_HOME` pattern, decision 2). The delegate tool's
   Exec refuses by name when the marker is set: `delegate: a worker
-  cannot delegate (RIG_DELEGATE is set; no recursion)`. The
+  cannot delegate (RIG_DELEGATE is set — no recursion)`. The
   allow-list omission below is the honest-path guard; the marker is
   the hard rule.
 - **The allow-list, the doing set (2.14.1)**: a worker does, the
@@ -481,13 +484,10 @@ Named cases, failing first, in `tool/delegate` over a fake `Spawn`
 - **The silence window is the runner's**: the stall kill has no test
   here because the tool sets no window; the per-job `stall` cases are
   `store/scheduler`'s.
-- **The fan-out overlap**: `slots` 3: three concurrent Execs run, and
-  the spawn seam's timestamps prove the three spawns overlap.
-- **The one-slot sequence**: `slots` 1: three concurrent Execs run
-  one after another and each succeeds.
-- **The slots-full wait**: `slots` 2: two concurrent Execs run, a
-  third with an expiring context waits and then refuses naming the
-  full set and the wait time; no worker was spawned for it.
+- **The gate**: two free slots and two concurrent Execs both spawn,
+  overlapping (the spawn seam's timestamps prove it); one resident
+  model and a second concurrent Exec sends and waits on the server's
+  queue — no slot arithmetic on the tool's side (2.6.0 sent-and-wait).
 - **The no-recursion refusal**: `RIG_DELEGATE=1` set, Exec refuses by
   name.
 - **The approval prompt shape**: `approve.Prompt` for `delegate`

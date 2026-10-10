@@ -119,7 +119,7 @@ func (s *search) exec(ctx, query string, maxResults int) (string, error)
 // fetch.go: the engine
 const (
     maxBytesDefault  = 5 * 1024 * 1024         // pane's MAX_BYTES
-    maxChars         = 20_000                  // pane's MAX_CHARS
+    defaultMaxChars  = 20_000                  // pane's MAX_CHARS
     defaultTimeoutMs = 30_000                  // pane's DEFAULT_TIMEOUT_MS
     maxHops          = 5                       // pane's MAX_HOPS
 )

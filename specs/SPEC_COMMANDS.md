@@ -121,10 +121,15 @@ type SessionRow struct {
 	Started time.Time
 	Exit    string
 	Turns   int
-	Current bool // the live session, marked in the list
+	Tokens  int64  // the list render's token column
+	Label   string // the queue-scope label the row ran in
+	Current bool   // the live session, marked in the list
 }
 
 type Env struct {
+	Swarm   Swarm                        // the swarm command's snapshot types
+	Lines   func() int                   // the TUI's row budget for lists
+
 	Session func() *core.Session          // the live session (post-swap)
 
 	// frontend-owned seam, filled by the dispatcher (decision 2)
@@ -137,15 +142,37 @@ type Env struct {
 	NewSession    func(ctx context.Context, dir string) (string, error)
 	                                         // dir "" keeps the workspace (new);
 	                                         // project passes the canonical path
+	Workspace     func() string           // the canonical workspace
 	SessionList   func(ctx context.Context) ([]SessionRow, error)
 	SessionShow   func(ctx context.Context, id string) (string, error)
 	SessionResume func(ctx context.Context, id string) error
 	Models        func() models.Table
 	ActiveModel   func() string
-	SwitchModel   func(ctx context.Context, id string) error
-	Tools         map[string]core.Tool   // the same instances the model gets
+	SwitchModel   func(ctx context.Context, id string) (string, error)
+	                                         // reports the row it switched to
+	Effort       func() string             // the effort dial
+	Efforts      func() []string           // the row's levels
+	SetEffort    func(ctx context.Context, level string) error
+	Role         func() string             // the role dial
+	SetRole      func(ctx context.Context, name string) error
+	Theme        func() string             // the theme dial
+	SetTheme     func(ctx context.Context, name string) error
+	Approve      func() string             // the approval gate stance
+	SetApprove   func(ctx context.Context, mode string) error
+	Tools        map[string]core.Tool      // the same instances the model gets
+
+	Plugins     func() []PluginInfo        // the plugins surface
+	Reload      func(ctx context.Context) (string, error)
+	PluginsDir  string
+	DecisionTrain func(ctx context.Context, trainer string) (string, error)
 }
 ```
+
+(The sketch is shape-current at 2.14.13 — `SessionRow` carries the list
+render's `Tokens`/`Label` columns, `Env` carries the swarm snapshot, the
+list budget, the workspace, the effort/role/theme/approve dials, the
+plugins trio and the decision-train door; it sketches the seams, not
+byte equality.)
 
 The `Env` carries closures, not handles: the command package sees
 `core` and `models` and nothing else; no store type, no recorder, no
@@ -488,7 +515,7 @@ session s1 · 4 messages
 - assistant messages: the content on the header line (possibly empty),
   then `    thinking: <reasoning>` when the model thought, then
   `    call <id> <name> <args>` per tool call (args as the stored JSON);
-- tool results: `[n] tool (<id>): <result>`;
+- tool results: `[n] tool <id>: <result>`;
 - a compaction summary renders as an ordinary user row: the marker is
   in the content and self-describing.
 
@@ -520,7 +547,7 @@ next; adoption is idempotent, named.
 Output: `sessions: resumed <id> (<N> messages)`, N the projection's
 message count.
 
-Usage: `sessions <other>` → `sessions: usage: sessions [list|summary|show|resume
+Usage: `sessions <other>` → `sessions: usage: sessions [list [all|<n>]|summary|show|resume
 <id>]`. `list` is the bare command's read under a name; the verb the
 TUI's menu (10) accepts, and the `Sub()` hints are `list`, `summary`,
 `show`, `resume`, one-lined, so `/sessions` opens the same selectable, scrollable
@@ -567,9 +594,11 @@ are the root's fields to write, and the loop borrows them per turn"):
    session, the system prompt, the row)`, `k.Provider =
    compact.Decorator(inner, pol)`, `k.Policy = pol`, and the active
    model state; the root's one mutable string every closure reads;
-3. the transcript, the session row, and the recorder are untouched: the
-   switch is not a new session, and the row keeps the model the session
-   started with (a historical record; the switch is not retroactive).
+3. the transcript and the recorder are untouched: the switch is not a
+   new session; the session row's `model` column follows the switch
+   (written by the switch seam, 2.14.13), so `sessions list` and
+   `-resume` report the model the row now runs, not the one it started
+   with.
 
 The effect is the next turn's request: the loop reads `k.Provider` /
 `k.Policy` fresh at each turn start (it already does; that is why the
@@ -585,9 +614,10 @@ against the old pair; while the loop reads `k.Provider` / `k.Policy`
 fresh at the next turn start. The switch is next-turn by construction,
 not by guard.
 
-The session row's `model` column stays the model the session started
-with; a historical record, named in 4's contract; the switch is not
-recorded per-message. A `[models] switched to <id>` breadcrumb row was
+The session row's `model` column follows the switch (2.14.13: the
+switch seam writes it; `sessions list`'s column and the `-resume`
+projection report the row's current model); it is not recorded
+per-message. A `[models] switched to <id>` breadcrumb row was
 considered and rejected: it would put transcript machinery in the
 model's context for a fact the operator can read from the command's own
 output and the store's usage rows.
@@ -837,7 +867,7 @@ Refusals, named: `rem show` (no id) → `rem: show needs an id (rem show
 `rem: no such memory: <id>` (show and forget both name the gap); `rem
 forget` (no id) → the needs-an-id voice; `rem project` (no path) →
 `rem: project takes a path (rem project <path>)`; `rem <other>` →
-`rem: usage: rem [list|show|forget <id>|project <path>]`.
+`rem: usage: rem [list [all|<n>]|show <id>|forget <id>|project <path> [all|<n>]]`.
 
 Why the command and not the tool: the tool's learn/recall/reflect/prune
 is the model's multi-line JSON surface; the operator's read and prune

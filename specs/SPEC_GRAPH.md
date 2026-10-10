@@ -168,8 +168,9 @@ store/graph/           metadata + gen.json/source.json, generated
                        the in-place replace), extract.go (the seam),
                        extract_go.go (Go), lsp.go + extract_lsp.go (the
                        client and the language-server implementation)
-middleware/index/      the hook: a link in the canonical chain, innermost,
-                       that touches the path of a read, write or edit
+middleware/index/      the hook: a link in the canonical chain, outermost
+                       (the loop wraps first-listed outermost), that
+                       touches the path of a read, write or edit
                        that returned without error
 tool/rem/              index and pack actions; the words in tool/registry.json
 cmd/rig/main.go        the queue created and Run, its notices through the

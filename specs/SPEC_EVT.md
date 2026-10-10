@@ -75,7 +75,7 @@ evt/
   event.go      Event, NewEvent, Execute
   clock.go      Clock, Counter (default), Monotonic
   queue.go      Queue, NewQueue: the 4-ary max-heap with the position map
-  engine.go     Engine, NewEngine, options: WithClock, WithTick
+  engine.go     Engine, NewEngine, options: WithClock, WithTick, WithCapacity
   scheduler.go  Scheduler, NewScheduler, ErrNoEngine, ErrStarted
   PACKAGE.md
 ```

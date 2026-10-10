@@ -80,8 +80,10 @@ what `create` truthfully already does (upsert one task by text). The
 behavior was fine; the voice was the bug, and the voice fix is a later
 one-liner if lived use asks ("plan upserted", not "queue replaced").
 The event-sourced fold cannot change retroactively regardless (replay
-compatibility); the one genuinely destructive verb remains the empty
-create, unguarded as before, named here for the day it bites.
+compatibility); the one genuinely destructive verb was the empty create
+(refused at both doors since 2.12.4 — the "day it bites" arrived as a
+refusal, not a guard; the empty-array clear survives only in legacy
+replay), named here for the record.
 
 The original decision, kept for the record:
 
@@ -141,9 +143,11 @@ Rejected, named: a recall tool call at session start (a turn spent on
 what the prompt can carry); injecting all rems (the cap is the point);
 a global recall (the cwd is the scope rem already chose).
 
-### 3. bash: the failing reply names the cwd
+### 3. bash: the failing reply names the workspace
 
-A nonzero exit's reply gains one trailing line: `(cwd /home/ng)`. A
+A nonzero exit's reply gains one trailing line: `(workspace <dir>)` —
+the canonical workspace the call ran in (the vocabulary moved from
+`cwd` at 2.1.8). A
 success stays byte-identical (the piped goldens hold). One line, one
 condition; the two wasted calls the reporter counted were both "where
 am I" probes after a path error.
@@ -187,22 +191,27 @@ of a half-picked candidate: picking requires navigation, and
 navigation disarms dispatch) while making the common case (type the
 whole command, hit Enter) do the obvious thing.
 
-### 6. todo: the voice says what the queue did (1.3.3)
+### 6. todo: the voice says what the queue did (1.3.3, re-voiced 2.12.4)
 
 Decision 1's one-liner, landed with the scope binding (SPEC_STATE).
-`create` merges by text — the fold upserts and always did — so the note
-reports the merge in the numbers that matter: `→ queue merged: 2 new`, or
-`2 new, 1 already there`, `nothing new`, and `queue cleared` for the empty
-create. The old `queue replaced with 1 tasks` taught a model that a create
-wipes a queue it never wiped, and a session that believed it reached for
-`create` as a cleanup and inherited whatever the bucket already held. The
-semantics are untouched (replay compatibility, decision 1); only the voice
-moved, and the wording now tells the truth about the merge.
+`create` is one item per call — the fold upserts by text — so the note
+names the one thing that happened: `added tN` for a new task, `tN
+already there` for a repeat. The merge voices of the first wording
+(`→ queue merged: 2 new` and friends) went with 2.12.4's one-item
+create; the old `queue replaced with 1 tasks` taught a model that a
+create wipes a queue it never wiped, and a session that believed it
+reached for `create` as a cleanup and inherited whatever the bucket
+already held. The semantics are untouched (replay compatibility,
+decision 1); the voice names the upsert, not a merge.
+
+The empty create is refused at both doors (`todo: text required` from
+the store, `action 'create' requires text` from the tool), so decision
+1's "one destructive verb" is gone — the empty-array clear survives
+only in legacy replay.
 
 `prune` is the door that was missing: the queue's done rows drop out of
 the projection, the log keeps the history, and the bucket decision 1's
-reporter drowned in is now sweepable in one line. The empty create stays
-the one destructive verb, unguarded as before.
+reporter drowned in is now sweepable in one line.
 
 The binding note appears when the binding actually moved: a successful
 write or an explicit `todo project <path>`. A read that names a project
@@ -225,7 +234,7 @@ queue replaced: 5 tasks (dropped 43: 40 open, 3 in progress)
 todo: create would drop 3 in-progress tasks owned by session 1a01ad…
 (t7, t12, t19): finish or fail them first, or add instead
 → t44 added: wire the guard
-(cwd /home/ng)
+(workspace /home/ng/Projects/rig)
 edit: the file changed since the read:
 --- as read
 +++ on disk

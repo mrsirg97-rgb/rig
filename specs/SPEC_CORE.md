@@ -56,6 +56,8 @@ rig/
     compact/     transcript summarization (SPEC_COMPACT)
     effort/      the reasoning dial
     empty/       the empty-turn guard (SPEC_EMPTY)
+    operator/    the menu-shaped tool wrapper and the delegated-worker
+                 middleware (the operator verbs, SPEC_WORKERS)
   middleware/    the chain links; the one order lives in cmd/rig
     approve/     the manual approval gate (SPEC_MODES 4)
     cutoff/      refuse-before-execute for cut-off calls (SPEC_HARDENING 10)
@@ -187,6 +189,7 @@ type EmptyTurn struct {
 	Resample int   // 1-based: this resample
 	Limit    int   // total resamples allowed
 	Usage    Usage // the discarded attempt's usage, still counted
+	Model    string // the swallowed attempt's model, the response's own echo
 }
 
 type Fault struct{ Err error }
@@ -219,6 +222,7 @@ type Compacted struct {
 	Dropped int
 	Kept    int
 	Usage   Usage
+	Model   string // the served model, the summary call's own echo
 }
 
 // Phase is begin, delta and end of one model call made behind the
@@ -255,8 +259,11 @@ Provider-stream events (`TextDelta`, `ReasoningDelta`, `ToolCallEvent`,
 `Done`, `Fault`) are emitted by the adapter in stream order. Loop events
 (`ToolStart`, `ToolResult`, `TurnEnd`) bracket execution and close the
 turn; they are emitted by the loop. Policy events (`Compacted`,
-SPEC_COMPACT) are emitted at `Assemble` or on-stream by the policy's
-decorator; the third emitter category; the loop forwards them in its
+`Compacting`, SPEC_COMPACT) are the third emitter category, emitted by
+the policy's decorator: `Compacting` is the on-stream opener of the
+policy's own summary call (the recorder discards its partial on it),
+`Compacted` the rewriter's landing, emitted at `Assemble` or on-stream;
+the loop forwards them in its
 existing default, and the recorder lands them (SPEC_STATE). `EmptyTurn`
 (SPEC_EMPTY) is the provider-decorator event in that category: the empty
 guard emits it instead of a discarded empty turn's `Done`, and the
@@ -384,12 +391,13 @@ never on the wire: the model needs the reply contract, not the event
 log's compaction rule. Refusals and descriptions share vocabulary (the
 pending zone, approve, the door), so the model meets each word in both
 places. The whole menu; every native's description plus schema; is
-pinned under 15,000 characters (14,000 until 2.11.12: the wall cut words that carried meaning three times in one week, and 2.12.1 makes it a guideline with a CI delta) by a case in `cmd/rig` over the wire
-golden (13.1k at the amendment: 5.5k of description, 7.5k of schema),
+pinned under 15,000 characters (14,000 until 2.11.12: the wall cut words that carried meaning three times in one week, and 2.12.1 makes it a guideline with a CI delta) by `TestWireDump`'s arithmetic in `cmd/rig` — `menu.txt` must equal the tools' own description-plus-parameters count —
+plus the CI wire-check job's wall (aim 15,000, refuse past 15,500, the two numbers in the job's env); there is no stored golden since 2.12.3, the job renders merge-base and head and posts the diff
+(13.1k at the amendment: 5.5k of description, 7.5k of schema),
 so growth is a decision (a vision model's row pays 457 more for `view`,
 which joins that menu only for a row whose `vision` flag is set, SPEC_VIEW); the schemas of `rem`, `scheduler`, and
 `todo` are 4k of that and the next lever, named. No description carries
-the voice of another harness ("pi", "pane"), pinned by the same case. The
+the voice of another harness ("pi", "pane"), pinned by the same test. The
 one-line tools (`bash`, `write`, `edit`) keep their line and gain
 the shape's clauses without padding.
 
@@ -478,7 +486,11 @@ logging all wrap here, composed in order at the root. A participant may
 additionally observe the turn boundary (`TurnObserver`; the loop fans out
 `TurnStart` at every turn start) and contribute system-prompt prose
 (`GuidelineContributor`; the root collects it into the system prompt). The
-retry guard is the first participant beyond a plain wrap: it wraps to bound
+retry guard sits mid-chain, not first: the canonical chain is index
+(when the graph tap is wired), toolset, approve, cutoff, the two perm
+gates, the operator gate (delegated workers only), the guard trio
+(bound, rounds, cap), paths, the decision site, rem's guide
+(SPEC_HARDENING 9 and 10 name the placements) — it wraps to bound
 and refuse, and observes the turn boundary to clear its per-turn budget
 (bound keyed by tool name, the streak per args, cleared per turn, pane's
 semantics).

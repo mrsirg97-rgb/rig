@@ -92,6 +92,10 @@ TDD.
 
 ```
 config/               NEW leaf (stdlib + models, nothing else):
+  parse.go            the whole settings parse: the unknown-key
+                      refusal, the per-key integer/presence voices,
+                      the workers.json-era legacy keys (2.4.0)
+  embed.go            the two go:embed statements
   config.go           Load, Config
   settings.go         Settings, the settings.json parse, the per-key
                       overlay over the embedded, the two presence keys,
@@ -110,8 +114,8 @@ config/               NEW leaf (stdlib + models, nothing else):
                       models.Defaults rows moved out of models/ (4),
                       emptied by 2.12.11: the operator's file is the
                       table, the embed stays for the merge's shape
-  config_test.go, settings_test.go, modelsfile_test.go,
-  agents_test.go, theme_test.go
+  main_test.go, workers_test.go, modelsmerge_test.go,
+  settings_test.go, modelsfile_test.go, agents_test.go, theme_test.go
 models/               Model +Role / +Effort (4); Check's role
                       vocabulary; Resolve: the RIG_MODEL_* env overlays
                       the active row's fields, the synthesized row
@@ -179,11 +183,26 @@ type Settings struct {
 	System        string
 	Allow         []string
 	Retries       int
+	Rounds        int
+	ResultCap     int
 	Python        string
 	SearXNG       string
 	WebFetchProxy *string
 	Trafilatura   *string // nil = auto (shared venv, then PATH)
+	Workers       *bool
+	MaxWorkers    int
+	WorkerWindow  int
 	SwapURL       string
+	DecisionURL   string
+	DecisionUnit  string
+	TrainPython   string
+	ReviewBatch   *int // nil = unset; nil and 0 mean off, negative refuses
+	Theme         string
+	Sandbox       string
+	SandboxBinds  []string
+	Approve       string
+	Plugins       SettingsPlugins
+	UpdateKey     string
 }
 ```
 
@@ -203,7 +222,6 @@ The embedded defaults (the move is exact; 0.2.0's values):
 ```json
 {
   "baseUrl": "http://127.0.0.1:8090/v1",
-  "model": "local",
   "system": "you are an agent operating in rig, a minimal, general purpose harness, designed to help you get more done with less friction. you act on the session's workspace, using the available tools to inspect, change, and run things in it. the toolset is focused on purpose, with each tool's description saying when to use it. do not attempt to use a tool that does not exist in rig. the harness has guards: an allowlist, a retry guard (three identical failing calls to one tool in a turn exhaust the bound; a corrected call always executes), an approval gate, a plugin landing zone. every refusal names its rule and is there to guide you, not punish you. a refusal is final for that call: change the call or ask, never reach the same effect through another tool. when a tool fails, read the error and work out why before calling again. do not retry blindly, and stop when the environment or the plan is wrong. a capability you build twice belongs in a plugin. for any job of three or more steps, or one that touches several files, plan it in todo before the first edit: create the tasks, complete or fail each when done, and leave the queue empty at the end. when the work is done, answer in plain text: what changed, what you verified, what is left.",
   "allow": ["bash", "read", "write", "edit", "view", "todo", "rem", "python", "web", "decide", "plugin", "sessions"],
   "retries": 3,
@@ -354,13 +372,8 @@ rig: config: ~/.rig/models.json: row 3: duplicate id "local"
 rig: config: ~/.rig/models.json: row 1: role: "boss" (allowed: interactive, worker)
 rig: config: ~/.rig/models.json: row 1: window: expected an integer, got "big"
 rig: config: ~/.rig/models.json: local: Reserve 81920 must be in [0, Window 65536): as large as the window, the trigger fires at every estimate
-rig: config: ~/.rig/workers.json: expected a JSON object
-rig: config: ~/.rig/workers.json: "model" is required
-rig: config: ~/.rig/workers.json: model "brain": no row in the models table (known: local)
-rig: config: ~/.rig/workers.json: slots: expected an integer, got "two"
-rig: config: ~/.rig/workers.json: slots: expected a positive number, got 0
-rig: config: ~/.rig/workers.json: unknown key "slot" (known: model, reviewer, slots)
-rig: config: ~/.rig/settings.json: defaultJobModel "x" disagrees with workers.json's model "y"; delete the key
+rig: config: ~/.rig/workers.json: workers.json retired: the fleet is the resident model
+rig: config: ~/.rig/settings.json: defaultJobModel moved to model — the fleet is the resident model; delete the key
 rig: config: ~/.rig/theme.json: invalid character 'x' after object key:value pair
 rig: config: ~/.rig/AGENTS.md: permission denied
 ```
@@ -380,22 +393,21 @@ Rules that make the voice total:
   row, and the merged row's file is the one the operator wrote.
 - **Read order is fixed** (the first malformed file wins,
   deterministically): `settings.json`, `models.json`, `workers.json`
-  (12; it validates its id against the merged table, so it reads
-  after `models.json`), `theme.json`, `AGENTS.md` (global, then
+  (12; a presence-only read since 2.4.0, so it reads after
+  `models.json`), `theme.json`, `AGENTS.md` (global, then
   project).
 - `AGENTS.md`: ENOENT is silent: every other read error (permission, a
   directory by that name, I/O) refuses with the OS reason, the path
   named once.
 - **A cut key migrates once, then nags.** `settings.json`'s
   `defaultJobModel` is cut by 12, and a box that updates in place must
-  keep starting: with no `workers.json`, the first start mints one from
-  the key (`{"model": …}`, the model checked against the table; a
-  model the table lacks refuses, naming it, minting nothing) and says so
-  once on stderr; every later start ignores the key with a one-line
-  notice until it is deleted. Two truths refuse: a key that disagrees
-  with `workers.json`'s model names both. An empty value is the notice
-  only. The key stays in the known list so the cut's voice, not the
-  generic unknown-key voice, names it.
+  keep starting: the key parses into two unexported legacy fields and
+  nothing else — no `workers.json` is minted, nothing validates — and
+  every start ignores the value with the one-line notice until the key
+  is deleted. There is no second truth to refuse (the two-truths voice
+  of the workers.json era is gone with the file). An empty value is the
+  notice only. The key stays in the known list so the cut's voice, not
+  the generic unknown-key voice, names it.
 
 ### 4. models.json: the table out of code
 
@@ -618,12 +630,14 @@ guesses where it is; 1.1.4) and AGENTS.md sit **between the system
 prompt and the participant guidelines**:
 
 ```
-fullSystem = join( [system, session, AGENTS.md(global+project), guidelines], "\n\n" )
+fullSystem = join( [system, session, role, AGENTS.md(global+project), guidelines], "\n\n" )
 ```
 
 skipping empty segments. The order is descending proximity: the
 operator's identity prompt, then the session's place (the model's
-ground truth), then the user's project contract (broad to narrow:
+ground truth), then the role's dial bytes (`command.RoleProse(r.role)`,
+emitted whenever a role is set — the segment is absent, not empty,
+when the dial is untouched), then the user's project contract (broad to narrow:
 global before local), then the participants' operational prose
 (machine-contributed, closest to the tool surface). With no AGENTS.md
 present the assembly is 0.2.0's bytes plus the session section (9); the
@@ -1044,7 +1058,8 @@ case names one, the built binary for the e2e.
 - `TestAgentsOrderAgainstGuidelines`: a root with a
   guideline-contributing middleware plus both AGENTS files:
   `fullSystem` is `system + "\n\n" + agents + "\n\n" + guidelines`
-  exactly (6's order, pinned); the existing
+  exactly (6's order, pinned; the test leaves the role unset, so the
+  role segment is absent and the formula reduces to this); the existing
   `TestGuidelinesAreCollectedIntoTheSystemPrompt` (no AGENTS.md)
   stays green.
 - `TestRowEnvBeatsFileForActiveID`: a file row for the active id
