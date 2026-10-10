@@ -121,10 +121,10 @@ A command job's fire skips the busy probe and
   time (named, else the resident model resolved to its models-table
   row, else `DefaultModel` — the session's default; an unreachable
   swap falls to the default as it always did, a resident with no row
-  refuses naming it and the known rows), the gate is the live free-slot read (skipped for
-  a remote row via the `Models` seam — the swap is never consulted;
-  `WaitBusy` waits like a fire up to `Timeout`, the claim-time read
-  refuses at once), the ad-hoc record (a minted once-job row with no
+  refuses naming it and the known rows), the gate is one read of the
+  resident set (skipped for a remote row via the `Models` seam — the
+  swap is never consulted; another resident refuses at once), the
+  ad-hoc record (a minted once-job row with no
   crontab line, `done` once its fire lands), the
   state-store bind and explicit identity for the resumable transcript,
   the no-recursion marker, and the

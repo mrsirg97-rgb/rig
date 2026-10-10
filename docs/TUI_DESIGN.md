@@ -200,7 +200,7 @@ runs (`workers <n> · +<pending> ✓<done> ✕<failed> · w<id> <task> <age>`,
 `reviewer <n> · ⧗<review> ✓<done> ✕<failed> · w<id> <task> <age>`), zero
 rows and no rule when nothing runs. A delegated batch — the publisher
 whose role string is `delegate` — takes two rows: `delegating · 3 workers
-· 1m12s` over the most recent call of any of them (`#2 edit
+· 1 queued · 1m12s` over the most recent call of any of them (`#2 edit
 tool/file/edit.go · 12s`, `—` until a worker calls), the same two rows
 for ten workers as for one, kept breathing between turns by the frame
 ticker the batch holds. No new colors: labels and markers dim, counts
@@ -286,7 +286,7 @@ into the store's `listLimit`, so a listing shows what fits here.
 
 ## the theme tables
 
-Sixteen named slots, five shipped palettes plus the `oled` alias of warm
+Seventeen named slots, five shipped palettes plus the `oled` alias of warm
 (warm is the default), two glyph sets; warm and cool are the dashboard's
 two looks on the same slots. The phosphor ramps (p1 green, p3 amber) are
 four brightnesses of one hue: text on the brightest, accent and success

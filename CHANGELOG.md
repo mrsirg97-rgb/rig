@@ -1,4 +1,38 @@
 # Changelog
+## [2.15.1]: the escape the other frontends skipped
+
+The 2.14.12 fix moved the `//` escape onto one path and called the TUI
+correct; the steered slot bypasses the consume point by construction, so
+the escape each frontend carries ran zero times on the one path a
+mid-turn line takes. The audit's doc pass rides along: the PACKAGE.md
+files the delta sharpened now describe what shipped, the front door
+names the second provider, and two spec sentences the 2.14.13 pass
+missed read the tree as it is.
+
+- **the TUI's steered slot rides its consume point** (`frontend/tui`):
+  the slot's delivery checked the line, started the turn, and returned
+  it raw — no command dispatch at re-entry, no unescape. The delivery
+  now goes through the same gate the quiet prompt's bytes take: a
+  command dispatches at re-entry, a `//` line unescapes, the turn
+  starts on the delivered line. Two tests pin the seam — the steered
+  escape (`//home/ng/x` reaches the model as `/home/ng/x`) and the
+  steered command (`/nope` dispatches its refusal instead of reaching
+  the model).
+- **the dashboard's two doors share one escape** (`frontend/web`): the
+  quiet path unescaped and the steered slot did not; the escape moved
+  into `take`, the one seam both doors deliver through, and one test
+  pins both doors — the quiet prompt and the steered prompt reach the
+  model as `/home/ng/x`.
+- **the audit's doc pass** (models, config, store/scheduler, cmd/rig,
+  frontend/web PACKAGE.md, README, AGENTS.md, docs, specs): the model
+  row inventory carries the fields 2.15.0 added and drops the ones
+  2.4.0 retired; the scheduler gate and the fleet wiring name the
+  resident read they make; the dashboard's seams match the router it
+  ships; the README names the second provider and carries the row;
+  SPEC_GRAPH's chain claim names the loop's real wrap order
+  (first-listed innermost) and SPEC_DECISION's pack grammar describes
+  the hand-pack fallback.
+
 ## [2.15.0]: a second provider
 
 `core.Provider` is one method and, since 0.x, it had one implementer.

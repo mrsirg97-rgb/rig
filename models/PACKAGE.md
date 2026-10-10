@@ -13,12 +13,17 @@ command reads this same table.
   `Role`, `Effort` (the live turn's default level: the dial, else the
   row), and the hosted run site (SPEC_HOSTED): `Remote`,
   `Provider` (a name implies remote), `BaseURL`, `APIKey` (never logged or
-  rendered), `Concurrency` (default 1 for remote rows), `Reasoning`
+  rendered), `Reasoning`
   (`reasoning_content` default, `reasoning` for OpenRouter), `ProviderPin`
-  and `CacheControl` (openrouter-only), `Retries` (default 3 for remote
-  rows).
+  and `CacheControl` (openrouter or anthropic), `Retries` (default 3 for remote
+  rows), `ThinkingBudget` and the four per-million prices `InputPrice`,
+  `OutputPrice`, `CacheReadPrice`, `CacheWritePrice` (anthropic).
 - `Table`: id -> row, built by `New` with every row checked.
 - `Check`: the row's invariants, loud, naming the id and fields.
+- `Capped`: the row's budget scaled to a worker's window (`WorkerWindow`,
+  SPEC_CONFIG 5): `Reserve`, `KeepRecent` and `MaxTokens` scale by the
+  ratio; `0` or a value at or past the row's window returns the row
+  unchanged.
 - `LowestEffort`: `Efforts[0]`, `""` when the row names none — the level
   the cheap calls (the compaction summary, the review fire) ask for; the
   operator's `efforts` order is lowest first.
@@ -50,7 +55,7 @@ command reads this same table.
 - Env precedence is env over file over embedded: the overlay makes the env
   win for a known id too (0.2.0 consulted the env only for unknown ids).
   The hosted overlay adds `RIG_MODEL_BASE_URL`, `RIG_MODEL_API_KEY`,
-  `RIG_MODEL_REMOTE`, `RIG_MODEL_CONCURRENCY`, `RIG_MODEL_REASONING`,
+  `RIG_MODEL_REMOTE`, `RIG_MODEL_REASONING`,
   `RIG_MODEL_PROVIDER`, and `RIG_MODEL_RETRIES`; a key can live in the
   environment and never in a file. A remote row's `retries` defaults to 3
   at `New` (0 = the default; there is no "no retry" for a remote row).

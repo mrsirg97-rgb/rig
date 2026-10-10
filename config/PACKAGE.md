@@ -21,7 +21,7 @@ no core, no store types (decision 1). JSON only, stdlib encoding/json.
   `workers.json` (retired, SPEC_WORKERS: the fleet is the resident
   model), a present `concurrency` key in models.json, and the legacy
   `defaultJobModel` — all read, ignored, named.
-  `Settings.Plugins` (`SettingsPlugins{Enabled, Max}`) is the plugin
+  `Settings.Plugins` (`SettingsPlugins{Max}`) is the plugin
 - `plugins`: `max` caps the door's enum: `enabled` is retired (SPEC_GROWTH 9,
   amended); a non-empty one refuses at load naming the directory switch
   (`plugins/disabled/`), an empty one is dropped.
@@ -46,7 +46,7 @@ no core, no store types (decision 1). JSON only, stdlib encoding/json.
 - `SetTheme`: the `theme` key's one writer (2.3.2): the file's other
   keys preserved, the write atomic (temp then rename), the value
   verbatim; a malformed existing file refuses in the loader's voice.
-- The per-key decoders: `jsonString`, `jsonInt`, `jsonAllow`,
+- The per-key decoders: `jsonString`, `jsonInt`, `jsonFloat`, `jsonAllow`,
   `jsonStringArray`, `gojson`, and the `readErr` voice.
 
 ## How it is consumed
@@ -69,7 +69,7 @@ no core, no store types (decision 1). JSON only, stdlib encoding/json.
   deterministically: settings.json, models.json, workers.json,
   theme.json, AGENTS.md (global, then project). `Load` never creates a
   file.
-- The embedded allow is the native set (13 names) grown by `scheduler`
+- The embedded allow is the native set (12 names) grown by `scheduler`
   and `delegate` whenever the operator named no allow of their own
   (their list stands as written) — the worker tools register for every
   run now (SPEC_WORKERS). The embedded models table carries no rows: the

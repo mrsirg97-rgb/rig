@@ -712,6 +712,73 @@ func TestSteerSeam(t *testing.T) {
 	}
 }
 
+func TestTheSteeredLineUnescapesLikeTheQuietPrompt(t *testing.T) {
+	th := oledTheme(t)
+	s := newScriptedSession(t, th, WithWidth(50),
+		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
+	)
+	ctx, cancel := context.WithCancel(context.Background())
+	ctx = core.WithInterrupt(ctx, cancel)
+	saved := s.ctx
+	s.ctx = ctx
+	defer func() { s.ctx = saved }()
+	if got := s.prompt(promptMark(th), "go\n"); got != "go" {
+		t.Fatalf("prompt = %q, want go", got)
+	}
+	fe, ok := interface{}(s.fe).(interface{ Steer(string) bool })
+	if !ok {
+		t.Fatal("the TUI is not a Steerer")
+	}
+	fe.Steer("//home/ng/x")
+	s.fe.Notify(core.TurnEnd{Reason: core.TurnInterrupt})
+	s.ctx = saved
+	line, err := s.input()
+	if err != nil || line != "/home/ng/x" {
+		t.Fatalf("the steered escape = (%q, %v), want /home/ng/x", line, err)
+	}
+	s.fe.Notify(core.TurnEnd{Reason: core.TurnOver})
+}
+
+func TestTheSteeredCommandDispatchesAtReEntry(t *testing.T) {
+	th := oledTheme(t)
+	newC := &fakeCmd{name: "new", out: "new session: s2"}
+	s := newScriptedSession(t, th, WithWidth(50),
+		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
+		WithCommands([]core.Command{newC}, nil),
+	)
+	ctx, cancel := context.WithCancel(context.Background())
+	ctx = core.WithInterrupt(ctx, cancel)
+	saved := s.ctx
+	s.ctx = ctx
+	defer func() { s.ctx = saved }()
+	if got := s.prompt(promptMark(th), "go\n"); got != "go" {
+		t.Fatalf("prompt = %q, want go", got)
+	}
+	fe, ok := interface{}(s.fe).(interface{ Steer(string) bool })
+	if !ok {
+		t.Fatal("the TUI is not a Steerer")
+	}
+	fe.Steer("/nope")
+	s.fe.Notify(core.TurnEnd{Reason: core.TurnInterrupt})
+	s.ctx = saved
+	in := make(chan string, 1)
+	go func() {
+		l, _ := s.input()
+		in <- l
+	}()
+	s.await("unknown command: nope")
+	s.si.feed("go2\n")
+	select {
+	case l := <-in:
+		if l != "go2" {
+			t.Fatalf("the steered command dispatched at re-entry and the quiet line delivered: %q", l)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("timed out after the steered command")
+	}
+	s.fe.Notify(core.TurnEnd{Reason: core.TurnOver})
+}
+
 func TestTextFlowsAsTheCLIDoes(t *testing.T) {
 	th := oledTheme(t)
 	s := newScriptedSession(t, th, WithWidth(100),

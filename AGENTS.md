@@ -247,6 +247,11 @@ that is harder than writing a lot, and it is the bar.
 - `provider/openai`: the OpenAI-compatible streaming provider over
   net/http: plain JSON/SSE wire, per-model tool-call formats, the
   bounded header wait and the stream's idle bound (SPEC_HARDENING 11).
+- `provider/anthropic`: the second provider (SPEC_HOSTED 7): Anthropic's
+  Messages API over stdlib net/http and SSE, in the shape of
+  `provider/openai` — the row's cache breakpoints, native thinking with
+  the block carry-back, and the cost column from the row's own
+  per-million prices.
 - `plugins`: python plugin discovery: one file under the rig home's
   `plugins/` is one tool, discovered and executed through the shared
   kernel.
