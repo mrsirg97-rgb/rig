@@ -1,4 +1,80 @@
 # Changelog
+## [2.15.0]: a second provider
+
+`core.Provider` is one method and, since 0.x, it had one implementer.
+Claude was reachable through OpenRouter, so the gain was never access:
+it is the native semantics — and the first test of the seam's claim
+that a new behavior is a new implementer at the root, never a branch
+in the caller. The diff touches `provider/anthropic`, `models`,
+`config`, `cmd/rig/root.go` and the docs; the loop, `core/` and the
+policy take zero lines.
+
+- **the Messages wire** (`provider/anthropic`): Anthropic's Messages
+  API as a `core.Provider` in the shape of `provider/openai` — stdlib
+  net/http and SSE, no SDK, `New(Config)` returning the interface.
+  `POST {BaseURL}/v1/messages` with `x-api-key` and
+  `anthropic-version` (default `2023-06-01`); the key never reaches a
+  fault, a notice, a log or a wire fixture. The system prompt rides
+  the top-level `system` array, the tools ride `tools[]` with
+  `input_schema`, the transcript rides content blocks, and every
+  `core.ToolCall` id round-trips as the `tool_use` id so results pair
+  by id.
+- **the breakpoints**: with the row's `cacheControl`,
+  `cache_control: {"type":"ephemeral"}` lands on the last system
+  block, the last tool, and the last user block of the prior turn —
+  three of the four the API allows, chosen because a write happens
+  only at a breakpoint and a read looks backward from one: the
+  byte-stable system and tool tables write once and read every turn,
+  and the prior-turn placement keeps a tool round-trip's writes at one
+  per user turn. The body is pinned byte-for-byte; the prefix cache is
+  byte-keyed, so this encoding is load-bearing.
+- **native thinking**: the row's `thinkingBudget` rides
+  `thinking: {"type":"enabled","budget_tokens":N}`; `thinking_delta`
+  streams live as `ReasoningDelta`, and the block record — text plus
+  `signature_delta`'s signature, or a `redacted_thinking`'s data —
+  rides `ReasoningDetails` so the next turn's request carries the
+  blocks back verbatim, first in the assistant message, as the API
+  requires for tool-use continuity. Thinking off sends no thinking
+  blocks in either direction.
+- **the cost column from the row**: `inputPrice`, `outputPrice`,
+  `cacheReadPrice`, `cacheWritePrice` (per-million, zero when absent)
+  times the usage the stream reports — Anthropic's
+  `cache_read_input_tokens` and `cache_creation_input_tokens` feeding
+  the same column openrouter's `usage.cost` fills; no price table in
+  Go, and the prices are refused on any other provider. `Usage.Prompt`
+  sums the anthropic fields so the context accounting stays
+  comparable, and takes the cache fields from wherever the stream
+  reports them — the api's `message_start`, or the final
+  `message_delta` a compat runtime reports them in.
+- **the encoder's hard cases**: the transcript replays on every later
+  request, so one body the api rejects fails the session from then on.
+  An empty tool result rides a named `[no output]` text block; a
+  request whose `max_tokens` was lowered under the thinking budget
+  drops thinking for that request, thinking blocks included; another
+  provider's `reasoning.text` records and an empty thinking record
+  don't ride; an assistant turn that encodes to no blocks is skipped
+  instead of `content: null`; the assistant replay orders thinking,
+  then text, then tool calls, matching generation. The image inline
+  bound is the api's: 5 MiB measured on the base64 data.
+- **the row and the root**: `provider: "anthropic"` selects the new
+  provider in `buildProvider`; `models.Check` admits `thinkingBudget`
+  and `cacheControl` for it, refuses `providerPin` and `reasoning` on
+  it by name, and refuses a budget at or past the row's `maxTokens`.
+  429 and 5xx retry per the row's `retries` honouring `retry-after`;
+  the idle bound and the 5-minute header timeout as
+  `provider/openai` applies them; a stream without `message_stop` is
+  `stream truncated: no finish marker`, the same words.
+- **the tests**: a fake Messages server pins the body, the tool round
+  trip, every stop reason, each error path's words, the truncation,
+  the retry-after wait and the cost arithmetic — plus the encoder's
+  hard cases (the empty result, the budget under a lowered max_tokens,
+  the foreign records, the null content, the block order, the encoded
+  image bound); one live smoke behind
+  env vars (`RIG_SMOKE_ANTHROPIC_MODEL` + key or base URL) proved the
+  wire and the stream against a real server — and caught that the
+  real wire sends SSE `event:` name lines, which are skipped, not
+  faulted.
+
 ## [2.14.15]: the schema says what the code takes
 
 The tool surface is the agent's world, and the descriptions had

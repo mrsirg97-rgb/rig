@@ -14,6 +14,8 @@ const (
 
 	ReasoningContent    = "reasoning_content"
 	ReasoningOpenRouter = "reasoning"
+
+	thinkingBudgetFloor = 1024
 )
 
 type Model struct {
@@ -34,6 +36,12 @@ type Model struct {
 	ProviderPin  []string
 	CacheControl bool
 	Retries      int
+
+	ThinkingBudget  int
+	InputPrice      float64
+	OutputPrice     float64
+	CacheReadPrice  float64
+	CacheWritePrice float64
 }
 
 func (m Model) LowestEffort() string {
@@ -73,8 +81,41 @@ func (m Model) Check() error {
 	if m.Remote && m.BaseURL == "" {
 		return fmt.Errorf("models: %s: a remote row needs a baseUrl (the endpoint it runs against)", m.ID)
 	}
-	if (len(m.ProviderPin) > 0 || m.CacheControl) && m.Provider != "openrouter" {
-		return fmt.Errorf("models: %s: providerPin and cacheControl are openrouter-only (provider: %q)", m.ID, m.Provider)
+	if m.ThinkingBudget < 0 {
+		return fmt.Errorf("models: %s: thinkingBudget %d must be >= 0", m.ID, m.ThinkingBudget)
+	}
+	if m.ThinkingBudget > 0 {
+		if m.Provider != "anthropic" {
+			return fmt.Errorf("models: %s: thinkingBudget is anthropic-only (provider: %q)", m.ID, m.Provider)
+		}
+		if m.ThinkingBudget >= m.MaxTokens {
+			return fmt.Errorf("models: %s: thinkingBudget %d must be < maxTokens %d (the api requires room to answer)", m.ID, m.ThinkingBudget, m.MaxTokens)
+		}
+		if m.ThinkingBudget < thinkingBudgetFloor {
+			return fmt.Errorf("models: %s: thinkingBudget %d is under the api's floor of %d (the api rejects smaller budgets)", m.ID, m.ThinkingBudget, thinkingBudgetFloor)
+		}
+	}
+	if len(m.ProviderPin) > 0 && m.Provider != "openrouter" {
+		return fmt.Errorf("models: %s: providerPin is openrouter-only (provider: %q)", m.ID, m.Provider)
+	}
+	if m.CacheControl && m.Provider != "openrouter" && m.Provider != "anthropic" {
+		return fmt.Errorf("models: %s: cacheControl needs the openrouter or anthropic provider (provider: %q)", m.ID, m.Provider)
+	}
+	if m.Provider == "anthropic" && m.Reasoning != "" {
+		return fmt.Errorf("models: %s: reasoning is openai-wire naming (provider: %q; the thinking blocks carry their own)", m.ID, m.Provider)
+	}
+	for _, p := range []struct {
+		name  string
+		price float64
+	}{
+		{"inputPrice", m.InputPrice},
+		{"outputPrice", m.OutputPrice},
+		{"cacheReadPrice", m.CacheReadPrice},
+		{"cacheWritePrice", m.CacheWritePrice},
+	} {
+		if p.price != 0 && m.Provider != "anthropic" {
+			return fmt.Errorf("models: %s: %s is anthropic-only (provider: %q)", m.ID, p.name, m.Provider)
+		}
 	}
 	return nil
 }

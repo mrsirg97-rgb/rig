@@ -445,6 +445,8 @@ refusal for a name nobody set, now reached by a row nobody wrote.
 | `role`     | string | no       | `"worker"` or `"interactive"`; default `interactive`; shown by `/models` |
 | `effort`   | string | no       | the live turn's default request effort: the dial, else the row; the cheap calls (the compaction summary, the review fire) ask for the row's lowest `efforts` level instead (2.14.2) |
 | `vision`   | bool   | no       | the model takes image input; **presence-aware** (an explicit `false` descends onto an embedded row, unlike the zero-means-unset numbers). Default `false`. It gates the `view` tool (SPEC_VIEW) and the provider's image parts |
+| `thinkingBudget` | int | no    | the row's thinking budget for `provider: "anthropic"`; 0 = off; `Check` refuses one at or past `maxTokens` and refuses the field on any other provider (SPEC_HOSTED 7) |
+| `inputPrice`, `outputPrice`, `cacheReadPrice`, `cacheWritePrice` | number | no | per-million dollars; the cost column's source for the anthropic stream, zero when absent, refused on any other provider (SPEC_HOSTED 7) |
 
 `role` is display and fleet-identity in this PR: `/models` lists it
 (4's render); it is validated at parse (unknown value refuses, naming

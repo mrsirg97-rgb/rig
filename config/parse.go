@@ -273,6 +273,14 @@ func jsonInt(raw json.RawMessage) (int, error) {
 	return int(f), nil
 }
 
+func jsonFloat(raw json.RawMessage) (float64, error) {
+	var v float64
+	if err := json.Unmarshal(raw, &v); err != nil {
+		return 0, fmt.Errorf("expected a number, got %s", gojson(v))
+	}
+	return v, nil
+}
+
 func jsonBool(raw json.RawMessage) (bool, error) {
 	var v any
 	if err := json.Unmarshal(raw, &v); err != nil {

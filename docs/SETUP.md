@@ -107,7 +107,7 @@ not find.
 | file              | purpose                                                                 |
 |-------------------|-------------------------------------------------------------------------|
 | `settings.json`   | the knobs below, flat, by their env names (lowerCamel, no `RIG_` prefix); `defaultJobModel` is retired (2.4.0): a present one is named once at start and ignored — move it to `model` by hand, then delete the key |
-| `models.json`     | the model table, one row per model: `id`, `window`, `maxTokens`, `reserve`, `keepRecent` (all four numerics required on every row), optional `role` (`worker`/`interactive`, default the latter), `effort` (the summary call's reasoning effort), `efforts` (the `/effort` dial's vocabulary), `vision` (registers `view` on that row), and the hosted run site — `remote`, `provider`, `baseUrl`, `apiKey`, `reasoning`, `providerPin`, `cacheControl`, `retries`; plus the retired `concurrency` row key (2.4.0: read and dropped with one start notice, like settings' `defaultJobModel`) — under "On hosted mode" below and `specs/SPEC_HOSTED.md` |
+| `models.json`     | the model table, one row per model: `id`, `window`, `maxTokens`, `reserve`, `keepRecent` (all four numerics required on every row), optional `role` (`worker`/`interactive`, default the latter), `effort` (the summary call's reasoning effort), `efforts` (the `/effort` dial's vocabulary), `vision` (registers `view` on that row), and the hosted run site — `remote`, `provider`, `baseUrl`, `apiKey`, `reasoning`, `providerPin`, `cacheControl`, `retries`, plus the anthropic fields `thinkingBudget` and the per-million prices `inputPrice`/`outputPrice`/`cacheReadPrice`/`cacheWritePrice` (2.15.0); plus the retired `concurrency` row key (2.4.0: read and dropped with one start notice, like settings' `defaultJobModel`) — under "On hosted mode" below and `specs/SPEC_HOSTED.md` |
 | `workers.json`    | **retired (2.4.0)**: the fleet is the resident model. A present file is read, ignored, and named once at start; deleting it silences the line |
 | `AGENTS.md`       | global instructions; read before the project's `AGENTS.md` (the nearest one from the workspace up to the repo root) and placed between the system prompt and the participants' guidelines |
 | `theme.json`      | the terminal frontend's custom theme (`specs/SPEC_TUI.md` 7), the `/theme custom` preset: `base` (one of `warm`, `cool`, `paper`, `p1`, `p3`, or the legacy `oled`; required), optional `slots` (slot names → `#rrggbb`) and `glyphs` (`unicode` or `ascii`). Unknown keys refuse; the TUI owns the schema. The dial itself is settings.json's `theme` key |
@@ -178,6 +178,18 @@ fields and skip the local swap entirely; 429 and 5xx retry with bounded
 backoff (`retries`, default 3) instead of faulting the turn. Cost rides
 the endpoint's `usage.cost` into the state store, shows in the TUI
 footer, and sums into a swarm's `budget=` and a job's `budget`.
+
+**On the anthropic provider** (2.15.0, `specs/SPEC_HOSTED.md` decision
+7): a row with `provider: "anthropic"` speaks Anthropic's Messages API
+at `{baseUrl}/v1/messages` — native thinking blocks
+(`thinkingBudget`, the row's token budget, carried back with its
+signatures), native prompt caching (`cacheControl` puts the
+breakpoints on the system prompt, the tool table and the prior turn),
+Anthropic's stop reasons, and the cost column fed by the row's own
+per-million prices (`inputPrice`, `outputPrice`, `cacheReadPrice`,
+`cacheWritePrice` — set them to the model's card, zero when absent).
+`providerPin` and `reasoning` are refused on an anthropic row: they
+name openai-wire concepts.
 
 **On the model row**: compaction is per-model, so the active model must
 resolve to a row (window, max tokens, reserve, keep-recent). The table
@@ -253,7 +265,8 @@ by id over whatever the build ships:
 [
   {"id": "local", "window": 65536, "maxTokens": 8192, "reserve": 8192, "keepRecent": 16384, "role": "interactive", "efforts": ["low", "medium", "xhigh"]},
   {"id": "worker", "window": 32768, "maxTokens": 4096, "reserve": 4096, "keepRecent": 8192, "role": "worker", "efforts": ["low", "medium"]},
-  {"id": "openrouter-sonnet", "window": 200000, "maxTokens": 8192, "reserve": 16384, "keepRecent": 40000, "remote": true, "provider": "openrouter", "baseUrl": "https://openrouter.ai/api/v1", "apiKey": "sk-or-...", "reasoning": "reasoning", "providerPin": "Together", "cacheControl": true}
+  {"id": "openrouter-sonnet", "window": 200000, "maxTokens": 8192, "reserve": 16384, "keepRecent": 40000, "remote": true, "provider": "openrouter", "baseUrl": "https://openrouter.ai/api/v1", "apiKey": "sk-or-...", "reasoning": "reasoning", "providerPin": "Together", "cacheControl": true},
+  {"id": "anthropic-sonnet", "window": 200000, "maxTokens": 8192, "reserve": 16384, "keepRecent": 40000, "provider": "anthropic", "baseUrl": "https://api.anthropic.com", "apiKey": "sk-ant-...", "thinkingBudget": 2048, "cacheControl": true, "inputPrice": 3, "outputPrice": 15, "cacheReadPrice": 0.3, "cacheWritePrice": 3.75}
 ]
 ```
 
@@ -267,7 +280,11 @@ remote), `baseUrl` (the endpoint), `apiKey` (the bearer key, from the
 file or `RIG_MODEL_API_KEY`), `reasoning` (`reasoning` for OpenRouter,
 the default `reasoning_content` otherwise), `providerPin` and
 `cacheControl` (openrouter-only), `retries` (the 429/5xx retry bound,
-default 3 for remote rows).
+default 3 for remote rows). The fourth row is Anthropic's Messages API
+(2.15.0): `provider: "anthropic"`, native thinking (`thinkingBudget`,
+the row's token budget), the caching breakpoints (`cacheControl`), and
+the cost column fed by the row's own per-million prices — set them to
+your model's card.
 
 **The workers** (`specs/SPEC_WORKERS.md`): the fleet is the resident
 model. A worker's model resolves at claim time — the named one, else the

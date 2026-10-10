@@ -21,7 +21,7 @@ func TestModelsMalformedNamesFileRowAndField(t *testing.T) {
 		{"duplicate id", `[{"id": "local", "window": 100, "maxTokens": 1, "reserve": 1, "keepRecent": 1}, {"id": "local", "window": 200, "maxTokens": 1, "reserve": 1, "keepRecent": 1}]`, `row 2: duplicate id "local"`},
 		{"unknown role", `[{"id": "x", "window": 100, "maxTokens": 1, "reserve": 1, "keepRecent": 1, "role": "boss"}]`, `row 1: role: "boss" (allowed: interactive, worker)`},
 		{"bad int", `[{"id": "x", "window": "big", "maxTokens": 1, "reserve": 1, "keepRecent": 1}]`, `row 1: window: expected an integer, got "big"`},
-		{"unknown row key", `[{"id": "x", "window": 100, "maxTokens": 1, "reserve": 1, "keepRecent": 1, "winodw": 1}]`, `row 1: unknown key "winodw" (known: apiKey, baseUrl, cacheControl, concurrency, effort, efforts, id, keepRecent, maxTokens, provider, providerPin, reasoning, remote, reserve, retries, role, vision, window)`},
+		{"unknown row key", `[{"id": "x", "window": 100, "maxTokens": 1, "reserve": 1, "keepRecent": 1, "winodw": 1}]`, `row 1: unknown key "winodw" (known: apiKey, baseUrl, cacheControl, cacheReadPrice, cacheWritePrice, concurrency, effort, efforts, id, inputPrice, keepRecent, maxTokens, outputPrice, provider, providerPin, reasoning, remote, reserve, retries, role, thinkingBudget, vision, window)`},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -171,7 +171,14 @@ func TestModelsHostedRowInvariantsRefuse(t *testing.T) {
 	dir2 := t.TempDir()
 	p2 := write(t, dir2, "models.json", `[{"id": "brain", "window": 262144, "maxTokens": 16384, "reserve": 16384, "keepRecent": 32768, "provider": "deepseek", "baseUrl": "https://api.deepseek.com", "cacheControl": true}]`)
 	err = loadErr(t, dir2, t.TempDir())
-	if err.Error() != "config: "+p2+": brain: providerPin and cacheControl are openrouter-only (provider: \"deepseek\")" {
-		t.Fatalf("the voice = %q, want the openrouter-only refusal", err)
+	if err.Error() != "config: "+p2+": brain: cacheControl needs the openrouter or anthropic provider (provider: \"deepseek\")" {
+		t.Fatalf("the voice = %q, want the cacheControl refusal", err)
+	}
+
+	dir3 := t.TempDir()
+	p3 := write(t, dir3, "models.json", `[{"id": "brain", "window": 262144, "maxTokens": 16384, "reserve": 16384, "keepRecent": 32768, "provider": "deepseek", "baseUrl": "https://api.deepseek.com", "providerPin": ["X"]}]`)
+	err = loadErr(t, dir3, t.TempDir())
+	if err.Error() != "config: "+p3+": brain: providerPin is openrouter-only (provider: \"deepseek\")" {
+		t.Fatalf("the voice = %q, want the providerPin refusal", err)
 	}
 }
