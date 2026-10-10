@@ -1,7 +1,6 @@
 package bash
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -37,7 +36,7 @@ type args struct {
 
 func (t bashTool) Exec(ctx context.Context, data json.RawMessage) (string, error) {
 	var a args
-	if err := strictDecode(data, &a); err != nil {
+	if err := tool.Decode(data, &a); err != nil {
 		return "", fmt.Errorf("bash: args: %w", err)
 	}
 	return t.Run(ctx, a.Command, a.Workspace)
@@ -98,12 +97,6 @@ func (bashTool) Run(ctx context.Context, command, workspace string) (string, err
 		return withCwd, fmt.Errorf("bash: %w", err)
 	}
 	return content, nil
-}
-
-func strictDecode(data json.RawMessage, out any) error {
-	dec := json.NewDecoder(bytes.NewReader(data))
-	dec.DisallowUnknownFields()
-	return dec.Decode(out)
 }
 
 func checkCwd(dir string) error {

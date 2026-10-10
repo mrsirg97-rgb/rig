@@ -42,7 +42,7 @@ type readArgs struct {
 
 func (t readTool) Exec(ctx context.Context, data json.RawMessage) (string, error) {
 	var a readArgs
-	if err := strictDecode(data, &a); err != nil {
+	if err := tool.Decode(data, &a); err != nil {
 		return "", fmt.Errorf("read: args: %w", err)
 	}
 	return t.Read(ctx, a.Path, a.Offset, a.Limit, a.Diff)

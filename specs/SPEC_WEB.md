@@ -91,7 +91,6 @@ One `core.Tool`, the engines behind it:
 // web.go; the interface named, the concrete type unexported,
 // the core/tool.go house shape
 const DefaultSearXNG = "http://127.0.0.1:8888" // pane's PI_SEARXNG_URL default
-const DefaultProxy   = "http://127.0.0.1:8889" // pane's PI_WEB_FETCH_PROXY default
 type Config struct {
     Search SearchConfig   // BaseURL (pane appends /search), Do seam
     Fetch  FetchConfig    // Proxy, Trafilatura, Lookup, Do, MaxBytes
@@ -104,7 +103,6 @@ type Web interface {
 }
 type web struct{ tool.Definition; search *search; fetch *fetch }
 func New(cfg Config) Web           // the injection seam (pane's Deps)
-func NewDefault() Web              // the defaults: SearXNG default, proxy on
     // Name, Description and Schema ride the embedded tool.Definition:
     // the words are tool/registry.json bytes (2.8.1), not methods here
 func (w *web) Exec(ctx context.Context, args json.RawMessage) (string, error)
@@ -137,7 +135,7 @@ func (f *fetch) Guarded(ctx context.Context, raw string) (Fetched, error) // pan
 func (f *fetch) exec(ctx, raw string, maxC, timeoutMs int) (string, error)
 
 // shared surface, pane's functions verbatim
-func IPisPrivate(ip string) bool            // pane's ipIsPrivate over net/netip, same refusal set as a superset
+func publicAddr(ip string) (netip.Addr, bool) // pane's ipIsPrivate inverted over net/netip, same refusal set as a superset
 func HtmlToText(html string) string         // pane's htmlToText (the RE2 port)
 func CapChars(text string, max int) string  // pane's capChars
 func ExtractReadable(ctx context.Context, html string, trafilatura *string) (string, string) // + the rig announcement footer

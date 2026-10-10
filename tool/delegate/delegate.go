@@ -1,7 +1,6 @@
 package delegate
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -12,13 +11,14 @@ import (
 	"sync"
 	"time"
 
+	"github.com/mrsirg97-rgb/rig/v2/tool"
+
 	"github.com/mrsirg97-rgb/rig/v2"
 	"github.com/mrsirg97-rgb/rig/v2/broadcast"
 	"github.com/mrsirg97-rgb/rig/v2/core"
 	"github.com/mrsirg97-rgb/rig/v2/models"
 	"github.com/mrsirg97-rgb/rig/v2/pathguard"
 	sched "github.com/mrsirg97-rgb/rig/v2/store/scheduler"
-	"github.com/mrsirg97-rgb/rig/v2/tool"
 )
 
 const (
@@ -92,7 +92,7 @@ type args struct {
 
 func (a *adapter) Exec(ctx context.Context, data json.RawMessage) (string, error) {
 	var g args
-	if err := strictDecode(data, &g); err != nil {
+	if err := tool.Decode(data, &g); err != nil {
 		return "", fmt.Errorf("delegate: args: %w", err)
 	}
 	return a.Run(ctx, g.Task, g.Workspace, g.Model)
@@ -288,12 +288,6 @@ func capOutput(s string) string {
 		return s
 	}
 	return s[:outputCap] + "\n[TRUNCATED: " + fmt.Sprintf("%d", len(s)) + " bytes total]"
-}
-
-func strictDecode(data json.RawMessage, out any) error {
-	dec := json.NewDecoder(bytes.NewReader(data))
-	dec.DisallowUnknownFields()
-	return dec.Decode(out)
 }
 
 func (a *adapter) begin(task string, stop context.CancelFunc, state string) (broadcast.Member, int) {

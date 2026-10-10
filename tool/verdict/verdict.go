@@ -1,7 +1,6 @@
 package verdict
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -40,9 +39,7 @@ type args struct {
 
 func (a *adapter) Exec(ctx context.Context, data json.RawMessage) (string, error) {
 	var g args
-	dec := json.NewDecoder(bytes.NewReader(data))
-	dec.DisallowUnknownFields()
-	if err := dec.Decode(&g); err != nil {
+	if err := tool.Decode(data, &g); err != nil {
 		return "", fmt.Errorf("verdict: args: %w", err)
 	}
 	return a.Deliver(ctx, g.Row, g.Accept, g.Reason)

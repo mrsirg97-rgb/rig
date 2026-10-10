@@ -85,7 +85,21 @@ func execArgs(t *testing.T, w interface {
 	return w.Exec(context.Background(), json.RawMessage(args))
 }
 
-func TestIPisPrivateV4Table(t *testing.T) {
+func TestPublicAddrRefusesUnnormalizedLoopbackSpellings(t *testing.T) {
+	for _, ip := range []string{"::ffff:7f00:1", "0:0:0:0:0:0:0:1", "0::1", "::0001",
+		"::ffff:0:0", "::FFFF:10.0.0.1", "fe80::1%en0", "not-an-address", ""} {
+		if _, ok := publicAddr(ip); ok {
+			t.Errorf("%s must be private", ip)
+		}
+	}
+	for _, ip := range []string{"::ffff:5db8:d822", "2001:4860:4860::8888"} {
+		if _, ok := publicAddr(ip); !ok {
+			t.Errorf("%s must be public", ip)
+		}
+	}
+}
+
+func TestPublicAddrTables(t *testing.T) {
 	priv := []string{
 		"0.0.0.0", "10.1.2.3", "127.0.0.1", "169.254.169.254",
 		"172.16.0.1", "172.31.255.255", "192.168.1.1", "100.64.0.1",
@@ -96,18 +110,18 @@ func TestIPisPrivateV4Table(t *testing.T) {
 	pub := []string{"1.1.1.1", "8.8.8.8", "93.184.216.34", "172.32.0.1",
 		"100.128.0.1", "198.20.0.1", "192.88.100.1"}
 	for _, ip := range priv {
-		if !IPisPrivate(ip) {
+		if _, ok := publicAddr(ip); ok {
 			t.Errorf("%s must be private", ip)
 		}
 	}
 	for _, ip := range pub {
-		if IPisPrivate(ip) {
+		if _, ok := publicAddr(ip); !ok {
 			t.Errorf("%s must be public", ip)
 		}
 	}
 }
 
-func TestIPisPrivateV6Table(t *testing.T) {
+func TestPublicAddrV6Tables(t *testing.T) {
 	priv := []string{
 		"::1", "::", "fc00::1", "fd12:3456::1", "fe80::1",
 		"FEB0::1", "ff02::1", "::ffff:127.0.0.1", "::ffff:192.168.0.1",
@@ -116,26 +130,12 @@ func TestIPisPrivateV6Table(t *testing.T) {
 		"2606:2800:220:1:248:1893:25c8:1946", "::ffff:8.8.8.8", "fec0::1",
 	}
 	for _, ip := range priv {
-		if !IPisPrivate(ip) {
+		if _, ok := publicAddr(ip); ok {
 			t.Errorf("%s must be private", ip)
 		}
 	}
 	for _, ip := range pub {
-		if IPisPrivate(ip) {
-			t.Errorf("%s must be public", ip)
-		}
-	}
-}
-
-func TestIPisPrivateRefusesUnnormalizedLoopbackSpellings(t *testing.T) {
-	for _, ip := range []string{"::ffff:7f00:1", "0:0:0:0:0:0:0:1", "0::1", "::0001",
-		"::ffff:0:0", "::FFFF:10.0.0.1", "fe80::1%en0", "not-an-address", ""} {
-		if !IPisPrivate(ip) {
-			t.Errorf("%s must be private", ip)
-		}
-	}
-	for _, ip := range []string{"::ffff:5db8:d822", "2001:4860:4860::8888"} {
-		if IPisPrivate(ip) {
+		if _, ok := publicAddr(ip); !ok {
 			t.Errorf("%s must be public", ip)
 		}
 	}
@@ -431,7 +431,7 @@ func TestExecuteReportsGuardRefusalsAsToolErrorsNotThrows(t *testing.T) {
 }
 
 func TestToolRegistrationOneWebToolWithActionAndTarget(t *testing.T) {
-	w := NewDefault()
+	w := New(Config{})
 	if w.Name() != "web" {
 		t.Fatalf("name = %q, want web", w.Name())
 	}
@@ -569,7 +569,7 @@ func TestJSONReplyIsCappedUnderTheSameMarker(t *testing.T) {
 }
 
 func TestSchemaRequiresActionAndTargetAndBoundsAllOptions(t *testing.T) {
-	s := getSchema(t, NewDefault())
+	s := getSchema(t, New(Config{}))
 	if len(s.Required) != 2 || s.Required[0] != "action" || s.Required[1] != "target" {
 		t.Fatalf("required = %v, want [action target]", s.Required)
 	}

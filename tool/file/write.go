@@ -28,7 +28,7 @@ type writeArgs struct {
 
 func (t writeTool) Exec(ctx context.Context, data json.RawMessage) (string, error) {
 	var a writeArgs
-	if err := strictDecode(data, &a); err != nil {
+	if err := tool.Decode(data, &a); err != nil {
 		return "", fmt.Errorf("write: args: %w", err)
 	}
 	return t.Write(ctx, a.Path, a.Content)

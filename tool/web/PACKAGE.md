@@ -16,7 +16,7 @@ client, no new venv.
   `Fetch(ctx, url, maxChars, timeoutMs)`. The no-query and no-url
   refusals and the `maxResults`/`maxChars`/`timeoutMs` bounds live in the
   verb they belong to, so a Go caller and the model hit the same checks.
-  `New(Config)` and `NewDefault()` return the interface; the struct is
+  `New(Config)` returns the interface; the struct is
   unexported.
 - The engines behind it: the SearXNG `/search` JSON call, and the
   guarded reader — resolves the host, refuses private addresses (SSRF

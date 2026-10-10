@@ -13,8 +13,6 @@ import (
 
 const DefaultSearXNG = "http://127.0.0.1:8888"
 
-const DefaultProxy = "http://127.0.0.1:8889"
-
 type Config struct {
 	Search SearchConfig
 	Fetch  FetchConfig
@@ -36,10 +34,6 @@ type web struct {
 
 func New(cfg Config) Web {
 	return &web{Definition: tool.Def("web"), search: newSearch(cfg.Search), fetch: newFetch(cfg.Fetch)}
-}
-
-func NewDefault() Web {
-	return New(Config{Fetch: FetchConfig{Proxy: DefaultProxy}})
 }
 
 func (w *web) Exec(ctx context.Context, args json.RawMessage) (string, error) {

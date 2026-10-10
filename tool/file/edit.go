@@ -37,7 +37,7 @@ type editArgs struct {
 
 func (t editTool) Exec(ctx context.Context, data json.RawMessage) (string, error) {
 	var a editArgs
-	if err := strictDecode(data, &a); err != nil {
+	if err := tool.Decode(data, &a); err != nil {
 		return "", fmt.Errorf("edit: args: %w", err)
 	}
 	return t.Edit(ctx, a.Path, a.Old, a.New)

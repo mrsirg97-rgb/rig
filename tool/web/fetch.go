@@ -127,11 +127,6 @@ func publicAddr(ip string) (netip.Addr, bool) {
 	return a, true
 }
 
-func IPisPrivate(ip string) bool {
-	_, ok := publicAddr(ip)
-	return !ok
-}
-
 type pinKey struct{}
 
 func pinnedDial(ctx context.Context, network, addr string) (net.Conn, error) {
