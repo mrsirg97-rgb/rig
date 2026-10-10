@@ -25,6 +25,7 @@ import (
 	effort "github.com/mrsirg97-rgb/rig/v2/policy/effort"
 	"github.com/mrsirg97-rgb/rig/v2/policy/empty"
 	"github.com/mrsirg97-rgb/rig/v2/policy/operator"
+	"github.com/mrsirg97-rgb/rig/v2/provider/anthropic"
 	"github.com/mrsirg97-rgb/rig/v2/provider/openai"
 	"github.com/mrsirg97-rgb/rig/v2/store"
 	remdom "github.com/mrsirg97-rgb/rig/v2/store/rem/domain"
@@ -275,6 +276,23 @@ func (r *root) buildProvider() core.Provider {
 	headerTimeout := openai.HeaderTimeoutOff
 	if r.row.Remote {
 		headerTimeout = 0
+	}
+	if r.row.Provider == "anthropic" {
+		return anthropic.New(anthropic.Config{
+			BaseURL:         r.row.BaseURL,
+			Model:           r.activeID,
+			APIKey:          r.row.APIKey,
+			MaxTokens:       r.row.MaxTokens,
+			Thinking:        anthropic.Thinking{Budget: r.row.ThinkingBudget},
+			CacheControl:    r.row.CacheControl,
+			Retries:         r.row.Retries,
+			BlobsDir:        r.blobsDir(),
+			HeaderTimeout:   headerTimeout,
+			InputPrice:      r.row.InputPrice,
+			OutputPrice:     r.row.OutputPrice,
+			CacheReadPrice:  r.row.CacheReadPrice,
+			CacheWritePrice: r.row.CacheWritePrice,
+		})
 	}
 	if !r.row.Remote && r.row.APIKey == "" {
 		cfg := openai.Config{

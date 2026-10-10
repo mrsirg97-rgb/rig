@@ -342,6 +342,54 @@ func TestRemoteRowInvariantsRefuse(t *testing.T) {
 	}
 }
 
+func TestAnthropicRowInvariantsRefuse(t *testing.T) {
+	cases := []struct {
+		name string
+		mut  func(*models.Model)
+		part string
+	}{
+		{"thinkingBudget without anthropic", func(m *models.Model) { m.ThinkingBudget = 2048 }, "anthropic-only"},
+		{"negative thinkingBudget", func(m *models.Model) { m.Provider = "anthropic"; m.ThinkingBudget = -1 }, ">= 0"},
+		{"budget past maxTokens", func(m *models.Model) {
+			m.Provider = "anthropic"
+			m.ThinkingBudget = m.MaxTokens
+		}, "must be < maxTokens"},
+		{"providerPin on anthropic", func(m *models.Model) {
+			m.Provider = "anthropic"
+			m.ProviderPin = []string{"X"}
+		}, "openrouter-only"},
+		{"reasoning on anthropic", func(m *models.Model) { m.Provider = "anthropic"; m.Reasoning = "reasoning" }, "reasoning"},
+		{"cacheControl without either provider", func(m *models.Model) { m.Provider = "deepseek"; m.CacheControl = true }, "openrouter or anthropic"},
+		{"prices without anthropic", func(m *models.Model) { m.InputPrice = 3 }, "anthropic-only"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			m := legal
+			c.mut(&m)
+			err := m.Check()
+			if err == nil {
+				t.Fatalf("Check() = nil, want a refusal")
+			}
+			if !strings.Contains(err.Error(), c.part) {
+				t.Fatalf("the refusal must name %q: %v", c.part, err)
+			}
+		})
+	}
+}
+
+func TestAnthropicRowAdmitsItsFields(t *testing.T) {
+	m := legal
+	m.Provider = "anthropic"
+	m.Remote = true
+	m.BaseURL = "https://api.anthropic.com"
+	m.CacheControl = true
+	m.ThinkingBudget = 2048
+	m.InputPrice, m.OutputPrice, m.CacheReadPrice, m.CacheWritePrice = 3, 15, 0.25, 4
+	if err := m.Check(); err != nil {
+		t.Fatalf("Check: %v", err)
+	}
+}
+
 func TestResolveEnvOverlaysHostedKeys(t *testing.T) {
 	env := map[string]string{
 		"RIG_MODEL_REMOTE": "true", "RIG_MODEL_BASE_URL": "https://api.deepseek.com",

@@ -104,6 +104,22 @@ func TestMergeOverlaysTheHostedFieldsOntoTheTableRow(t *testing.T) {
 	}
 }
 
+func TestMergeOverlaysTheAnthropicFieldsOntoTheTableRow(t *testing.T) {
+	tbl := mergedOK(t, mergeTableOf(t, localTableRow), `{"id": "local", "provider": "anthropic", "baseUrl": "https://api.anthropic.com", "thinkingBudget": 2048, "cacheControl": true, "inputPrice": 3, "outputPrice": 15, "cacheReadPrice": 0.25, "cacheWritePrice": 4}`)
+	m, _ := tbl.Get("local")
+	want := localRow()
+	want.Remote = true
+	want.Provider = "anthropic"
+	want.BaseURL = "https://api.anthropic.com"
+	want.Retries = 3
+	want.ThinkingBudget = 2048
+	want.CacheControl = true
+	want.InputPrice, want.OutputPrice, want.CacheReadPrice, want.CacheWritePrice = 3, 15, 0.25, 4
+	if !reflect.DeepEqual(m, want) {
+		t.Fatalf("anthropic overlay = %+v, want the file's fields over the row's (+%+v)", m, want)
+	}
+}
+
 func TestMergeKeepsATableRowTheOperatorsFileDoesNotList(t *testing.T) {
 	tbl := mergedOK(t, mergeTableOf(t, localTableRow, brainTableRow), workerTableRow)
 	if got := tbl.Known(); !reflect.DeepEqual(got, []string{"brain", "hand", "local"}) {

@@ -8,12 +8,16 @@ accounting, per-provider reasoning field names, and a remote spawn path
 that never touches the local swap. This spec adds exactly that: model
 rows gain where they run, the provider gains hosted behavior, cost lands
 in the usage column, and swarms and scheduled jobs take dollar budgets.
+(2.15.0 added a second implementer of the seam that speaks Anthropic's
+Messages wire: decision 7.)
 
 ## what it is not (named)
 
 - **Not a new provider.** No new wire, no new package, no protocol
   translation. The OpenAI-compatible adapter is the provider; hosted
-  mode is configuration on top of it.
+  mode is configuration on top of it. (Amended by 2.15.0: hosted mode
+  gained a second provider — decision 7 — but the amendment rides the
+  same row shape and the same one-method seam; nothing here changed.)
 - **Not a key vault.** The key is the operator's, in `models.json` or
   an env overlay; it is never logged, never rendered, and never lands
   in an error. There is no key rotation machinery.
@@ -170,6 +174,81 @@ row; `tool/delegate` and `RunJob` resolve through the models table
 seam. The scheduler's `runs` table gains `cost` (schema v7,
 presence-keyed migration) and `jobs` gains `budget`.
 
+### 7. The second provider (2.15.0)
+
+`core.Provider` is one method and had one implementer since 0.x.
+Claude is reachable through OpenRouter, so 2.15.0's gain is not access;
+it is native semantics: explicit `cache_control` breakpoints on the two
+blocks the words-are-the-budget work made the bulk of every turn (the
+system prompt and the tool table, a cache read a tenth of the price),
+native thinking blocks with a token budget instead of a
+`reasoning_details` translation, and Anthropic's own stop reasons and
+usage (`cache_read_input_tokens`, `cache_creation_input_tokens`)
+feeding the cost column. And it is the first test of the seam's claim:
+a new behavior is a new implementer at the root, never a branch in the
+caller — the diff touches `provider/anthropic`, `models`, `config`,
+`cmd/rig/root.go` and docs, and `loop/`, `core/` and the policy take
+zero lines. The design note is `docs/history/ANTHROPIC-PROVIDER.md`;
+the package contract is `provider/anthropic/PACKAGE.md`.
+
+- **The row**: `models.Model` gains `ThinkingBudget` (`thinkingBudget`)
+  and four optional per-million prices `inputPrice`, `outputPrice`,
+  `cacheReadPrice`, `cacheWritePrice`. `Check` admits `thinkingBudget`
+  and `cacheControl` for `provider: "anthropic"`, refuses
+  `providerPin` and `reasoning` on it by name (the pin is OpenRouter's
+  upstream order; `reasoning` names an openai-compatible wire field
+  and the thinking blocks carry their own), refuses a `thinkingBudget`
+  at or past the row's `maxTokens` (the api requires room to answer),
+  and refuses the prices on any other provider (openrouter reports
+  `usage.cost` itself; a row price there would be a second truth).
+- **The wire**: `provider/anthropic` posts `{BaseURL}/v1/messages`
+  with `stream: true`, `x-api-key` and `anthropic-version` (default
+  `2023-06-01`); the key never reaches a fault, a notice, a log or a
+  test fixture. The system prompt rides the top-level `system` array;
+  the tools ride `tools[]` with `input_schema`; the transcript rides
+  content blocks with every `core.ToolCall` id round-tripping as the
+  `tool_use` id.
+- **The breakpoint choice**: `cache_control: {"type":"ephemeral"}` on
+  exactly three blocks — the last system block, the last tool, and the
+  last user block of the prior turn. Anthropic's caching docs name the
+  mechanics: a cache write happens only at a breakpoint, and a read
+  looks backward from a breakpoint for a prior entry inside a
+  20-block lookback. The system and tool tables are byte-stable per
+  session, so their entries write once and read every turn; the
+  transcript breakpoint on the prior turn's tail keeps the writes at
+  one per user turn — within a tool round-trip the prefix through the
+  breakpoint is unchanged (the assistant's tool_use and the
+  tool_results append after it), so each round-trip request re-reads
+  the same entry instead of rewriting it at the write multiplier. The
+  fourth breakpoint stays unused: three named positions, no fourth
+  rule to maintain.
+- **The thinking carry-back**: a thinking block streams as
+  `thinking_delta` (live `ReasoningDelta`) plus one `signature_delta`;
+  the block record — the text and its signature, or a
+  `redacted_thinking`'s data — rides `ReasoningDelta.Details` into
+  `Message.ReasoningDetails`, the same carrier the openai provider
+  uses for reasoning_details. When thinking is enabled the assistant
+  message is rebuilt from those records verbatim (the API requires the
+  blocks for tool-use continuity, and requires them first in the
+  message); when thinking is off no thinking blocks are sent in either
+  direction. An empty signature (the local Maya runtime's) is carried
+  as it arrived.
+- **The cost source**: the row's per-million prices times the usage
+  the stream reports — `inputPrice` over the uncached input,
+  `cacheWritePrice` over `cache_creation_input_tokens`,
+  `cacheReadPrice` over `cache_read_input_tokens`, `outputPrice` over
+  the output tokens, zero when the row names no prices. No price
+  table in Go. `Usage.Prompt` is the anthropic fields summed
+  (`input_tokens` excludes the cached tokens; the sum is what openai's
+  `prompt_tokens` means), so the context accounting stays comparable
+  across providers.
+- **The bounds**: the header timeout (5-minute default, remote rows on
+  the bound as `provider/openai` applies them) and the idle bound
+  (10 minutes, reset per line) as SPEC_HARDENING 11; a stream without
+  `message_stop` is `stream truncated: no finish marker`, the same
+  words as openai's; 429 and 5xx retry per `Retries` honouring
+  `retry-after`.
+
 ## non-goals
 
 - No key management, rotation, or redaction UI: the key is a row field
@@ -198,3 +277,14 @@ presence-keyed migration) and `jobs` gains `budget`.
   controller emits the notice and claims no more.
 - A scheduled job with a budget: the fire at the cap records a skip
   naming the spend.
+- 2.15.0: a fake Messages server drives `provider/anthropic` the same
+  way — the body pinned byte-for-byte including the three breakpoints;
+  a tool-use round trip pairing by id; thinking blocks carried back
+  with signatures (and redacted_thinking verbatim); every stop reason
+  mapped; each error path's words; the truncated stream's fault; 429
+  with retry-after; the usage and cost arithmetic from the row's
+  prices; a 5-minute header timeout on a silent server and the idle
+  bound. One live smoke behind env vars runs keyless against the
+  operator's Messages-format llama-swap and proves the wire and the
+  stream against a live server; the semantics that server lacks stay
+  pinned by the fakes.

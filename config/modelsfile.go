@@ -12,28 +12,33 @@ import (
 )
 
 type rowDoc struct {
-	n            int
-	id           string
-	window       *int
-	maxTokens    *int
-	reserve      *int
-	keepRecent   *int
-	role         *string
-	effort       *string
-	efforts      *[]string
-	vision       *bool
-	remote       *bool
-	provider     *string
-	baseURL      *string
-	apiKey       *string
-	concurrency  *int
-	reasoning    *string
-	providerPin  *[]string
-	cacheControl *bool
-	retries      *int
+	n               int
+	id              string
+	window          *int
+	maxTokens       *int
+	reserve         *int
+	keepRecent      *int
+	role            *string
+	effort          *string
+	efforts         *[]string
+	vision          *bool
+	remote          *bool
+	provider        *string
+	baseURL         *string
+	apiKey          *string
+	concurrency     *int
+	reasoning       *string
+	providerPin     *[]string
+	cacheControl    *bool
+	retries         *int
+	thinkingBudget  *int
+	inputPrice      *float64
+	outputPrice     *float64
+	cacheReadPrice  *float64
+	cacheWritePrice *float64
 }
 
-var knownRowKeys = []string{"apiKey", "baseUrl", "cacheControl", "concurrency", "effort", "efforts", "id", "keepRecent", "maxTokens", "provider", "providerPin", "reasoning", "remote", "reserve", "retries", "role", "vision", "window"}
+var knownRowKeys = []string{"apiKey", "baseUrl", "cacheControl", "cacheReadPrice", "cacheWritePrice", "concurrency", "effort", "efforts", "id", "inputPrice", "keepRecent", "maxTokens", "outputPrice", "provider", "providerPin", "reasoning", "remote", "reserve", "retries", "role", "thinkingBudget", "vision", "window"}
 
 var knownRowKeysSet = func() map[string]bool {
 	m := make(map[string]bool, len(knownRowKeys))
@@ -216,7 +221,7 @@ func parseRows(data []byte, path string) ([]rowDoc, error) {
 			}
 			d.cacheControl = &v
 		}
-		for _, field := range []string{"concurrency", "retries"} {
+		for _, field := range []string{"concurrency", "retries", "thinkingBudget"} {
 			rawV, ok := keys[field]
 			if !ok {
 				continue
@@ -230,6 +235,28 @@ func parseRows(data []byte, path string) ([]rowDoc, error) {
 				d.concurrency = &v
 			case "retries":
 				d.retries = &v
+			case "thinkingBudget":
+				d.thinkingBudget = &v
+			}
+		}
+		for _, field := range []string{"inputPrice", "outputPrice", "cacheReadPrice", "cacheWritePrice"} {
+			rawV, ok := keys[field]
+			if !ok {
+				continue
+			}
+			v, err := jsonFloat(rawV)
+			if err != nil {
+				return nil, rowErr(n, "%s: %v", field, err)
+			}
+			switch field {
+			case "inputPrice":
+				d.inputPrice = &v
+			case "outputPrice":
+				d.outputPrice = &v
+			case "cacheReadPrice":
+				d.cacheReadPrice = &v
+			case "cacheWritePrice":
+				d.cacheWritePrice = &v
 			}
 		}
 		out = append(out, d)
@@ -349,5 +376,20 @@ func applyHosted(m *models.Model, d *rowDoc) {
 	}
 	if d.retries != nil {
 		m.Retries = *d.retries
+	}
+	if d.thinkingBudget != nil {
+		m.ThinkingBudget = *d.thinkingBudget
+	}
+	if d.inputPrice != nil {
+		m.InputPrice = *d.inputPrice
+	}
+	if d.outputPrice != nil {
+		m.OutputPrice = *d.outputPrice
+	}
+	if d.cacheReadPrice != nil {
+		m.CacheReadPrice = *d.cacheReadPrice
+	}
+	if d.cacheWritePrice != nil {
+		m.CacheWritePrice = *d.cacheWritePrice
 	}
 }
