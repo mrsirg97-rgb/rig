@@ -338,103 +338,54 @@ func main() {
 		os.Exit(1)
 	}
 
-	sessionsPath := state.StorePath(cfgDir, cwd)
-	if err := os.MkdirAll(filepath.Dir(sessionsPath), 0o755); err != nil {
+	sdb, closeState, err := openStore("state", state.StorePath(cfgDir, cwd), state.Statements(), state.SchemaVersion, state.Migration())
+	if err != nil {
 		fmt.Fprintln(os.Stderr, "rig:", err)
 		os.Exit(1)
 	}
-	sdb, quarantined, sReport, err := store.Open(sessionsPath, state.Statements(), state.SchemaVersion, state.Migration())
-	if err != nil {
-		fmt.Fprintln(os.Stderr, "rig: state store:", err)
-		os.Exit(1)
-	}
-	if quarantined != "" {
-		fmt.Fprintf(os.Stderr, "rig: quarantined corrupt state file: %s\n", quarantined)
-	}
-	if sReport != "" {
-		fmt.Fprintln(os.Stderr, "rig:", sReport)
-	}
-	defer sdb.DB.Close()
+	defer closeState()
 
 	todoPath := todostore.FilePath(cfgDir)
 	if err := os.MkdirAll(filepath.Dir(todoPath), 0o755); err != nil {
 		fmt.Fprintln(os.Stderr, "rig:", err)
 		os.Exit(1)
 	}
-	tdb, todoQuarantined, todoReport, todoErr := store.Open(todoPath, todostore.Statements(), todostore.SchemaVersion, todostore.Migration(cwd, filepath.Dir(todoPath)), todostore.ReviewMigration, todostore.EdgeMigration)
-	if todoErr != nil {
-		fmt.Fprintln(os.Stderr, "rig: todo store:", todoErr)
-		os.Exit(1)
-	}
-	if todoQuarantined != "" {
-		fmt.Fprintf(os.Stderr, "rig: quarantined corrupt todo file: %s\n", todoQuarantined)
-	}
-	if todoReport != "" {
-		fmt.Fprintf(os.Stderr, "rig: %s\n", todoReport)
-	}
-	defer tdb.DB.Close()
-
-	decisionPath := decisionstore.FilePath(cfgDir)
-	if err := os.MkdirAll(filepath.Dir(decisionPath), 0o755); err != nil {
+	tdb, closeTodo, err := openStore("todo", todoPath, todostore.Statements(), todostore.SchemaVersion, todostore.Migration(cwd, filepath.Dir(todoPath)), todostore.ReviewMigration, todostore.EdgeMigration)
+	if err != nil {
 		fmt.Fprintln(os.Stderr, "rig:", err)
 		os.Exit(1)
 	}
-	decdb, dQuarantined, dReport, dErr := store.Open(decisionPath, decisionstore.Statements(), decisionstore.SchemaVersion, decisionstore.Migration())
-	if dErr != nil {
-		fmt.Fprintln(os.Stderr, "rig: decision store:", dErr)
+	defer closeTodo()
+
+	decdb, closeDecision, err := openStore("decision", decisionstore.FilePath(cfgDir), decisionstore.Statements(), decisionstore.SchemaVersion, decisionstore.Migration())
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "rig:", err)
 		os.Exit(1)
 	}
-	if dQuarantined != "" {
-		fmt.Fprintf(os.Stderr, "rig: quarantined corrupt decision file: %s\n", dQuarantined)
-	}
-	if dReport != "" {
-		fmt.Fprintln(os.Stderr, "rig:", dReport)
-	}
-	defer decdb.DB.Close()
+	defer closeDecision()
 
 	engine, room := newFleet()
 	voice := room.Add(rig.MemberDecision)
 
-	remPath := remstore.FilePath(cfgDir)
-	if err := os.MkdirAll(filepath.Dir(remPath), 0o755); err != nil {
+	rdb, closeRem, err := openStore("rem", remstore.FilePath(cfgDir), remstore.Statements(), remstore.SchemaVersion, remstore.Migration(cwd))
+	if err != nil {
 		fmt.Fprintln(os.Stderr, "rig:", err)
 		os.Exit(1)
 	}
-	rdb, remQuarantined, remReport, remErr := store.Open(remPath, remstore.Statements(), remstore.SchemaVersion, remstore.Migration(cwd))
-	if remErr != nil {
-		fmt.Fprintln(os.Stderr, "rig: rem store:", remErr)
-		os.Exit(1)
-	}
-	if remQuarantined != "" {
-		fmt.Fprintf(os.Stderr, "rig: quarantined corrupt rem file: %s\n", remQuarantined)
-	}
-	if remReport != "" {
-		fmt.Fprintf(os.Stderr, "rig: %s\n", remReport)
-	}
-	defer rdb.DB.Close()
+	defer closeRem()
 
 	schedHome := filepath.Join(cfgDir, "scheduler")
-	if err := os.MkdirAll(schedHome, 0o755); err != nil {
-		fmt.Fprintln(os.Stderr, "rig:", err)
-		os.Exit(1)
-	}
 	self, err := os.Executable()
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "rig:", err)
 		os.Exit(1)
 	}
-	scdb, sQuarantined, sReport, sErr := store.Open(filepath.Join(schedHome, "global.sqlite"), sched.Statements(), sched.SchemaVersion, sched.Migration(schedHome, cfgDir, self+" run-job", sched.RealCrontab("")))
-	if sErr != nil {
-		fmt.Fprintln(os.Stderr, "rig: scheduler store:", sErr)
+	scdb, closeSched, err := openStore("scheduler", filepath.Join(schedHome, "global.sqlite"), sched.Statements(), sched.SchemaVersion, sched.Migration(schedHome, cfgDir, self+" run-job", sched.RealCrontab("")))
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "rig:", err)
 		os.Exit(1)
 	}
-	if sQuarantined != "" {
-		fmt.Fprintf(os.Stderr, "rig: quarantined corrupt scheduler file: %s\n", sQuarantined)
-	}
-	if sReport != "" {
-		fmt.Fprintf(os.Stderr, "rig: %s\n", sReport)
-	}
-	defer scdb.DB.Close()
+	defer closeSched()
 
 	swapURL := cfg.Settings.SwapURL
 	if v := os.Getenv("RIG_SWAP_URL"); v != "" {
