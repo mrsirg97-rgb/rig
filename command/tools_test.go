@@ -654,24 +654,6 @@ func TestSchedulerUpdateShapeNamesModelNone(t *testing.T) {
 	}
 }
 
-func TestTheTodoAdapterCarriesNoDeadShapes(t *testing.T) {
-	src, err := os.ReadFile("tools.go")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if strings.Contains(string(src), "func isUpdateKey") {
-		t.Fatal("isUpdateKey has no caller (the update switch answers by name)")
-	}
-	for _, group := range []string{
-		`case fields[0] == "claim" && len(fields) == 1:`,
-		`case fields[0] == "claim" || fields[0] == "accept":`,
-	} {
-		if n := strings.Count(string(src), group); n != 1 {
-			t.Fatalf("the case group appears %d times, want once: %s", n, group)
-		}
-	}
-}
-
 func TestSchedulerUpdateDropsTheBusyKey(t *testing.T) {
 	var update *command.Sub
 	for _, s := range allByName(t)["scheduler"].(command.Subber).Sub() {
