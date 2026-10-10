@@ -353,6 +353,74 @@ func TestTheUnitRewriteTouchesOneLineOnly(t *testing.T) {
 	}
 }
 
+func canonicalCwd(t *testing.T, name string) string {
+	t.Helper()
+	dir := filepath.Join(t.TempDir(), name)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	real, err := filepath.EvalSymlinks(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return real
+}
+
+func TestDecisionTrainEnqueueLandsALineRunJobFires(t *testing.T) {
+	rigHome := t.TempDir()
+	schedHome := filepath.Join(rigHome, "scheduler")
+	if err := os.MkdirAll(schedHome, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	db, _, _, err := store.Open(filepath.Join(schedHome, "global.sqlite"), sched.Statements(), sched.SchemaVersion)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.DB.Close()
+	ct := &crontabRecord{}
+	enqueue := decisionTrainEnqueue(db, rigHome, "/x/rig", canonicalCwd(t, "trainfire"), ct)
+	if _, err := enqueue(context.Background(), "reviewer"); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(ct.lines, "# rig-scheduler:"+sched.TagHome(rigHome)+":") {
+		t.Fatalf("the enqueue must tag its line with the rig home run-job reads, got: %s", ct.lines)
+	}
+	var id string
+	if err := db.DB.QueryRow(`SELECT id FROM jobs`).Scan(&id); err != nil {
+		t.Fatal(err)
+	}
+	var spawned [][]string
+	spawn := func(_ context.Context, argv []string, _ string, _ []string, _ func([]byte)) (sched.SpawnResult, error) {
+		spawned = append(spawned, argv)
+		return sched.SpawnResult{Exit: 0}, nil
+	}
+	fetch := func(string) (json.RawMessage, error) {
+		return nil, fmt.Errorf("busy probe must not run")
+	}
+	if err := sched.RunJob(id, sched.RunOpts{
+		Home:    schedHome,
+		Crontab: ct,
+		Fetch:   fetch,
+		Spawn:   spawn,
+		RigHome: rigHome,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if len(spawned) != 1 {
+		t.Fatalf("run-job must fire the training job, spawned %d times (lines: %s)", len(spawned), ct.lines)
+	}
+	if !strings.Contains(spawned[0][2], "decision train reviewer") {
+		t.Fatalf("the fire must run the training command, got %v", spawned[0])
+	}
+	var status, reason string
+	if err := db.DB.QueryRow(`SELECT status, COALESCE(reason, '') FROM runs WHERE job_id = ?`, id).Scan(&status, &reason); err != nil {
+		t.Fatal(err)
+	}
+	if status == "skip" {
+		t.Fatalf("run-job must not skip the training job for drift, got skip (%s)", reason)
+	}
+}
+
 func TestTheIncumbentExpandsTheHomeTilde(t *testing.T) {
 	unit := filepath.Join(t.TempDir(), "laya.service")
 	if err := os.WriteFile(unit, []byte(unitTemplate), 0o644); err != nil {

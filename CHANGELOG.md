@@ -1,4 +1,29 @@
 # Changelog
+## [2.14.14]: the train lands the line run-job reads
+
+The `/decision train` job never fired: the enqueue tagged its crontab
+line with the scheduler store's directory while run-job looked the
+line up under the rig home, so every fire recorded
+`skip · no crontab line (drift)` — j145 and j215 both sat out, and
+2.14.12's test pinned the fire time but never asked whether the line
+run-job reads exists.
+
+- **the enqueue tags with the rig home** (`cmd/rig`): the wiring hands
+  `decisionTrainEnqueue` the one rig home main resolves, named
+  `rigHome` like the `RunOpts.RigHome` run-job reads — one value,
+  passed once, the same one the scheduler tool and every worker
+  wiring already pass. The crontab tag format is untouched; the
+  operator's other jobs keep firing.
+- **the test asks whether run-job can find the line** (`cmd/rig`): the
+  enqueue lands a training job against a fake crontab, the job runs
+  the real `sched.RunJob` path with the homes main wires, and the
+  fire must reach the spawn — not a drift skip. It failed first: the
+  line carried the store dir's tag.
+- **one `//` unescape** (`frontend/cli`): the steered slot and the
+  typed delivery each ran the prefix check and `command.Unescape`;
+  both branches now call one `inputText`, the path the existing
+  steer and quiet-prompt tests pin.
+
 ## [2.14.13]: the specs read the tree again
 
 The 2.14.10 audit's remaining spec/doc findings, amended in place
