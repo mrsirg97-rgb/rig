@@ -303,7 +303,7 @@ live set (read at startup, so raising it takes a restart).
 the live session streamed in the TUI's grammar — approvals answered in
 place, stop while a turn runs, the same commands typed into the same `❯`
 prompt — beside the stores with their writes: sessions per workspace with
-transcripts and resume; the queue (create, start, complete, retry); the
+transcripts and resume; the queue (create, complete, retry); the
 jobs with their run audit (create, pause, resume, remove, repair); the
 swarm, live, with start and stop; the model table, switch, and effort
 dial; and the plugins' three zones with the forge's source read and save

@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -9,13 +10,62 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/mrsirg97-rgb/rig/v2/core"
 	"github.com/mrsirg97-rgb/rig/v2/decision"
 	"github.com/mrsirg97-rgb/rig/v2/store"
 	decisionstore "github.com/mrsirg97-rgb/rig/v2/store/decision"
+	sched "github.com/mrsirg97-rgb/rig/v2/store/scheduler"
 	"github.com/mrsirg97-rgb/rig/v2/testenv"
 )
+
+type crontabRecord struct{ lines string }
+
+func (c *crontabRecord) List() (string, error)     { return c.lines, nil }
+func (c *crontabRecord) Install(text string) error { c.lines = text; return nil }
+
+func TestDecisionTrainEnqueueLandsTwoMinutesOut(t *testing.T) {
+	home := t.TempDir()
+	db, _, _, err := store.Open(filepath.Join(home, "global.sqlite"), sched.Statements(), sched.SchemaVersion)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.DB.Close()
+	enqueue := decisionTrainEnqueue(db, home, "/x/rig", t.TempDir(), &crontabRecord{})
+	before := time.Now()
+	if _, err := enqueue(context.Background(), "reviewer"); err != nil {
+		t.Fatal(err)
+	}
+	var args string
+	if err := db.DB.QueryRow(`SELECT args FROM events WHERE op = 'create'`).Scan(&args); err != nil {
+		t.Fatal(err)
+	}
+	var record struct {
+		Name string  `json:"name"`
+		At   *string `json:"at"`
+		Cron string  `json:"cron"`
+	}
+	if err := json.Unmarshal([]byte(args), &record); err != nil {
+		t.Fatal(err)
+	}
+	if record.At == nil {
+		t.Fatalf("the once-job must carry a normalized at: %s", args)
+	}
+	at, err := time.Parse(time.RFC3339, *record.At)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if at.Second() != 0 || at.Nanosecond() != 0 {
+		t.Fatalf("the fire must land on an even minute (the crontab's granularity is the margin), got %s", at)
+	}
+	if margin := at.Sub(before); margin < 2*time.Minute {
+		t.Fatalf("the fire must be at least two minutes out, got %s (at %s, before %s)", margin, at, before)
+	}
+	if margin := at.Sub(before); margin > 3*time.Minute+30*time.Second {
+		t.Fatalf("the margin must not drift past the next even minute's bound, got %s", margin)
+	}
+}
 
 func kernelInterpreter(t *testing.T) string {
 	t.Helper()

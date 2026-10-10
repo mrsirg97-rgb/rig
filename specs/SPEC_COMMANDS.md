@@ -668,8 +668,7 @@ scheduler show <id>             one job with its last run
 scheduler create <name> <prompt…> <cron>     5-field vixie, or
 scheduler create <name> <prompt…> once <ISO>
 scheduler update <id> [name <n>] [model <m>|none] [workspace <dir>]
-          [busy <skip|force>] [cron <5 fields|once>] [at <ISO>]
-          [prompt <the rest of the line>]
+          [cron <5 fields|once>] [at <ISO>] [prompt <the rest of the line>]
 scheduler pause|resume|remove <id>
 scheduler runs <id> [n]
 scheduler repair [id]           re-derive a drifting job's crontab line

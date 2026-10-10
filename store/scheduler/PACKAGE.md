@@ -58,14 +58,12 @@ written before the store commit; drift is surfaced in list.
   rewritten to the `rig-scheduler` tag, every other line left byte
   identical, and a store with no jobs never touches the crontab shim.
 - `runner.go`: the job runner (`RunJob`); `lock.go`: the fire lock and
-  log pruning, `busy.go`: the swap gate (the resident set and the live
-  free-slot read, `ResidentModel`/`FreeSlots`) with `FleetCapacity`,
+  log pruning, `busy.go`: the swap gate (the resident set,
+  `ResidentModel`) with
   the not-resident refusal carried as `ErrNotResident` so a caller
   matches it with `errors.Is` instead of its text (the swarm's drain
   treats it as a stop, not a death),
-  the wire-time capability read — the widest slot count the resident
-  server runs, from one live read of the same `/slots` the gate reads,
-  nothing resident the zero value — and the spend read,
+  and the spend read,
   `spawn.go`: the real spawn and the capture
   (the worker spawn, bwrap jail, socket proxy);
   the spawn captures each stream to the first and last 128 KiB

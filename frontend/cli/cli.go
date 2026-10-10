@@ -160,11 +160,16 @@ func (c *cli) Input(ctx context.Context) (string, error) {
 				continue
 			}
 
+			out := line
+			if strings.HasPrefix(line, "//") {
+				out = command.Unescape(line)
+			}
+
 			c.mu.Lock()
 			c.steeredLive = false
 			c.turnCtx = ctx
 			c.mu.Unlock()
-			return line, nil
+			return out, nil
 		default:
 		}
 		select {

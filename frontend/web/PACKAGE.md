@@ -108,8 +108,8 @@ the Apple meta tags, safe-area insets).
   cached at `New`: a file created, promoted, or dropped is visible on
   the next read.
 - **The todo's two hands** (`todoverbs.go`, SPEC_SERVE 15): `POST
-  /api/todo/start` and `/api/todo/complete` (`{id}`): `todo.Start` and
-  `todo.Complete` attributed to `dashboard`, the id checked to the
+  /api/todo/complete` and `/api/todo/retry` (`{id}`): `todo.Complete`
+  and `todo.Retry` attributed to `dashboard`, the id checked to the
   tool's shape, the reply verbatim (a model-claimed task refuses in the
   store's voice). Same walls as every write.
 - **The scheduler's five doors** (`schedulerverbs.go`, SPEC_SERVE 16):

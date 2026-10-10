@@ -344,8 +344,12 @@ reviewer 1 · ⧗1 ✓1 ✕0 · w3 t386 4m
 - The tail is the role's busiest worker — in flight first, then the
   highest done+failed, ties by id — its current task (`—` when idle) and
   heartbeat age (`12s`, `4m`, `1h`; `—` when none), dim.
-- A delegate shows the worker row only (its snapshot carries the one
-  in-flight worker; the queue counts are zero).
+- A delegate's band is its own two rows (the head and the call row,
+  SPEC_TUI 3a), not the role rows: its snapshot carries every worker,
+  running and queued (2.14.9 queues the call past the `maxWorkers`
+  cap), and the head names the running count with the queued count when
+  one queues; the role-row tail and the `+`/`⧗` fold stay the swarm's
+  own.
 
 Rejected, named: the controller calling the frontend on every heartbeat
 (the band's cadence is the throttle, not the stream's); a transcript

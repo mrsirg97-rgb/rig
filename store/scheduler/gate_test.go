@@ -14,27 +14,12 @@ import (
 	sched "github.com/mrsirg97-rgb/rig/v2/store/scheduler"
 )
 
-func slotsJSON(processing []bool) string {
-	type slot struct {
-		ID           int  `json:"id"`
-		IsProcessing bool `json:"is_processing"`
-	}
-	var slots []slot
-	for i, p := range processing {
-		slots = append(slots, slot{ID: i, IsProcessing: p})
-	}
-	b, _ := json.Marshal(slots)
-	return string(b)
-}
-
 type gateFetch struct {
-	mu        sync.Mutex
-	resident  []string
-	statuses  map[string]string
-	models    []swapModel
-	slots     [][]bool
-	failing   string
-	slotReads int
+	mu       sync.Mutex
+	resident []string
+	statuses map[string]string
+	models   []swapModel
+	failing  string
 }
 
 func (f *gateFetch) fetch(url string) (json.RawMessage, error) {
@@ -51,16 +36,6 @@ func (f *gateFetch) fetch(url string) (json.RawMessage, error) {
 		return json.RawMessage(modelsJSON(f.statuses)), nil
 	case strings.HasSuffix(url, "/running"):
 		return json.RawMessage(runningJSON(f.resident...)), nil
-	case strings.Contains(url, "/upstream/"):
-		if len(f.slots) == 0 {
-			return nil, jsonError("no slots fixture for " + url)
-		}
-		served := f.slots[0]
-		if len(f.slots) > 1 {
-			f.slots = f.slots[1:]
-		}
-		f.slotReads++
-		return json.RawMessage(slotsJSON(served)), nil
 	}
 	return nil, jsonError("unexpected url " + url)
 }
@@ -109,23 +84,23 @@ func spawnModel(t *testing.T, spawn *delegateSpawn) string {
 	return ""
 }
 
-func TestDelegateFullSlotSetStillSendsAndWaits(t *testing.T) {
+func TestDelegateSendsAndWaits(t *testing.T) {
 	spawn := &delegateSpawn{result: sched.SpawnResult{Exit: 0, Stdout: "done\n"}}
-	fetch := &gateFetch{resident: []string{"qwen3.8-27b-workers"}, slots: [][]bool{{true}}}
+	fetch := &gateFetch{resident: []string{"qwen3.8-27b-workers"}}
 	in := gateDelegateInput(t, fetch, spawn.spawn, func(in *sched.DelegateInput) {
 		in.Models = modelTable(t, "qwen3.8-27b-workers")
 	})
 	if _, err := sched.Delegate(in); err != nil {
-		t.Fatalf("a resident model with every slot processing must send and wait on the server's queue: %v", err)
+		t.Fatalf("a resident model must send and wait on the server's queue: %v", err)
 	}
 	if spawn.count() != 1 {
 		t.Fatalf("spawn calls = %d, want 1 (the server queues the request)", spawn.count())
 	}
 }
 
-func TestDelegateFreeSlotSpawnsTheWorker(t *testing.T) {
+func TestDelegateUnnamedResidentSpawnsTheRow(t *testing.T) {
 	spawn := &delegateSpawn{result: sched.SpawnResult{Exit: 0, Stdout: "done\n"}}
-	fetch := &gateFetch{resident: []string{"qwen3.8-27b-workers"}, slots: [][]bool{{true, false}}}
+	fetch := &gateFetch{resident: []string{"qwen3.8-27b-workers"}}
 	in := gateDelegateInput(t, fetch, spawn.spawn, func(in *sched.DelegateInput) {
 		in.Models = modelTable(t, "qwen3.8-27b-workers")
 	})
@@ -142,7 +117,6 @@ func TestDelegateUnnamedResidentAliasRunsTheTableRow(t *testing.T) {
 	fetch := &gateFetch{
 		resident: []string{"glm5.3-flash"},
 		models:   []swapModel{{ID: "glm5.3-flash", Alias: []string{"ox-alpha"}}},
-		slots:    [][]bool{{false}},
 	}
 	in := gateDelegateInput(t, fetch, spawn.spawn, func(in *sched.DelegateInput) {
 		in.Model = ""
@@ -170,7 +144,7 @@ func TestDelegateUnnamedResidentAliasRunsTheTableRow(t *testing.T) {
 
 func TestDelegateUnnamedResidentRowRunsUnchanged(t *testing.T) {
 	spawn := &delegateSpawn{result: sched.SpawnResult{Exit: 0, Stdout: "done\n"}}
-	fetch := &gateFetch{resident: []string{"qwen3.8-27b"}, slots: [][]bool{{false}}}
+	fetch := &gateFetch{resident: []string{"qwen3.8-27b"}}
 	in := gateDelegateInput(t, fetch, spawn.spawn, func(in *sched.DelegateInput) {
 		in.Model = ""
 		in.Models = modelTable(t, "qwen3.8-27b")
@@ -202,7 +176,7 @@ func TestDelegateUnnamedResidentWithoutARowRefusesNamingItAndTheKnownRows(t *tes
 
 func TestDelegateUnnamedModelRunsTheResidentModel(t *testing.T) {
 	spawn := &delegateSpawn{result: sched.SpawnResult{Exit: 0, Stdout: "done\n"}}
-	fetch := &gateFetch{resident: []string{"resident-a"}, slots: [][]bool{{false}}}
+	fetch := &gateFetch{resident: []string{"resident-a"}}
 	in := gateDelegateInput(t, fetch, spawn.spawn, func(in *sched.DelegateInput) {
 		in.Model = ""
 		in.Models = modelTable(t, "resident-a")
@@ -245,7 +219,7 @@ func TestDelegateNamedModelWhileAnotherResidentRefusesNamingTheHolder(t *testing
 
 func TestDelegateGateReadFailureFailsClosed(t *testing.T) {
 	spawn := &delegateSpawn{result: sched.SpawnResult{Exit: 0}}
-	fetch := &gateFetch{resident: []string{"qwen3.8-27b-workers"}, slots: [][]bool{{true}}}
+	fetch := &gateFetch{resident: []string{"qwen3.8-27b-workers"}}
 	fetch.failing = "models endpoint down"
 	in := gateDelegateInput(t, fetch, spawn.spawn, nil)
 	if _, err := sched.Delegate(in); err == nil {
@@ -297,10 +271,10 @@ func TestDelegateZeroTimeoutKeepsTheDefault(t *testing.T) {
 	}
 }
 
-func TestRunJobWaitsForAFreeSlotUpToTheFireTimeout(t *testing.T) {
+func TestRunJobSendsAndWaitsUpToTheFireTimeout(t *testing.T) {
 	h, key := setupJob(t, realCwd(t, "job"), nil)
 	spawn := &fakeSpawn{result: sched.SpawnResult{Exit: 0}}
-	gf := &gateFetch{resident: []string{"qwen3.8-27b-workers"}, slots: [][]bool{{true}, {false}}}
+	gf := &gateFetch{resident: []string{"qwen3.8-27b-workers"}}
 	opts := runOpts(h, []string{"qwen3.8-27b-workers"}, spawn, fetchOpts{})
 	opts.Fetch = gf.fetch
 	opts.Timeout = 30 * time.Second
@@ -308,25 +282,25 @@ func TestRunJobWaitsForAFreeSlotUpToTheFireTimeout(t *testing.T) {
 		t.Fatalf("run-job: %v", err)
 	}
 	if len(spawn.calls) != 1 {
-		t.Fatalf("spawn calls = %d, want 1 after the slot freed", len(spawn.calls))
+		t.Fatalf("spawn calls = %d, want 1 (the fire's request queues at the server)", len(spawn.calls))
 	}
 }
 
-func TestRunJobSendsAndWaitsWhileEverySlotIsProcessing(t *testing.T) {
+func TestRunJobSendsAndWaits(t *testing.T) {
 	h, key := setupJob(t, realCwd(t, "job"), nil)
 	spawn := &fakeSpawn{result: sched.SpawnResult{Exit: 0}}
-	gf := &gateFetch{resident: []string{"qwen3.8-27b-workers"}, slots: [][]bool{{true, true}}}
+	gf := &gateFetch{resident: []string{"qwen3.8-27b-workers"}}
 	opts := runOpts(h, []string{"qwen3.8-27b-workers"}, spawn, fetchOpts{})
 	opts.Fetch = gf.fetch
 	if err := sched.RunJob(key, opts); err != nil {
 		t.Fatalf("run-job: %v", err)
 	}
 	if len(spawn.calls) != 1 {
-		t.Fatalf("spawn calls = %d, want 1 (the fire's request queues at the server)", len(spawn.calls))
+		t.Fatalf("spawn calls = %d, want 1", len(spawn.calls))
 	}
 	rec := runEvents(t, h, "")[0]
 	if rec.Args["status"] == "skip" {
-		t.Fatalf("a full slot set must not skip: %v", rec.Args)
+		t.Fatalf("the fire must not skip: %v", rec.Args)
 	}
 }
 

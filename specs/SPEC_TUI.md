@@ -572,11 +572,13 @@ reviewer 1 · ⧗0 ✓0 ✕0 · w2 — —
   two publishers of `core.SwarmStatus` apart — and the band renders
   from it, under the cache row and the status rows:
 
-      delegating · 3 workers · 1m12s
+      delegating · 3 workers · 1 queued · 1m12s
       #2 edit tool/file/edit.go · 12s
 
   the head counting the batch and the time since its first spawn (one
-  worker reads `1 worker`), the second row the most recent call across
+  worker reads `1 worker`), the queued count between them naming the
+  calls the `maxWorkers` cap holds back (2.14.9; the segment is absent
+  when nothing queues), the second row the most recent call across
   all of them — the worker's number, the tool, the first argument line,
   and that call's age — `—` until a worker has called. Nothing per
   worker is listed: the band summarizes a batch the operator is not

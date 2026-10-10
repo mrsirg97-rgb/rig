@@ -654,6 +654,29 @@ func TestSchedulerUpdateShapeNamesModelNone(t *testing.T) {
 	}
 }
 
+func TestSchedulerUpdateDropsTheBusyKey(t *testing.T) {
+	var update *command.Sub
+	for _, s := range allByName(t)["scheduler"].(command.Subber).Sub() {
+		if s.Name == "update" {
+			update = &s
+		}
+	}
+	if update == nil {
+		t.Fatal("the scheduler menu must carry the update verb")
+	}
+	if strings.Contains(update.Desc, "busy") {
+		t.Fatalf("the menu shape must not advertise the retired busy key: %s", update.Desc)
+	}
+	env := &command.Env{Session: func() *core.Session { return core.NewSession() }, Tools: map[string]core.Tool{"scheduler": fakeExecFunc(nil)}}
+	_, err := runCmd(t, "scheduler", "update", env)
+	if err == nil || strings.Contains(err.Error(), "busy") {
+		t.Fatalf("the usage line must not advertise busy, got %v", err)
+	}
+	if _, err := runCmd(t, "scheduler", "update j8 busy skip", env); err == nil || !strings.Contains(err.Error(), "unknown key") {
+		t.Fatalf("busy must stay refused: %v", err)
+	}
+}
+
 func TestSchedulerUpdatePromptKeepsKeyWords(t *testing.T) {
 	var got map[string]any
 	capture := fakeExecFunc(func(ctx context.Context, args json.RawMessage) (string, error) {

@@ -49,7 +49,7 @@ func (t toolCmd) Sub() []Sub {
 			{Name: "list", Desc: "show the jobs"},
 			{Name: "show", Desc: "one job with its last run: show <id>"},
 			{Name: "create", Desc: "add a job: create <name> <prompt> <cron>"},
-			{Name: "update", Desc: "change a job's fields: update <id> [name <n>] [model <m>|none] [workspace <dir>] [busy <skip|force>] [cron <5 fields|once>] [at <ISO>] [prompt <the rest of the line>]"},
+			{Name: "update", Desc: "change a job's fields: update <id> [name <n>] [model <m>|none] [workspace <dir>] [cron <5 fields|once>] [at <ISO>] [prompt <the rest of the line>]"},
 			{Name: "runs", Desc: "a job's recent runs: runs <id> [n]"},
 			{Name: "pause", Desc: "pause a job: pause <id>"},
 			{Name: "resume", Desc: "resume a paused job: resume <id>"},
@@ -150,15 +150,6 @@ func todoArgs(args string) (json.RawMessage, error) {
 	case (fields[0] == "note" || fields[0] == "reject") && len(fields) >= 3:
 		m := map[string]any{"action": fields[0], "id": fields[1], "note": strings.TrimSpace(args[len(fields[0])+1+len(fields[1]):])}
 		return json.Marshal(m)
-	case fields[0] == "claim" && len(fields) == 1:
-		return json.RawMessage(`{"action":"claim"}`), nil
-	case fields[0] == "claim" && len(fields) == 2 && fields[1] == "review":
-		return json.RawMessage(`{"action":"claim","status":"review"}`), nil
-	case fields[0] == "accept" && len(fields) == 2:
-		return json.Marshal(map[string]any{"action": "accept", "id": fields[1]})
-	case (fields[0] == "note" || fields[0] == "reject") && len(fields) >= 3:
-		m := map[string]any{"action": fields[0], "id": fields[1], "note": strings.TrimSpace(args[len(fields[0])+1+len(fields[1]):])}
-		return json.Marshal(m)
 	case (fields[0] == "complete" || fields[0] == "done" || fields[0] == "fail" || fields[0] == "release" || fields[0] == "retry") && len(fields) == 2:
 		action := fields[0]
 		if action == "done" {
@@ -195,10 +186,6 @@ func todoArgs(args string) (json.RawMessage, error) {
 		return nil, fmt.Errorf("todo: %s takes no extra args (todo %s)", fields[0], fields[0])
 	case fields[0] == "note" || fields[0] == "reject":
 		return nil, fmt.Errorf("todo: %s takes an id and text (todo %s <id> <text…>)", fields[0], fields[0])
-	case fields[0] == "claim" || fields[0] == "accept":
-		return nil, fmt.Errorf("todo: %s takes no extra args (todo %s)", fields[0], fields[0])
-	case fields[0] == "note" || fields[0] == "reject":
-		return nil, fmt.Errorf("todo: %s takes an id and text (todo %s <id> <text…>)", fields[0], fields[0])
 	case fields[0] == "complete" || fields[0] == "done" || fields[0] == "fail" || fields[0] == "release" || fields[0] == "retry":
 		return nil, fmt.Errorf("todo: %s takes an id (todo %s <id>)", fields[0], fields[0])
 	case fields[0] == "move":
@@ -229,7 +216,7 @@ func withDefaultScope(raw json.RawMessage, scope string) (json.RawMessage, error
 	return json.Marshal(m)
 }
 
-const schedulerVerbs = "list|show <id>|create <name> <prompt…> <cron>|update <id> [name <n>] [model <m>|none] [workspace <dir>] [busy <skip|force>] [cron <5 fields|once>] [at <ISO>] [prompt <the rest of the line>]|pause|resume|remove <id>|runs <id> [n]|repair [id]"
+const schedulerVerbs = "list|show <id>|create <name> <prompt…> <cron>|update <id> [name <n>] [model <m>|none] [workspace <dir>] [cron <5 fields|once>] [at <ISO>] [prompt <the rest of the line>]|pause|resume|remove <id>|runs <id> [n]|repair [id]"
 
 func schedulerArgs(args string) (json.RawMessage, error) {
 	fields := strings.Fields(args)
@@ -281,14 +268,6 @@ func schedulerArgs(args string) (json.RawMessage, error) {
 	default:
 		return nil, fmt.Errorf("scheduler: unknown action %q (scheduler %s)", fields[0], schedulerVerbs)
 	}
-}
-
-func isUpdateKey(s string) bool {
-	switch s {
-	case "name", "prompt", "cron", "at", "model", "workspace":
-		return true
-	}
-	return false
 }
 
 func schedulerUpdate(fields []string) (json.RawMessage, error) {
