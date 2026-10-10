@@ -1,4 +1,33 @@
 # Changelog
+## [2.14.15]: the schema says what the code takes
+
+The tool surface is the agent's world, and the descriptions had
+drifted from what the code accepts in small ways that cost real
+calls. This round's own todo queue refused five of six creates
+because a link named a task that did not exist yet — the refusal was
+strict by design, the prose never said so. The registry now speaks
+the code, schema cells included.
+
+- **a link names a task that exists** (`tool/todo`): the guidelines
+  carry the clause — create first, then link; a link to a task that
+  does not exist refuses — and `requires`/`blocks` say the target
+  must already exist. The `action` description maps all fourteen
+  verbs, `id` names the nine that take one, and `note` says reject
+  refuses without a reason.
+- **the scheduler schema carries workspace and n** (`tool/scheduler`):
+  create and update take the workspace the job runs in and `runs`
+  takes how many recent runs to list — both parsed by the code,
+  absent from the schema, so an agent reading the wire could not pass
+  them. `update` is named where it lives: in the `id` description and
+  a gloss of what a partial rewrite keeps. The schema's stale claim
+  that workspace must be gone went with it.
+- **no undocumented cell left** (`tool/rem`, `tool/sessions`,
+  `tool/web`, `tool/bash`): every property now carries a description
+  — rem's action, verb and supersedes; sessions' action, project and
+  n — the web action reads as the verb it is, and bash's workspace
+  names its default. The params were live all along; the words were
+  missing.
+
 ## [2.14.14]: the train lands the line run-job reads
 
 The `/decision train` job never fired: the enqueue tagged its crontab

@@ -114,11 +114,15 @@ func TestSchemaCarriesTheParameterVoicesAndNoScope(t *testing.T) {
 		t.Fatal("the scope arg must be gone from the schema")
 	}
 	id, _ := schema.Properties["id"].(map[string]any)
-	if got, _ := id["description"].(string); got != "job id jN from list; required for pause/resume/remove/runs/show; repair takes it or none." {
+	if got, _ := id["description"].(string); got != "job id jN from list; required for update/pause/resume/remove/runs/show; repair takes it or none." {
 		t.Fatalf("id description %q", got)
 	}
-	if _, ok := schema.Properties["workspace"]; ok {
-		t.Fatal("the workspace arg must be gone from the schema (the job runs in the session's workspace)")
+	ws, _ := schema.Properties["workspace"].(map[string]any)
+	if ws == nil {
+		t.Fatal("the schema must carry workspace: create and update take the workspace the job runs in")
+	}
+	if got, _ := ws["description"].(string); got != "for create and update: the workspace the job runs in; the caller's workspace when omitted, and it must sit under the caller's workspace or the rig home" {
+		t.Fatalf("workspace description %q", got)
 	}
 }
 

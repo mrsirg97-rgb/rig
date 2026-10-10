@@ -295,7 +295,7 @@ func TestDescriptionAndSchemaSpeakWorkspace(t *testing.T) {
 
 func TestDescriptionAndSchemaCarryTheLinkContract(t *testing.T) {
 	tool := todoapi.New(newDB(t), todoapi.Interactive)
-	for _, want := range []string{"one task per create", "create the task it waits for first, then link", "copy them, never invent them"} {
+	for _, want := range []string{"one task per create", "create the task it waits for first, then link", "a link to a task that does not exist refuses", "copy them, never invent them"} {
 		if !strings.Contains(tool.Description(), want) {
 			t.Fatalf("the description must carry %q:\n%s", want, tool.Description())
 		}
@@ -314,8 +314,8 @@ func TestDescriptionAndSchemaCarryTheLinkContract(t *testing.T) {
 	}
 	want := map[string]string{
 		"text":     "for create: what needs doing. one task per call.",
-		"requires": "for create: the task this one waits for, as its id from a reply (t12). omit when none; null removes a link.",
-		"blocks":   "for create: the task that waits for this one, as its id. omit when none; null removes a link.",
+		"requires": "for create: the task this one waits for, as its id from a reply (t12); the task must already exist. omit when none; null removes a link.",
+		"blocks":   "for create: the task that waits for this one, as its id from a reply (t12); the task must already exist. omit when none; null removes a link.",
 	}
 	for key, wantDesc := range want {
 		if desc := s.Properties[key].Description; desc != wantDesc {
