@@ -134,11 +134,13 @@ views, fetches, delegates) run beside each other eight at a time, and
 anything with an effects lands as a barrier between them. The model
 gets concurrency; the transcript keeps its order.
 
-Broadcast rides the same queue. The fleet — delegate workers,
-reviewers, the swarm's notices — posts its messages at a priority below
-the turn's own events, so a worker's message runs in the gaps of a turn
-and never ahead of it. A busy session delays the chatter and loses
-nothing, because the stores hold the facts. And the runtime names no
+Broadcast rides the same queue. A delegate's return posts above the
+turn's own events, so the work you asked for is in hand at the boundary
+of the turn in flight — a busy session is never a reason it waits. The
+fleet's other messages — the reviewers, the swarm's notices — post below
+the turn's own events, so they run in the gaps of a turn and never ahead
+of it; a busy session delays the chatter and loses nothing, because the
+stores hold the facts. And the runtime names no
 concrete tool, provider, policy, frontend, or middleware: one file plus
 one registration line extends it.
 
@@ -204,7 +206,7 @@ the core is frozen.
 <!-- measured:begin (scripts/readme-measured; do not hand-edit) -->
 Numbers, not adjectives — and each one names its mechanism. The block is computed: `scripts/readme-measured` reads the stores and the tree, CI refuses drift, so it cannot go stale on you. One SQL read of the state store: the store is the receipt.
 
-**98.3% of 5.4 billion prompt tokens served from cache**, across 2,438 sessions and 50,024 recorded turns — the earliest on v0.2.0. The ratio is `cache_read / prompt`, the arithmetic `sessions summary` runs; the byte-stable prefix is why the provider can reuse so much of it. Cost per turn, era by era:
+**98.3% of 5.4 billion prompt tokens served from cache**, across 2,443 sessions and 50,086 recorded turns — the earliest on v0.2.0. The ratio is `cache_read / prompt`, the arithmetic `sessions summary` runs; the byte-stable prefix is why the provider can reuse so much of it. Cost per turn, era by era:
 
 | era | turns | new tokens / turn | completion / turn | cache |
 |---------|--------|------|------|--------|
@@ -212,13 +214,13 @@ Numbers, not adjectives — and each one names its mechanism. The block is compu
 | 1.0–1.3 | 7,440 | 933 | 676 | 99.13% |
 | 1.4–1.9 | 10,045 | 962 | 525 | 99.26% |
 | 2.0–2.9 | 7,360 | 906 | 503 | 99.09% |
-| 2.10.x | 11,173 | 4,383 | 620 | 95.24% |
+| 2.10.x | 11,235 | 4,389 | 624 | 95.26% |
 
 The 2.1.x consolidation rethought the system prompt and the toolset and kept the machinery — the kink is visible. The 2.10.x row is the fleet's own traffic: swarm workers and delegates are short-lived sessions whose first turns cannot hit a cache that does not exist yet, and the models rotate; the interactive sessions of that era hold the ~98% line.
 
 **A few thousand bytes of preamble.** The system prompt and the tool schemas are lean, byte-stable, and carefully chosen, and the tests say so: `TestSystemPromptIsByteStableAcrossBuilds`, `TestWireMarshalingIsDeterministic`, `TestWireMessagesAreAppendOnly`. A stray timestamp cannot quietly kill the cache.
 
-**409 lines is the loop** — `loop.go` plus `batch.go`, stdlib only. **662 lines is the whole swarm** — claim, spawn, complete, verdict, reap, and the status throttle. **47,078 lines of Go, 75,188 of tests.** The one store dependency is pure-Go SQLite.
+**409 lines is the loop** — `loop.go` plus `batch.go`, stdlib only. **662 lines is the whole swarm** — claim, spawn, complete, verdict, reap, and the status throttle. **47,116 lines of Go, 75,231 of tests.** The one store dependency is pure-Go SQLite.
 
 <!-- measured:end -->
 

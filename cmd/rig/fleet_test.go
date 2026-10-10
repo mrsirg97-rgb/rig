@@ -5,13 +5,56 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
+	"github.com/mrsirg97-rgb/rig/v2"
 	"github.com/mrsirg97-rgb/rig/v2/broadcast"
 	"github.com/mrsirg97-rgb/rig/v2/command"
+	"github.com/mrsirg97-rgb/rig/v2/core"
+	"github.com/mrsirg97-rgb/rig/v2/evt"
 	"github.com/mrsirg97-rgb/rig/v2/models"
 	sched "github.com/mrsirg97-rgb/rig/v2/store/scheduler"
 )
+
+type recordingEngine struct {
+	evt.Engine
+
+	mu         sync.Mutex
+	priorities []int
+}
+
+func (e *recordingEngine) Add(c evt.Closure, priority int) uint64 {
+	e.mu.Lock()
+	e.priorities = append(e.priorities, priority)
+	e.mu.Unlock()
+	return e.Engine.Add(c, priority)
+}
+
+func TestTheDelegateReturnPostsAboveTheTurnsQueue(t *testing.T) {
+	eng := &recordingEngine{Engine: evt.NewEngine()}
+	room := broadcast.NewRoom("fleet", fleetTransports(eng))
+	room.Add(rig.MemberFrontend).Subscribe(context.Background(), func(err error, messages ...broadcast.Message) {})
+	room.Add(rig.MemberDelegate)
+	other := room.Mint()
+	room.Add(rig.MemberDelegate).Publish(context.Background(), func(error) {}, broadcast.NewMessage(rig.MemberDelegate, true, core.WorkerDone{N: 1, Content: "the worker's return", Exit: 0, Duration: time.Second}))
+	other.Publish(context.Background(), func(error) {}, broadcast.NewMessage(other.Id(), true, core.Notice{Source: "swarm", Text: "a worker says"}))
+	eng.mu.Lock()
+	defer eng.mu.Unlock()
+	above := 0
+	for _, p := range eng.priorities {
+		if p != rig.PriorityDelegate && p != rig.PriorityFleet {
+			t.Fatalf("a send posted at %d (known: %d, %d)", p, rig.PriorityDelegate, rig.PriorityFleet)
+		}
+		if p == rig.PriorityDelegate {
+			above++
+		}
+	}
+	if above != 1 {
+		t.Fatalf("exactly one delivery (the delegate return's) posts above the turn's queue, got %d in %v", above, eng.priorities)
+	}
+}
 
 func swapFetch(running []string, slots int) sched.Fetch {
 	return func(url string) (json.RawMessage, error) {

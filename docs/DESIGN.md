@@ -70,11 +70,13 @@ a result; a step that waits on the world spawns and its completion posts
 back at the same priority, so the event is the wakeup.
 
 The kernel carries the named priorities (`PriorityInput` 90,
-`PriorityStream` 50, `PriorityTool` 50, `PriorityFleet` 30,
-`PriorityReview` 10); the loop reads them, the root assigns them. The
-fleet's room posts at 30 and the reviewer at 10 — that is the whole
-mechanism behind "a worker's message runs in the gaps of a turn and
-never ahead of it."
+`PriorityDelegate` 70, `PriorityStream` 50, `PriorityTool` 50,
+`PriorityFleet` 30, `PriorityReview` 10); the loop reads them, the root
+assigns them. The session's frontend member posts a delegate's return at
+70 and the fleet's other deliveries at 30, and the reviewer bites at 10
+— that is the whole mechanism behind "the delegation work is in hand at
+the turn's boundary, and the fleet's chatter runs in the gaps of a turn
+and never ahead of it."
 
 ```
  user message ─► Assemble (ContextPolicy) ─► Stream (Provider)
@@ -246,11 +248,17 @@ is the one voice every background subsystem notices with; the kernel
 names the members (`MemberFrontend`, `MemberDelegate`, `MemberGraph`,
 `MemberDecision`), and the swarm's supervisor registers as one.
 
-Because the room posts at `PriorityFleet` 30, below the turn's own
-events, a worker's message runs in the gaps of a turn and never ahead of
-it. Starvation is the documented property, not a bug to chase: a busy
-session delays the fleet's chatter and loses nothing, because the stores
-hold the facts. That same ordering — priority, not source — is why the
+Because the session's frontend member posts a delegate's return at
+`PriorityDelegate` 70 — above the turn's own events — the return is in
+hand at the boundary of the turn in flight: the session acts on the
+delegation work at its next turn, however many turns queue behind it.
+The room's other deliveries post at `PriorityFleet` 30, below the
+turn's own events, so the fleet's chatter runs in the gaps of a turn and
+never ahead of it. Starvation is the documented property for the
+chatter, not a bug to chase: a busy session delays it and loses nothing,
+because the stores hold the facts — and the delegate's return is not
+chatter, it is the inbox append the boundary drains. That same ordering —
+priority, not source — is why the
 swarm needs no machinery of its own: workers, reviewers, and the
 operator's input are just producers on one queue.
 

@@ -104,6 +104,8 @@ scripts/
 reopen loop/ 1.1.4
 reopen kernel.go 2.0.1
 reopen kernel_test.go 2.0.1
+reopen kernel.go 2.15.2
+reopen kernel_test.go 2.15.2
 reopen core/seam_test.go 2.0.1
 reopen core/session_test.go 2.0.1
 reopen core/provider.go 2.8.3

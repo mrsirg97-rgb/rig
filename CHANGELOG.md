@@ -1,4 +1,39 @@
 # Changelog
+## [2.15.2]: the delegate's return outruns the turn's queue
+
+A delegate is async, but its return only has value while the work it
+informs is in flight. The fleet's one priority made that a bet on the
+session going idle: a main session that always has a next turn queued
+starved its returns until the queue emptied — the worker reports landed
+after everything, not as the work happened. The room delivers through
+the receiving member's transport, so the fix is the session's own inbox
+member: a delegate-origin message posts above the turn's own events, and
+the rest of the fleet keeps its gaps.
+
+- **the delegate's return posts above the turn's queue** (`cmd/rig`,
+  `kernel.go`): the fleet's transport factory is per member, and the
+  session's frontend member now carries two of them — a delegate-origin
+  message (the worker's return, its status snapshot) posts at the new
+  `PriorityDelegate` 70, the room's other deliveries at `PriorityFleet`
+  30. The return is a cheap inbox append and the status snapshot rides
+  the transport's own latest-value throttle, so the turn's stream is
+  never delayed by more than one closure; the transcript order is
+  untouched — the return is not a transcript event until it is delivered
+  at the boundary, returns first, then what the operator typed. The
+  supervisor's notices, the decision member and the graph keep the gaps;
+  the reviewer keeps 10; the operator's input keeps 90.
+- **the ordering pins** (`kernel_test.go`, cmd/rig): the kernel's chain
+  gains the link — the operator above the delegate, the delegate above
+  the turn, the turn above the fleet — and the wiring test publishes a
+  delegate return through the real fleet factory and asserts exactly one
+  delivery above the turn's queue while every other delivery keeps the
+  gaps. It failed first: the return crossed at 30.
+- **the specs read the new order** (SPEC_EVT, DESIGN, README, AGENTS,
+  EMBED): the priorities list carries the sixth name, and the "gaps of a
+  turn" sentences split the return from the chatter — the return is in
+  hand at the boundary of the turn in flight, and the chatter is the
+  documented starvation that loses nothing.
+
 ## [2.15.1]: the escape the other frontends skipped
 
 The 2.14.12 fix moved the `//` escape onto one path and called the TUI

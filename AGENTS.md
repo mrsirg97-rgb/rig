@@ -307,7 +307,8 @@ that is harder than writing a lot, and it is the bar.
 - `broadcast`: the fleet's message seams (2.11.0), lifted from the
   operator's module onto the event loop: a `Room` of `Member`s over a
   `Transport`, a `Message` with origin, health and a `core.Event`, none
-  being a heartbeat; a send is a post at the room's priority and the
+  being a heartbeat; a send is a post at the receiving member's
+  priority and the
   queue is the durability; `Say` is the one voice a background
   subsystem notices with, and the member ids are named in the kernel.
 - `tool`: the registry of the model's words: `registry.json`, embedded,
