@@ -14,10 +14,7 @@ func Allowlist(names ...string) core.ToolMiddleware {
 }
 
 func AllowlistWithDoor(names []string, door func(string) bool, rec ...decision.Recorder) core.ToolMiddleware {
-	var record decision.Recorder
-	if len(rec) > 0 {
-		record = rec[0]
-	}
+	record := decision.FirstRecorder(rec...)
 	return allowlist(names, door, record)
 }
 
@@ -34,15 +31,8 @@ func allowlist(names []string, door func(string) bool, record decision.Recorder)
 			if door != nil && door(call.Name) {
 				return next(ctx, call)
 			}
-			if record != nil {
-				record.Record(ctx, decision.Final{
-					Site:     decision.SitePerm,
-					State:    string(call.Args),
-					Question: decision.Binary("allow", "allow "+call.Name+"?"),
-					Answer:   "no",
-					Decider:  decision.SitePerm,
-				})
-			}
+			decision.Deny(ctx, record, decision.SitePerm, string(call.Args),
+				decision.Binary("allow", "allow "+call.Name+"?"), "no")
 			msg := fmt.Sprintf("permission denied: %s is not in the allow-list", call.Name)
 			return msg, errors.New(msg)
 		}

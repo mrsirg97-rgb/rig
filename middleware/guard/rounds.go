@@ -22,9 +22,7 @@ func Rounds(n int, rec ...decision.Recorder) core.ToolMiddleware {
 		n = 0
 	}
 	r := &rounds{limit: n}
-	if len(rec) > 0 {
-		r.record = rec[0]
-	}
+	r.record = decision.FirstRecorder(rec...)
 	return r
 }
 
@@ -35,13 +33,8 @@ func (r *rounds) Wrap(next core.ToolExec) core.ToolExec {
 		if r.limit > 0 && r.count > r.limit {
 			r.mu.Unlock()
 			if r.record != nil {
-				r.record.Record(ctx, decision.Final{
-					Site:     decision.SiteGuard,
-					State:    call.Name,
-					Question: decision.Binary("call", "make another tool call this turn?"),
-					Answer:   "no",
-					Decider:  decision.SiteGuard,
-				})
+				decision.Deny(ctx, r.record, decision.SiteGuard, call.Name,
+					decision.Binary("call", "make another tool call this turn?"), "no")
 			}
 			msg := fmt.Sprintf("round cap: %d tool calls is this turn's limit; stop calling tools and report, or ask the operator to raise it", r.limit)
 			return msg, errors.New(msg)

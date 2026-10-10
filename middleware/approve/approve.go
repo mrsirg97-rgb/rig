@@ -25,10 +25,7 @@ func Mode(s string) (string, bool) {
 }
 
 func Gate(mode func() string, ask func(ctx context.Context, prompt string) bool, mutating func(name string) bool, rec ...decision.Recorder) core.ToolMiddleware {
-	var record decision.Recorder
-	if len(rec) > 0 {
-		record = rec[0]
-	}
+	record := decision.FirstRecorder(rec...)
 	return core.ToolMiddlewareFunc(func(next core.ToolExec) core.ToolExec {
 		return func(ctx context.Context, call core.ToolCall) (string, error) {
 			if mode() != Manual || !mutating(call.Name) {
@@ -41,15 +38,8 @@ func Gate(mode func() string, ask func(ctx context.Context, prompt string) bool,
 			if ask(ctx, Prompt(call)) {
 				verdict = "yes"
 			}
-			if record != nil {
-				record.Record(ctx, decision.Final{
-					Site:     decision.SiteApprove,
-					State:    Prompt(call),
-					Question: decision.Binary("run", "run this call?"),
-					Answer:   verdict,
-					Decider:  decision.SiteApprove,
-				})
-			}
+			decision.Deny(ctx, record, decision.SiteApprove, Prompt(call),
+				decision.Binary("run", "run this call?"), verdict)
 			if verdict == "no" {
 				return "approve: the operator declined " + call.Name + " — do not retry the same call; adjust, or ask what they want", nil
 			}

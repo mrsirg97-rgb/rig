@@ -15,25 +15,14 @@ import (
 )
 
 func recordPerm(r decision.Recorder, ctx context.Context, call core.ToolCall, target string) {
-	if r == nil {
-		return
-	}
-	r.Record(ctx, decision.Final{
-		Site:     decision.SitePerm,
-		State:    target,
-		Question: decision.Binary("allow", "allow "+call.Name+"?"),
-		Answer:   "no",
-		Decider:  decision.SitePerm,
-	})
+	decision.Deny(ctx, r, decision.SitePerm, target,
+		decision.Binary("allow", "allow "+call.Name+"?"), "no")
 }
 
 const provenanceVoice = "plugins install by the operator's /plugins approve; write to plugins/pending/"
 
 func Plugins(pluginsDir string, rec ...decision.Recorder) core.ToolMiddleware {
-	var record decision.Recorder
-	if len(rec) > 0 {
-		record = rec[0]
-	}
+	record := decision.FirstRecorder(rec...)
 	root, rootErr := resolvedPath(pluginsDir)
 	return core.ToolMiddlewareFunc(func(next core.ToolExec) core.ToolExec {
 		return func(ctx context.Context, call core.ToolCall) (string, error) {

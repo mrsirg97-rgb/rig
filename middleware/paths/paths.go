@@ -38,20 +38,12 @@ func Expand(p string) string {
 }
 
 func Middleware(rec ...decision.Recorder) core.ToolMiddleware {
-	var record decision.Recorder
-	if len(rec) > 0 {
-		record = rec[0]
-	}
+	record := decision.FirstRecorder(rec...)
 	return core.ToolMiddlewareFunc(func(next core.ToolExec) core.ToolExec {
 		return func(ctx context.Context, call core.ToolCall) (string, error) {
 			onExpand := func(field, raw, expanded string) {
-				record.Record(ctx, decision.Final{
-					Site:     decision.SitePaths,
-					State:    raw,
-					Question: decision.Binary("expand", "expand ~ in "+field+"?"),
-					Answer:   expanded,
-					Decider:  decision.SitePaths,
-				})
+				decision.Deny(ctx, record, decision.SitePaths, raw,
+					decision.Binary("expand", "expand ~ in "+field+"?"), expanded)
 			}
 			if record == nil {
 				onExpand = nil

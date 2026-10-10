@@ -24,9 +24,7 @@ func Bound(limit int, rec ...decision.Recorder) core.ToolMiddleware {
 		limit = 1
 	}
 	b := &bound{limit: limit, counts: map[string]int{}, lastFailed: map[string]string{}}
-	if len(rec) > 0 {
-		b.record = rec[0]
-	}
+	b.record = decision.FirstRecorder(rec...)
 	return b
 }
 
@@ -39,15 +37,8 @@ func (g *bound) Wrap(next core.ToolExec) core.ToolExec {
 		}
 		if g.counts[call.Name] >= g.limit {
 			g.mu.Unlock()
-			if g.record != nil {
-				g.record.Record(ctx, decision.Final{
-					Site:     decision.SiteGuard,
-					State:    args,
-					Question: decision.Binary("retry", "issue the identical failing call again?"),
-					Answer:   "no",
-					Decider:  decision.SiteGuard,
-				})
-			}
+			decision.Deny(ctx, g.record, decision.SiteGuard, args,
+				decision.Binary("retry", "issue the identical failing call again?"), "no")
 			msg := fmt.Sprintf("bound exhausted: %s has failed %d times; stop reissuing this call", call.Name, g.limit)
 			return msg, errors.New(msg)
 		}
