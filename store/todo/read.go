@@ -27,10 +27,7 @@ func ReadFinished(ctx context.Context, db store.DB, p Project, session string, n
 }
 
 func read(ctx context.Context, db store.DB, p Project, session string, mode readMode, n int) (string, error) {
-	if session == "" {
-		session = anon
-	}
-	return mutate(ctx, db, p, func(bound context.Context, tx *sql.Tx, f *folded) (string, error) {
+	return mutate(ctx, db, p, session, func(bound context.Context, tx *sql.Tx, f *folded, session string) (string, error) {
 		if e := rewrite(tx, f, p.Key); e != nil {
 			return "", e
 		}
@@ -39,10 +36,7 @@ func read(ctx context.Context, db store.DB, p Project, session string, mode read
 }
 
 func ReadOne(ctx context.Context, db store.DB, p Project, id, session string) (string, error) {
-	if session == "" {
-		session = anon
-	}
-	return mutate(ctx, db, p, func(bound context.Context, tx *sql.Tx, f *folded) (string, error) {
+	return mutate(ctx, db, p, session, func(bound context.Context, tx *sql.Tx, f *folded, session string) (string, error) {
 		if e := rewrite(tx, f, p.Key); e != nil {
 			return "", e
 		}
@@ -61,9 +55,7 @@ func ReadOne(ctx context.Context, db store.DB, p Project, id, session string) (s
 }
 
 func Notes(ctx context.Context, db store.DB, p Project, id, session string) (string, error) {
-	if session == "" {
-		session = anon
-	}
+	session = sessionOrAnon(session)
 	_, tx, err := db.TxReadOnly(ctx)
 	if err != nil {
 		return "", err

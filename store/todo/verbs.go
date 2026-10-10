@@ -13,13 +13,10 @@ import (
 )
 
 func Create(ctx context.Context, db store.DB, p Project, item CreateItem, session string) (string, error) {
-	if session == "" {
-		session = anon
-	}
 	if item.Text == "" {
 		return "", fmt.Errorf("todo: text required")
 	}
-	return mutate(ctx, db, p, func(bound context.Context, tx *sql.Tx, f *folded) (string, error) {
+	return mutate(ctx, db, p, session, func(bound context.Context, tx *sql.Tx, f *folded, session string) (string, error) {
 		foot, e := maybeCompact(bound, tx, f, session, p.Key)
 		if e != nil {
 			return "", e
@@ -74,10 +71,7 @@ func Start(ctx context.Context, db store.DB, p Project, id, session string, work
 }
 
 func Complete(ctx context.Context, db store.DB, p Project, id, session string, worker bool) (string, error) {
-	if session == "" {
-		session = anon
-	}
-	return mutate(ctx, db, p, func(bound context.Context, tx *sql.Tx, f *folded) (string, error) {
+	return mutate(ctx, db, p, session, func(bound context.Context, tx *sql.Tx, f *folded, session string) (string, error) {
 		ts, ok := f.tasks[id]
 		if !ok {
 			return "", unknownTask(p, id)
@@ -152,10 +146,7 @@ func Complete(ctx context.Context, db store.DB, p Project, id, session string, w
 }
 
 func Fail(ctx context.Context, db store.DB, p Project, id, session string, worker bool) (string, error) {
-	if session == "" {
-		session = anon
-	}
-	return mutate(ctx, db, p, func(bound context.Context, tx *sql.Tx, f *folded) (string, error) {
+	return mutate(ctx, db, p, session, func(bound context.Context, tx *sql.Tx, f *folded, session string) (string, error) {
 		foot, e := maybeCompact(bound, tx, f, session, p.Key)
 		if e != nil {
 			return "", e
@@ -223,13 +214,10 @@ func Retry(ctx context.Context, db store.DB, p Project, id, session string) (str
 const MaxNoteLen = 1000
 
 func Claim(ctx context.Context, db store.DB, p Project, session, status string) (string, error) {
-	if session == "" {
-		session = anon
-	}
 	if status != "" && status != statusReview {
 		return "", fmt.Errorf("todo: unknown claim status %q (only %s)", status, statusReview)
 	}
-	return mutate(ctx, db, p, func(bound context.Context, tx *sql.Tx, f *folded) (string, error) {
+	return mutate(ctx, db, p, session, func(bound context.Context, tx *sql.Tx, f *folded, session string) (string, error) {
 		foot, e := maybeCompact(bound, tx, f, session, p.Key)
 		if e != nil {
 			return "", e
@@ -273,14 +261,11 @@ func Claim(ctx context.Context, db store.DB, p Project, session, status string) 
 }
 
 func Note(ctx context.Context, db store.DB, p Project, id, text, session string) (string, error) {
-	if session == "" {
-		session = anon
-	}
 	note, err := cleanNote(text, "note")
 	if err != nil {
 		return "", err
 	}
-	return mutate(ctx, db, p, func(bound context.Context, tx *sql.Tx, f *folded) (string, error) {
+	return mutate(ctx, db, p, session, func(bound context.Context, tx *sql.Tx, f *folded, session string) (string, error) {
 		foot, e := maybeCompact(bound, tx, f, session, p.Key)
 		if e != nil {
 			return "", e
@@ -314,10 +299,7 @@ func cleanNote(text, verb string) (string, error) {
 }
 
 func Accept(ctx context.Context, db store.DB, p Project, id, session string) (string, error) {
-	if session == "" {
-		session = anon
-	}
-	return mutate(ctx, db, p, func(bound context.Context, tx *sql.Tx, f *folded) (string, error) {
+	return mutate(ctx, db, p, session, func(bound context.Context, tx *sql.Tx, f *folded, session string) (string, error) {
 		foot, e := maybeCompact(bound, tx, f, session, p.Key)
 		if e != nil {
 			return "", e
@@ -360,14 +342,11 @@ func Accept(ctx context.Context, db store.DB, p Project, id, session string) (st
 }
 
 func Reject(ctx context.Context, db store.DB, p Project, id, reason, session string) (string, error) {
-	if session == "" {
-		session = anon
-	}
 	note, err := cleanNote(reason, "reject")
 	if err != nil {
 		return "", err
 	}
-	return mutate(ctx, db, p, func(bound context.Context, tx *sql.Tx, f *folded) (string, error) {
+	return mutate(ctx, db, p, session, func(bound context.Context, tx *sql.Tx, f *folded, session string) (string, error) {
 		foot, e := maybeCompact(bound, tx, f, session, p.Key)
 		if e != nil {
 			return "", e
@@ -426,10 +405,7 @@ func reviewHold(ts *taskState, id, session string) error {
 }
 
 func Move(ctx context.Context, db store.DB, p Project, id string, pos int, session string) (string, error) {
-	if session == "" {
-		session = anon
-	}
-	return mutate(ctx, db, p, func(bound context.Context, tx *sql.Tx, f *folded) (string, error) {
+	return mutate(ctx, db, p, session, func(bound context.Context, tx *sql.Tx, f *folded, session string) (string, error) {
 		foot, e := maybeCompact(bound, tx, f, session, p.Key)
 		if e != nil {
 			return "", e
@@ -458,10 +434,7 @@ func Move(ctx context.Context, db store.DB, p Project, id string, pos int, sessi
 }
 
 func Release(ctx context.Context, db store.DB, p Project, id, session string) (string, error) {
-	if session == "" {
-		session = anon
-	}
-	return mutate(ctx, db, p, func(bound context.Context, tx *sql.Tx, f *folded) (string, error) {
+	return mutate(ctx, db, p, session, func(bound context.Context, tx *sql.Tx, f *folded, session string) (string, error) {
 		foot, e := maybeCompact(bound, tx, f, session, p.Key)
 		if e != nil {
 			return "", e
@@ -524,14 +497,11 @@ func Release(ctx context.Context, db store.DB, p Project, id, session string) (s
 }
 
 func Reap(ctx context.Context, db store.DB, p Project, ended []string, session string) (string, error) {
-	if session == "" {
-		session = anon
-	}
 	dead := map[string]bool{}
 	for _, id := range ended {
 		dead[id] = true
 	}
-	return mutate(ctx, db, p, func(bound context.Context, tx *sql.Tx, f *folded) (string, error) {
+	return mutate(ctx, db, p, session, func(bound context.Context, tx *sql.Tx, f *folded, session string) (string, error) {
 		foot, e := maybeCompact(bound, tx, f, session, p.Key)
 		if e != nil {
 			return "", e
@@ -575,10 +545,7 @@ func Reap(ctx context.Context, db store.DB, p Project, ended []string, session s
 }
 
 func Prune(ctx context.Context, db store.DB, p Project, session string) (string, error) {
-	if session == "" {
-		session = anon
-	}
-	return mutate(ctx, db, p, func(bound context.Context, tx *sql.Tx, f *folded) (string, error) {
+	return mutate(ctx, db, p, session, func(bound context.Context, tx *sql.Tx, f *folded, session string) (string, error) {
 		foot, e := maybeCompact(bound, tx, f, session, p.Key)
 		if e != nil {
 			return "", e

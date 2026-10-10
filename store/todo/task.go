@@ -18,9 +18,7 @@ type TaskNote struct {
 }
 
 func Task(ctx context.Context, db store.DB, p Project, id, session string) (TaskInfo, error) {
-	if session == "" {
-		session = anon
-	}
+	session = sessionOrAnon(session)
 	_, tx, err := db.TxReadOnly(ctx)
 	if err != nil {
 		return TaskInfo{}, err

@@ -20,14 +20,11 @@ func verb(
 	check func(f *folded, ts *taskState) (ok, noop bool, voice string),
 	op, toStatus, note string,
 ) (string, error) {
-	if session == "" {
-		session = anon
-	}
 	scopeWord := ""
 	if op == "start" {
 		scopeWord = p.Dir
 	}
-	return mutate(ctx, db, p, func(bound context.Context, tx *sql.Tx, f *folded) (string, error) {
+	return mutate(ctx, db, p, session, func(bound context.Context, tx *sql.Tx, f *folded, session string) (string, error) {
 		ts, ok := f.tasks[id]
 		if !ok {
 			return "", unknownTask(p, id)
@@ -52,11 +49,7 @@ func verb(
 		ts.updatedSeq = seq
 		ts.updatedTs = nowRFC3339()
 		if toStatus == statusActive {
-			if session == "" {
-				ts.owner = anon
-			} else {
-				ts.owner = session
-			}
+			ts.owner = session
 		} else {
 			ts.owner = ""
 		}
@@ -295,7 +288,11 @@ func withFoot(reply, foot string) string {
 	return reply + "\n" + foot
 }
 
-func mutate(ctx context.Context, db store.DB, p Project, act func(bound context.Context, tx *sql.Tx, f *folded) (string, error)) (string, error) {
+// mutate is the one write path: the transaction, the fold, and the one
+// anon lift — an unnamed session is the anon one for everything the
+// action writes.
+func mutate(ctx context.Context, db store.DB, p Project, session string, act func(bound context.Context, tx *sql.Tx, f *folded, session string) (string, error)) (string, error) {
+	session = sessionOrAnon(session)
 	bound, tx, err := db.Tx(ctx)
 	if err != nil {
 		return "", err
@@ -306,7 +303,7 @@ func mutate(ctx context.Context, db store.DB, p Project, act func(bound context.
 		return "", err
 	}
 	f.label = p.Label
-	reply, err := act(bound, tx, f)
+	reply, err := act(bound, tx, f, session)
 	if err != nil {
 		return "", err
 	}
@@ -343,9 +340,7 @@ func eventsOf(tx *sql.Tx, scope string) (*folded, error) {
 }
 
 func appendEvent(bound context.Context, seq int64, op, args, session, scope string) (string, error) {
-	if session == "" {
-		session = anon
-	}
+	session = sessionOrAnon(session)
 	s := session
 	sess := &s
 	ts := nowRFC3339()
@@ -416,6 +411,14 @@ func asGiven(it CreateItem) map[string]any {
 		m["blocks"] = nil
 	}
 	return m
+}
+
+// sessionOrAnon is the anon lift: an unnamed session is the anon one.
+func sessionOrAnon(session string) string {
+	if session == "" {
+		return anon
+	}
+	return session
 }
 
 func nowRFC3339() string {
