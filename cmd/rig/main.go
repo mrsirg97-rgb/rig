@@ -49,7 +49,7 @@ import (
 	webtool "github.com/mrsirg97-rgb/rig/v2/tool/web"
 )
 
-const Version = "2.14.13"
+const Version = "2.14.14"
 
 func main() {
 	if i := execDoor(os.Args, os.Getenv(sched.LandlockEnv)); i >= 0 {
@@ -559,7 +559,7 @@ func main() {
 	})
 
 	env := r.commandEnv()
-	env.DecisionTrain = decisionTrainEnqueue(scdb, schedHome, self, cwd, sched.RealCrontab(""))
+	env.DecisionTrain = decisionTrainEnqueue(scdb, cfgDir, self, cwd, sched.RealCrontab(""))
 
 	var fe core.Frontend
 	var webSrv *web.Server

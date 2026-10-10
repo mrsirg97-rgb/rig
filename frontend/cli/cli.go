@@ -127,6 +127,13 @@ func (c *cli) queueSlot(line string) {
 	}
 }
 
+func inputText(line string) string {
+	if strings.HasPrefix(line, "//") {
+		return command.Unescape(line)
+	}
+	return line
+}
+
 func (c *cli) Input(ctx context.Context) (string, error) {
 	c.mu.Lock()
 	if cancel, ok := core.InterruptFrom(ctx); ok {
@@ -160,16 +167,11 @@ func (c *cli) Input(ctx context.Context) (string, error) {
 				continue
 			}
 
-			out := line
-			if strings.HasPrefix(line, "//") {
-				out = command.Unescape(line)
-			}
-
 			c.mu.Lock()
 			c.steeredLive = false
 			c.turnCtx = ctx
 			c.mu.Unlock()
-			return out, nil
+			return inputText(line), nil
 		default:
 		}
 		select {
@@ -187,16 +189,11 @@ func (c *cli) Input(ctx context.Context) (string, error) {
 				c.dispatch(ctx, line)
 				continue
 			}
-			out := line
-			if strings.HasPrefix(line, "//") {
-				out = command.Unescape(line)
-			}
-
 			c.mu.Lock()
 			c.turnCtx = ctx
 			c.steeredLive = false
 			c.mu.Unlock()
-			return out, nil
+			return inputText(line), nil
 		}
 	}
 }
