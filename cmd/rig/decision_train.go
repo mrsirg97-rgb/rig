@@ -13,7 +13,6 @@ import (
 
 	"github.com/mrsirg97-rgb/rig/v2"
 	"github.com/mrsirg97-rgb/rig/v2/broadcast"
-	"github.com/mrsirg97-rgb/rig/v2/config"
 	"github.com/mrsirg97-rgb/rig/v2/core"
 	"github.com/mrsirg97-rgb/rig/v2/decision"
 	"github.com/mrsirg97-rgb/rig/v2/plugins"
@@ -36,17 +35,7 @@ func decisionTrain(args []string) int {
 		fmt.Fprintf(os.Stderr, "rig: decision train: %q is not a trainer name (the filename stem)\n", trainer)
 		return 2
 	}
-	cfgDir, err := rigHome()
-	if err != nil {
-		fmt.Fprintln(os.Stderr, "rig:", err)
-		return 1
-	}
-	cwd, err := os.Getwd()
-	if err != nil {
-		fmt.Fprintln(os.Stderr, "rig:", err)
-		return 1
-	}
-	cfg, err := config.Load(cfgDir, cwd)
+	cfgDir, cwd, cfg, err := boot()
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "rig:", err)
 		return 1
@@ -74,13 +63,7 @@ func decisionTrain(args []string) int {
 	engine, room := newFleet()
 	go engine.Start(ctx)
 	defer engine.Stop()
-	room.Add(rig.MemberFrontend).Subscribe(ctx, func(err error, messages ...broadcast.Message) {
-		for _, m := range messages {
-			if n, ok := m.Event().(core.Notice); err == nil && ok {
-				fmt.Fprintln(os.Stderr, "rig: "+n.Source+": "+n.Text)
-			}
-		}
-	})
+	noticePrinter(ctx, room)
 	voice := room.Add(rig.MemberDecision)
 
 	k := pythontool.NewWith(trainPython, pythontool.DefaultHost(), cwd)

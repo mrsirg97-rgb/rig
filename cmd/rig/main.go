@@ -707,28 +707,48 @@ func landlockExec(i int) {
 	}
 }
 
+// boot is the headless jobs' prologue: the rig home, the working
+// directory, the config, and the notices printed as they load.
+func boot() (string, string, *config.Config, error) {
+	cfgDir, err := rigHome()
+	if err != nil {
+		return "", "", nil, err
+	}
+	cwd, err := os.Getwd()
+	if err != nil {
+		return "", "", nil, err
+	}
+	cfg, err := config.Load(cfgDir, cwd)
+	if err != nil {
+		return "", "", nil, err
+	}
+	for _, n := range cfg.Notices {
+		fmt.Fprintln(os.Stderr, "rig:", n)
+	}
+	return cfgDir, cwd, cfg, nil
+}
+
+// noticePrinter is the headless frontend's stand-in: a fleet member
+// that prints every notice to stderr as it arrives.
+func noticePrinter(ctx context.Context, room broadcast.Room) {
+	room.Add(rig.MemberFrontend).Subscribe(ctx, func(err error, messages ...broadcast.Message) {
+		for _, m := range messages {
+			if n, ok := m.Event().(core.Notice); err == nil && ok {
+				fmt.Fprintln(os.Stderr, "rig: "+n.Source+": "+n.Text)
+			}
+		}
+	})
+}
+
 func runJob(args []string) int {
 	if len(args) < 1 {
 		fmt.Fprintln(os.Stderr, "rig: usage: run-job <key>")
 		return 2
 	}
-	cfgDir, err := rigHome()
+	cfgDir, _, cfg, err := boot()
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "rig:", err)
 		return 1
-	}
-	cwd, err := os.Getwd()
-	if err != nil {
-		fmt.Fprintln(os.Stderr, "rig:", err)
-		return 1
-	}
-	cfg, err := config.Load(cfgDir, cwd)
-	if err != nil {
-		fmt.Fprintln(os.Stderr, "rig:", err)
-		return 1
-	}
-	for _, n := range cfg.Notices {
-		fmt.Fprintln(os.Stderr, "rig:", n)
 	}
 	swapURL := cfg.Settings.SwapURL
 	if v := os.Getenv("RIG_SWAP_URL"); v != "" {
@@ -759,13 +779,7 @@ func runJob(args []string) int {
 		engine, room := newFleet()
 		go engine.Start(context.Background())
 		defer engine.Stop()
-		room.Add(rig.MemberFrontend).Subscribe(context.Background(), func(err error, messages ...broadcast.Message) {
-			for _, m := range messages {
-				if n, ok := m.Event().(core.Notice); err == nil && ok {
-					fmt.Fprintln(os.Stderr, "rig: "+n.Source+": "+n.Text)
-				}
-			}
-		})
+		noticePrinter(context.Background(), room)
 		jobDecisions = decisionstore.Recorder{DB: jdb, Voice: room.Add(rig.MemberDecision)}
 	}
 	if err := sched.RunJob(args[0], sched.RunOpts{
