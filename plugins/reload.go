@@ -45,22 +45,9 @@ func Zone(home, dir, zone string) ([]string, error) {
 	return files, nil
 }
 
+// List is the home zone itself: the one Zone read with no zone join.
 func List(home, dir string) ([]string, error) {
-	zoneDir := filepath.Join(home, dir)
-	entries, err := os.ReadDir(zoneDir)
-	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return nil, nil
-		}
-		return nil, err
-	}
-	var files []string
-	for _, e := range entries {
-		if !e.IsDir() && strings.HasSuffix(e.Name(), ".py") {
-			files = append(files, filepath.Join(zoneDir, e.Name()))
-		}
-	}
-	return files, nil
+	return Zone(home, dir, "")
 }
 
 func Check(reports []Report, natives map[string]bool) error {

@@ -261,7 +261,7 @@ func (r *root) commandEnv() *command.Env {
 		SetApprove:    r.switchApprove,
 		Tools:         r.tools,
 		Plugins:       func() []command.PluginInfo { return r.pluginInfos },
-		Reload:        r.reloadPlugins,
+		Reload:        r.eco.Reload,
 		PluginsDir:    r.pluginsDir,
 		RemList:       r.remList,
 		RemShow:       r.remShow,
