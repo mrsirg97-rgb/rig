@@ -40,9 +40,9 @@ them once (the command set rides the frontend dispatchers, and
 | `WithParallel` | the in-flight bound | unset; `DefaultParallel` is 8 |
 | `WithEngine` | the event engine | the root's engine, the fleet room's queue |
 
-Beside the options the kernel names the queue's five priorities
-(`PriorityInput` 90, `PriorityStream` 50, `PriorityTool` 50,
-`PriorityFleet` 30, `PriorityReview` 10) and the room's four member
+Beside the options the kernel names the queue's six priorities
+(`PriorityInput` 90, `PriorityDelegate` 70, `PriorityStream` 50,
+`PriorityTool` 50, `PriorityFleet` 30, `PriorityReview` 10) and the room's four member
 ids (`MemberFrontend`, `MemberDelegate`, `MemberGraph`,
 `MemberDecision`).
 

@@ -76,7 +76,7 @@ func TestWithEngineHandsTheLoopItsEngine(t *testing.T) {
 	if New().Engine != nil {
 		t.Fatal("a kernel built without one has none; the loop mints its own")
 	}
-	if !(PriorityInput > PriorityStream && PriorityStream >= PriorityTool && PriorityTool > PriorityFleet && PriorityFleet > PriorityReview) {
-		t.Fatalf("the review runs below the fleet, the fleet below the turn, the turn below the operator: %d %d %d %d %d", PriorityInput, PriorityStream, PriorityTool, PriorityFleet, PriorityReview)
+	if !(PriorityInput > PriorityDelegate && PriorityDelegate > PriorityStream && PriorityStream >= PriorityTool && PriorityTool > PriorityFleet && PriorityFleet > PriorityReview) {
+		t.Fatalf("the review runs below the fleet, the fleet below the delegate, the delegate below the turn, the turn below the operator: %d %d %d %d %d %d", PriorityInput, PriorityDelegate, PriorityStream, PriorityTool, PriorityFleet, PriorityReview)
 	}
 }

@@ -372,9 +372,46 @@ func (r *root) swapIn(s *core.Session, rec2 *state.Recorder) {
 
 func newFleet() (evt.Engine, broadcast.Room) {
 	engine := evt.NewEngine()
-	return engine, broadcast.NewRoom("fleet", func(origin int64) broadcast.Transport {
+	return engine, broadcast.NewRoom("fleet", fleetTransports(engine))
+}
+
+func fleetTransports(engine evt.Engine) func(int64) broadcast.Transport {
+	return func(origin int64) broadcast.Transport {
+		if origin == rig.MemberFrontend {
+			return delegateReturns{
+				fast:  broadcast.NewLoopTransport(origin, engine, rig.PriorityDelegate),
+				fleet: broadcast.NewLoopTransport(origin, engine, rig.PriorityFleet),
+			}
+		}
 		return broadcast.NewLoopTransport(origin, engine, rig.PriorityFleet)
-	})
+	}
+}
+
+type delegateReturns struct {
+	fast  broadcast.Transport
+	fleet broadcast.Transport
+}
+
+func (t delegateReturns) Id() int64 {
+	return t.fast.Id()
+}
+
+func (t delegateReturns) Send(ctx context.Context, callback func(ack error), messages ...broadcast.Message) {
+	if len(messages) > 0 && messages[0].Origin() == rig.MemberDelegate {
+		t.fast.Send(ctx, callback, messages...)
+		return
+	}
+	t.fleet.Send(ctx, callback, messages...)
+}
+
+func (t delegateReturns) Recv(ctx context.Context, callback func(err error, messages ...broadcast.Message)) {
+	t.fast.Recv(ctx, callback)
+	t.fleet.Recv(ctx, callback)
+}
+
+func (t delegateReturns) Close() {
+	t.fast.Close()
+	t.fleet.Close()
 }
 
 func (r *root) listen() {

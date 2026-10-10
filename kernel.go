@@ -29,11 +29,12 @@ type Kernel struct {
 const DefaultParallel = 8
 
 const (
-	PriorityInput  = 90
-	PriorityStream = 50
-	PriorityTool   = 50
-	PriorityFleet  = 30
-	PriorityReview = 10
+	PriorityInput    = 90
+	PriorityDelegate = 70
+	PriorityStream   = 50
+	PriorityTool     = 50
+	PriorityFleet    = 30
+	PriorityReview   = 10
 )
 
 const (

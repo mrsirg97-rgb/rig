@@ -281,10 +281,16 @@ while the operator steers, needed the fleet on the same loop. The
 kernel gains `Engine` and `WithEngine`; `loop.Run` uses the kernel's
 engine when it has one and mints its own otherwise, so every existing
 run is byte-identical. The priorities move up to the kernel with names
-(`PriorityInput` 90, `PriorityStream` 50, `PriorityTool` 50,
-`PriorityFleet` 30, `PriorityReview` 10): the root assigns them, the
-loop only reads, and the fleet's room (`broadcast/`) posts below the
-turn's own events, so a worker's message runs in the gaps of a turn and
+(`PriorityInput` 90, `PriorityDelegate` 70, `PriorityStream` 50,
+`PriorityTool` 50, `PriorityFleet` 30, `PriorityReview` 10): the root
+assigns them, the loop only reads. The room delivers through the
+receiving member's transport, and the session's frontend member carries
+two of them: a delegate-origin message (the worker's return, its status
+snapshot) posts at `PriorityDelegate` 70, above the turn's own events,
+so a return is in hand at the boundary of the turn in flight and the
+session acts on it at its next turn however many turns queue behind it;
+the room's other deliveries post at `PriorityFleet` 30, below the
+turn's own events, so the fleet's chatter runs in the gaps of a turn and
 never ahead of it. The decision review sits below the fleet: its bite
 posts at turn end and starts only when nothing else is queued, so the
 labels get the idle time and nothing waits on them. The closure that
