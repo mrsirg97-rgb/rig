@@ -1,4 +1,48 @@
 # Changelog
+## [2.14.12]: the escape the steering slot skipped
+
+The 2.14.10 audit's findings shipped as fixes: one escape one path
+forgot, a retired route that answered as if it worked, a key the help
+advertised and the parser refused, a dead chain the spec retired in
+2.6.0, shapes written twice, a margin that landed short, and the
+queued-delegate words the 2.14.9 doc pass missed.
+
+- **the CLI's `//` escape survives a steer** (`frontend/cli`): a line
+  typed into a live turn rode the steering slot raw, so `//home/ng/x`
+  reached the model as `//home/ng/x` — the escape ran only on the
+  quiet-prompt path, exactly the user it exists for. The slot's
+  delivery unescapes like the quiet prompt's; the TUI's single consume
+  point always did. Mid-turn commands still dispatch at re-entry.
+- **the dashboard's todo loses the start door for good**
+  (`frontend/web`, docs, specs): `/api/todo/start` sat in the method
+  gate with no dispatch case, so a POST fell through the switch and
+  answered a silent empty 200. The gate drops it — the POST is a named
+  404 — and SETUP.md and SPEC_SERVE 15 name the two hands the page
+  has.
+- **`scheduler update` stops advertising the busy key** (`command`):
+  the Sub hint and the usage line named `[busy <skip|force>]`, which
+  the parser refused and the store retired; the advertised shape and
+  SPEC_COMMANDS 8 name the six live keys.
+- **the retired slot read is gone** (`store/scheduler`):
+  `FleetCapacity` → `FreeSlots` → `slotRead` survived with zero
+  callers against SPEC_WORKERS 2.6.0's "the slot read goes"; the gate
+  fake's `/slots` fixtures and its never-asserted counter went with
+  them.
+- **the todo adapter carries no dead shapes** (`command`): the
+  claim/accept/note-reject case groups were written twice in
+  `todoArgs` and again in its error switch, and `isUpdateKey` had no
+  caller; each appears once.
+- **the decision train lands its named margin** (`cmd/rig`): the
+  once-job took `now+2m` and the crontab took that exact minute, so a
+  `:05:37` enqueue fired a minute and change out. The `at` now rounds
+  up to the next even minute at least two minutes out, as SPEC_DECISION
+  names it, and the crontab seam is a constructor argument so the test
+  fakes it.
+- **the queued-delegate words land** (specs, docs): SPEC_SWARM 7,
+  SPEC_TUI 3a and USAGE's delegate paragraph name the 2.14.9 queue —
+  the snapshot carries queued workers, the head inserts `N queued`, and
+  a call past the cap answers the queued line.
+
 ## [2.14.11]: the worker window
 
 Three workers on one slot at 180k each hold prompt-cache entries of

@@ -277,6 +277,11 @@ func TestAllowList404And405(t *testing.T) {
 	if allow := rec.Header().Get("Allow"); !strings.Contains(allow, "GET") || !strings.Contains(allow, "POST") {
 		t.Fatalf("todo DELETE: Allow %q, want GET and POST", allow)
 	}
+
+	rec = doReq(t, h, "POST", "/api/todo/start", nil, bearer(tok))
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("retired todo/start: got %d %q, want a named 404 (the route lost its door, not a silent 200)", rec.Code, rec.Body.String())
+	}
 }
 
 func TestTodoCreateWalls(t *testing.T) {
@@ -1565,7 +1570,7 @@ func TestBrowseRootedAtHome(t *testing.T) {
 	}
 }
 
-func TestTodoStartAndComplete(t *testing.T) {
+func TestTodoComplete(t *testing.T) {
 	srv, tok := newTestServer(t)
 	h := srv.Handler()
 	q := "?cwd=" + testCWD

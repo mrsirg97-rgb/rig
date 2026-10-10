@@ -154,14 +154,17 @@ under your session's or the rig home — wired wherever the worker tools
 are on and the swap is readable (one slot hosts it; the request queues at
 the server). Several delegate calls in one turn run in parallel, and none
 of them block the turn (2.14.0): each answers at once with
-`delegate: worker #2 started · session <id> · log <path>` and keeps
+`delegate: worker #2 started · session <id> · log <path>` — or, past
+`maxWorkers` (2.14.9), `delegate: worker #2 queued · 3 workers run at
+once (settings maxWorkers); it starts when one returns` — and keeps
 working. When a worker finishes, its return arrives as the head of the
 next turn — `delegate #2 returned · exit 0 · 4m12s · session <id>` over
 its output — and if nothing was running, the return starts that turn by
 itself. Two returns that land during one turn come as one block, in the
 order they finished, before whatever you had typed. While a batch runs
-the status footer carries the band: `delegating · 3 workers · 1m12s` and
-the most recent call of any of them. There is no timeout to set: a worker
+the status footer carries the band: `delegating · 3 workers · 1m12s`
+(`1 queued` joins between the count and the age when the cap queues a
+worker, 2.14.9) and the most recent call of any of them. There is no timeout to set: a worker
 lives until it exits or the session ends (waiting behind nine others in a
 slot is work, not a hang); esc on an empty prompt with no turn live stops
 every worker you have running, and in the dashboard the send button does

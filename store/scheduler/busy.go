@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"net/url"
 	"sort"
 	"strings"
 
@@ -80,14 +79,6 @@ func canonicalModels(fetch Fetch, swapURL string) (map[string]string, []string, 
 	return canon, resident, nil
 }
 
-func FreeSlots(fetch Fetch, swapURL, model string) (int, int, error) {
-	slots, err := slotRead(fetch, swapURL, model)
-	if err != nil {
-		return 0, 0, err
-	}
-	return slots.free, slots.total, nil
-}
-
 type noRowError struct {
 	resident string
 	known    string
@@ -137,49 +128,6 @@ func ResidentModel(fetch Fetch, swapURL string) (string, error) {
 		return "", nil
 	}
 	return resident[0], nil
-}
-
-func FleetCapacity(fetch Fetch, swapURL string) (int, error) {
-	_, resident, err := canonicalModels(fetch, swapURL)
-	if err != nil {
-		return 0, err
-	}
-	widest := 0
-	for _, model := range resident {
-		_, total, err := FreeSlots(fetch, swapURL, model)
-		if err != nil {
-			return 0, err
-		}
-		if total > widest {
-			widest = total
-		}
-	}
-	return widest, nil
-}
-
-type slotSet struct {
-	free  int
-	total int
-}
-
-func slotRead(fetch Fetch, swapURL, model string) (slotSet, error) {
-	raw, err := fetch(swapURL + "/upstream/" + url.PathEscape(model) + "/slots")
-	if err != nil {
-		return slotSet{}, fmt.Errorf("gate check failed: slots: %v", err)
-	}
-	var slots []struct {
-		IsProcessing bool `json:"is_processing"`
-	}
-	if err := json.Unmarshal(raw, &slots); err != nil {
-		return slotSet{}, fmt.Errorf("gate check failed: slots: %v", err)
-	}
-	out := slotSet{total: len(slots)}
-	for _, s := range slots {
-		if !s.IsProcessing {
-			out.free++
-		}
-	}
-	return out, nil
 }
 
 var ErrNotResident = errors.New("a different model is resident")

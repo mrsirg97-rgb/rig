@@ -88,6 +88,27 @@ func TestInputCancellationBeforeRead(t *testing.T) {
 	}
 }
 
+func TestInputUnescapesTheSteeredLine(t *testing.T) {
+	r := build(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	r.in <- "one\n"
+	if line, err := r.fe.Input(core.WithInterrupt(ctx, cancel)); err != nil || line != "one" {
+		t.Fatalf("first input: %q %v", line, err)
+	}
+
+	r.in <- "//home/ng/x\n"
+	waitFor(t, func() bool { return ctx.Err() != nil }, "the steered line must interrupt the live turn")
+
+	ctx2, cancel2 := context.WithCancel(context.Background())
+	defer cancel2()
+	line, err := r.fe.Input(core.WithInterrupt(ctx2, cancel2))
+	if err != nil || line != "/home/ng/x" {
+		t.Fatalf("the steered // escape must reach the model as /home/ng/x, got %q %v", line, err)
+	}
+}
+
 func TestInputServesTheSteeringSlotBeforeBlocking(t *testing.T) {
 
 	r := build(t)

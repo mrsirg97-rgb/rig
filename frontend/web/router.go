@@ -47,7 +47,7 @@ func (s *Server) allowed(path string) (map[string]bool, bool) {
 		return setOf("GET"), true
 	case path == "/api/todo":
 		return setOf("GET", "POST"), true
-	case path == "/api/todo/start" || path == "/api/todo/complete" || path == "/api/todo/retry":
+	case path == "/api/todo/complete" || path == "/api/todo/retry":
 		return setOf("POST"), true
 	case path == "/api/scheduler":
 		return setOf("GET", "POST"), true

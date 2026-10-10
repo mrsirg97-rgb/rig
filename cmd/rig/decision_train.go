@@ -376,7 +376,7 @@ func pct(a float64) string {
 	return fmt.Sprintf("%.0f%%", 100*a)
 }
 
-func decisionTrainEnqueue(db store.DB, home, self, cwd string) func(context.Context, string) (string, error) {
+func decisionTrainEnqueue(db store.DB, home, self, cwd string, ct sched.Crontab) func(context.Context, string) (string, error) {
 	return func(ctx context.Context, trainer string) (string, error) {
 		if !plugins.PluginNameRe.MatchString(trainer) {
 			return "", fmt.Errorf("decision: %q is not a trainer name (the filename stem)", trainer)
@@ -386,13 +386,17 @@ func decisionTrainEnqueue(db store.DB, home, self, cwd string) func(context.Cont
 			session = s.ID
 		}
 		now := time.Now()
-		at := now.Add(2 * time.Minute).UTC().Format(time.RFC3339)
+		m := now.Add(2 * time.Minute)
+		at := m.Truncate(time.Minute)
+		if at.Before(m) {
+			at = at.Add(time.Minute)
+		}
 		tag := now.UTC().Format("20060102-1504")
-		return sched.Create(ctx, db, sched.RealCrontab(""), sched.CreateInput{
+		return sched.Create(ctx, db, ct, sched.CreateInput{
 			Name:    "decision-train-" + trainer + "-" + tag,
 			Command: self + " decision train " + trainer,
 			Cron:    "once",
-			At:      at,
+			At:      at.UTC().Format(time.RFC3339),
 			Cwd:     cwd,
 		}, cwd, session, self+" run-job", home, time.Now)
 	}
