@@ -1,4 +1,69 @@
 # Changelog
+## [2.14.16]: the copies go to the seam
+
+A refactor release: no refusal moves and no wire byte moves, and the
+branch carries `-refactor` — the freeze gate's own escape hatch doing
+the one job it documented, named here in the PR. The tree loses its
+hand-rolled copies to seams that already existed, and the tests lose
+the assumptions that were never theirs alone.
+
+The code (46,138 → 45,998) now holds one of each:
+
+- one store open (`cmd/rig/stores.go`): `openStore` is the directory,
+  the open, the quarantine line and the migration report, named by the
+  store it opens — five hand-rolled blocks in main go, and with them
+  the two spellings of the report line (an `Fprintln` with a live
+  `%s`, an `Fprintf`), same bytes on the wire, one spelling now.
+- one boot: `boot` and `noticePrinter` are the headless jobs'
+  prologue — the rig home, the working directory, the config, the
+  notices, and a fleet member that prints every notice to stderr.
+  `runJob` and `decisionTrain` were two copies of each.
+- one strict door (`tool/decode.go`): `tool.Decode` replaces five
+  byte-identical `strictDecode`s across bash, file, delegate,
+  verdict and view; view keeps its empty-payload default and rides
+  the door like the rest. The loose tools stay loose — strictness is
+  the security posture the strict five declared.
+- one refusal row: `decision.Deny` records the row every gate writes
+  — the site is both the row's site and its decider, because the gate
+  speaks for itself — and `decision.FirstRecorder` is the middleware
+  constructor's door for the variadic seam. Six copies across guard,
+  perm, approve and paths go, nil checks included (a nil recorder is
+  no row, by contract).
+- one anon lift: todo's `mutate` takes the session, resolves it once,
+  and hands the resolved name to its action — sixteen hand-rolled
+  copies across the verbs, the reads and the append go. The two
+  read-only paths take the one helper by name.
+- one zone read: `plugins.List` is `Zone` with no zone join, and
+  cmd/rig's reload is the `Ecosystem.Reload` it already held — the
+  reload failure's prefix follows the ecosystem's voice (`plugin:
+  reload:`), nothing pinned the old one.
+- web loses `NewDefault`, `DefaultProxy` and `IPisPrivate`, dead in
+  production; the pin tables stay, driving `publicAddr` directly.
+- the exec door is named: `landlockExec` is the jailed worker's
+  entry (the wall lands, the thread locks, the command replaces the
+  process) instead of an anonymous block at the top of main.
+
+The 30k aim is named, not reached, and the reachability is the
+reason. The two big lifts left on the table are the generated domain
+tail — 83 of 127 accessors are test-only, ~2,200 lines inside code
+this pass does not touch — and an event-log leaf under todo and
+scheduler's near-clone fold machinery (~300 lines, two compact paths
+that must stay bug-compatible by hand). The recon pass's ranked list
+of what remains — config's field table riding parse, merge and the
+env ladder (~230 lines), the command picker harness (~100),
+`sqlx.Transact` (~100), a `frontend/session` leaf under the cli/web
+clone (~120), the output-cap leaf (~55) — is named in the PR for the
+next pass.
+
+The tests (73,424 → 66,829) ran one bar: cut a test when another pins
+the same invariant through the same surface, when it asserts an
+internal mechanism with no behavioral consequence, or when it pins a
+dead production path. Half was the aim; the honest floor is what the
+bar yields, because the protected set — refusal voices, wire and
+golden bytes, journeys, races, tables — is the bulk of every cluster.
+What the pass cut, cluster by cluster with the invariant and the
+redundancy that justified each cut, is in the PR.
+
 ## [2.14.15]: the schema says what the code takes
 
 The tool surface is the agent's world, and the descriptions had
