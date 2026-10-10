@@ -53,25 +53,7 @@ const Version = "2.14.16"
 
 func main() {
 	if i := execDoor(os.Args, os.Getenv(sched.LandlockEnv)); i >= 0 {
-		if err := sched.ApplyLandlock(os.Getenv(sched.LandlockEnv)); err != nil {
-			fmt.Fprintln(os.Stderr, "rig:", err)
-			os.Exit(1)
-		}
-		runtime.LockOSThread()
-		argv := os.Args[i+1:]
-		if len(argv) == 0 {
-			fmt.Fprintln(os.Stderr, "rig: -exec needs a command")
-			os.Exit(1)
-		}
-		resolved, err := exec.LookPath(argv[0])
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "rig: -exec: %v\n", err)
-			os.Exit(1)
-		}
-		if err := syscall.Exec(resolved, argv, os.Environ()); err != nil {
-			fmt.Fprintf(os.Stderr, "rig: -exec: %v\n", err)
-			os.Exit(1)
-		}
+		landlockExec(i)
 	}
 
 	baseURL := flag.String("base-url", "", "OpenAI-compatible endpoint base URL (the worker swap); precedence: flag > RIG_BASE_URL > settings.json baseUrl > the embedded default")
@@ -697,6 +679,30 @@ func main() {
 
 	if runErr != nil || faulted {
 		closeFrontend()
+		os.Exit(1)
+	}
+}
+
+// landlockExec is the exec door: the wall lands on this process, then the
+// named command replaces it (the runner's jailed worker path).
+func landlockExec(i int) {
+	if err := sched.ApplyLandlock(os.Getenv(sched.LandlockEnv)); err != nil {
+		fmt.Fprintln(os.Stderr, "rig:", err)
+		os.Exit(1)
+	}
+	runtime.LockOSThread()
+	argv := os.Args[i+1:]
+	if len(argv) == 0 {
+		fmt.Fprintln(os.Stderr, "rig: -exec needs a command")
+		os.Exit(1)
+	}
+	resolved, err := exec.LookPath(argv[0])
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "rig: -exec: %v\n", err)
+		os.Exit(1)
+	}
+	if err := syscall.Exec(resolved, argv, os.Environ()); err != nil {
+		fmt.Fprintf(os.Stderr, "rig: -exec: %v\n", err)
 		os.Exit(1)
 	}
 }
