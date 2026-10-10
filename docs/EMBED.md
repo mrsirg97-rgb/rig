@@ -17,9 +17,10 @@ seams, and the stores are yours.
   producers; tool calls run concurrently, effects land in call order.
 - **kernel.go**: `rig.New(rig.WithProvider(...), ...)`, the composition
   root as a struct. Duplicate tool or command names panic at `New`.
-- **store**: the SQLite stores (`state`, `todo`, `rem`, `scheduler`),
-  the `sqlx` transaction seam (`store.Open`), and the project scope
-  identity (`store/scope`).
+- **store**: the SQLite stores (`state`, `todo`, `rem`, `scheduler`,
+  `graph`, `decision`), the `sqlx` transaction seam
+  (`store.Open`), and the project scope identity
+  (`store/scope`).
 
 ## the kernel surface
 
@@ -29,7 +30,7 @@ them once (the command set rides the frontend dispatchers, and
 
 | option | what it is | root wiring |
 |---|---|---|
-| `WithProvider` | one turn, streamed | `openai.New(...)` / `openai.NewWithConfig(...)` |
+| `WithProvider` | one turn, streamed | the row's wire: `openai.New(...)` / `openai.NewWithConfig(...)`, `anthropic.New(...)` on an anthropic row |
 | `WithTools` | the tool table | the map of `tool/*` adapters, plus `pluginTools` |
 | `WithFrontend` | input pull, event notify | `tui.New`, `cli.New`, or `oneshot.New` |
 | `WithPolicy` | message assembly | `compact.New` (the per-model trigger) |
@@ -215,7 +216,8 @@ A model row says where it runs. Local: the row hits the swap at
 fleet is the resident model; no slot is counted). Hosted (`remote: true`
 or `provider: "openrouter"`): the row's `baseUrl` and `apiKey` speak the
 OpenAI wire as-is — `Authorization: Bearer <key>` rides every request,
-429 and 5xx retry with bounded backoff — and the worker skips the local
+429 and 5xx retry with bounded backoff (an anthropic row speaks
+Anthropic's Messages wire instead, SPEC_HOSTED 7) — and the worker skips the local
 swap and the busy probe entirely (nothing counts slots; the endpoint's
 own 429 retry is the backpressure). `usage.cost` lands in the state
 store and sums into a swarm's `budget=` or a scheduled job's `budget`.

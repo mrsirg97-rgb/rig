@@ -84,15 +84,36 @@ dials. This file *is* the table, so every row carries its four numbers:
     "baseUrl": "https://openrouter.ai/api/v1",
     "apiKey": "sk-or-…",
     "reasoning": "reasoning"
+  },
+  {
+    "id": "claude",
+    "window": 200000,
+    "maxTokens": 8192,
+    "reserve": 16384,
+    "keepRecent": 40000,
+    "provider": "anthropic",
+    "baseUrl": "https://api.anthropic.com",
+    "apiKey": "sk-ant-…",
+    "thinkingBudget": 2048,
+    "cacheControl": true,
+    "inputPrice": 3,
+    "outputPrice": 15,
+    "cacheReadPrice": 0.3,
+    "cacheWritePrice": 3.75
   }
 ]
 ```
 
-A hosted endpoint (OpenRouter, DeepSeek, any remote OpenAI-compatible
-server) is a model row, not a new provider: `remote` or `provider`,
-`baseUrl`, `apiKey`, bounded 429/5xx retry, and cost accounting that
-feeds the TUI footer, the swarm's `budget=`, and a job's `budget`.
-Switch rows any time mid-session with `/models sonnet`.
+A hosted endpoint is a model row: an OpenAI-compatible server
+(OpenRouter, DeepSeek, any of them) speaks that wire as-is — `remote`
+or `provider`, `baseUrl`, `apiKey`, bounded 429/5xx retry, and cost
+accounting that feeds the TUI footer, the swarm's `budget=`, and a
+job's `budget` — and `provider: "anthropic"` is the one named second
+provider: native thinking (`thinkingBudget`), cache-control
+breakpoints (`cacheControl`), and the cost column from the row's own
+per-million prices. The row's fields and invariants: `docs/SETUP.md`
+and `specs/SPEC_HOSTED.md`. Switch rows any time mid-session with
+`/models sonnet`.
 
 ## what's different
 
@@ -183,7 +204,7 @@ the core is frozen.
 <!-- measured:begin (scripts/readme-measured; do not hand-edit) -->
 Numbers, not adjectives — and each one names its mechanism. The block is computed: `scripts/readme-measured` reads the stores and the tree, CI refuses drift, so it cannot go stale on you. One SQL read of the state store: the store is the receipt.
 
-**98.3% of 5.4 billion prompt tokens served from cache**, across 2,418 sessions and 49,595 recorded turns — the earliest on v0.2.0. The ratio is `cache_read / prompt`, the arithmetic `sessions summary` runs; the byte-stable prefix is why the provider can reuse so much of it. Cost per turn, era by era:
+**98.3% of 5.4 billion prompt tokens served from cache**, across 2,438 sessions and 50,024 recorded turns — the earliest on v0.2.0. The ratio is `cache_read / prompt`, the arithmetic `sessions summary` runs; the byte-stable prefix is why the provider can reuse so much of it. Cost per turn, era by era:
 
 | era | turns | new tokens / turn | completion / turn | cache |
 |---------|--------|------|------|--------|
@@ -191,13 +212,13 @@ Numbers, not adjectives — and each one names its mechanism. The block is compu
 | 1.0–1.3 | 7,440 | 933 | 676 | 99.13% |
 | 1.4–1.9 | 10,045 | 962 | 525 | 99.26% |
 | 2.0–2.9 | 7,360 | 906 | 503 | 99.09% |
-| 2.10.x | 10,744 | 4,463 | 613 | 95.18% |
+| 2.10.x | 11,173 | 4,383 | 620 | 95.24% |
 
 The 2.1.x consolidation rethought the system prompt and the toolset and kept the machinery — the kink is visible. The 2.10.x row is the fleet's own traffic: swarm workers and delegates are short-lived sessions whose first turns cannot hit a cache that does not exist yet, and the models rotate; the interactive sessions of that era hold the ~98% line.
 
 **A few thousand bytes of preamble.** The system prompt and the tool schemas are lean, byte-stable, and carefully chosen, and the tests say so: `TestSystemPromptIsByteStableAcrossBuilds`, `TestWireMarshalingIsDeterministic`, `TestWireMessagesAreAppendOnly`. A stray timestamp cannot quietly kill the cache.
 
-**409 lines is the loop** — `loop.go` plus `batch.go`, stdlib only. **662 lines is the whole swarm** — claim, spawn, complete, verdict, reap, and the status throttle. **47,081 lines of Go, 75,108 of tests.** The one store dependency is pure-Go SQLite.
+**409 lines is the loop** — `loop.go` plus `batch.go`, stdlib only. **662 lines is the whole swarm** — claim, spawn, complete, verdict, reap, and the status throttle. **47,078 lines of Go, 75,188 of tests.** The one store dependency is pure-Go SQLite.
 
 <!-- measured:end -->
 

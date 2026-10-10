@@ -56,9 +56,15 @@ sees core and models and nothing else.
   chose) with no tools: it reads the rows and replies on stdout. The
   loop's frontend is the recorder wrapped with the reviewer's turn-end
   wake when one reviews; the wrap stays off `r.fe`, whose `Ask` the
-  session reads directly.
+  session reads directly. The train rides the same wiring: `rig
+  decision train <trainer>` (`decision_train.go`) runs a trainer from
+  the train zone headless, and `/decision train` lands its once-job on
+  the crontab through the `DecisionTrain` enqueue seam
+  (`command/env.go`), tagged with the rig home the runner reads.
 - **The seam closures**: `buildSystem` (prompt assembly), `buildPair`
-  (the provider+policy rebuild), `swapIn`, `compactNow`, `newSession`,
+  (the provider+policy rebuild), `buildProvider` (the row's wire:
+  openai, or anthropic when the row says so), `swapIn`, `compactNow`,
+  `newSession`,
   `sessionList/Show/Resume`, `switchModel` (the recorder's row write
   happens before the switch applies: a refused write refuses the
   switch), `switchEffort`, `switchRole`,
@@ -210,15 +216,14 @@ into a `Phase`. A notice with no recorder yet goes to stderr.
   worker model, the resident one or the session's default — and the
   scheduler is wired everywhere. The drain pair (`delegate` and the
   swarm) is a capability, read once at wire time by `fleetWiring` from
-  one live `GET /upstream/<model>/slots`, the same read the gate makes:
-  the session's model row is remote (the gate never consults the local
-  swap), or the resident server reports more than one slot, or nothing
-  is resident — the model that loads is the session's default and the
-  claim-time gate already refuses on one slot, so the read cannot know
-  better than the gate. An unreadable swap, one resident slot, or
-  settings.json's `"workers": false` wires the pair off: the wire
-  happens once, at start, an unreadable swap fails closed, and nothing
-  turns the pair on where the slots are not. The menu says nothing
+  the resident model (`sched.ResidentModel`): the session's model row
+  is remote (the gate never consults the local swap), or the resident
+  read succeeds — one resident, or nothing resident (the model that
+  loads is the session's default) — the pair wires on: the wiring reads
+  the same resident truth the gate enforces, so it cannot disagree with
+  it. An unreadable swap (the pair fails closed) or settings.json's
+  `"workers": false` wires the pair off: the wire happens once, at
+  start, and nothing turns the pair on where the swap did not answer. The menu says nothing
   about what is absent; the swarm adapter carries the read's verdict
   and `/swarm` names it when it refuses. `fleetEnds` is the child's
   half of that pipe: a pipe exists because the parent made one, not

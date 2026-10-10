@@ -97,8 +97,11 @@ scorer holds the sink: every answered candidate is one pending row
 (site `pack`, the server as decider), the reviewer settles them at turn
 end as it settles bash rows, and a deny names the right answer. A
 transport error refuses the score and writes no rows; a reply that
-skips a candidate hides it — the pack lists the server's declines by
-name for the model to judge and shows the never-answered nowhere.
+skips a candidate does not hide it — the pack carries a confident
+decline and a never-answered candidate as a block like every answered
+one (past the per-candidate fit, the hand-pack fallback compacts it)
+until the load cap stops adding, and only the unsure list comes back
+by name for the model to judge.
 
 ## the decide tool (the delegate)
 

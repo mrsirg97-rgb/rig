@@ -84,15 +84,16 @@ the Apple meta tags, safe-area insets).
   transcript as structure: messages, reasoning, tool calls and results,
   and the usage rows), todo and scheduler (the store's own text,
   verbatim; the scheduler reply carries the fleet's model as `worker`,
-  empty when no fleet stands, so the view renders the create form or
+  the one constant `resident`, so the view renders the create form or
   the no-fleet refusal in its place), models (every row: window, effort
   list, role), plugins (the loaded set, the pending zone, and the
   disabled zone, each with the file's DESCRIPTION). The memory
   view is gone (SPEC_SERVE 11): rem is the model's, read in the TUI.
 - **The writes** (SPEC_SERVE phase 2): a todo create (one task per
   line, `todo.Create`), a scheduler create (`scheduler.Create`, the
-  runner command the root wired; no fleet refuses 400 naming the
-  `workers.json` move, a body naming a model keeps it and a body
+  runner command the root wired; no fleet gate — the POST rides
+  `sched.Create` the same way (SPEC_SERVE's 2.4.0 amendment), a body
+  naming a model keeps it and a body
   naming none stores the unnamed job — the fire resolves the resident
   model, else the settings' model), and a plugin create (one file into
   `plugins/pending/`, the contract's `DESCRIPTION`/`SCHEMA`/`run`). Each
@@ -199,7 +200,7 @@ the Apple meta tags, safe-area insets).
 The dashboard calls store verbs, never domain accessors and never raw SQL
 (SPEC_SERVE 3): `state.ListSessions`, `state.Resume`,
 `state.SessionUsage`, `todo.Read`, `todo.ReadAll`, `todo.Create`,
-`todo.Start`, `todo.Complete`, `todo.Retry`, `scheduler.List`,
+`todo.Complete`, `todo.Retry`, `scheduler.List`,
 `scheduler.Create`, `scheduler.Pause`, `scheduler.Resume`,
 `scheduler.Remove`, `scheduler.Update`, `scheduler.Runs`, `rem.Recent`,
 `plugins.Move`, and the `models.Table` / `plugins.List` surfaces. The
