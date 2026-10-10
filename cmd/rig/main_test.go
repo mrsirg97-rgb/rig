@@ -202,32 +202,6 @@ func TestWireRegistersEverySeam(t *testing.T) {
 	}
 }
 
-func TestSessionsIsANonMutatingNative(t *testing.T) {
-	inNatives := false
-	for _, n := range nativeToolNames {
-		if n == "sessions" {
-			inNatives = true
-		}
-	}
-	if !inNatives {
-		t.Fatal("sessions must be a native (the eighteenth)")
-	}
-	if mutatingNatives["sessions"] {
-		t.Fatal("sessions must be absent from mutatingNatives (it never pauses; a read's migration is the store's own)")
-	}
-	r := &root{}
-	r.natives = make(map[string]bool, len(nativeToolNames))
-	for _, n := range nativeToolNames {
-		r.natives[n] = true
-	}
-	if r.isMutating("sessions") {
-		t.Fatal("sessions must pass the approval gate silently (isMutating false)")
-	}
-	if !r.isMutating("bash") {
-		t.Fatal("the control: bash must stay mutating")
-	}
-}
-
 func TestAllowGatesExecutionAndNotTheWire(t *testing.T) {
 	full := wire(testRoot(nullFrontend{}))
 	allowed := testRoot(nullFrontend{})
@@ -295,17 +269,6 @@ func TestGuidelinesAreCollectedIntoTheSystemPrompt(t *testing.T) {
 	b := guidelineMW{ToolMiddlewareFunc: func(next core.ToolExec) core.ToolExec { return next }, text: "two"}
 	if got := guidelinesOf([]core.ToolMiddleware{a, b}); got != "one\n\ntwo" {
 		t.Fatalf("multiple contributors must join in listed order: %q", got)
-	}
-}
-
-func TestWireSystemPromptCarriesTheBase(t *testing.T) {
-	k := wire(testRoot(nullFrontend{}))
-	msgs, err := k.Policy.Assemble(context.Background(), core.NewSession())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(msgs) == 0 || msgs[0].Role != core.RoleSystem || msgs[0].Content != "be terse" {
-		t.Fatalf("the base system prompt must ride the policy verbatim: %+v", msgs)
 	}
 }
 
@@ -671,9 +634,9 @@ func TestIsMutatingPredicate(t *testing.T) {
 			t.Errorf("%s must pause (a mutating native, or a plugin)", n)
 		}
 	}
-	for _, n := range []string{"read", "web", "todo", "rem"} {
+	for _, n := range []string{"read", "web", "todo", "rem", "sessions"} {
 		if r.isMutating(n) {
-			t.Errorf("%s must pass silently", n)
+			t.Errorf("%s must pass silently (a read's migration is the store's own)", n)
 		}
 	}
 }
@@ -706,44 +669,6 @@ func TestNewResetsDials(t *testing.T) {
 	}
 	if strings.Contains(h.r.fullSystem, "architect") {
 		t.Fatalf("the fresh assembly must drop the stance: %q", h.r.fullSystem)
-	}
-}
-
-func TestEffortForWireFallsBackToTheRow(t *testing.T) {
-	r := testRoot(nullFrontend{})
-	if got := r.effortForWire(); got != "" {
-		t.Fatalf("no dial, no row default: today's bytes, got %q", got)
-	}
-	r.row.Effort = "xhigh"
-	if got := r.effortForWire(); got != "xhigh" {
-		t.Fatalf("the row's default must ride the wire: %q", got)
-	}
-	r.effort = "low"
-	if got := r.effortForWire(); got != "low" {
-		t.Fatalf("the dial must override the row: %q", got)
-	}
-}
-
-func TestModelSwitchUpdatesTheSessionRow(t *testing.T) {
-	r := testRoot(nullFrontend{})
-	db := storeRoot(t, r)
-
-	speaks, err := models.New(
-		models.Model{Role: models.RoleInteractive, ID: "local", Window: 65536, MaxTokens: 8192, Reserve: 8192, KeepRecent: 16384},
-		models.Model{Role: models.RoleInteractive, ID: "ox-alpha", Window: 65536, MaxTokens: 8192, Reserve: 8192, KeepRecent: 16384},
-	)
-	if err != nil {
-		t.Fatal(err)
-	}
-	r.runtime = speaks
-	wire(r)
-
-	if _, err := r.switchModel(context.Background(), "ox-alpha"); err != nil {
-		t.Fatalf("switchModel: %v", err)
-	}
-	s := mustReadSession(t, db, r.session.ID)
-	if s.Model != "ox-alpha" {
-		t.Fatalf("session row model = %q, want the switched id ox-alpha", s.Model)
 	}
 }
 

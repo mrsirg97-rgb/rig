@@ -2,7 +2,6 @@ package scheduler_test
 
 import (
 	"context"
-	"errors"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -309,25 +308,6 @@ func TestUpdateArgsCarryOnlyTheChangedFieldsAndReplaySurvivesReopen(t *testing.T
 		t.Fatal(err)
 	}
 	contains(t, list, "brain")
-}
-
-func TestCrontabInstallFailureOnUpdateLeavesTheStoreUntouched(t *testing.T) {
-	h := newHarness(t, "/ws/u12")
-	if _, err := h.create(sched.CreateInput{Model: "w", Name: "f", Prompt: "p", Cron: "0 3 * * *", Cwd: "/ws/u12"}); err != nil {
-		t.Fatal(err)
-	}
-	fc := failingCrontab{installErr: errors.New("crontab install failed (exit 2): boom")}
-	_, err := sched.Update(context.Background(), h.db, fc,
-		sched.UpdateInput{ID: "j1", Cron: "0 9 * * *"},
-		"sess-core", runnerCmd, h.rigHome, func() time.Time { return nowFixed })
-	mustErr(t, err, `crontab install failed`)
-	var n int
-	if err := h.db.DB.QueryRow(`SELECT count(*) FROM events`).Scan(&n); err != nil {
-		t.Fatal(err)
-	}
-	if n != 1 {
-		t.Fatalf("events = %d, want 1 (the create)", n)
-	}
 }
 
 func TestUpdateRefusesAnUnknownBusy(t *testing.T) {

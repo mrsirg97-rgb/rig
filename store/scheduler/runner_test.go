@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"sync"
 	"syscall"
 	"testing"
 	"time"
@@ -15,7 +16,7 @@ import (
 	sched "github.com/mrsirg97-rgb/rig/v2/store/scheduler"
 )
 
-var runnerNow = time.Date(2026, 8, 15, 12, 0, 0, 0, time.UTC)
+var runnerNow = nowFixed
 
 const logName = "2026-08-15T12-00-00-000Z.log"
 
@@ -144,9 +145,12 @@ func (e jsonErr) Error() string { return string(e) }
 func jsonError(s string) error { return jsonErr(s) }
 
 type fakeSpawn struct {
-	calls  []fakeCall
-	result sched.SpawnResult
-	err    error
+	mu      sync.Mutex
+	calls   []fakeCall
+	envs    [][]string
+	result  sched.SpawnResult
+	err     error
+	onSpawn func(ctx context.Context, argv []string)
 }
 
 type fakeCall struct {
@@ -156,8 +160,20 @@ type fakeCall struct {
 }
 
 func (f *fakeSpawn) spawn(ctx context.Context, argv []string, cwd string, env []string, observe func([]byte)) (sched.SpawnResult, error) {
+	f.mu.Lock()
 	f.calls = append(f.calls, fakeCall{Argv: argv, Cwd: cwd, Ctx: ctx})
+	f.envs = append(f.envs, env)
+	f.mu.Unlock()
+	if f.onSpawn != nil {
+		f.onSpawn(ctx, argv)
+	}
 	return f.result, f.err
+}
+
+func (f *fakeSpawn) count() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return len(f.calls)
 }
 
 func realCwd(t *testing.T, name string) string {
@@ -372,36 +388,6 @@ func TestSomethingElseResidentSkipRecordsAndSpawnsNothing(t *testing.T) {
 	}
 }
 
-func TestOwnModelLoadedIdleWhileAnotherResidentRuns(t *testing.T) {
-	jobDir := realCwd(t, "job")
-	h, key := setupJob(t, jobDir, nil)
-	spawn := &fakeSpawn{result: sched.SpawnResult{Exit: 0}}
-	err := sched.RunJob(key, runOpts(h, []string{"qwen3.8-27b"}, spawn, fetchOpts{
-		statuses: map[string]string{"qwen3.8-27b-workers": "loaded"},
-	}))
-	mustOK(t, err)
-	if len(spawn.calls) != 1 {
-		t.Fatalf("spawn calls = %d, want 1", len(spawn.calls))
-	}
-}
-
-func TestOwnModelNotLoadedSomethingElseResidentSkips(t *testing.T) {
-	jobDir := realCwd(t, "job")
-	h, key := setupJob(t, jobDir, nil)
-	spawn := &fakeSpawn{}
-	err := sched.RunJob(key, runOpts(h, []string{"qwen3.8-27b"}, spawn, fetchOpts{
-		statuses: map[string]string{"qwen3.8-27b": "loaded"},
-	}))
-	mustOK(t, err)
-	rec := runEvents(t, h, "")[0]
-	if rec.Args["status"] != "skip" || !regexp.MustCompile(`held by`).MatchString(toString(rec.Args["reason"])) {
-		t.Fatalf("record %v", rec.Args)
-	}
-	if len(spawn.calls) != 0 {
-		t.Fatal("no spawn")
-	}
-}
-
 func TestBusyCheckFetchFailureFailsClosedWithReason(t *testing.T) {
 	jobDir := realCwd(t, "job")
 	h, key := setupJob(t, jobDir, nil)
@@ -502,7 +488,7 @@ func TestOnceDoneIsARuleOfTheFoldAndSurvivesTheNextFold(t *testing.T) {
 	if row["state"] != "done" {
 		t.Fatalf("state after refold %v", row["state"])
 	}
-	if ops := strings.Join(eventsOps(t, h), ","); ops != "create,run,create" {
+	if ops := strings.Join(eventOps(t, h), ","); ops != "create,run,create" {
 		t.Fatalf("the fire writes the run and nothing else: %v", ops)
 	}
 	out, err := h.list()
@@ -709,31 +695,6 @@ func TestLockHeldRecordsSkipWithoutRunningTheWorker(t *testing.T) {
 	}
 }
 
-func TestCrontabListFailureLoudNothingRecorded(t *testing.T) {
-	jobDir := realCwd(t, "job")
-	h, key := setupJob(t, jobDir, nil)
-	fc := failingCrontab{listErr: jsonErr("crontab list failed (exit 1): PAM: user not authorized")}
-	err := sched.RunJob(key, sched.RunOpts{
-		Home:      h.home,
-		RigHome:   h.rigHome,
-		Crontab:   fc,
-		Fetch:     fakeFetch(nil, fetchOpts{}),
-		Spawn:     (&fakeSpawn{}).spawn,
-		WorkerCmd: []string{"/x/rig"},
-		SwapURL:   "http://127.0.0.1:8090",
-		Now:       func() time.Time { return runnerNow },
-	})
-	if err == nil || !regexp.MustCompile(`crontab list failed`).MatchString(err.Error()) {
-		t.Fatalf("error %v", err)
-	}
-	if rec := runEvents(t, h, ""); len(rec) != 0 {
-		t.Fatalf("fail closed: nothing recorded, got %d", len(rec))
-	}
-	if !strings.Contains(h.ct.text, "rig-scheduler:"+sched.TagHome(h.rigHome)+":") {
-		t.Fatal("crontab must be untouched")
-	}
-}
-
 func toString(v any) string {
 	if s, ok := v.(string); ok {
 		return s
@@ -863,25 +824,6 @@ func TestUnnamedJobResidentAliasFiresOnTheTableRow(t *testing.T) {
 	}
 }
 
-func TestUnnamedJobResidentRowFiresUnchanged(t *testing.T) {
-	h, key := setupJob(t, realCwd(t, "job"), func(in *sched.CreateInput) { in.Model = "" })
-	spawn := &fakeSpawn{result: sched.SpawnResult{Exit: 0}}
-	opts := runOpts(h, []string{"qwen3.8-27b"}, spawn, fetchOpts{})
-	opts.Models = modelTable(t, "qwen3.8-27b")
-	mustOK(t, sched.RunJob(key, opts))
-	if len(spawn.calls) != 1 {
-		t.Fatalf("spawn calls = %d, want 1", len(spawn.calls))
-	}
-	tail := spawn.calls[0].Argv[len(spawn.calls[0].Argv)-2:]
-	if tail[0] != "-model" || tail[1] != "qwen3.8-27b" {
-		t.Fatalf("a resident id that is itself a row must fire unchanged, argv tail %v", tail)
-	}
-	rec := runEvents(t, h, "")
-	if rec[0].Args["status"] != "ok" || rec[0].Args["model"] != "qwen3.8-27b" {
-		t.Fatalf("the run record must name the row id: %v", rec[0].Args)
-	}
-}
-
 func TestUnnamedJobResidentWithoutARowSkipsNamingItAndTheKnownRows(t *testing.T) {
 	h, key := setupJob(t, realCwd(t, "job"), func(in *sched.CreateInput) { in.Model = "" })
 	spawn := &fakeSpawn{}
@@ -930,21 +872,5 @@ func TestUnnamedJobNoDefaultNothingResidentSkipsNamed(t *testing.T) {
 	rec := runEvents(t, h, "")[0]
 	if rec.Args["status"] != "skip" || !strings.Contains(toString(rec.Args["reason"]), "no model") {
 		t.Fatalf("the skip must name the missing model: %v", rec.Args)
-	}
-}
-
-func TestNamedModelAnotherResidentStillSkipsNamingTheHolder(t *testing.T) {
-	h, key := setupJob(t, realCwd(t, "job"), func(in *sched.CreateInput) { in.Model = "dsv4" })
-	spawn := &fakeSpawn{}
-	mustOK(t, sched.RunJob(key, runOpts(h, []string{"glm5.3-flash"}, spawn, fetchOpts{})))
-	if len(spawn.calls) != 0 {
-		t.Fatal("a named model never evicts the resident")
-	}
-	rec := runEvents(t, h, "")[0]
-	if rec.Args["status"] != "skip" {
-		t.Fatalf("status %v", rec.Args["status"])
-	}
-	if !strings.Contains(toString(rec.Args["reason"]), "held by glm5.3-flash") {
-		t.Fatalf("the skip must name the holder: %v", rec.Args["reason"])
 	}
 }

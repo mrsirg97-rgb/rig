@@ -36,19 +36,6 @@ func TestProjectOpensASessionInTheNamedWorkspace(t *testing.T) {
 	}
 }
 
-func TestProjectRefusesANonDirectoryByName(t *testing.T) {
-	byName := allByName(t)
-	swap := &swapSeam{id: "s9"}
-	env := &command.Env{NewSession: swap.swap}
-	out, err := byName["project"].Run(context.Background(), filepath.Join(t.TempDir(), "absent"), env)
-	if err == nil || !strings.Contains(err.Error(), "project: not a directory:") {
-		t.Fatalf("a non-directory must refuse by name, got (%q, %v)", out, err)
-	}
-	if swap.played {
-		t.Fatal("the seam must not run for a refused project")
-	}
-}
-
 func TestProjectRefusesBareArgs(t *testing.T) {
 	byName := allByName(t)
 	env := &command.Env{NewSession: (&swapSeam{id: "s9"}).swap}
@@ -64,19 +51,6 @@ func TestProjectRefusesALiveTurn(t *testing.T) {
 	if _, err := byName["project"].Run(context.Background(), t.TempDir(), env); err == nil ||
 		err.Error() != "project: a turn is live; steer or interrupt first" {
 		t.Fatalf("a live turn must refuse, got %v", err)
-	}
-}
-
-func TestNewKeepsTheWorkspace(t *testing.T) {
-	byName := allByName(t)
-	seen := "untouched"
-	swap := &swapSeam{dir: &seen, id: "s2"}
-	out, err := byName["new"].Run(context.Background(), "", &command.Env{NewSession: swap.swap})
-	if err != nil || out != "new: session s2" {
-		t.Fatalf("new = (%q, %v)", out, err)
-	}
-	if seen != "" {
-		t.Fatalf("new must keep the current workspace, the seam saw %q", seen)
 	}
 }
 

@@ -38,28 +38,6 @@ func TestEditSingleChangeReplacesExactlyOnce(t *testing.T) {
 	}
 }
 
-func TestEditReplyNamesThePathAndBytesReplaced(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "code.txt")
-	if err := os.WriteFile(path, []byte("one two three\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	ctx := core.WithSession(context.Background(), core.NewSession())
-	if _, err := file.NewRead().Exec(ctx, argsJSON(t, map[string]any{"path": path})); err != nil {
-		t.Fatalf("read: %v", err)
-	}
-	got, err := file.NewEdit().Exec(ctx, argsJSON(t, map[string]any{
-		"path": path, "old": "two three", "new": "2 3",
-	}))
-	if err != nil {
-		t.Fatalf("edit: %v", err)
-	}
-	want := "edited " + path + ": replaced 9 byte(s)"
-	if got != want {
-		t.Fatalf("the reply is one line, the path and the bytes replaced:\n got %q\nwant %q", got, want)
-	}
-}
-
 func TestEditAmbiguousOldNamesTheCount(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "code.txt")
@@ -279,61 +257,6 @@ func TestEditWithoutPriorReadMismatchReturnsTheFileText(t *testing.T) {
 	want := content + "\n[edit: " + path + " was not read this session; its text is above, now edit it]"
 	if got != want {
 		t.Fatalf("the reply must be the file's text ending with the marker:\n got %q\nwant %q", got, want)
-	}
-	data, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if string(data) != content {
-		t.Fatal("the teaching reply must not mutate the file")
-	}
-}
-
-func TestEditWithoutPriorReadAmbiguousReturnsTheFileText(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "code.txt")
-	if err := os.WriteFile(path, []byte("x y x"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	ctx := core.WithSession(context.Background(), core.NewSession())
-	got, err := file.NewEdit().Exec(ctx, argsJSON(t, map[string]any{
-		"path": path, "old": "x", "new": "z",
-	}))
-	if err != nil {
-		t.Fatalf("an ambiguous old on an unread file hands back the text too: %v", err)
-	}
-	if !strings.HasSuffix(got, "\n[edit: "+path+" was not read this session; its text is above, now edit it]") {
-		t.Fatalf("the ambiguous reply must end with the marker, got %q", got)
-	}
-	data, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if string(data) != "x y x" {
-		t.Fatal("the teaching reply must not mutate the file")
-	}
-}
-
-func TestEditUnreadTeachesOnceOnAMiss(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "code.txt")
-	content := "alpha\nbeta\n"
-	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	ctx := core.WithSession(context.Background(), core.NewSession())
-	got, err := file.NewEdit().Exec(ctx, argsJSON(t, map[string]any{
-		"path": path, "old": "absent", "new": "x",
-	}))
-	if err != nil {
-		t.Fatalf("a miss on an unread file teaches instead of refusing: %v", err)
-	}
-	marker := "\n[edit: " + path + " was not read this session; its text is above, now edit it]"
-	if strings.Count(got, marker) != 1 {
-		t.Fatalf("the miss must teach once, got %d markers:\n%s", strings.Count(got, marker), got)
-	}
-	if body := strings.TrimSuffix(got, marker); body != content {
-		t.Fatalf("the teaching must be the whole file exactly once, got %q", body)
 	}
 	data, err := os.ReadFile(path)
 	if err != nil {

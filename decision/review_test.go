@@ -177,22 +177,6 @@ func waitFires(t *testing.T, fired <-chan struct{}, n int) {
 	}
 }
 
-func waitSettled(t *testing.T, db store.DB, want int) {
-	t.Helper()
-	deadline := time.Now().Add(5 * time.Second)
-	for time.Now().Before(deadline) {
-		var n int
-		if err := db.QueryRow(`SELECT count(*) FROM decisions WHERE status = 'pending'`).Scan(&n); err != nil {
-			t.Fatal(err)
-		}
-		if n == want {
-			return
-		}
-		time.Sleep(5 * time.Millisecond)
-	}
-	t.Fatalf("the rows never settled to %d pending", want)
-}
-
 func TestABiteTakesOnlyTheRowsOfItsOwnScopeOrGlobal(t *testing.T) {
 	db := openReviewedStore(t, 1)
 	ctx := context.Background()
@@ -346,7 +330,7 @@ func TestTwoHundredSixtyFourRowsBiteTenAtATimeAcrossTwentySevenWakes(t *testing.
 		if remaining < 0 {
 			remaining = 0
 		}
-		waitSettled(t, db, remaining)
+		waitRows(t, db, "pending", remaining)
 	}
 	waitFires(t, f.fired, 27)
 	if f.calls() != 27 {
@@ -379,9 +363,9 @@ func TestAQuietTurnEndWithABacklogStillTakesABite(t *testing.T) {
 
 	r.Land()
 	r.Wake()
-	waitSettled(t, db, 2)
+	waitRows(t, db, "pending", 2)
 	r.Wake()
-	waitSettled(t, db, 0)
+	waitRows(t, db, "pending", 0)
 	waitFires(t, f.fired, 2)
 	if f.calls() != 2 {
 		t.Fatalf("the backlog left dirty by a bite takes the next turn end, got %d fires", f.calls())
@@ -487,7 +471,7 @@ func TestALandingMarksDirtyAndTheTurnEndWakes(t *testing.T) {
 	case <-time.After(2 * time.Second):
 		t.Fatal("a landing marks the reviewer dirty; the turn end is the wake")
 	}
-	waitSettled(t, db, 0)
+	waitRows(t, db, "pending", 0)
 }
 
 func TestATurnEndWithNoLandingCostsNothing(t *testing.T) {
@@ -514,9 +498,9 @@ func TestTheRowsPastTheBudgetStayDirtyForTheNextTurnEnd(t *testing.T) {
 
 	r.Land()
 	r.Wake()
-	waitSettled(t, db, 1)
+	waitRows(t, db, "pending", 1)
 	r.Wake()
-	waitSettled(t, db, 0)
+	waitRows(t, db, "pending", 0)
 	waitFires(t, f.fired, 2)
 	if f.calls != 2 {
 		t.Fatalf("the overflow converged over the turn ends, got %d fires", f.calls)
@@ -853,7 +837,7 @@ func TestAFireThatReturnsOnItsOwnReleasesItsContext(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		t.Fatal("the bite never fired")
 	}
-	waitSettled(t, db, 0)
+	waitRows(t, db, "pending", 0)
 	select {
 	case <-f.ctx.Done():
 	case <-time.After(5 * time.Second):
@@ -936,7 +920,7 @@ func TestTheLastReturnWakesTheDeferredBiteOnce(t *testing.T) {
 
 	deliverStatus(t, engine, room, rig.MemberDelegate, core.SwarmStatus{})
 	waitFires(t, f.fired, 1)
-	waitSettled(t, db, 0)
+	waitRows(t, db, "pending", 0)
 	hearNothing(t, f.fired, "the woken bite a second time")
 }
 
@@ -954,7 +938,7 @@ func TestASwarmWorkerGatesTheBiteTheSameWay(t *testing.T) {
 
 	deliverStatus(t, engine, room, 0, core.SwarmStatus{})
 	waitFires(t, f.fired, 1)
-	waitSettled(t, db, 0)
+	waitRows(t, db, "pending", 0)
 }
 
 func TestABiteInFlightOutlivesAWorkerSpawning(t *testing.T) {
@@ -978,7 +962,7 @@ func TestABiteInFlightOutlivesAWorkerSpawning(t *testing.T) {
 	})
 	wakeOnLoop(t, engine, r)
 	close(release)
-	waitSettled(t, db, 0)
+	waitRows(t, db, "pending", 0)
 	hearNothing(t, fired, "the fire a second time")
 }
 

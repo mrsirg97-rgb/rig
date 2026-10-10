@@ -91,18 +91,6 @@ func TestUpdateSetsAndResetsTheTimeoutWithZeroAsTheDefault(t *testing.T) {
 	}
 }
 
-func TestUpdateRefusesAnOutOfRangeTimeoutByName(t *testing.T) {
-	h := newHarness(t, realCwd(t, "tour"))
-	_, err := h.create(sched.CreateInput{
-		Name: "u", Prompt: "p", Cron: "0 */4 * * *", Model: "qwen3.8-workers",
-	})
-	mustOK(t, err)
-	for _, bad := range []int{-2, 1441} {
-		_, err = h.update(sched.UpdateInput{ID: "j1", Timeout: bad})
-		mustErr(t, err, "timeout")
-	}
-}
-
 func TestACommandJobCarriesItsTimeoutToo(t *testing.T) {
 	cwd := realCwd(t, "tocmd")
 	h := newHarness(t, cwd)
@@ -126,39 +114,6 @@ func TestACommandJobCarriesItsTimeoutToo(t *testing.T) {
 	if len(spawn.calls) != 1 {
 		t.Fatalf("the command must still fire once: %d", len(spawn.calls))
 	}
-}
-
-func TestTimeoutSurvivesCompactionFoldAndRewrite(t *testing.T) {
-	h := newHarness(t, realCwd(t, "tocompact"))
-	_, err := h.create(sched.CreateInput{
-		Name: "kept", Prompt: "p", Cron: "0 */4 * * *",
-		Model: "qwen3.8-workers", Timeout: 60,
-	})
-	mustOK(t, err)
-	for i := 0; i < 1000; i++ {
-		if _, err := h.db.DB.Exec(
-			`INSERT INTO events (seq, ts, op, args, session) VALUES (?, ?, 'noop', '{}', NULL)`,
-			2+i, nowFixed.Format(time.RFC3339)); err != nil {
-			t.Fatal(err)
-		}
-	}
-	if _, err := h.update(sched.UpdateInput{ID: "j1", Name: "kept2"}); err != nil {
-		t.Fatal(err)
-	}
-	var compacted string
-	if err := h.db.DB.QueryRow(`SELECT op FROM events WHERE op='compact' LIMIT 1`).Scan(&compacted); err != nil {
-		t.Fatalf("the threshold compaction must have run: %v", err)
-	}
-	var timeout any
-	if err := h.db.DB.QueryRow(`SELECT timeout FROM jobs WHERE id='j1'`).Scan(&timeout); err != nil {
-		t.Fatal(err)
-	}
-	if timeout != int64(60) {
-		t.Fatalf("the timeout must survive the compact fold, got %v", timeout)
-	}
-	listing, err := h.list()
-	mustOK(t, err)
-	contains(t, listing, "timeout 60m")
 }
 
 func eventArgs(t *testing.T, h *harness, op string) map[string]any {

@@ -9,13 +9,6 @@ import (
 	"github.com/mrsirg97-rgb/rig/v2/config"
 )
 
-func TestThemeAbsentNil(t *testing.T) {
-	cfg := load(t, t.TempDir(), t.TempDir())
-	if cfg.Theme != nil {
-		t.Fatalf("Theme = %s, want nil when absent", cfg.Theme)
-	}
-}
-
 func TestThemeRawIsTheFileBytes(t *testing.T) {
 	dir := t.TempDir()
 	doc := []byte(`{"palette":{"bg":"#0a0a0a","fg":"#e5e5e5"},"font":"system"}

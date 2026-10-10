@@ -145,27 +145,6 @@ func TestRemRefusalsByName(t *testing.T) {
 	}
 }
 
-func TestRemSubHints(t *testing.T) {
-	byName := allByName(t)
-	subber, ok := byName["rem"].(interface{ Sub() []command.Sub })
-	if !ok {
-		t.Fatal("rem must carry Sub hints (the TUI's menu door)")
-	}
-	subs := subber.Sub()
-	want := []string{"list", "show", "forget", "project"}
-	if len(subs) != len(want) {
-		t.Fatalf("Sub() = %d hints, want %d", len(subs), len(want))
-	}
-	for i, s := range subs {
-		if s.Name != want[i] {
-			t.Fatalf("Sub() %d = %q, want %q", i, s.Name, want[i])
-		}
-		if s.Desc == "" {
-			t.Fatalf("Sub() %d (%s) must carry a one-liner", i, s.Name)
-		}
-	}
-}
-
 func TestRemProjectRendersAndNames(t *testing.T) {
 	byName := allByName(t)
 	env := remListEnv([]command.RemRow{

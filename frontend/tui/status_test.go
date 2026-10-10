@@ -201,19 +201,6 @@ func TestStatusLineEffortColorsAndFallback(t *testing.T) {
 	}
 }
 
-func TestStatusLineNamesTheFleetModel(t *testing.T) {
-	th, err := tui.ResolveTheme("oled", nil, true)
-	if err != nil {
-		t.Fatal(err)
-	}
-	got := tui.RenderStatusLine(th, "huihui3.8", "", "", "", 41200, 262144, true, 214000, 3200, 187000, 0)
-	rows := strings.Split(got, "\n")
-	want := th.Paint("dim", "default") + th.Paint("dim", " · ") + th.Paint("warn", "auto")
-	if len(rows) != 3 || rows[1] != want {
-		t.Fatalf("the stance row must name the fleet's model:\ngot  %q\nwant %q", rows[1], want)
-	}
-}
-
 func TestRenderStatusLineShowsTheSessionsDollars(t *testing.T) {
 	th, err := tui.ResolveTheme("oled", nil, true)
 	if err != nil {

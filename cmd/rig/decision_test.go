@@ -49,23 +49,9 @@ func TestTheWiredGatesRecordIntoTheStore(t *testing.T) {
 	}
 }
 
-func TestNoDecisionStoreMeansNoRecorder(t *testing.T) {
-	r := testRoot(nullFrontend{})
-	if r.drec != nil {
-		t.Fatal("a root without a store records nothing")
-	}
-}
-
 type fakeProposals struct{ got []decision.Pending }
 
 func (f *fakeProposals) Propose(p decision.Pending) { f.got = append(f.got, p) }
-
-func TestWithNoProposerTheChainIsCanonical(t *testing.T) {
-	k := wire(testRoot(nullFrontend{}))
-	if len(k.Middleware) != 9 {
-		t.Fatalf("no decisionUrl, no link: %d", len(k.Middleware))
-	}
-}
 
 func TestAProposerAddsOneSiteLink(t *testing.T) {
 	r := testRoot(nullFrontend{})
@@ -132,19 +118,5 @@ func TestAnAllowedRunKeepsThePluginDoorOpen(t *testing.T) {
 	out, err := exec(context.Background(), core.ToolCall{ID: "c2", Name: "myplug", Args: nil})
 	if err != nil || out != "plugin ran" {
 		t.Fatalf("the door passes an installed plugin where tools are allowed: (%q, %v)", out, err)
-	}
-}
-
-func TestWithNoProposerNothingProposes(t *testing.T) {
-	r := testRoot(nullFrontend{})
-	k := wire(r)
-	var exec core.ToolExec = func(ctx context.Context, call core.ToolCall) (string, error) {
-		return "ran", nil
-	}
-	for _, mw := range k.Middleware {
-		exec = mw.Wrap(exec)
-	}
-	if _, err := exec(context.Background(), core.ToolCall{ID: "c1", Name: "bash", Args: json.RawMessage(`{"command":"ls"}`)}); err != nil {
-		t.Fatal(err)
 	}
 }

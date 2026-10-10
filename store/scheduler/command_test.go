@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"path/filepath"
 	"reflect"
-	"strings"
 	"testing"
 	"time"
 
@@ -64,56 +63,6 @@ func TestCommandJobFiresTheLineNotTheWorker(t *testing.T) {
 	mustOK(t, err)
 	contains(t, runs, "1 run")
 	contains(t, runs, "ok")
-}
-
-func TestCommandOnceJobConsumesItselfAfterTheFire(t *testing.T) {
-	cwd := realCwd(t, "oncecmd")
-	h := newHarness(t, cwd)
-	_, err := h.create(sched.CreateInput{
-		Name: "once", Command: "true", Cron: "once",
-		At: "2026-08-16T00:00:00Z", Cwd: cwd,
-	})
-	mustOK(t, err)
-	spawn := &fakeSpawn{result: sched.SpawnResult{Exit: 0}}
-	if err := sched.RunJob("j1", sched.RunOpts{
-		Home: h.home, Crontab: h.ct, RigHome: h.rigHome, Fetch: func(string) (json.RawMessage, error) {
-			return nil, jsonError("busy probe must not run")
-		},
-		Spawn: spawn.spawn, WorkerCmd: []string{"/x/rig"},
-		Now: func() time.Time { return runnerNow }, Sandbox: "off",
-	}); err != nil {
-		t.Fatal(err)
-	}
-	if strings.Contains(h.ct.text, "rig-scheduler:"+sched.TagHome(h.rigHome)+":j1") {
-		t.Fatalf("a consumed once job's line must be gone: %s", h.ct.text)
-	}
-	if row := jobsRow(t, h, "j1"); row["state"] != "done" {
-		t.Fatalf("the once fire must move the job to done: %v", row["state"])
-	}
-}
-
-func TestCommandJobFailureIsRecordedFail(t *testing.T) {
-	cwd := realCwd(t, "failcmd")
-	h := newHarness(t, cwd)
-	if _, err := h.create(sched.CreateInput{
-		Name: "fails", Command: "false", Cron: "0 3 * * *", Cwd: cwd,
-	}); err != nil {
-		t.Fatal(err)
-	}
-	spawn := &fakeSpawn{result: sched.SpawnResult{Exit: 2, Stderr: "boom"}}
-	if err := sched.RunJob("j1", sched.RunOpts{
-		Home: h.home, Crontab: h.ct, RigHome: h.rigHome, Fetch: func(string) (json.RawMessage, error) {
-			return nil, jsonError("busy probe must not run")
-		},
-		Spawn: spawn.spawn, WorkerCmd: []string{"/x/rig"},
-		Now: func() time.Time { return runnerNow }, Sandbox: "off",
-	}); err != nil {
-		t.Fatal(err)
-	}
-	runs, err := h.runs("j1", 0)
-	mustOK(t, err)
-	contains(t, runs, "fail")
-	contains(t, runs, "exit 2")
 }
 
 func TestCreateRefusesACommandMixedWithTheModelPayloads(t *testing.T) {

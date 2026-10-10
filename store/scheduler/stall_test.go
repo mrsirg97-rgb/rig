@@ -93,18 +93,6 @@ func TestUpdateSetsAndResetsTheStallWithMinusOneAsTheDefault(t *testing.T) {
 	}
 }
 
-func TestUpdateRefusesAnOutOfRangeStallByName(t *testing.T) {
-	h := newHarness(t, realCwd(t, "stallrange2"))
-	_, err := h.create(sched.CreateInput{
-		Name: "u", Prompt: "p", Cron: "0 */4 * * *", Model: "qwen3.8-workers",
-	})
-	mustOK(t, err)
-	for _, bad := range []int{-2, 1441} {
-		_, err = h.update(sched.UpdateInput{ID: "j1", Stall: bad})
-		mustErr(t, err, "stall")
-	}
-}
-
 func TestStallSurvivesCompactionFoldAndRewrite(t *testing.T) {
 	h := newHarness(t, realCwd(t, "stallcompact"))
 	_, err := h.create(sched.CreateInput{

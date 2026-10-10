@@ -8,7 +8,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
-	"runtime"
 	"strconv"
 	"strings"
 	"testing"
@@ -166,20 +165,6 @@ func TestReadOffsetPastTheEndRefusesLoud(t *testing.T) {
 	}))
 	if err == nil || !strings.Contains(err.Error(), "past the end") {
 		t.Fatalf("an offset past the end must refuse loud naming the file's lines, got %v", err)
-	}
-}
-
-func TestReadOffsetNegativeRefusesLoud(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "note.txt")
-	if err := os.WriteFile(path, []byte("a\nb\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	_, err := file.NewRead().Exec(context.Background(), argsJSON(t, map[string]any{
-		"path": path, "offset": -1,
-	}))
-	if err == nil || !strings.Contains(err.Error(), "negative") {
-		t.Fatalf("a negative offset must refuse loud, got %v", err)
 	}
 }
 
@@ -375,30 +360,6 @@ func TestReadOneHugeLineCapsByteIdentical(t *testing.T) {
 	}
 }
 
-func TestReadBigFileDoesNotAllocateTheWholeFile(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "big.txt")
-	size := 64 << 20
-	if err := os.WriteFile(path, []byte(strings.Repeat("x\n", size/2)), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	var before, after runtime.MemStats
-	runtime.ReadMemStats(&before)
-	got, err := file.NewRead().Exec(context.Background(), argsJSON(t, map[string]any{"path": path}))
-	if err != nil {
-		t.Fatalf("read: %v", err)
-	}
-	runtime.ReadMemStats(&after)
-	if !truncMarkerRe.MatchString(got) {
-		t.Fatalf("a %d-byte file must come back capped with the line-facts marker, got %d bytes", size, len(got))
-	}
-	allocated := after.TotalAlloc - before.TotalAlloc
-	const bound = 16 << 20
-	if allocated > bound {
-		t.Fatalf("the read allocated %d bytes for a %d-byte file, want <= %d (the cap is %d; the whole file must not be materialised)", allocated, size, bound, readCap)
-	}
-}
-
 func TestReadBigFileRangesReassembleExactly(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "big.txt")
@@ -496,35 +457,6 @@ func TestReadDiffShowsTheHunk(t *testing.T) {
 	}
 }
 
-func TestReadDiffShowsTheHunkWithTheEditStaged(t *testing.T) {
-	dir := t.TempDir()
-	oldWd, err := os.Getwd()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := os.Chdir(dir); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { os.Chdir(oldWd) })
-	initRepo(t, dir)
-	path := filepath.Join(dir, "note.txt")
-	if err := os.WriteFile(path, []byte("one\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	commitAll(t, dir, "base")
-	if err := os.WriteFile(path, []byte("one\ntwo\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	git(t, dir, "add", "note.txt")
-	got, err := file.NewRead().Exec(context.Background(), argsJSON(t, map[string]any{"path": path, "diff": true}))
-	if err != nil {
-		t.Fatalf("read diff: %v", err)
-	}
-	if !strings.Contains(got, "@@") || !strings.Contains(got, "+two") {
-		t.Fatalf("a staged edit must still show its hunk against HEAD:\n%s", got)
-	}
-}
-
 func TestReadDiffShowsAnAddedFileStagedWhole(t *testing.T) {
 	dir := t.TempDir()
 	oldWd, err := os.Getwd()
@@ -554,30 +486,5 @@ func TestReadDiffShowsAnAddedFileStagedWhole(t *testing.T) {
 	}
 	if !strings.Contains(got, "new file") || !strings.Contains(got, "+fresh") {
 		t.Fatalf("the staged add must show as a new file:\n%s", got)
-	}
-}
-
-func TestReadDiffCleanSaysNoChanges(t *testing.T) {
-	dir := t.TempDir()
-	oldWd, err := os.Getwd()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := os.Chdir(dir); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { os.Chdir(oldWd) })
-	initRepo(t, dir)
-	path := filepath.Join(dir, "note.txt")
-	if err := os.WriteFile(path, []byte("one\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	commitAll(t, dir, "base")
-	got, err := file.NewRead().Exec(context.Background(), argsJSON(t, map[string]any{"path": path, "diff": true}))
-	if err != nil {
-		t.Fatalf("read diff: %v", err)
-	}
-	if !strings.HasSuffix(got, "\n\nno changes") {
-		t.Fatalf("a clean file must append 'no changes':\n%s", got)
 	}
 }

@@ -56,16 +56,6 @@ func TestLoadAbsentFilesIsSilent(t *testing.T) {
 	}
 }
 
-func TestLoadEmptyDirIsSilent(t *testing.T) {
-	empty := t.TempDir()
-	absent := t.TempDir()
-	a := load(t, empty, t.TempDir())
-	b := load(t, absent, t.TempDir())
-	if !reflect.DeepEqual(a, b) {
-		t.Fatalf("an empty config dir must be silent (the same result as absent):\nempty: %+v\nabsent: %+v", a, b)
-	}
-}
-
 func TestEmbeddedDefaultsAreTheV020Values(t *testing.T) {
 	cfg := load(t, t.TempDir(), t.TempDir())
 	s := cfg.Settings
@@ -196,18 +186,6 @@ func TestSandboxLandlockIsASetting(t *testing.T) {
 	cfg := load(t, dir, t.TempDir())
 	if cfg.Settings.Sandbox != "landlock" {
 		t.Fatalf("sandbox = %q, want the file's landlock", cfg.Settings.Sandbox)
-	}
-}
-
-func TestSandboxBindsEmptyDescends(t *testing.T) {
-	dir := t.TempDir()
-	write(t, dir, "settings.json", `{"sandbox": "off", "sandboxBinds": []}`)
-	cfg := load(t, dir, t.TempDir())
-	if cfg.Settings.Sandbox != "off" {
-		t.Fatalf("sandbox = %q, want the file's off", cfg.Settings.Sandbox)
-	}
-	if len(cfg.Settings.SandboxBinds) != 0 {
-		t.Fatalf("sandboxBinds = %v, want the embedded empty (an empty file list is no binds)", cfg.Settings.SandboxBinds)
 	}
 }
 

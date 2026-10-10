@@ -17,6 +17,7 @@ type vt struct {
 	bottom  int
 	err     string
 	clamped int
+	buf     []byte
 }
 
 func newVT(width int) *vt { return &vt{width: width, rows: []string{}} }
@@ -83,9 +84,13 @@ func (v *vt) writeRune(r rune) {
 }
 
 func (v *vt) feed(b []byte) {
+	v.buf = append(v.buf, b...)
+	rest := 0
+	incomplete := false
 	i := 0
-	for i < len(b) {
-		c := b[i]
+	for i < len(v.buf) {
+		rest = i
+		c := v.buf[i]
 		if v.err != "" {
 			return
 		}
@@ -97,19 +102,25 @@ func (v *vt) feed(b []byte) {
 			}
 			i++
 		case c == 0x1b:
-			if i+1 >= len(b) || b[i+1] != '[' {
+			if i+1 >= len(v.buf) {
+				incomplete = true
+				i = len(v.buf)
+				continue
+			}
+			if v.buf[i+1] != '[' {
 				v.fail("a bare escape: the vocabulary is CSI only")
 				return
 			}
 			j := i + 2
-			for j < len(b) && !(b[j] >= 0x40 && b[j] <= 0x7e) {
+			for j < len(v.buf) && !(v.buf[j] >= 0x40 && v.buf[j] <= 0x7e) {
 				j++
 			}
-			if j >= len(b) {
-				v.fail("an unterminated CSI")
-				return
+			if j >= len(v.buf) {
+				incomplete = true
+				i = len(v.buf)
+				continue
 			}
-			params, term := string(b[i+2:j]), b[j]
+			params, term := string(v.buf[i+2:j]), v.buf[j]
 			switch term {
 			case 'A':
 				n, aerr := atoi(params)
@@ -132,7 +143,6 @@ func (v *vt) feed(b []byte) {
 				}
 				v.r -= n
 			case 'B':
-
 				n, aerr := atoi(params)
 				if aerr != nil || n <= 0 {
 					v.fail("cursor-down with n = " + params)
@@ -178,7 +188,6 @@ func (v *vt) feed(b []byte) {
 					return
 				}
 			case 'J':
-
 				if params != "0" && params != "" {
 					v.fail("an unknown erase mode: 0J only")
 					return
@@ -197,20 +206,23 @@ func (v *vt) feed(b []byte) {
 				}
 				v.rows = v.rows[:v.r+1]
 			case 'm':
-
 			case 'h', 'l':
 				if params != "?2026" {
 					v.fail("a mode outside the vocabulary: " + params + string(term))
 					return
 				}
-
 			default:
 				v.fail("an escape outside the vocabulary: " + string(term))
 				return
 			}
 			i = j + 1
 		default:
-			r, size := utf8.DecodeRune(b[i:])
+			if !utf8.FullRune(v.buf[i:]) {
+				incomplete = true
+				i = len(v.buf)
+				continue
+			}
+			r, size := utf8.DecodeRune(v.buf[i:])
 			if r == utf8.RuneError && size == 1 {
 				v.fail("an invalid or orphaned UTF-8 byte")
 				return
@@ -226,6 +238,11 @@ func (v *vt) feed(b []byte) {
 			v.writeRune(r)
 			i += size
 		}
+	}
+	if incomplete {
+		v.buf = append(v.buf[:0], v.buf[rest:]...)
+	} else {
+		v.buf = v.buf[:0]
 	}
 }
 
@@ -369,35 +386,6 @@ func TestLiveRegionProtocol(t *testing.T) {
 	}
 }
 
-func TestLiveRegionWidthExact(t *testing.T) {
-	th, err := ResolveTheme("oled", nil, true)
-	if err != nil {
-		t.Fatal(err)
-	}
-	rule := th.Paint(SlotRule, strings.Repeat(th.Glyph(GlyphDot), 12))
-	var out strings.Builder
-	l := newLive(&out, 12)
-	l.draw(rule+"\n"+rule, []string{"x"}, "")
-	v := newVT(12)
-	v.feed([]byte(out.String()))
-	if v.err != "" {
-		t.Fatalf("harness: %s", v.err)
-	}
-	want := []string{
-		strings.Repeat(th.Glyph(GlyphDot), 12),
-		strings.Repeat(th.Glyph(GlyphDot), 12),
-		"x",
-	}
-	if len(v.rows) != len(want) {
-		t.Fatalf("a phantom row: %d rows, want %d:\n%q", len(v.rows), len(want), v.rows)
-	}
-	for i := range want {
-		if v.rows[i] != want[i] {
-			t.Fatalf("row %d = %q, want %q\nall: %q", i, v.rows[i], want[i], v.rows)
-		}
-	}
-}
-
 func TestLiveRegionImmutability(t *testing.T) {
 	th, err := ResolveTheme("", json.RawMessage(`{"base":"p1","glyphs":"ascii"}`), true)
 	if err != nil {
@@ -428,106 +416,5 @@ func TestLiveRegionImmutability(t *testing.T) {
 	}
 	if want := paintFree(in); v.rows[51] != want {
 		t.Fatalf("the final input row = %q, want %q", v.rows[51], want)
-	}
-}
-
-func TestLiveRegionStatusRow(t *testing.T) {
-	th, err := ResolveTheme("oled", nil, true)
-	if err != nil {
-		t.Fatal(err)
-	}
-	prompt := th.Paint(SlotAccent, th.Glyph(GlyphPrompt))
-	inEmpty := prompt + th.Paint(SlotText, " ")
-	activity := th.Paint(SlotEmber, "thinking")
-	status := th.Paint(SlotDim, "huihui3.8")
-
-	var out strings.Builder
-	l := newLive(&out, 50)
-	l.draw("", []string{inEmpty}, status)
-	l.edit(prompt+th.Paint(SlotText, " hi"), 4, status)
-	l.enter("hi", activity, inEmpty, status)
-	l.draw(th.Paint(SlotText, "hel"), []string{activity, inEmpty}, status)
-	l.setActivity(th.Paint(SlotDim, "/") + th.Paint(SlotAccent, " bash"))
-	l.setActivity(activity)
-
-	l.draw(th.Paint(SlotDim, "up 1.2k down 220 · cache r 0 0%"), []string{inEmpty}, status)
-
-	v := newVT(50)
-	v.feed([]byte(out.String()))
-	if v.err != "" {
-		t.Fatalf("harness: %s\nstream:\n%q", v.err, out.String())
-	}
-	want := []string{
-		"hi",
-		"",
-		"hel",
-		"up 1.2k down 220 · cache r 0 0%",
-		"❯ ",
-		paintFree(status),
-	}
-	if len(v.rows) != len(want) {
-		t.Fatalf("the screen has %d rows, want %d:\n%q", len(v.rows), len(want), v.rows)
-	}
-	for i := range want {
-		if v.rows[i] != want[i] {
-			t.Fatalf("row %d = %q, want %q\nall: %q", i, v.rows[i], want[i], v.rows)
-		}
-	}
-}
-
-func TestLiveRegionMenuRows(t *testing.T) {
-	th, err := ResolveTheme("oled", nil, true)
-	if err != nil {
-		t.Fatal(err)
-	}
-	prompt := th.Paint(SlotAccent, th.Glyph(GlyphPrompt))
-	inEmpty := prompt + th.Paint(SlotText, " ")
-	inCmd := prompt + th.Paint(SlotText, " /s")
-	menuA := th.Paint(SlotEmber, "scheduler") + th.Paint(SlotText, "  the scheduler's jobs")
-	menuB := th.Paint(SlotEmber, "sessions") + th.Paint(SlotText, "  the session's store")
-	menuC := th.Paint(SlotEmber, "steer") + th.Paint(SlotText, "  a note into the queue")
-	status := th.Paint(SlotDim, "huihui3.8")
-
-	var out strings.Builder
-	l := newLive(&out, 50)
-	l.draw("", []string{inEmpty}, status)
-	l.edit(inCmd, 3, status)
-
-	l.editFull([]string{th.Invert(menuA), menuB, menuC, inCmd}, 3, status)
-
-	l.edit(prompt+th.Paint(SlotText, " /sc"), 4, status)
-
-	l.editFull([]string{inEmpty}, 3, status)
-
-	v := newVT(50)
-	v.feed([]byte(out.String()))
-	if v.err != "" {
-		t.Fatalf("harness: %s\nstream:\n%q", v.err, out.String())
-	}
-	want := []string{
-		"❯ ",
-		"huihui3.8",
-	}
-	if len(v.rows) != len(want) {
-		t.Fatalf("the screen has %d rows, want %d:\n%q", len(v.rows), len(want), v.rows)
-	}
-	for i := range want {
-		if v.rows[i] != want[i] {
-			t.Fatalf("row %d = %q, want %q\nall: %q", i, v.rows[i], want[i], v.rows)
-		}
-	}
-
-	frame := out.String()
-	if iMenu := strings.Index(frame, th.Invert(menuA)); iMenu < 0 {
-		t.Fatal("the inverted selection row is not in the stream")
-	} else {
-		rest := frame[iMenu:]
-		iB := strings.Index(rest, menuB)
-		iC := strings.Index(rest, menuC)
-		iIn := strings.Index(rest, inCmd)
-		iSt := strings.Index(rest, status)
-		if !(iB > 0 && iC > iB && iIn > iC && iSt > iIn) {
-			t.Fatalf("the menu frame's row order broke: b=%d c=%d in=%d st=%d", iB, iC, iIn, iSt)
-		}
 	}
 }

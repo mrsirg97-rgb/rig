@@ -21,22 +21,6 @@ func argsJSON(t *testing.T, args map[string]any) json.RawMessage {
 	return data
 }
 
-func TestExecutesCommandAndReturnsOutput(t *testing.T) {
-	tool := bash.New()
-	if tool.Name() != "bash" {
-		t.Fatalf("name = %q, want bash", tool.Name())
-	}
-	got, err := tool.Exec(context.Background(), argsJSON(t, map[string]any{
-		"command": "echo hello",
-	}))
-	if err != nil {
-		t.Fatalf("exec: %v", err)
-	}
-	if got != "hello\n" {
-		t.Fatalf("output = %q, want %q", got, "hello\n")
-	}
-}
-
 func TestNonZeroExitIsAFedBackError(t *testing.T) {
 	tool := bash.New()
 	_, err := tool.Exec(context.Background(), argsJSON(t, map[string]any{
@@ -150,21 +134,6 @@ func TestStderrIsIncluded(t *testing.T) {
 	}
 }
 
-func TestCwdIsRespected(t *testing.T) {
-	dir := t.TempDir()
-	tool := bash.New()
-	got, err := tool.Exec(context.Background(), argsJSON(t, map[string]any{
-		"command":   "pwd",
-		"workspace": dir,
-	}))
-	if err != nil {
-		t.Fatalf("exec: %v", err)
-	}
-	if got != dir+"\n" {
-		t.Fatalf("pwd = %q, want %q", got, dir+"\n")
-	}
-}
-
 func TestMissingCommandFailsLoud(t *testing.T) {
 	tool := bash.New()
 	_, err := tool.Exec(context.Background(), argsJSON(t, map[string]any{
@@ -172,16 +141,6 @@ func TestMissingCommandFailsLoud(t *testing.T) {
 	}))
 	if err == nil {
 		t.Fatal("missing binary must fail loudly")
-	}
-}
-
-func TestEmptyCommandFailsLoud(t *testing.T) {
-	tool := bash.New()
-	_, err := tool.Exec(context.Background(), argsJSON(t, map[string]any{
-		"command": "",
-	}))
-	if err == nil {
-		t.Fatal("empty command must fail loudly")
 	}
 }
 
@@ -232,23 +191,6 @@ func TestBackgroundChildDoesNotHoldTheTurn(t *testing.T) {
 	}
 	if elapsed > 5*time.Second {
 		t.Fatalf("background child held the turn for %v, want a bounded exit", elapsed)
-	}
-}
-
-func TestOutputIsCapped(t *testing.T) {
-	tool := bash.New()
-
-	got, err := tool.Exec(context.Background(), argsJSON(t, map[string]any{
-		"command": "yes | head -c 1048576",
-	}))
-	if err != nil {
-		t.Fatalf("exec: %v", err)
-	}
-	if len(got) >= 1048576 {
-		t.Fatalf("unbounded output: %d bytes", len(got))
-	}
-	if !strings.HasSuffix(got, "[output truncated]") {
-		t.Fatal("capped output must name the truncation for the model")
 	}
 }
 

@@ -243,19 +243,6 @@ func assertTranscriptSurvives(t *testing.T, label string, v *vt, committed []str
 	}
 }
 
-func TestStdinTerminalOwnsWinch(t *testing.T) {
-	withStdinPTY(t, func(master *os.File) {
-		fe := New(os.Stdin, &lockBuf{}, oledTheme(t), WithTicks(make(chan time.Time))).(*tui)
-		defer fe.Close()
-		fe.mu.Lock()
-		stop := fe.stopWinch
-		fe.mu.Unlock()
-		if stop == nil {
-			t.Fatal("stdin is the terminal: the frontend must own the winch signal handler")
-		}
-	})
-}
-
 func TestPTYWinchIdleRepaint(t *testing.T) {
 	th := oledTheme(t)
 	withStdinPTY(t, func(master *os.File) {

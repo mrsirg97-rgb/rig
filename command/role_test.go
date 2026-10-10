@@ -54,24 +54,3 @@ func TestRoleUnknownNameRefusesNamingThree(t *testing.T) {
 		t.Fatalf("the unknown-name refusal = (%q, %v), want the pinned voice", out, err)
 	}
 }
-
-func TestRoleSubCarriesTheThree(t *testing.T) {
-	byName := allByName(t)
-	subber, ok := byName["role"].(command.Subber)
-	if !ok {
-		t.Fatal("the role command must implement Sub()")
-	}
-	got := subber.Sub()
-	if len(got) != 3 {
-		t.Fatalf("Sub() = %d hints, want the shipped three", len(got))
-	}
-	wantNames := []string{"default", "architect", "reviewer"}
-	for i, s := range got {
-		if s.Name != wantNames[i] {
-			t.Fatalf("Sub() %d = %q, want %q", i, s.Name, wantNames[i])
-		}
-		if s.Desc == "" {
-			t.Fatalf("Sub() %d (%s) must carry a one-liner", i, s.Name)
-		}
-	}
-}

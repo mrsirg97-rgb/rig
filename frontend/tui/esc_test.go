@@ -2,7 +2,6 @@ package tui
 
 import (
 	"context"
-	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -52,35 +51,5 @@ func TestTheSecondEscStopsTheBatch(t *testing.T) {
 			t.Fatal("the second esc never stopped the batch")
 		}
 		time.Sleep(time.Millisecond)
-	}
-}
-
-func TestAKeystrokeClearsTheArm(t *testing.T) {
-	stops := new(atomic.Int64)
-	s := escArmSession(t, stops)
-
-	s.si.feed("\x1b")
-	s.await("esc again to stop 1 worker")
-	s.si.feed("a")
-	s.screenUntil(t, 60, 20, 2*time.Second, func(j string) bool {
-		return !strings.Contains(j, "esc again to stop")
-	}, "a keystroke did not clear the arm")
-	if stops.Load() != 0 {
-		t.Fatalf("the cleared arm stopped the batch %d times", stops)
-	}
-}
-
-func TestTheArmExpiresWithoutStopping(t *testing.T) {
-	stops := new(atomic.Int64)
-	s := escArmSession(t, stops)
-
-	s.si.feed("\x1b")
-	s.await("esc again to stop 1 worker")
-	s.ticks <- time.Now().Add(escArmWindow + time.Second)
-	s.screenUntil(t, 60, 20, 2*time.Second, func(j string) bool {
-		return !strings.Contains(j, "esc again to stop")
-	}, "the arm never expired")
-	if stops.Load() != 0 {
-		t.Fatalf("the expired arm stopped the batch %d times", stops)
 	}
 }

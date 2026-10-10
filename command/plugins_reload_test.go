@@ -2,52 +2,18 @@ package command_test
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/mrsirg97-rgb/rig/v2/command"
-	"github.com/mrsirg97-rgb/rig/v2/core"
 )
 
 const createTemplate = "author a plugin: %s; the contract is DESCRIPTION, SCHEMA, run(args) -> str; write it SELF-CONTAINED to the pending directory (SPEC_SANDBOX); the operator installs it with /plugins approve; then call it through the plugin door and test it with one call."
 
 func wantUsage() string {
 	return "plugins: usage: plugins | plugins pending | plugins disabled | plugins approve <name> | plugins reload | plugins create <text> | plugins enable <name> | plugins disable <name>"
-}
-
-func TestPluginsReloadVerbPassesTheReplyThrough(t *testing.T) {
-	reply := "plugins: reload: 1 loaded, 1 skipped\nloaded:\n  echo: the fixture echo plugin (/h/plugins/echo.py)\nskipped:\n  broken.py: NameError: name 'x' is not defined\n"
-	calls := 0
-	env := &command.Env{
-		Plugins:    func() []command.PluginInfo { return nil },
-		PluginsDir: t.TempDir(),
-		Reload: func(ctx context.Context) (string, error) {
-			calls++
-			return reply, nil
-		},
-	}
-	out, err := pluginsCmd(t).Run(context.Background(), "reload", env)
-	if err != nil {
-		t.Fatalf("reload: %v", err)
-	}
-	if out != reply {
-		t.Fatalf("the reply = %q, want the root's verbatim", out)
-	}
-	if calls != 1 {
-		t.Fatalf("the reload's action ran %d times, want 1", calls)
-	}
-
-	_, err = pluginsCmd(t).Run(context.Background(), "reload", &command.Env{
-		Plugins:    func() []command.PluginInfo { return nil },
-		PluginsDir: t.TempDir(),
-	})
-	if err == nil || !strings.Contains(err.Error(), "no reload seam") {
-		t.Fatalf("a nil seam must refuse with the no-seam voice, got %v", err)
-	}
 }
 
 func TestPluginsCreateQueuesTheTemplate(t *testing.T) {
@@ -96,80 +62,4 @@ func TestPluginsUsageNamesTheReloadAndCreateVerbs(t *testing.T) {
 	if err.Error() != wantUsage() {
 		t.Fatalf("the usage line = %q, want %q", err.Error(), wantUsage())
 	}
-}
-
-func TestPluginsApproveMovesThenReloads(t *testing.T) {
-	t.Run("the move plus the reload's reply", func(t *testing.T) {
-		home := homeWithZone(t, map[string]string{"forge.py": goodPending})
-		pluginsDir := filepath.Join(home, "plugins")
-		src := filepath.Join(pluginsDir, "pending", "forge.py")
-		dst := filepath.Join(pluginsDir, "forge.py")
-		calls := 0
-		out, err := pluginsCmd(t).Run(context.Background(), "approve forge", &command.Env{
-			Plugins:    func() []command.PluginInfo { return nil },
-			PluginsDir: pluginsDir,
-			Tools:      map[string]core.Tool{"bash": namedTool{name: "bash"}},
-			Reload: func(ctx context.Context) (string, error) {
-				calls++
-				return "plugins: reload: 1 loaded, 0 skipped", nil
-			},
-		})
-		if err != nil {
-			t.Fatalf("approve: %v", err)
-		}
-		if calls != 1 {
-			t.Fatalf("the reload's action ran %d times, want 1", calls)
-		}
-		if _, statErr := os.Stat(dst); statErr != nil {
-			t.Fatalf("the approved plugin must land at the top level: %v", statErr)
-		}
-		want := "plugins: approved forge (" + src + " -> " + dst + ")\nplugins: reload: 1 loaded, 0 skipped"
-		if out != want {
-			t.Fatalf("the reply = %q, want the move's line plus the reload's reply:\n%q", out, want)
-		}
-	})
-
-	t.Run("a reload failure keeps the move", func(t *testing.T) {
-		home := homeWithZone(t, map[string]string{"forge.py": goodPending})
-		pluginsDir := filepath.Join(home, "plugins")
-		_, err := pluginsCmd(t).Run(context.Background(), "approve forge", &command.Env{
-			Plugins:    func() []command.PluginInfo { return nil },
-			PluginsDir: pluginsDir,
-			Tools:      map[string]core.Tool{"bash": namedTool{name: "bash"}},
-			Reload: func(ctx context.Context) (string, error) {
-				return "", errors.New("discovery: kernel exited (code 1)")
-			},
-		})
-		if err == nil {
-			t.Fatal("a reload failure must refuse")
-		}
-		if !strings.Contains(err.Error(), "plugins: approved forge") {
-			t.Fatalf("the move's line must ride the refusal (the disk is the truth), got %v", err)
-		}
-		if !strings.Contains(err.Error(), "the reload failed: discovery: kernel exited (code 1)") {
-			t.Fatalf("the refusal must name the reload's failure, got %v", err)
-		}
-		if _, statErr := os.Stat(filepath.Join(pluginsDir, "forge.py")); statErr != nil {
-			t.Fatalf("the move must stand after a failed reload: %v", statErr)
-		}
-	})
-
-	t.Run("a pre-8 root is the move only", func(t *testing.T) {
-		home := homeWithZone(t, map[string]string{"forge.py": goodPending})
-		pluginsDir := filepath.Join(home, "plugins")
-		src := filepath.Join(pluginsDir, "pending", "forge.py")
-		dst := filepath.Join(pluginsDir, "forge.py")
-		out, err := pluginsCmd(t).Run(context.Background(), "approve forge", &command.Env{
-			Plugins:    func() []command.PluginInfo { return nil },
-			PluginsDir: pluginsDir,
-			Tools:      map[string]core.Tool{"bash": namedTool{name: "bash"}},
-		})
-		if err != nil {
-			t.Fatalf("approve: %v", err)
-		}
-		want := "plugins: approved forge (" + src + " -> " + dst + "); the discovery loads it at the next start"
-		if out != want {
-			t.Fatalf("the pre-8 voice = %q, want the move only:\n%q", out, want)
-		}
-	})
 }

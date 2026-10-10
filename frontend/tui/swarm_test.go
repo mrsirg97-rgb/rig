@@ -322,7 +322,7 @@ func TestSwarmBandResizeLeavesNoTornRows(t *testing.T) {
 		t.Fatalf("the band or its rule vanished on the resize:\n%s", joined)
 	}
 
-	freeze := newVTStream(36)
+	freeze := newVT(36)
 	stream := s.out.Bytes()
 	for off := 0; off < len(stream); off += 9 {
 		end := off + 9

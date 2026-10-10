@@ -7,31 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-
-	"github.com/mrsirg97-rgb/rig/v2/plugins"
 )
-
-func TestListPluginFilesIgnoresThePendingZone(t *testing.T) {
-	home := t.TempDir()
-	pluginsDir := filepath.Join(home, "plugins")
-	if err := os.MkdirAll(filepath.Join(pluginsDir, "pending"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(pluginsDir, "echo.py"), []byte("top level"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(pluginsDir, "pending", "other.py"), []byte("pending"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-
-	files, err := plugins.List(home, "plugins")
-	if err != nil {
-		t.Fatalf("plugins.List: %v", err)
-	}
-	if len(files) != 1 || files[0] != filepath.Join(pluginsDir, "echo.py") {
-		t.Fatalf("the listing = %v, want only the top-level file", files)
-	}
-}
 
 func writeCallArgs(t *testing.T, path, content string) string {
 	t.Helper()

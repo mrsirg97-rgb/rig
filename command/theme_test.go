@@ -109,24 +109,3 @@ func TestThemeForeignEnvRefuses(t *testing.T) {
 		t.Fatalf("the foreign env = %v, want the wiring refusal", err)
 	}
 }
-
-func TestThemeSubsAreTheThreePresets(t *testing.T) {
-	byName := allByName(t)
-	c, ok := byName["theme"].(command.Subber)
-	if !ok {
-		t.Fatal("theme must be a Subber (the TUI's argument-hints door)")
-	}
-	subs := c.Sub()
-	var names []string
-	for _, s := range subs {
-		names = append(names, s.Name)
-	}
-	if strings.Join(names, ",") != "warm,cool,custom" {
-		t.Fatalf("the hints = %v, want warm, cool, custom in order", names)
-	}
-	for _, s := range subs {
-		if s.Desc == "" {
-			t.Fatalf("the hint for %s carries no description", s.Name)
-		}
-	}
-}

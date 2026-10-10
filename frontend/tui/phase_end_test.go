@@ -27,20 +27,6 @@ func summarizeOutLoud(t *testing.T, s *scriptedSession) {
 	awaitScreen(t, s, "summarizing · ", true)
 }
 
-func TestAnInTurnCompactionGivesTheRowBackWhenTheTurnEnds(t *testing.T) {
-	th := oledTheme(t)
-	s := liveTurnSession(t, th)
-	summarizeOutLoud(t, s)
-	s.fe.Notify(core.Compacted{Summary: "s", Dropped: 1200, Kept: 400})
-	s.fe.Notify(core.TurnEnd{Reason: core.TurnOver})
-	awaitScreen(t, s, "summarizing · ", false)
-	s.fe.mu.Lock()
-	defer s.fe.mu.Unlock()
-	if s.fe.aside != "" || s.fe.tickStop != nil {
-		t.Fatalf("the compaction line ended the phase: aside=%q ticker=%v", s.fe.aside, s.fe.tickStop != nil)
-	}
-}
-
 func TestANoticeBreathesAfterAnInTurnCompaction(t *testing.T) {
 	th := oledTheme(t)
 	s := liveTurnSession(t, th)

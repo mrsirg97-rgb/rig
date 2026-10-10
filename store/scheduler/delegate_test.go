@@ -20,40 +20,6 @@ import (
 	sched "github.com/mrsirg97-rgb/rig/v2/store/scheduler"
 )
 
-type delegateSpawn struct {
-	mu      sync.Mutex
-	calls   []delegateCall
-	result  sched.SpawnResult
-	err     error
-	block   chan struct{}
-	onSpawn func(ctx context.Context, observe func([]byte))
-}
-
-type delegateCall struct {
-	Argv []string
-	Cwd  string
-	Ctx  context.Context
-}
-
-func (f *delegateSpawn) spawn(ctx context.Context, argv []string, cwd string, env []string, observe func([]byte)) (sched.SpawnResult, error) {
-	f.mu.Lock()
-	f.calls = append(f.calls, delegateCall{Argv: argv, Cwd: cwd, Ctx: ctx})
-	f.mu.Unlock()
-	if f.onSpawn != nil {
-		f.onSpawn(ctx, observe)
-	}
-	if f.block != nil {
-		<-f.block
-	}
-	return f.result, f.err
-}
-
-func (f *delegateSpawn) count() int {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	return len(f.calls)
-}
-
 func delegateFetch(t *testing.T, busyFirst bool, failing string) func(url string) (json.RawMessage, error) {
 	t.Helper()
 	var mu sync.Mutex
@@ -107,7 +73,7 @@ func delegateInput(t *testing.T, fetch sched.Fetch, spawn sched.Spawn, mutate fu
 }
 
 func TestDelegateHolderSkipStillRefuses(t *testing.T) {
-	spawn := &delegateSpawn{result: sched.SpawnResult{Exit: 0}}
+	spawn := &fakeSpawn{result: sched.SpawnResult{Exit: 0}}
 	in := delegateInput(t, delegateFetch(t, true, ""), spawn.spawn, nil)
 	if _, err := sched.Delegate(in); err == nil {
 		t.Fatal("a named model while another is resident must refuse")
@@ -120,7 +86,7 @@ func TestDelegateHolderSkipStillRefuses(t *testing.T) {
 }
 
 func TestDelegateCheckFailureFailsClosed(t *testing.T) {
-	spawn := &delegateSpawn{result: sched.SpawnResult{Exit: 0}}
+	spawn := &fakeSpawn{result: sched.SpawnResult{Exit: 0}}
 	in := delegateInput(t, delegateFetch(t, true, "models down"), spawn.spawn, nil)
 	if _, err := sched.Delegate(in); err == nil {
 		t.Fatal("a failed gate check must refuse")
@@ -147,9 +113,9 @@ func TestDelegateWorkerHeartbeatIsPublishedAsItsMember(t *testing.T) {
 			}
 		}
 	})
-	spawn := &delegateSpawn{result: sched.SpawnResult{Exit: 0, Stdout: "done\n"}}
+	spawn := &fakeSpawn{result: sched.SpawnResult{Exit: 0, Stdout: "done\n"}}
 	var env []string
-	spawn.onSpawn = func(ctx context.Context, observe func([]byte)) {
+	spawn.onSpawn = func(ctx context.Context, argv []string) {
 		id, w, ok := sched.FleetFrom(ctx)
 		if !ok {
 			t.Error("the spawn context carries no fleet pipe")
@@ -180,10 +146,10 @@ func TestDelegateWorkerHeartbeatIsPublishedAsItsMember(t *testing.T) {
 }
 
 func TestDelegateSpawnCtxCancelsTheWorker(t *testing.T) {
-	spawn := &delegateSpawn{result: sched.SpawnResult{Exit: 1, TimedOut: true, Stderr: "killed\n"}}
+	spawn := &fakeSpawn{result: sched.SpawnResult{Exit: 1, TimedOut: true, Stderr: "killed\n"}}
 	spawnCtx, cancel := context.WithCancel(context.Background())
 	captured := make(chan context.Context, 1)
-	spawn.onSpawn = func(ctx context.Context, observe func([]byte)) {
+	spawn.onSpawn = func(ctx context.Context, argv []string) {
 		captured <- ctx
 	}
 	in := delegateInput(t, delegateFetch(t, false, ""), spawn.spawn, func(in *sched.DelegateInput) {
@@ -207,7 +173,7 @@ func TestDelegateSpawnCtxCancelsTheWorker(t *testing.T) {
 }
 
 func TestDelegateDefaultsAreUnchanged(t *testing.T) {
-	spawn := &delegateSpawn{result: sched.SpawnResult{Exit: 0, Stdout: "done\n"}}
+	spawn := &fakeSpawn{result: sched.SpawnResult{Exit: 0, Stdout: "done\n"}}
 	in := delegateInput(t, delegateFetch(t, false, ""), spawn.spawn, nil)
 	if _, err := sched.Delegate(in); err != nil {
 		t.Fatalf("delegate: %v", err)
@@ -232,7 +198,7 @@ func TestDelegateDefaultsAreUnchanged(t *testing.T) {
 }
 
 func TestADelegateSpawnCarriesTheEffortItIsGiven(t *testing.T) {
-	spawn := &delegateSpawn{result: sched.SpawnResult{Exit: 0, Stdout: "done\n"}}
+	spawn := &fakeSpawn{result: sched.SpawnResult{Exit: 0, Stdout: "done\n"}}
 	in := delegateInput(t, delegateFetch(t, false, ""), spawn.spawn, func(in *sched.DelegateInput) {
 		in.Effort = "low"
 	})
@@ -252,7 +218,7 @@ func TestADelegateSpawnCarriesTheEffortItIsGiven(t *testing.T) {
 }
 
 func TestABareFireWithNoAllowRunsAllowNoneAndNoReportBack(t *testing.T) {
-	spawn := &delegateSpawn{result: sched.SpawnResult{Exit: 0}}
+	spawn := &fakeSpawn{result: sched.SpawnResult{Exit: 0}}
 	in := delegateInput(t, delegateFetch(t, false, ""), spawn.spawn, nil)
 	in.Bare = true
 	if _, err := sched.Delegate(in); err != nil {
@@ -285,7 +251,7 @@ func TestRemoteDelegateNeverConsultsTheSwap(t *testing.T) {
 	failing := func(url string) (json.RawMessage, error) {
 		return nil, jsonError("the swap must never be consulted: " + url)
 	}
-	spawn := &delegateSpawn{result: sched.SpawnResult{Exit: 0, Stdout: "done\n"}}
+	spawn := &fakeSpawn{result: sched.SpawnResult{Exit: 0, Stdout: "done\n"}}
 	in := delegateInput(t, failing, spawn.spawn, func(in *sched.DelegateInput) {
 		in.Model = "brain"
 		in.Models = func() models.Table {
@@ -315,8 +281,8 @@ func runReason(t *testing.T, in sched.DelegateInput, id string) string {
 }
 
 func TestDelegateRecordsCanceledReason(t *testing.T) {
-	spawn := &delegateSpawn{result: sched.SpawnResult{Exit: -1}}
-	spawn.onSpawn = func(ctx context.Context, observe func([]byte)) {
+	spawn := &fakeSpawn{result: sched.SpawnResult{Exit: -1}}
+	spawn.onSpawn = func(ctx context.Context, argv []string) {
 		<-ctx.Done()
 	}
 	ctx, cancel := context.WithCancel(context.Background())
@@ -344,7 +310,7 @@ func TestDelegateRecordsCanceledReason(t *testing.T) {
 }
 
 func TestDelegateRecordsSignalReason(t *testing.T) {
-	spawn := &delegateSpawn{result: sched.SpawnResult{Exit: -1, Signal: syscall.SIGKILL}}
+	spawn := &fakeSpawn{result: sched.SpawnResult{Exit: -1, Signal: syscall.SIGKILL}}
 	in := delegateInput(t, delegateFetch(t, false, ""), spawn.spawn, nil)
 	res, err := sched.Delegate(in)
 	if err != nil {
@@ -359,7 +325,7 @@ func TestDelegateRecordsSignalReason(t *testing.T) {
 }
 
 func TestDelegateRecordsTimeoutReason(t *testing.T) {
-	timeoutSpawn := &delegateSpawn{result: sched.SpawnResult{Exit: 1, TimedOut: true}}
+	timeoutSpawn := &fakeSpawn{result: sched.SpawnResult{Exit: 1, TimedOut: true}}
 	in := delegateInput(t, delegateFetch(t, false, ""), timeoutSpawn.spawn, nil)
 	if _, err := sched.Delegate(in); err != nil {
 		t.Fatalf("delegate: %v", err)
@@ -411,7 +377,7 @@ func TestAHealthyFireIsNoError(t *testing.T) {
 }
 
 func TestADelegateFireLeavesItsJobDone(t *testing.T) {
-	spawn := &delegateSpawn{result: sched.SpawnResult{Exit: 0, Stdout: "done\n"}}
+	spawn := &fakeSpawn{result: sched.SpawnResult{Exit: 0, Stdout: "done\n"}}
 	in := delegateInput(t, delegateFetch(t, false, ""), spawn.spawn, nil)
 	good, err := sched.Delegate(in)
 	if err != nil {

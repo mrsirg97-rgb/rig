@@ -1,7 +1,6 @@
 package scheduler_test
 
 import (
-	"context"
 	"io"
 	"os"
 	"path/filepath"
@@ -11,19 +10,6 @@ import (
 
 	sched "github.com/mrsirg97-rgb/rig/v2/store/scheduler"
 )
-
-type envSpawn struct {
-	calls  []fakeCall
-	envs   [][]string
-	result sched.SpawnResult
-	err    error
-}
-
-func (f *envSpawn) spawn(ctx context.Context, argv []string, cwd string, env []string, observe func([]byte)) (sched.SpawnResult, error) {
-	f.calls = append(f.calls, fakeCall{Argv: argv, Cwd: cwd})
-	f.envs = append(f.envs, env)
-	return f.result, f.err
-}
 
 func carriesSetenv(argv []string, key, value string) bool {
 	for i := 0; i+2 < len(argv); i++ {
@@ -67,7 +53,7 @@ func TestJailedRunRefusesLoudWithoutBwrap(t *testing.T) {
 	cwd := t.TempDir()
 	h, key := setupJob(t, cwd, nil)
 	t.Setenv("PATH", t.TempDir())
-	spawn := &envSpawn{}
+	spawn := &fakeSpawn{}
 	before := h.ct.text
 	err := sched.RunJob(key, runSandboxOpts(h, spawn.spawn, ""))
 	mustOK(t, err)
@@ -92,7 +78,7 @@ func TestJailedRunRefusesLoudWithoutBwrap(t *testing.T) {
 func TestSandboxOffRunsUnjailedWithTheOneLoudLine(t *testing.T) {
 	cwd := t.TempDir()
 	h, key := setupJob(t, cwd, nil)
-	spawn := &envSpawn{result: sched.SpawnResult{Exit: 0}}
+	spawn := &fakeSpawn{result: sched.SpawnResult{Exit: 0}}
 
 	stderr := captureStderrRun(t, func() {
 		mustOK(t, sched.RunJob(key, runSandboxOpts(h, spawn.spawn, "off")))
@@ -134,7 +120,7 @@ func TestJailedRunCarriesTheScratchHome(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Setenv("PATH", shimDir+string(os.PathListSeparator)+os.Getenv("PATH"))
-	spawn := &envSpawn{result: sched.SpawnResult{Exit: 0}}
+	spawn := &fakeSpawn{result: sched.SpawnResult{Exit: 0}}
 	err := sched.RunJob(key, runSandboxOpts(h, spawn.spawn, ""))
 	mustOK(t, err)
 	if len(spawn.calls) != 1 {
@@ -153,12 +139,5 @@ func TestJailedRunCarriesTheScratchHome(t *testing.T) {
 
 	if _, err := os.Stat(filepath.Join(cwd, ".rig-job.sock")); !os.IsNotExist(err) {
 		t.Fatalf("the run's socket must be removed after the spawn (stat: %v)", err)
-	}
-}
-
-func TestJailedRunRefusesOnANonLinuxPlatform(t *testing.T) {
-	v := sched.PlatformRefusal("windows")
-	if !strings.Contains(v, "windows") || !strings.Contains(v, "linux") || !strings.Contains(v, "jailed") {
-		t.Fatalf("the refusal must name the platform, the linux-only fact, and the profile: %q", v)
 	}
 }

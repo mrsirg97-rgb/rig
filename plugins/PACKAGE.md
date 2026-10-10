@@ -14,7 +14,8 @@ nothing else: the leaf discovers and wraps; the root (cmd/rig) wires.
 
 - `Zone(home, dir, zone)`: the files of one zone (`pending`,
   `disabled`) under the home directory named (`plugins`, `train`), the
-  same `.py` filter as `List`. Since 2.13.0 the machinery is the rules
+  same `.py` filter as `List` — `List` is the home zone itself, the one
+  Zone read with no zone join. Since 2.13.0 the machinery is the rules
   of a kernel-loaded zone, not the rules of a plugin
   (SPEC_PLUGINS 2.13.0, SPEC_DECISION's training section).
 

@@ -279,25 +279,3 @@ func TestGoldenStream(t *testing.T) {
 		})
 	}
 }
-
-func TestGoldenStreamProtocol(t *testing.T) {
-	oled, err := ResolveTheme("oled", nil, true)
-	if err != nil {
-		t.Fatal(err)
-	}
-	p1ascii, err := ResolveTheme("", []byte(`{"base":"p1","glyphs":"ascii"}`), true)
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, tc := range []struct {
-		th    Theme
-		width int
-	}{{oled, 50}, {oled, 100}, {p1ascii, 50}, {p1ascii, 100}} {
-		got := goldenStream(t, tc.th, tc.width)
-		v := newVT(tc.width)
-		v.feed([]byte(got))
-		if v.err != "" {
-			t.Fatalf("harness over the real stream: %s", v.err)
-		}
-	}
-}

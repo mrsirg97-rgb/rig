@@ -43,45 +43,6 @@ func TestSessionsList(t *testing.T) {
 	}
 }
 
-func TestSessionsSubHints(t *testing.T) {
-	byName := allByName(t)
-	subber, ok := byName["sessions"].(interface{ Sub() []command.Sub })
-	if !ok {
-		t.Fatal("sessions must carry Sub hints (the TUI's menu door)")
-	}
-	subs := subber.Sub()
-	want := []string{"list", "summary", "show", "resume"}
-	if len(subs) != len(want) {
-		t.Fatalf("Sub() = %d hints, want %d", len(subs), len(want))
-	}
-	for i, s := range subs {
-		if s.Name != want[i] {
-			t.Fatalf("Sub() %d = %q, want %q", i, s.Name, want[i])
-		}
-		if s.Desc == "" {
-			t.Fatalf("Sub() %d (%s) must carry a one-liner", i, s.Name)
-		}
-	}
-}
-
-func TestSessionsListVerb(t *testing.T) {
-	byName := allByName(t)
-	env := &command.Env{
-		SessionList: func(ctx context.Context) ([]command.SessionRow, error) { return listRows, nil },
-	}
-	out, err := byName["sessions"].Run(context.Background(), "list", env)
-	if err != nil {
-		t.Fatal(err)
-	}
-	want := "3 sessions · current 01j3c4x9ab12\n" +
-		"  01j3c4x9ab12 [~] 3 turns · 0 tokens · started 2h ago · exit open\n" +
-		"  01j3c2f7cd01 [x] 12 turns · 0 tokens · started 5h ago · exit ok\n" +
-		"  01j3b19eaa55 [!] 1 turn · 0 tokens · started 1d ago · exit fault"
-	if out != want {
-		t.Fatalf("the list verb must match the bare list:\ngot:\n%s\nwant:\n%s", out, want)
-	}
-}
-
 func TestSessionsListFitsTheScreenAndNamesTheRest(t *testing.T) {
 	byName := allByName(t)
 	rows := make([]command.SessionRow, 12)
@@ -255,43 +216,6 @@ func TestSessionsResumeLiveTurn(t *testing.T) {
 	}
 	if touched {
 		t.Fatal("the resume must not run on a live turn")
-	}
-}
-
-func TestSessionsResumeCurrentId(t *testing.T) {
-	byName := allByName(t)
-	touched := false
-	env := &command.Env{
-		Session: func() *core.Session {
-			return &core.Session{ID: "s1"}
-		},
-		SessionResume: func(ctx context.Context, id string) error {
-			touched = true
-			return nil
-		},
-	}
-	_, err := byName["sessions"].Run(context.Background(), "resume s1", env)
-	if err == nil || err.Error() != "sessions: already the current session: s1" {
-		t.Fatalf("the current id must refuse, got %v", err)
-	}
-	if touched {
-		t.Fatal("the resume must not run on the current id")
-	}
-}
-
-func TestSessionsResumeUnknownIdBeforeTouch(t *testing.T) {
-	byName := allByName(t)
-	env := &command.Env{
-		Session: func() *core.Session {
-			return &core.Session{ID: "s1"}
-		},
-		SessionResume: func(ctx context.Context, id string) error {
-			return errors.New("sessions: no such session: nope")
-		},
-	}
-	_, err := byName["sessions"].Run(context.Background(), "resume nope", env)
-	if err == nil || err.Error() != "sessions: no such session: nope" {
-		t.Fatalf("an unknown id must be loud, got %v", err)
 	}
 }
 

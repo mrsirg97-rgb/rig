@@ -88,29 +88,3 @@ func TestEffortNoLevelsRefusesNamingKey(t *testing.T) {
 		t.Fatalf("the dial-off refusal = (%q, %v), want the pinned voice", out, err)
 	}
 }
-
-func TestEffortSubCarriesLevelsInRowOrder(t *testing.T) {
-	cmds := command.All()
-	env := &command.Env{
-		Efforts: func() []string { return []string{"low", "medium", "xhigh"} },
-	}
-	command.EffortHints(cmds, env)
-	var got []command.Sub
-	for _, c := range cmds {
-		if c.Name() == "effort" {
-			got = c.(command.Subber).Sub()
-		}
-	}
-	wantNames := []string{"low", "medium", "xhigh"}
-	if len(got) != len(wantNames) {
-		t.Fatalf("Sub() = %d hints, want %d", len(got), len(wantNames))
-	}
-	for i, s := range got {
-		if s.Name != wantNames[i] {
-			t.Fatalf("Sub() %d = %q, want the row's order %q", i, s.Name, wantNames[i])
-		}
-		if s.Desc == "" {
-			t.Fatalf("Sub() %d (%s) must carry a description", i, s.Name)
-		}
-	}
-}

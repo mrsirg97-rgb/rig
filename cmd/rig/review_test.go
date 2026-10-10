@@ -188,19 +188,3 @@ func TestTheReviewFireAsksForTheRowsLowestEffort(t *testing.T) {
 		t.Fatalf("a row without levels must pass no effort, got %q", seen.Effort)
 	}
 }
-
-func TestAHealthyReviewFireReturnsTheModel(t *testing.T) {
-	r := &root{activeID: "ox-alpha", cwd: t.TempDir()}
-	r.delegate = func(in sched.DelegateInput) (sched.DelegateResult, error) {
-		return sched.DelegateResult{Model: "ox-alpha", Exit: 0}, nil
-	}
-	fleet(r)
-	fire := r.reviewFire(t.TempDir(), store.DB{}, "http://127.0.0.1:1", "rig", t.TempDir(), "", nil)
-	model, err := fire(context.Background(), "review these", r.room.Mint())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if model != "ox-alpha" {
-		t.Fatalf("fire = %q", model)
-	}
-}

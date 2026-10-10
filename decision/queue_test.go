@@ -49,16 +49,6 @@ func (s *storeSink) ProposePending(ctx context.Context, p decision.Pending, a de
 	return err
 }
 
-func openDecisionStore(t *testing.T) store.DB {
-	t.Helper()
-	db, _, _, err := store.Open(filepath.Join(t.TempDir(), "decision.sqlite"), decisionstore.Statements(), decisionstore.SchemaVersion)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { db.Close() })
-	return db
-}
-
 type storeSettled struct{ db store.DB }
 
 func (s storeSettled) Settled(ctx context.Context, site string, q decision.Question, state string) (string, bool, error) {
@@ -78,12 +68,22 @@ func (brokenSettled) Settled(ctx context.Context, site string, q decision.Questi
 	return "", false, pastDeadline()
 }
 
-func waitFinals(t *testing.T, db store.DB, want int) {
+func openDecisionStore(t *testing.T) store.DB {
+	t.Helper()
+	db, _, _, err := store.Open(filepath.Join(t.TempDir(), "decision.sqlite"), decisionstore.Statements(), decisionstore.SchemaVersion)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { db.Close() })
+	return db
+}
+
+func waitRows(t *testing.T, db store.DB, status string, want int) {
 	t.Helper()
 	deadline := time.Now().Add(5 * time.Second)
 	for time.Now().Before(deadline) {
 		var n int
-		if err := db.QueryRow(`SELECT count(*) FROM decisions WHERE status = 'final'`).Scan(&n); err != nil {
+		if err := db.QueryRow(`SELECT count(*) FROM decisions WHERE status = ?`, status).Scan(&n); err != nil {
 			t.Fatal(err)
 		}
 		if n == want {
@@ -91,7 +91,7 @@ func waitFinals(t *testing.T, db store.DB, want int) {
 		}
 		time.Sleep(5 * time.Millisecond)
 	}
-	t.Fatalf("the finals never landed at %d", want)
+	t.Fatalf("the rows never settled to %d %s", want, status)
 }
 
 func settleTwinQueue(t *testing.T, db store.DB, state, answer string, approved bool, correction string) {
@@ -290,7 +290,7 @@ func TestASettledTwinSkipsTheDeciderAndLandsFinal(t *testing.T) {
 		State:    `{"command":"ls"}`,
 		Question: decision.Choice("risk", "What risk does this bash call carry?", "safe", "changes", "dangerous"),
 	})
-	waitFinals(t, db, 1)
+	waitRows(t, db, "final", 1)
 	var answer, decider string
 	var conf *float64
 	if err := db.QueryRow(`SELECT answer, confidence, decider FROM decisions WHERE status = 'final'`).Scan(&answer, &conf, &decider); err != nil {

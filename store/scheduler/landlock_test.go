@@ -1,7 +1,6 @@
 package scheduler_test
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"os"
@@ -12,19 +11,6 @@ import (
 
 	sched "github.com/mrsirg97-rgb/rig/v2/store/scheduler"
 )
-
-type landlockEnvSpawn struct {
-	calls  []fakeCall
-	env    []string
-	result sched.SpawnResult
-	err    error
-}
-
-func (f *landlockEnvSpawn) spawn(ctx context.Context, argv []string, cwd string, env []string, observe func([]byte)) (sched.SpawnResult, error) {
-	f.calls = append(f.calls, fakeCall{Argv: argv, Cwd: cwd})
-	f.env = env
-	return f.result, f.err
-}
 
 func landlockRunOpts(h *harness, s sched.Spawn, abi int, abiErr error) sched.RunOpts {
 	return sched.RunOpts{
@@ -46,7 +32,7 @@ func TestALandlockDelegateSpawnCarriesTheEffortAfterTheModel(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(rigHome, "kernel"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	spawn := &landlockEnvSpawn{result: sched.SpawnResult{Exit: 0}}
+	spawn := &fakeSpawn{result: sched.SpawnResult{Exit: 0}}
 	in := delegateInput(t, delegateFetch(t, false, ""), spawn.spawn, func(in *sched.DelegateInput) {
 		in.Sandbox = "landlock"
 		in.RigHome = rigHome
@@ -84,7 +70,7 @@ func TestLandlockRunCarriesTheNamedEnvAndTheOneSocket(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(h.home, "kernel"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	spawn := &landlockEnvSpawn{result: sched.SpawnResult{Exit: 0}}
+	spawn := &fakeSpawn{result: sched.SpawnResult{Exit: 0}}
 	mustOK(t, sched.RunJob(key, landlockRunOpts(h, spawn.spawn, 6, nil)))
 	if len(spawn.calls) != 1 {
 		t.Fatalf("spawn calls = %d, want 1 (landlock is a run, not a skip)", len(spawn.calls))
@@ -108,7 +94,7 @@ func TestLandlockRunCarriesTheNamedEnvAndTheOneSocket(t *testing.T) {
 			t.Fatalf("a scheduled job names no effort (the row's default rides), got %v", argv)
 		}
 	}
-	env := spawn.env
+	env := spawn.envs[0]
 	if len(env) != 7 {
 		t.Fatalf("the env is the named list plus the fleet door (len %d: %v)", len(env), env)
 	}
@@ -153,7 +139,7 @@ func TestLandlockRunCarriesTheNamedEnvAndTheOneSocket(t *testing.T) {
 func TestLandlockRunRefusesOnAnOldABI(t *testing.T) {
 	cwd := t.TempDir()
 	h, key := setupJob(t, cwd, nil)
-	spawn := &landlockEnvSpawn{result: sched.SpawnResult{Exit: 0}}
+	spawn := &fakeSpawn{result: sched.SpawnResult{Exit: 0}}
 	mustOK(t, sched.RunJob(key, landlockRunOpts(h, spawn.spawn, 3, nil)))
 	rec := runEvents(t, h, "")[0]
 	if rec.Args["status"] != "skip" {
@@ -173,7 +159,7 @@ func TestLandlockRunRefusesOnAnOldABI(t *testing.T) {
 func TestLandlockRunRefusesWhenTheProbeFails(t *testing.T) {
 	cwd := t.TempDir()
 	h, key := setupJob(t, cwd, nil)
-	spawn := &landlockEnvSpawn{result: sched.SpawnResult{Exit: 0}}
+	spawn := &fakeSpawn{result: sched.SpawnResult{Exit: 0}}
 	mustOK(t, sched.RunJob(key, landlockRunOpts(h, spawn.spawn, 0, errors.New("no landlock"))))
 	rec := runEvents(t, h, "")[0]
 	if rec.Args["status"] != "skip" {
@@ -194,7 +180,7 @@ func TestLandlockRunRefusesOnAMissingBind(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(h.home, "kernel"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	opts := landlockRunOpts(h, (&landlockEnvSpawn{result: sched.SpawnResult{Exit: 0}}).spawn, 6, nil)
+	opts := landlockRunOpts(h, (&fakeSpawn{result: sched.SpawnResult{Exit: 0}}).spawn, 6, nil)
 	opts.SandboxBinds = []string{"/definitely/not/a/landlock/bind"}
 	mustOK(t, sched.RunJob(key, opts))
 	rec := runEvents(t, h, "")[0]

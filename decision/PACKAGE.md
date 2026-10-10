@@ -14,8 +14,12 @@ it). Stdlib-only leaf; no imports of the stores; its one leaf import is
 ## What it includes
 
 - `decision.go`: the types (Question, Answer, Final), the two interfaces,
-  the kind/status/site vocabulary as constants, and the question
-  constructors (`Choice`, `Score`, `Binary`). A choice carries a
+  the kind/status/site vocabulary as constants, the question
+  constructors (`Choice`, `Score`, `Binary`), and the gates' two doors:
+  `Deny` records the one refusal row (the site is both the row's site
+  and its decider — the gate speaks for itself; a nil recorder is no
+  row) and `FirstRecorder` takes the middleware constructor's variadic
+  seam down to one recorder. A choice carries a
   description per label (`Description`), a score carries its ordered
   criteria list (`Criteria`).
 - `http.go`: the HTTP `Decider` (settings `decisionUrl`), speaking

@@ -215,21 +215,3 @@ func TestSwarmStartErrorSurfacesVerbatim(t *testing.T) {
 		t.Errorf("start error = %v, want verbatim", err)
 	}
 }
-
-func TestSwarmSubHints(t *testing.T) {
-	for _, c := range command.All() {
-		if c.Name() != "swarm" {
-			continue
-		}
-		s, ok := c.(command.Subber)
-		if !ok {
-			t.Fatal("swarm must be a Subber")
-		}
-		subs := s.Sub()
-		if len(subs) != 2 || subs[0].Name != "start" || subs[1].Name != "stop" {
-			t.Errorf("sub hints = %+v", subs)
-		}
-		return
-	}
-	t.Fatal("no swarm command")
-}

@@ -216,25 +216,6 @@ func TestRowResolutionRefusalIsLoudBeforeStores(t *testing.T) {
 	}
 }
 
-func requestTools(t *testing.T, body []byte) []string {
-	t.Helper()
-	var req struct {
-		Tools []struct {
-			Function struct {
-				Name string `json:"name"`
-			} `json:"function"`
-		} `json:"tools"`
-	}
-	if err := json.Unmarshal(body, &req); err != nil {
-		t.Fatalf("the request body: %v", err)
-	}
-	names := make([]string, 0, len(req.Tools))
-	for _, tool := range req.Tools {
-		names = append(names, tool.Function.Name)
-	}
-	return names
-}
-
 func TestADelegatedWorkerOffersOnlyItsAllowList(t *testing.T) {
 	root, err := filepath.Abs("../..")
 	if err != nil {
@@ -258,7 +239,7 @@ func TestADelegatedWorkerOffersOnlyItsAllowList(t *testing.T) {
 		if outp, err := cmd.CombinedOutput(); err != nil {
 			t.Fatalf("the worker run must succeed: %v\n%s", err, outp)
 		}
-		if got := requestTools(t, s.last()); !reflect.DeepEqual(got, tc.want) {
+		if got := toolNames(s.last()); !reflect.DeepEqual(got, tc.want) {
 			t.Fatalf("allow %q: the worker's menu = %v, want %v", tc.allow, got, tc.want)
 		}
 	}
@@ -279,7 +260,7 @@ func TestAHeadlessRunWithoutTheMarkerKeepsTheMenu(t *testing.T) {
 	if outp, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("the oneshot run must succeed: %v\n%s", err, outp)
 	}
-	if got := requestTools(t, s.last()); len(got) < 10 {
+	if got := toolNames(s.last()); len(got) < 10 {
 		t.Fatalf("a headless run without the marker keeps the full menu, got %v", got)
 	}
 }

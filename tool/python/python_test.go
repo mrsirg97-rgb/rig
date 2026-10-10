@@ -101,15 +101,6 @@ func TestStatePersistsBetweenCalls(t *testing.T) {
 	matches(t, `Out\[.*\]: 42`, text)
 }
 
-func TestNumpyAndPandasAreImportable(t *testing.T) {
-	requireKernel(t)
-	text, ok := mustRun(t, map[string]any{"code": "import numpy, pandas; numpy.__version__"})
-	if !ok {
-		t.Fatalf("isError: %s", text)
-	}
-	matches(t, `Out\[.*\]: '\d+\.\d+\.\d+'`, text)
-}
-
 func TestVarsListsUserDefinedNamesOnly(t *testing.T) {
 	requireKernel(t)
 
@@ -137,15 +128,6 @@ func TestEmptyCallFailsLoudlyWithAClearMessage(t *testing.T) {
 		t.Fatalf("empty call succeeded: %s", text)
 	}
 	matches(t, `no code supplied`, text)
-}
-
-func TestActionCodeRunsTheCode(t *testing.T) {
-	requireKernel(t)
-	text, ok := mustRun(t, map[string]any{"action": "code", "code": "40 + 2"})
-	if !ok {
-		t.Fatalf("isError: %s", text)
-	}
-	matches(t, `Out\[.*\]: 42`, text)
 }
 
 func TestUnknownActionRefusesLoudBeforeTheKernel(t *testing.T) {

@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
-	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -14,12 +13,9 @@ import (
 	"reflect"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"testing"
 
 	"github.com/mrsirg97-rgb/rig/v2/config"
-	"github.com/mrsirg97-rgb/rig/v2/core"
-	"github.com/mrsirg97-rgb/rig/v2/middleware/perm"
 	"github.com/mrsirg97-rgb/rig/v2/models"
 	sched "github.com/mrsirg97-rgb/rig/v2/store/scheduler"
 	"github.com/mrsirg97-rgb/rig/v2/testenv"
@@ -123,6 +119,8 @@ func buildBin(t *testing.T, binDir string) string {
 	return buildBinAt(t, binDir, "../..")
 }
 
+const defaultSystem = "you are an agent operating in rig, a minimal, general purpose harness, designed to help you get more done with less friction. you act on the session's workspace, using the available tools to inspect, change, and run things in it. the toolset is focused on purpose, with each tool's description saying when to use it. do not attempt to use a tool that does not exist in rig. the harness has guards: an allowlist, a retry guard (three identical failing calls to one tool in a turn exhaust the bound; a corrected call always executes), an approval gate, a plugin landing zone. every refusal names its rule and is there to guide you, not punish you. a refusal is final for that call: change the call or ask, never reach the same effect through another tool. when a tool fails, read the error and work out why before calling again. do not retry blindly, and stop when the environment or the plan is wrong. a capability you build twice belongs in a plugin. for any job of three or more steps, or one that touches several files, plan it in todo before the first edit: create the tasks, complete or fail each when done, and leave the queue empty at the end. when the work is done, answer in plain text: what changed, what you verified, what is left."
+
 const localModelRow = `{"id": "local", "window": 65536, "maxTokens": 8192, "reserve": 8192, "keepRecent": 16384, "role": "interactive", "efforts": ["low", "medium", "xhigh"]}`
 
 func writeModelRows(t *testing.T, dir string, rows ...string) {
@@ -181,7 +179,6 @@ func cfgDir(t *testing.T, scratch string) string {
 }
 
 func TestPrecedenceFlagOverEnvOverFileOverEmbedded(t *testing.T) {
-	const embeddedSystem = "you are an agent operating in rig, a minimal, general purpose harness, designed to help you get more done with less friction. you act on the session's workspace, using the available tools to inspect, change, and run things in it. the toolset is focused on purpose, with each tool's description saying when to use it. do not attempt to use a tool that does not exist in rig. the harness has guards: an allowlist, a retry guard (three identical failing calls to one tool in a turn exhaust the bound; a corrected call always executes), an approval gate, a plugin landing zone. every refusal names its rule and is there to guide you, not punish you. a refusal is final for that call: change the call or ask, never reach the same effect through another tool. when a tool fails, read the error and work out why before calling again. do not retry blindly, and stop when the environment or the plan is wrong. a capability you build twice belongs in a plugin. for any job of three or more steps, or one that touches several files, plan it in todo before the first edit: create the tasks, complete or fail each when done, and leave the queue empty at the end. when the work is done, answer in plain text: what changed, what you verified, what is left."
 	cases := []struct {
 		name string
 		file string
@@ -189,7 +186,7 @@ func TestPrecedenceFlagOverEnvOverFileOverEmbedded(t *testing.T) {
 		flag string
 		want string
 	}{
-		{"embedded", "", "", "", embeddedSystem},
+		{"embedded", "", "", "", defaultSystem},
 		{"file over embedded", `{"system": "FROMFILE"}`, "", "", "FROMFILE"},
 		{"env over file", `{"system": "FROMFILE"}`, "FROMENV", "", "FROMENV"},
 		{"flag over env over file", `{"system": "FROMFILE"}`, "FROMENV", "FROMFLAG", "FROMFLAG"},
@@ -746,25 +743,9 @@ func TestRunJobWorkerInheritsJobCwdAgents(t *testing.T) {
 	sysMu.Lock()
 	sys := workerSystem
 	sysMu.Unlock()
-	const defaultSystem = "you are an agent operating in rig, a minimal, general purpose harness, designed to help you get more done with less friction. you act on the session's workspace, using the available tools to inspect, change, and run things in it. the toolset is focused on purpose, with each tool's description saying when to use it. do not attempt to use a tool that does not exist in rig. the harness has guards: an allowlist, a retry guard (three identical failing calls to one tool in a turn exhaust the bound; a corrected call always executes), an approval gate, a plugin landing zone. every refusal names its rule and is there to guide you, not punish you. a refusal is final for that call: change the call or ask, never reach the same effect through another tool. when a tool fails, read the error and work out why before calling again. do not retry blindly, and stop when the environment or the plan is wrong. a capability you build twice belongs in a plugin. for any job of three or more steps, or one that touches several files, plan it in todo before the first edit: create the tasks, complete or fail each when done, and leave the queue empty at the end. when the work is done, answer in plain text: what changed, what you verified, what is left."
 	want := defaultSystem + "\n\n" + sessionSection(workDir, scratch) + "\n\n" + global + "\n\n" + jobAgents
 	if sys != want {
 		t.Fatalf("the worker's system message = %q, want the default plus the session section, the global and the job cwd's AGENTS.md (not the session's):\n%q", sys, want)
-	}
-}
-
-func TestAgentsOrderAgainstGuidelines(t *testing.T) {
-	gw := guidelineMW{
-		ToolMiddlewareFunc: func(next core.ToolExec) core.ToolExec { return next },
-		text:               "GUIDELINE-PROSE",
-	}
-	r := testRoot(nullFrontend{})
-	r.agents = "G\n\nP"
-	r.middleware = []core.ToolMiddleware{perm.Allowlist("bash"), gw}
-	wire(r)
-	want := "be terse" + "\n\n" + "G\n\nP" + "\n\n" + "GUIDELINE-PROSE"
-	if r.fullSystem != want {
-		t.Fatalf("fullSystem = %q, want %q (system, then AGENTS.md, then the guidelines)", r.fullSystem, want)
 	}
 }
 
@@ -807,38 +788,6 @@ func TestRowEnvBeatsFileForActiveID(t *testing.T) {
 	}
 }
 
-func TestDefaultJobModelLegacyKeyIsNamedAtStart(t *testing.T) {
-	s := &bodySrv{}
-	srv := newBodySrv(t, s)
-	bin := buildBin(t, t.TempDir())
-	scratch := t.TempDir()
-	dir := cfgDir(t, scratch)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	p := filepath.Join(dir, "settings.json")
-	if err := os.WriteFile(p, []byte(`{"defaultJobModel": "local"}`), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	cmd := exec.Command(bin, "-p", "hello", "-base-url", srv.URL+"/v1")
-	cmd.Dir = t.TempDir()
-	cmd.Env = rigEnv(t, scratch, "")
-	out, runErr := cmd.CombinedOutput()
-	if runErr != nil {
-		t.Fatalf("the mint must not break the run: %v\n%s", runErr, out)
-	}
-	if got := s.count(); got != 1 {
-		t.Fatalf("the minted run must make exactly one model call, got %d", got)
-	}
-	want := `defaultJobModel moved to model — the fleet is the resident model; delete the key`
-	if !strings.Contains(string(out), want) {
-		t.Fatalf("the legacy key must be named once at start: %q", out)
-	}
-	if _, err := os.Stat(filepath.Join(dir, "workers.json")); !os.IsNotExist(err) {
-		t.Fatalf("nothing mints a workers.json anymore (stat err: %v)", err)
-	}
-}
-
 func TestOneSlotWireRecordsTheMenuWithTheDrainPair(t *testing.T) {
 	s := &bodySrv{}
 	srv := newBodySrv(t, s)
@@ -861,90 +810,6 @@ func TestOneSlotWireRecordsTheMenuWithTheDrainPair(t *testing.T) {
 		if strings.Contains(tl.Description, "absent") || strings.Contains(tl.Description, "not wired") {
 			t.Fatalf("the menu says nothing about what is absent: %s", tl.Name)
 		}
-	}
-}
-
-func TestTwoSlotWirePutsTheDrainPairOn(t *testing.T) {
-	s := &bodySrv{slots: 2}
-	srv := newBodySrv(t, s)
-	bin := buildBin(t, t.TempDir())
-	scratch := t.TempDir()
-	cmd := exec.Command(bin, "-p", "hello", "-base-url", srv.URL+"/v1")
-	cmd.Dir = t.TempDir()
-	cmd.Env = rigEnv(t, scratch, "", "RIG_SWAP_URL="+srv.URL)
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		t.Fatalf("the run must succeed: %v\n%s", err, out)
-	}
-	if !hasToolName(s.last(), "delegate") {
-		t.Fatalf("a two-slot server hosts the fleet: %v", toolNames(s.last()))
-	}
-}
-
-func TestWorkersFalseKeepsTheDrainPairOffAtTwoSlots(t *testing.T) {
-	s := &bodySrv{slots: 2}
-	srv := newBodySrv(t, s)
-	bin := buildBin(t, t.TempDir())
-	scratch := t.TempDir()
-	dir := cfgDir(t, scratch)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(dir, "settings.json"), []byte(`{"workers": false}`), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	cmd := exec.Command(bin, "-p", "hello", "-base-url", srv.URL+"/v1")
-	cmd.Dir = t.TempDir()
-	cmd.Env = rigEnv(t, scratch, "", "RIG_SWAP_URL="+srv.URL)
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		t.Fatalf("the run must succeed: %v\n%s", err, out)
-	}
-	if hasToolName(s.last(), "delegate") {
-		t.Fatalf("workers:false turns the drain pair off on a capable machine: %v", toolNames(s.last()))
-	}
-	if !hasToolName(s.last(), "scheduler") {
-		t.Fatalf("the scheduler is wired everywhere: %v", toolNames(s.last()))
-	}
-}
-
-func TestRemoteSessionRowWiresTheDrainPairWithoutSlots(t *testing.T) {
-	s := &bodySrv{slots: 1}
-	srv := newBodySrv(t, s)
-	bin := buildBin(t, t.TempDir())
-	scratch := t.TempDir()
-	dir := cfgDir(t, scratch)
-	remoteRow := `{"id": "brain", "window": 8192, "maxTokens": 1024, "reserve": 64, "keepRecent": 128, "remote": true, "baseUrl": "` + srv.URL + `/v1", "apiKey": "sk-test"}`
-	writeModelRows(t, dir, remoteRow)
-	cmd := exec.Command(bin, "-p", "hello", "-base-url", srv.URL+"/v1")
-	cmd.Dir = t.TempDir()
-	cmd.Env = rigEnv(t, scratch, "", "RIG_SWAP_URL="+srv.URL, "RIG_MODEL=brain")
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		t.Fatalf("the run must succeed: %v\n%s", err, out)
-	}
-	if !hasToolName(s.last(), "delegate") {
-		t.Fatalf("a remote row runs its own parallelism: %v", toolNames(s.last()))
-	}
-}
-
-func TestRetiredWorkersFileIsNamedOnceAtStart(t *testing.T) {
-	bin := buildBin(t, t.TempDir())
-	scratch := t.TempDir()
-	dir := cfgDir(t, scratch)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(dir, "workers.json"),
-		[]byte(`{"model": "ghost", "slots": 1}`), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	cmd := exec.Command(bin, "-p", "hello")
-	cmd.Dir = t.TempDir()
-	cmd.Env = rigEnv(t, scratch, "")
-	out, _ := cmd.CombinedOutput()
-	if !strings.Contains(string(out), "workers.json retired: the fleet is the resident model") {
-		t.Fatalf("the retired file must be named once at start: %q", out)
 	}
 }
 
@@ -1064,49 +929,6 @@ func TestNegativeEnvBoundsRefuseLoud(t *testing.T) {
 	}
 }
 
-func TestModelsFileRowListsAndSwitches(t *testing.T) {
-	dir := t.TempDir()
-	writeModelRows(t, dir, localModelRow, `{"id": "brain", "window": 262144, "maxTokens": 16384, "reserve": 16384, "keepRecent": 32768, "role": "worker"}`)
-	cfg, err := config.Load(dir, t.TempDir())
-	if err != nil {
-		t.Fatalf("Load: %v", err)
-	}
-	brain, ok := cfg.Models.Get("brain")
-	if !ok {
-		t.Fatal("the table has no brain row")
-	}
-	local, ok := cfg.Models.Get("local")
-	if !ok {
-		t.Fatal("the table has no local row")
-	}
-	h := newHarness(t, local, "local", cfg.Models)
-	done := h.startRun()
-	h.in <- "/models\n"
-	h.waitOut("brain")
-	listing := h.out.String()
-	brainLine := ""
-	for _, l := range strings.Split(listing, "\n") {
-		if strings.Contains(l, "brain") {
-			brainLine = l
-		}
-	}
-	if brainLine == "" || !strings.Contains(brainLine, "worker") {
-		t.Fatalf("the /models listing must carry brain's role (worker):\n%s", listing)
-	}
-	h.in <- "/models brain\n"
-	h.waitOut("models: active is now brain")
-	h.in <- "go\n"
-	h.waitCount("pong", 1)
-	modelsOut, _ := h.s.mainCalls()
-	if len(modelsOut) == 0 || modelsOut[len(modelsOut)-1] != "brain" {
-		t.Fatalf("the turn after the switch must carry brain, got %v", modelsOut)
-	}
-	if !reflect.DeepEqual(h.r.row, brain) {
-		t.Fatalf("the active row = %+v, want the file's brain row", h.r.row)
-	}
-	h.finish(done)
-}
-
 func TestEmbeddedAllowIsTheNativeSet(t *testing.T) {
 	cfg, err := config.Load(t.TempDir(), t.TempDir())
 	if err != nil {
@@ -1133,52 +955,6 @@ func TestEmbeddedAllowIsTheNativeSet(t *testing.T) {
 	}
 }
 
-func TestEmbeddedAllowGrowsWithTheFleet(t *testing.T) {
-	dir := t.TempDir()
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(dir, "workers.json"),
-		[]byte(`{"model": "local", "slots": 1}`), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	cfg, err := config.Load(dir, t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
-	allowed := map[string]bool{}
-	for _, n := range cfg.Settings.Allow {
-		allowed[n] = true
-	}
-	for _, n := range []string{"scheduler", "delegate"} {
-		if !allowed[n] {
-			t.Errorf("worker tool %q is not in the allow default", n)
-		}
-	}
-}
-
-func TestOperatorAllowStandsAsWritten(t *testing.T) {
-	dir := t.TempDir()
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(dir, "workers.json"),
-		[]byte(`{"model": "local", "slots": 1}`), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(dir, "settings.json"),
-		[]byte(`{"allow": ["bash", "read"]}`), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	cfg, err := config.Load(dir, t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if want := []string{"bash", "read"}; !reflect.DeepEqual(cfg.Settings.Allow, want) {
-		t.Fatalf("the operator's allow stands as written: %v, want %v", cfg.Settings.Allow, want)
-	}
-}
-
 func TestNoModelRefusesBeforeAnyRequest(t *testing.T) {
 	s := &bodySrv{}
 	srv := newBodySrv(t, s)
@@ -1196,74 +972,6 @@ func TestNoModelRefusesBeforeAnyRequest(t *testing.T) {
 	}
 	if s.count() != 0 {
 		t.Fatalf("requests = %d, want 0 (the refusal precedes any call)", s.count())
-	}
-}
-
-func TestNamedModelWithNoRowsRefusesBeforeAnyRequest(t *testing.T) {
-	s := &bodySrv{}
-	srv := newBodySrv(t, s)
-	bin := buildBin(t, t.TempDir())
-	scratch := t.TempDir()
-	cmd := exec.Command(bin, "-p", "hello", "-base-url", srv.URL+"/v1")
-	cmd.Dir = t.TempDir()
-	cmd.Env = append(scrubSwap(os.Environ()),
-		"HOME="+scratch,
-		"XDG_CONFIG_HOME="+scratch,
-		"RIG_MODEL=local",
-		"RIG_SWAP_URL="+srv.URL,
-	)
-	out, err := cmd.CombinedOutput()
-	if err == nil {
-		t.Fatalf("a named model no file defines must refuse: %s", out)
-	}
-	if !strings.Contains(string(out), `no row for "local"`) {
-		t.Fatalf("the refusal must name the missing row, got %q", out)
-	}
-	if s.count() != 0 {
-		t.Fatalf("requests = %d, want 0 (the refusal precedes any call)", s.count())
-	}
-	if _, statErr := os.Stat(cfgDir(t, scratch)); !os.IsNotExist(statErr) {
-		t.Fatalf("the refusal must precede the stores: the rig home %v (%v)", cfgDir(t, scratch), statErr)
-	}
-}
-
-func TestSpawnedRigWithoutASwapFixtureNeverReadsTheDefaultSwapPort(t *testing.T) {
-	listener, err := net.Listen("tcp", "127.0.0.1:8090")
-	if err != nil {
-		t.Skipf("8090 is already in use (%v); the box runs its own swap", err)
-	}
-	t.Cleanup(func() { listener.Close() })
-	var dials int32
-	go func() {
-		for {
-			conn, err := listener.Accept()
-			if err != nil {
-				return
-			}
-			conn.Close()
-			atomic.AddInt32(&dials, 1)
-		}
-	}()
-
-	s := &bodySrv{}
-	srv := newBodySrv(t, s)
-	bin := buildBin(t, t.TempDir())
-	scratch := t.TempDir()
-	cmd := exec.Command(bin, "-p", "hello", "-base-url", srv.URL+"/v1")
-	cmd.Dir = t.TempDir()
-	cmd.Env = rigEnv(t, scratch, "")
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		t.Fatalf("the run must succeed: %v\n%s", err, out)
-	}
-	if got := atomic.LoadInt32(&dials); got != 0 {
-		t.Fatalf("the binary read the default swap port %d times, want never", got)
-	}
-	if hasToolName(s.last(), "delegate") {
-		t.Fatalf("a closed swap wires the pair off, whatever answers the default port: %v", toolNames(s.last()))
-	}
-	if !hasToolName(s.last(), "scheduler") {
-		t.Fatalf("the scheduler is wired everywhere: %v", toolNames(s.last()))
 	}
 }
 

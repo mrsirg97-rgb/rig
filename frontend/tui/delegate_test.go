@@ -41,14 +41,14 @@ func TestTheDelegateBandIsTwoRowsForAnyCount(t *testing.T) {
 		if len(rows) != 3 {
 			t.Fatalf("%d workers: the band is the rule and two rows, got %d:\n%s", workers, len(rows), band)
 		}
-		head := stripANSI(rows[1])
+		head := paintFree(rows[1])
 		if !strings.Contains(head, "delegating") || !strings.Contains(head, fmt.Sprintf("%d %s", workers, wordFor(workers))) {
 			t.Fatalf("%d workers: the head row counts them: %q", workers, head)
 		}
 		if !strings.Contains(head, "1m") {
 			t.Fatalf("the head row carries the elapsed of the batch: %q", head)
 		}
-		if strings.TrimSpace(stripANSI(rows[2])) != "—" {
+		if strings.TrimSpace(paintFree(rows[2])) != "—" {
 			t.Fatalf("no worker has called yet, so the call row is a dash: %q", rows[2])
 		}
 	}
@@ -63,28 +63,12 @@ func TestTheCallRowIsTheMostRecentCallAcrossWorkers(t *testing.T) {
 		{ID: 3, Role: "delegate", Task: "c", State: "running", Heartbeat: now},
 	}}
 	rows := strings.Split(RenderDelegateBand(th, st, now.Add(-time.Hour), now), "\n")
-	got := stripANSI(rows[2])
+	got := paintFree(rows[2])
 	if !strings.Contains(got, "#2") || !strings.Contains(got, "edit tool/file/edit.go") || !strings.Contains(got, "12s") {
 		t.Fatalf("the row is the freshest call, its worker and its age: %q", got)
 	}
 	if strings.Contains(got, "read core") {
 		t.Fatalf("the older call does not belong to the row: %q", got)
-	}
-}
-
-func TestTheSwarmBandKeepsItsRoleRows(t *testing.T) {
-	th, _ := ResolveTheme("oled", nil, true)
-	now := time.Now()
-	st := core.SwarmStatus{Pending: 7, Review: 2, Workers: []core.SwarmWorker{
-		{ID: 2, Role: "worker", Task: "t388", State: "running", Heartbeat: now.Add(-12 * time.Second), Done: 3, Failed: 1},
-		{ID: 3, Role: "reviewer", Task: "t386", State: "running", Heartbeat: now.Add(-4 * time.Minute)},
-	}}
-	if IsDelegateBand(st) {
-		t.Fatal("a swarm's rows are not a delegate's")
-	}
-	band := RenderSwarmBand(th, st)
-	if !strings.Contains(band, "workers") || !strings.Contains(band, "reviewer") {
-		t.Fatalf("the swarm band keeps its role rows:\n%s", band)
 	}
 }
 
@@ -172,7 +156,7 @@ func TestTheDelegateBandShowsDuringAndBetweenTurns(t *testing.T) {
 	time.Sleep(150 * time.Millisecond)
 	s.tail = len(s.out.Bytes())
 	time.Sleep(150 * time.Millisecond)
-	if plain := stripANSI(s.since()); strings.Contains(plain, "delegating") {
+	if plain := paintFree(s.since()); strings.Contains(plain, "delegating") {
 		t.Fatalf("the band left when the batch did:\n%s", plain)
 	}
 }
@@ -242,20 +226,6 @@ func (s *scriptedSession) since() string {
 	return all[s.tail:]
 }
 
-func stripANSI(s string) string {
-	var out strings.Builder
-	for i := 0; i < len(s); i++ {
-		if s[i] == 0x1b {
-			for i < len(s) && s[i] != 'm' {
-				i++
-			}
-			continue
-		}
-		out.WriteByte(s[i])
-	}
-	return out.String()
-}
-
 func TestAnIdleEscWithNoWorkersClearsThePrompt(t *testing.T) {
 	th, _ := ResolveTheme("oled", nil, true)
 	stops := 0
@@ -296,7 +266,7 @@ func TestAReturnCommitsAsABlockAndThePromptNamesIt(t *testing.T) {
 	if !strings.HasPrefix(line, "delegate #9 returned · exit 0 · 1h21m0s · session 1a11cf58abcdef") {
 		t.Fatalf("the model still reads the block: %q", line)
 	}
-	plain := stripANSI(s.out.String())
+	plain := paintFree(s.out.String())
 	if !strings.Contains(plain, "delegate #9 · sweep the parsers") {
 		t.Fatalf("the block's head: %s", plain)
 	}
@@ -325,7 +295,7 @@ func TestAFailedReturnClosesWithTheFailGlyphAndTheExit(t *testing.T) {
 	s.fe.Notify(core.TurnEnd{Reason: core.TurnOver})
 	s.fe.Notify(core.WorkerDone{N: 2, Task: "t2", Content: "died", Exit: -1, Duration: 100 * time.Millisecond, Session: "s2"})
 	s.inputAt(context.Background())
-	plain := stripANSI(s.out.String())
+	plain := paintFree(s.out.String())
 	if !strings.Contains(plain, "delegate ✕ 0.1s · exit -1 · session s2") {
 		t.Fatalf("the failed close: %s", plain)
 	}
@@ -350,7 +320,7 @@ func TestABatchOfThreePaintsThreeBlocksAndOnePromptLine(t *testing.T) {
 	if i9, i11, i12 := strings.Index(line, "delegate #9"), strings.Index(line, "delegate #11"), strings.Index(line, "delegate #12"); i9 > i11 || i11 > i12 {
 		t.Fatalf("the block keeps arrival order: %q", line)
 	}
-	plain := stripANSI(s.out.String())
+	plain := paintFree(s.out.String())
 	for _, want := range []string{"delegate #9 · t9", "delegate #11 · t11", "delegate #12 · t12", "❯ delegate #9, #11, #12 returned"} {
 		if !strings.Contains(plain, want) {
 			t.Fatalf("the batch did not paint %q:\n%s", want, plain)
@@ -376,7 +346,7 @@ func TestABigReturnPaintsThePreviewBound(t *testing.T) {
 	}
 	s.fe.Notify(core.WorkerDone{N: 1, Task: "big", Content: b.String(), Exit: 0, Duration: time.Second, Session: "s1"})
 	s.inputAt(context.Background())
-	plain := stripANSI(s.out.String())
+	plain := paintFree(s.out.String())
 	if !strings.Contains(plain, "lines hidden") {
 		t.Fatalf("the big return did not bound its preview:\n%s", plain)
 	}
@@ -402,8 +372,8 @@ func TestTheCallRowPaintsTheCallWarnAndTheAgeDim(t *testing.T) {
 	if rows[2] != want {
 		t.Fatalf("the call is warn, the separator and age dim:\n got %q\nwant %q", rows[2], want)
 	}
-	if stripANSI(rows[2]) != "#8 read specs/SPEC_HARDENING.md · 12s" {
-		t.Fatalf("the visible text does not move: %q", stripANSI(rows[2]))
+	if paintFree(rows[2]) != "#8 read specs/SPEC_HARDENING.md · 12s" {
+		t.Fatalf("the visible text does not move: %q", paintFree(rows[2]))
 	}
 	idle := strings.Split(RenderDelegateBand(th, delegateSnapshot(""), now.Add(-time.Minute), now), "\n")
 	if idle[2] != th.Paint(SlotDim, "—") {

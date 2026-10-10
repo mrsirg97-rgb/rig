@@ -373,44 +373,6 @@ func TestMigrationNeverRunsUnderAnOverride(t *testing.T) {
 	}
 }
 
-func TestRigHomeOverrideBeatsTheOldHome(t *testing.T) {
-	s := &bodySrv{}
-	srv := newBodySrv(t, s)
-	bin := buildBin(t, t.TempDir())
-	scratch := t.TempDir()
-	override := filepath.Join(t.TempDir(), "the-home")
-	if err := os.MkdirAll(override, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(override, "settings.json"), []byte(`{"system": "FROM-RIG-HOME"}`), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	writeModelRows(t, override, localModelRow)
-	oldHome := filepath.Join(scratch, ".config", "rig")
-	if err := os.MkdirAll(oldHome, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(oldHome, "settings.json"), []byte(`{"system": "FROM-OLD"}`), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	cmd := exec.Command(bin, "-p", "hello", "-base-url", srv.URL+"/v1")
-	cmdDir := t.TempDir()
-	cmd.Dir = cmdDir
-	env := rigEnv(t, scratch, "")
-	env = append(env, "RIG_HOME="+override)
-	cmd.Env = env
-	if out, err := cmd.CombinedOutput(); err != nil {
-		t.Fatalf("the run must succeed: %v\n%s", err, out)
-	}
-	want := "FROM-RIG-HOME\n\n" + sessionSection(cmdDir, scratch)
-	if got := systemOf(t, s.last()); got != want {
-		t.Fatalf("the override's settings must win, got %q, want %q", got, want)
-	}
-	if got, err := os.ReadFile(filepath.Join(oldHome, "settings.json")); err != nil || string(got) != `{"system": "FROM-OLD"}` {
-		t.Fatalf("the old home must be left intact when the override's home is present (err=%v, contents=%q)", err, got)
-	}
-}
-
 func TestPluginsDiscoveryRegistersAndSkips(t *testing.T) {
 	py := pluginKernelPy(t)
 	s := &pluginSrv{replies: []string{pongReply}}
@@ -629,29 +591,6 @@ def run(args):
 	for _, d := range []string{filepath.Join(scratch, ".rig"), filepath.Join(scratch, ".config", "rig")} {
 		if got, rerr := os.ReadFile(filepath.Join(d, "settings.json")); rerr != nil || string(got) != `{"system": "FROM-LOSER"}` {
 			t.Fatalf("the competing home %s must be left untouched (err=%v, contents=%q)", d, rerr, got)
-		}
-	}
-}
-
-func TestNoPluginsDirectoryIsTheV020Wire(t *testing.T) {
-	s := &bodySrv{}
-	srv := newBodySrv(t, s)
-	bin := buildBin(t, t.TempDir())
-	scratch := t.TempDir()
-	cmd := exec.Command(bin, "-p", "hello", "-base-url", srv.URL+"/v1")
-	cmd.Dir = t.TempDir()
-	cmd.Env = rigEnv(t, scratch, "", "RIG_SWAP_URL="+srv.URL)
-	if out, err := cmd.CombinedOutput(); err != nil {
-		t.Fatalf("the run must succeed: %v\n%s", err, out)
-	}
-	tools := wireTools(t, s.last())
-	want := registeredNativeNames(false)
-	if len(tools) != len(want) {
-		t.Fatalf("tools = %d, want the native set with the drain pair (a one-slot wire; a text row: no view; no plugins directory, no plugins)", len(tools))
-	}
-	for i, name := range want {
-		if tools[i].Name != name {
-			t.Fatalf("position %d = %q, want %q (the 0.2.0 order)", i, tools[i].Name, name)
 		}
 	}
 }

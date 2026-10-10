@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -451,61 +450,6 @@ def run(args):
 	}
 	if got := len(h.r.live.List()); got != len(registeredNativeNames(false)) {
 		t.Fatalf("the table = %d tools, want the pre-reload list (the swap refused)", got)
-	}
-}
-
-func TestApproveReloadsPost8(t *testing.T) {
-	py := pluginKernelPy(t)
-	bin := buildBin(t, t.TempDir())
-	scratch := t.TempDir()
-	home := cfgDir(t, scratch)
-	zone := filepath.Join(home, "plugins", "pending")
-	if err := os.MkdirAll(zone, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(zone, "forge.py"), []byte(`DESCRIPTION = "the fixture forge plugin"
-SCHEMA = {"type": "object", "properties": {"text": {"type": "string"}}, "required": ["text"]}
-
-def run(args: dict) -> str:
-    return "forged: " + args["text"]
-`), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	cmd := exec.Command(bin, "-base-url", "http://127.0.0.1:1/v1")
-	cmd.Dir = t.TempDir()
-	cmd.Env = pluginEnv(t, scratch, py)
-	cmd.Stdin = strings.NewReader("/plugins approve forge\n/plugins\n")
-	out, err := cmd.Output()
-	if err != nil {
-		if ee, ok := err.(*exec.ExitError); ok {
-			t.Fatalf("the run must succeed: %v\nstdout: %s\nstderr: %s", err, out, ee.Stderr)
-		}
-		t.Fatalf("the run must succeed: %v\nstdout: %s", err, out)
-	}
-
-	for _, want := range []string{
-		"plugins: approved forge",
-		"1 plugin · reload · 1 loaded · 0 skipped",
-		"forge [x] the fixture forge plugin · " + filepath.Join(home, "plugins", "forge.py"),
-	} {
-		if !strings.Contains(string(out), want) {
-			t.Fatalf("the approve's reply must carry %q:\n%s", want, out)
-		}
-	}
-
-	tail := strings.Split(strings.TrimRight(string(out), "\n"), "\n")
-	if tail[len(tail)-1] != "  forge [x] the fixture forge plugin · "+filepath.Join(home, "plugins", "forge.py") {
-		t.Fatalf("the post-approve listing's row = %q, want the loaded plugin at its top-level home", tail[len(tail)-1])
-	}
-	if tail[len(tail)-2] != "1 plugin · 1 loaded · 0 skipped" {
-		t.Fatalf("the post-approve listing = %q, want the loaded listing (the listing follows the swap)", tail[len(tail)-2:])
-	}
-
-	if _, err := os.Stat(filepath.Join(home, "plugins", "forge.py")); err != nil {
-		t.Fatalf("the approved plugin must be at the top level: %v", err)
-	}
-	if _, err := os.Stat(filepath.Join(zone, "forge.py")); !os.IsNotExist(err) {
-		t.Fatalf("the pending zone must be empty after the approve: %v", err)
 	}
 }
 

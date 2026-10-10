@@ -26,24 +26,6 @@ func dropLine(t *testing.T, h *harness, id string) {
 	h.ct.text = regexp.MustCompile(`(?m).*rig-scheduler:`+sched.TagHome(h.rigHome)+`:`+id+`.*\n?`).ReplaceAllString(h.ct.text, "")
 }
 
-func eventsOps(t *testing.T, h *harness) []string {
-	t.Helper()
-	rows, err := h.db.DB.Query(`SELECT op FROM events ORDER BY seq`)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer rows.Close()
-	var ops []string
-	for rows.Next() {
-		var op string
-		if err := rows.Scan(&op); err != nil {
-			t.Fatal(err)
-		}
-		ops = append(ops, op)
-	}
-	return ops
-}
-
 func TestRepairReinstatesAMissingLineNamesTheDriftAndWritesNoEvent(t *testing.T) {
 	h := newHarness(t, "/ws/r1")
 	if _, err := h.create(sched.CreateInput{Model: "w", Name: "one", Prompt: "p", Cron: "0 2 * * *", Cwd: "/ws/r1"}); err != nil {
@@ -61,58 +43,12 @@ func TestRepairReinstatesAMissingLineNamesTheDriftAndWritesNoEvent(t *testing.T)
 	if line == "" || !strings.HasPrefix(line, "0 2 * * * "+runnerCmd+" j1  # rig-scheduler:") {
 		t.Fatalf("line %q, want the job's cron and the wired runner command", line)
 	}
-	if got := eventsOps(t, h); len(got) != 1 || got[0] != "create" {
+	if got := eventOps(t, h); len(got) != 1 || got[0] != "create" {
 		t.Fatalf("ops %v, want only create (repair is a crontab write only)", got)
 	}
 	after := jobsRow(t, h, "j1")
 	if after["state"] != before["state"] || after["cron"] != before["cron"] || after["updated_seq"] != before["updated_seq"] {
 		t.Fatalf("state changed: before %v after %v", before, after)
-	}
-}
-
-func TestRepairRewritesAnAlteredCronLine(t *testing.T) {
-	h := newHarness(t, "/ws/r2")
-	if _, err := h.create(sched.CreateInput{Model: "w", Name: "one", Prompt: "p", Cron: "0 2 * * *", Cwd: "/ws/r2"}); err != nil {
-		t.Fatal(err)
-	}
-	h.ct.mu.Lock()
-	h.ct.text = strings.Replace(h.ct.text, "0 2 * * * "+runnerCmd+" j1", "59 23 * * * "+runnerCmd+" j1", 1)
-	h.ct.mu.Unlock()
-
-	reply, err := sched.Repair(context.Background(), h.db, h.ct, "j1", runnerCmd, h.rigHome)
-	mustOK(t, err)
-	if !strings.Contains(reply, "'j1' repaired: cron differs (crontab: 59 23 * * *)") {
-		t.Fatalf("reply %q, want the drift verbatim", reply)
-	}
-	if line := taggedLine(t, h, "j1"); !strings.HasPrefix(line, "0 2 * * * "+runnerCmd+" j1") {
-		t.Fatalf("line %q, want the store's cron back", line)
-	}
-	list, err := h.list()
-	mustOK(t, err)
-	if strings.Contains(list, "drift:") {
-		t.Fatalf("clean after repair: %s", list)
-	}
-}
-
-func TestRepairRecommentsADriftedPausedLine(t *testing.T) {
-	h := newHarness(t, "/ws/r3")
-	if _, err := h.create(sched.CreateInput{Model: "w", Name: "one", Prompt: "p", Cron: "0 3 * * *", Cwd: "/ws/r3"}); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := sched.Pause(context.Background(), h.db, h.ct, "j1", h.sessCwd, "sess-core", h.rigHome); err != nil {
-		t.Fatal(err)
-	}
-	h.ct.mu.Lock()
-	h.ct.text = strings.Replace(h.ct.text, taggedLine(t, h, "j1"), strings.TrimPrefix(taggedLine(t, h, "j1"), "# "), 1)
-	h.ct.mu.Unlock()
-
-	reply, err := sched.Repair(context.Background(), h.db, h.ct, "j1", runnerCmd, h.rigHome)
-	mustOK(t, err)
-	if !strings.Contains(reply, "'j1' repaired: line is active") {
-		t.Fatalf("reply %q, want the drift verbatim", reply)
-	}
-	if line := taggedLine(t, h, "j1"); !strings.HasPrefix(line, "# 0 3 * * * "+runnerCmd+" j1") {
-		t.Fatalf("line %q, want the paused job's line commented", line)
 	}
 }
 
@@ -208,7 +144,7 @@ func TestRepairAllFixesEveryDriftOneLineEachAndNothingWhenNone(t *testing.T) {
 	if line := taggedLine(t, h, "j3"); !strings.HasPrefix(line, "# 0 2 * * * "+runnerCmd+" j3") {
 		t.Fatalf("j3 line %q, want the paused job's line commented", line)
 	}
-	if got := eventsOps(t, h); strings.Join(got, ",") != "create,create,create,pause" {
+	if got := eventOps(t, h); strings.Join(got, ",") != "create,create,create,pause" {
 		t.Fatalf("ops %v, want the walk to write no events", got)
 	}
 

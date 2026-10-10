@@ -20,11 +20,6 @@ import (
 	"github.com/mrsirg97-rgb/rig/v2/testenv"
 )
 
-type crontabRecord struct{ lines string }
-
-func (c *crontabRecord) List() (string, error)     { return c.lines, nil }
-func (c *crontabRecord) Install(text string) error { c.lines = text; return nil }
-
 func TestDecisionTrainEnqueueLandsTwoMinutesOut(t *testing.T) {
 	home := t.TempDir()
 	db, _, _, err := store.Open(filepath.Join(home, "global.sqlite"), sched.Statements(), sched.SchemaVersion)
@@ -32,7 +27,7 @@ func TestDecisionTrainEnqueueLandsTwoMinutesOut(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer db.DB.Close()
-	enqueue := decisionTrainEnqueue(db, home, "/x/rig", t.TempDir(), &crontabRecord{})
+	enqueue := decisionTrainEnqueue(db, home, "/x/rig", t.TempDir(), newFakeCrontab())
 	before := time.Now()
 	if _, err := enqueue(context.Background(), "reviewer"); err != nil {
 		t.Fatal(err)
@@ -377,13 +372,13 @@ func TestDecisionTrainEnqueueLandsALineRunJobFires(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer db.DB.Close()
-	ct := &crontabRecord{}
+	ct := newFakeCrontab()
 	enqueue := decisionTrainEnqueue(db, rigHome, "/x/rig", canonicalCwd(t, "trainfire"), ct)
 	if _, err := enqueue(context.Background(), "reviewer"); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(ct.lines, "# rig-scheduler:"+sched.TagHome(rigHome)+":") {
-		t.Fatalf("the enqueue must tag its line with the rig home run-job reads, got: %s", ct.lines)
+	if !strings.Contains(ct.text_(), "# rig-scheduler:"+sched.TagHome(rigHome)+":") {
+		t.Fatalf("the enqueue must tag its line with the rig home run-job reads, got: %s", ct.text_())
 	}
 	var id string
 	if err := db.DB.QueryRow(`SELECT id FROM jobs`).Scan(&id); err != nil {
@@ -407,7 +402,7 @@ func TestDecisionTrainEnqueueLandsALineRunJobFires(t *testing.T) {
 		t.Fatal(err)
 	}
 	if len(spawned) != 1 {
-		t.Fatalf("run-job must fire the training job, spawned %d times (lines: %s)", len(spawned), ct.lines)
+		t.Fatalf("run-job must fire the training job, spawned %d times (lines: %s)", len(spawned), ct.text_())
 	}
 	if !strings.Contains(spawned[0][2], "decision train reviewer") {
 		t.Fatalf("the fire must run the training command, got %v", spawned[0])

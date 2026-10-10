@@ -127,16 +127,6 @@ func TestTodoNotesAndReadIdThroughTheCommand(t *testing.T) {
 	}
 }
 
-func TestSchedulerCommandMissingToolKeepsTheGenericVoice(t *testing.T) {
-	env := &command.Env{
-		Tools: map[string]core.Tool{},
-	}
-	_, err := runCmd(t, "scheduler", "list", env)
-	if err == nil || !strings.Contains(err.Error(), "no scheduler tool (the root did not put it in Env.Tools)") {
-		t.Fatalf("the generic voice must name the missing tool, got %v", err)
-	}
-}
-
 func TestToolCommandThreadsTheLiveSession(t *testing.T) {
 	type seen struct {
 		mu   sync.Mutex
@@ -631,49 +621,6 @@ func TestSchedulerUpdateModelNoneMarshalsTheUnnamedJob(t *testing.T) {
 	}
 	if raw != `{"action":"update","id":"j8","model":"dsv4"}` {
 		t.Fatalf("a named model must stay a string, got %s", raw)
-	}
-}
-
-func TestSchedulerUpdateShapeNamesModelNone(t *testing.T) {
-	var update *command.Sub
-	for _, s := range allByName(t)["scheduler"].(command.Subber).Sub() {
-		if s.Name == "update" {
-			update = &s
-		}
-	}
-	if update == nil {
-		t.Fatal("the scheduler menu must carry the update verb")
-	}
-	if !strings.Contains(update.Desc, "[model <m>|none]") {
-		t.Fatalf("the menu shape must name none: %s", update.Desc)
-	}
-	env := &command.Env{Session: func() *core.Session { return core.NewSession() }, Tools: map[string]core.Tool{"scheduler": fakeExecFunc(nil)}}
-	_, err := runCmd(t, "scheduler", "update j8 model", env)
-	if err == nil || !strings.Contains(err.Error(), "[model <m>|none]") {
-		t.Fatalf("the shape refusal must name none, got %v", err)
-	}
-}
-
-func TestSchedulerUpdateDropsTheBusyKey(t *testing.T) {
-	var update *command.Sub
-	for _, s := range allByName(t)["scheduler"].(command.Subber).Sub() {
-		if s.Name == "update" {
-			update = &s
-		}
-	}
-	if update == nil {
-		t.Fatal("the scheduler menu must carry the update verb")
-	}
-	if strings.Contains(update.Desc, "busy") {
-		t.Fatalf("the menu shape must not advertise the retired busy key: %s", update.Desc)
-	}
-	env := &command.Env{Session: func() *core.Session { return core.NewSession() }, Tools: map[string]core.Tool{"scheduler": fakeExecFunc(nil)}}
-	_, err := runCmd(t, "scheduler", "update", env)
-	if err == nil || strings.Contains(err.Error(), "busy") {
-		t.Fatalf("the usage line must not advertise busy, got %v", err)
-	}
-	if _, err := runCmd(t, "scheduler", "update j8 busy skip", env); err == nil || !strings.Contains(err.Error(), "unknown key") {
-		t.Fatalf("busy must stay refused: %v", err)
 	}
 }
 

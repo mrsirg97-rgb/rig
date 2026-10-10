@@ -6,7 +6,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
@@ -15,28 +14,6 @@ import (
 	sched "github.com/mrsirg97-rgb/rig/v2/store/scheduler"
 	"github.com/mrsirg97-rgb/rig/v2/store/state"
 )
-
-type budgetSpawn struct {
-	mu      sync.Mutex
-	calls   []string
-	onSpawn func(argv []string)
-}
-
-func (f *budgetSpawn) spawn(ctx context.Context, argv []string, cwd string, env []string, observe func([]byte)) (sched.SpawnResult, error) {
-	f.mu.Lock()
-	f.calls = append(f.calls, strings.Join(argv, " "))
-	f.mu.Unlock()
-	if f.onSpawn != nil {
-		f.onSpawn(argv)
-	}
-	return sched.SpawnResult{Exit: 0, Stdout: "done\n"}, nil
-}
-
-func (f *budgetSpawn) count() int {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	return len(f.calls)
-}
 
 func remoteModels(t *testing.T) models.Table {
 	t.Helper()
@@ -57,8 +34,8 @@ func TestScheduledJobBudgetStopsFiringAtTheCap(t *testing.T) {
 	h, key := setupJobHome(t, cwd, rigHome, func(in *sched.CreateInput) {
 		in.Budget = 5
 	})
-	spawn := &budgetSpawn{}
-	spawn.onSpawn = func(argv []string) {
+	spawn := &fakeSpawn{result: sched.SpawnResult{Exit: 0, Stdout: "done\n"}}
+	spawn.onSpawn = func(ctx context.Context, argv []string) {
 		session := ""
 		for i, a := range argv {
 			if a == "-session-id" && i+1 < len(argv) {
@@ -77,8 +54,8 @@ func TestScheduledJobBudgetStopsFiringAtTheCap(t *testing.T) {
 			t.Fatalf("state store: %v", err)
 		}
 		defer db.DB.Close()
-		ctx := context.Background()
-		if err := state.RecordSession(ctx, db, session, cwd, "m", "v"); err != nil {
+		bg := context.Background()
+		if err := state.RecordSession(bg, db, session, cwd, "m", "v"); err != nil {
 			t.Fatal(err)
 		}
 		if _, err := state.RecordMessage(ctx, db, session, "user", "task", nil, nil, nil); err != nil {
@@ -134,7 +111,7 @@ func TestRemoteJobFireSkipsTheBusyProbe(t *testing.T) {
 		probeCalls++
 		return nil, jsonError("the swap must never be consulted: " + url)
 	}
-	spawn := &budgetSpawn{}
+	spawn := &fakeSpawn{result: sched.SpawnResult{Exit: 0, Stdout: "done\n"}}
 	opts := sched.RunOpts{
 		Home:      h.home,
 		Crontab:   h.ct,

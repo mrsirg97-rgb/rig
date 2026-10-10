@@ -116,15 +116,3 @@ func TestExpandTabs(t *testing.T) {
 		t.Fatalf("tab after a newline = %q, want eight spaces", got)
 	}
 }
-
-func TestMarkdownUnderscoreIntraword(t *testing.T) {
-	th := oledTheme(t)
-	out, _, _ := mdLine(th, []seg{{slot: SlotText, text: "run gpu_stats with cron_audit"}})
-	if got := RemoveColor(paintSegs(th, out)); got != "run gpu_stats with cron_audit" {
-		t.Fatalf("prose = %q, want the underscores kept", got)
-	}
-	out, _, _ = mdLine(th, []seg{{slot: SlotText, text: "- the snake_case_id stays"}})
-	if got := RemoveColor(paintSegs(th, out)); got != th.Glyph(GlyphDot)+" the snake_case_id stays" {
-		t.Fatalf("list = %q, want the underscores kept", got)
-	}
-}

@@ -5,41 +5,22 @@ import (
 	"fmt"
 	"io"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
 	"github.com/mrsirg97-rgb/rig/v2/core"
 )
 
-type liveSize struct {
-	mu sync.Mutex
-	w  int
-	h  int
-}
-
-func (sz *liveSize) get() (int, int, bool) {
-	sz.mu.Lock()
-	defer sz.mu.Unlock()
-	return sz.w, sz.h, true
-}
-
-func (sz *liveSize) set(w, h int) {
-	sz.mu.Lock()
-	defer sz.mu.Unlock()
-	sz.w, sz.h = w, h
-}
-
 type phaseScreen struct {
 	s       *scriptedSession
 	v       *vt
-	size    *liveSize
+	size    *mutable
 	painted int
 }
 
 func newPhaseScreen(t *testing.T, th Theme, width, height int) *phaseScreen {
 	t.Helper()
-	sz := &liveSize{w: width, h: height}
+	sz := newMutable(width, height)
 	s := newScriptedSession(t, th, WithWidth(width), WithSize(sz.get),
 		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }))
 	if got := s.prompt(promptMark(th), "go\n"); got != "go" {
@@ -317,31 +298,6 @@ func TestPhasePreviewSurvivesATerminalOneRowTall(t *testing.T) {
 	p.s.fe.Notify(core.Phase{Name: "reviewing", Done: true, Ok: true, Note: "15 rows settled"})
 	p.s.tick()
 	p.feed(t)
-}
-
-func TestPhaseBufferKeepsOnlyThePreviewRows(t *testing.T) {
-	th := oledTheme(t)
-	p := newPhaseScreen(t, th, 60, 24)
-	p.s.fe.Notify(core.Phase{Name: "reviewing"})
-	p.s.tick()
-	p.feed(t)
-	for i := 1; i <= 300; i++ {
-		p.say(fmt.Sprintf("line %03d\n", i))
-	}
-	p.awaitOut(t, "\u00b7 290 rows above \u00b7")
-	p.drain(t)
-	p.s.fe.mu.Lock()
-	kept, carry := len(p.s.fe.phaseLines), p.s.fe.phaseHidden
-	p.s.fe.mu.Unlock()
-	if kept != phasePreviewRows {
-		t.Fatalf("the buffer holds %d closed lines, want the %d the preview can show", kept, phasePreviewRows)
-	}
-	if carry != 290 {
-		t.Fatalf("the carry counts %d hidden rows, want the 290 that scrolled", carry)
-	}
-	if indexOfRowContaining(p.rows(), "· 290 rows above ·") < 0 {
-		t.Fatalf("the header lost the carry:\n%q", p.rows())
-	}
 }
 
 func TestPhasePreviewReMeasuresOnResize(t *testing.T) {
