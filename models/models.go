@@ -14,6 +14,8 @@ const (
 
 	ReasoningContent    = "reasoning_content"
 	ReasoningOpenRouter = "reasoning"
+
+	thinkingBudgetFloor = 1024
 )
 
 type Model struct {
@@ -88,6 +90,9 @@ func (m Model) Check() error {
 		}
 		if m.ThinkingBudget >= m.MaxTokens {
 			return fmt.Errorf("models: %s: thinkingBudget %d must be < maxTokens %d (the api requires room to answer)", m.ID, m.ThinkingBudget, m.MaxTokens)
+		}
+		if m.ThinkingBudget < thinkingBudgetFloor {
+			return fmt.Errorf("models: %s: thinkingBudget %d is under the api's floor of %d (the api rejects smaller budgets)", m.ID, m.ThinkingBudget, thinkingBudgetFloor)
 		}
 	}
 	if len(m.ProviderPin) > 0 && m.Provider != "openrouter" {

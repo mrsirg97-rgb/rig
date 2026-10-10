@@ -43,7 +43,19 @@ policy take zero lines.
   the same column openrouter's `usage.cost` fills; no price table in
   Go, and the prices are refused on any other provider. `Usage.Prompt`
   sums the anthropic fields so the context accounting stays
-  comparable.
+  comparable, and takes the cache fields from wherever the stream
+  reports them — the api's `message_start`, or the final
+  `message_delta` a compat runtime reports them in.
+- **the encoder's hard cases**: the transcript replays on every later
+  request, so one body the api rejects fails the session from then on.
+  An empty tool result rides a named `[no output]` text block; a
+  request whose `max_tokens` was lowered under the thinking budget
+  drops thinking for that request, thinking blocks included; another
+  provider's `reasoning.text` records and an empty thinking record
+  don't ride; an assistant turn that encodes to no blocks is skipped
+  instead of `content: null`; the assistant replay orders thinking,
+  then text, then tool calls, matching generation. The image inline
+  bound is the api's: 5 MiB measured on the base64 data.
 - **the row and the root**: `provider: "anthropic"` selects the new
   provider in `buildProvider`; `models.Check` admits `thinkingBudget`
   and `cacheControl` for it, refuses `providerPin` and `reasoning` on
@@ -54,7 +66,10 @@ policy take zero lines.
   `stream truncated: no finish marker`, the same words.
 - **the tests**: a fake Messages server pins the body, the tool round
   trip, every stop reason, each error path's words, the truncation,
-  the retry-after wait and the cost arithmetic; one live smoke behind
+  the retry-after wait and the cost arithmetic — plus the encoder's
+  hard cases (the empty result, the budget under a lowered max_tokens,
+  the foreign records, the null content, the block order, the encoded
+  image bound); one live smoke behind
   env vars (`RIG_SMOKE_ANTHROPIC_MODEL` + key or base URL) proved the
   wire and the stream against a real server — and caught that the
   real wire sends SSE `event:` name lines, which are skipped, not

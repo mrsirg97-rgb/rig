@@ -24,7 +24,11 @@ the wire dialect is this package's problem.
   removes the bound), `IdleTimeout` (zero is the 10-minute default),
   `BlobsDir` (vision), and the four per-million prices `InputPrice`,
   `OutputPrice`, `CacheReadPrice`, `CacheWritePrice` (the cost column:
-  zero when absent, no price table in Go).
+  zero when absent, no price table in Go). `Thinking{Budget}` is the
+  row's thinking budget; 0 = off, and off sends no thinking blocks in
+  either direction. A request whose `max_tokens` leaves no room under
+  the budget — the compact clamp lowers it, the summary call sets it —
+  drops thinking for that request, thinking blocks included.
 - The wire (`wireRequest`, `wireMessage`, `wireContent`, `wireEvent`,
   …): the system prompt rides the top-level `system` array of text
   blocks; `Tools` ride `tools[]` with `input_schema` from
@@ -33,7 +37,14 @@ the wire dialect is this package's problem.
   verbatim, so results pair), user `tool_result` batched into one user
   message per run of results, `thinking`/`redacted_thinking` blocks
   carried back verbatim when thinking is enabled, and view results as
-  `image` blocks with a base64 source inside their `tool_result`.
+  `image` blocks with a base64 source inside their `tool_result`. The
+  assistant replay orders thinking, then the text, then the tool
+  calls — the generation order the API replayed — and skips an
+  assistant turn that encodes to no blocks rather than send
+  `content: null`. An empty tool result rides a named `[no output]`
+  text block (the API rejects an empty one). Only the anthropic
+  records ride: another provider's `reasoning.text`-shaped details and
+  an empty thinking record are dropped.
 - The cache breakpoints (`CacheControl`): `cache_control:
   {"type":"ephemeral"}` on the last system block, the last tool, and
   the last user block of the prior turn — three of the four the API
@@ -46,10 +57,13 @@ the wire dialect is this package's problem.
   rewrite, a reorder, or a nondeterministic field in this encoding is
   a cache regression.
 - The stream (`Stream`): SSE in, `core.Event` out. `message_start`
-  seeds the prompt usage (`Usage.Prompt` is `input_tokens` +
-  `cache_read_input_tokens` + `cache_creation_input_tokens` — the
-  anthropic `input_tokens` excludes the cached tokens, and the sum is
-  what openai's `prompt_tokens` already means) and echoes `model`.
+  seeds the usage's input and cache fields and echoes `model`; the
+  final `message_delta` may repeat the cache fields — compat runtimes
+  report them only there — and `Usage.Prompt` is summed at `Done`
+  (`input_tokens` + `cache_read_input_tokens` +
+  `cache_creation_input_tokens` — the anthropic `input_tokens`
+  excludes the cached tokens, and the sum is what openai's
+  `prompt_tokens` already means).
   `text_delta` → `TextDelta`; `thinking_delta` → `ReasoningDelta`
   live, with the block record (`{"type":"thinking","thinking",…
   "signature"}` or `{"type":"redacted_thinking","data"}`) emitted on
@@ -76,9 +90,9 @@ the wire dialect is this package's problem.
 - An empty message list is a loud `Stream` error, and so is a request
   and a Config that together carry no `max_tokens`.
 - A thinking budget needs room to answer: `models.Check` refuses a
-  budget at or past the row's `maxTokens`. The API's own floor on
-  `budget_tokens` is not re-checked here — a too-small budget is the
-  API's 400, loud through the transport.
+  budget at or past the row's `maxTokens`, and one under the API's own
+  1,024 floor. A request whose `max_tokens` is lowered under the
+  budget sends no thinking at all.
 - A tool call whose args are not valid JSON when the stream ends keeps
   its raw partial args and carries `Cut` set to the mapped stop reason
   (the cutoff link refuses it before the tool, SPEC_HARDENING 10); on
@@ -101,9 +115,12 @@ the wire dialect is this package's problem.
 - The scanner buffer is bounded (64 KiB initial, 4 MiB max); the
   error body is read capped at 256 bytes.
 - The blob loader (`images.go`) is duplicated from
-  `provider/openai`'s on purpose: the same sha-verify, size bound and
-  note voices, because a lift would edit a package this change need
-  not touch. Collapse them when a third provider needs it.
+  `provider/openai`'s on purpose: the same sha-verify and note voices,
+  because a lift would edit a package this change need not touch.
+  Collapse them when a third provider needs it. The inline bound is
+  this API's: 5 MiB measured on the base64 data, which is what the API
+  checks (openai bounds the decoded bytes) — an image that encodes
+  over it rides the note instead of the wire.
 - The live smoke (`smoke_test.go`) runs behind `RIG_SMOKE_ANTHROPIC_MODEL`
   plus either `RIG_SMOKE_ANTHROPIC_KEY` (a real key against the
   api default base) or `RIG_SMOKE_ANTHROPIC_BASE_URL` (keyless, a

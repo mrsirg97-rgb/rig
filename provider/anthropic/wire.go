@@ -13,6 +13,8 @@ const (
 	roleAssistant = "assistant"
 
 	cacheEphemeral = "ephemeral"
+
+	emptyToolResult = "[no output]"
 )
 
 type wireCacheControl struct {
@@ -103,7 +105,9 @@ type wireUsage struct {
 }
 
 type wireUsageDelta struct {
-	OutputTokens int `json:"output_tokens"`
+	OutputTokens             int `json:"output_tokens"`
+	CacheReadInputTokens     int `json:"cache_read_input_tokens"`
+	CacheCreationInputTokens int `json:"cache_creation_input_tokens"`
 }
 
 type wireBlock struct {
@@ -152,15 +156,16 @@ func (p *provider) encode(req core.Request) ([]byte, error) {
 	if p.cache && len(system) > 0 {
 		system[len(system)-1].CacheControl = &wireCacheControl{Type: cacheEphemeral}
 	}
+	on := thinking(p.budget, maxTokens)
 	out := wireRequest{
 		Model:     p.model,
 		MaxTokens: maxTokens,
 		System:    system,
 		Tools:     p.wireTools(req.Tools),
-		Messages:  p.wireMessages(msgs),
+		Messages:  p.wireMessages(msgs, on),
 		Stream:    true,
 	}
-	if p.budget > 0 {
+	if on {
 		out.Thinking = &wireThinking{Type: "enabled", BudgetTokens: p.budget}
 	}
 	body, err := json.Marshal(out)
@@ -181,7 +186,11 @@ func (p *provider) wireTools(specs []core.ToolSpec) []wireTool {
 	return out
 }
 
-func (p *provider) wireMessages(msgs []core.Message) []wireMessage {
+func thinking(budget, maxTokens int) bool {
+	return budget > 0 && budget < maxTokens
+}
+
+func (p *provider) wireMessages(msgs []core.Message, on bool) []wireMessage {
 	out := make([]wireMessage, 0, len(msgs))
 	var pending []wireContent
 	var owner callTable
@@ -196,7 +205,9 @@ func (p *provider) wireMessages(msgs []core.Message) []wireMessage {
 		switch m.Role {
 		case core.RoleAssistant:
 			flush()
-			out = append(out, p.assistantMessage(m))
+			if am := p.assistantMessage(m, on); len(am.Content) > 0 {
+				out = append(out, am)
+			}
 			owner = tableOf(m)
 		case core.RoleTool:
 			pending = append(pending, p.toolResultBlock(m, owner))
@@ -224,16 +235,16 @@ func markTranscriptBreakpoint(msgs []wireMessage, cache bool) {
 	}
 }
 
-func (p *provider) assistantMessage(m core.Message) wireMessage {
+func (p *provider) assistantMessage(m core.Message, on bool) wireMessage {
 	var blocks []wireContent
-	if p.budget > 0 {
+	if on {
 		blocks = append(blocks, thinkingBlocks(m.ReasoningDetails)...)
-	}
-	for _, c := range m.ToolCalls {
-		blocks = append(blocks, wireContent{Type: "tool_use", ID: c.ID, Name: c.Name, Input: inputOf(c.Args)})
 	}
 	if m.Content != "" {
 		blocks = append(blocks, wireContent{Type: "text", Text: m.Content})
+	}
+	for _, c := range m.ToolCalls {
+		blocks = append(blocks, wireContent{Type: "tool_use", ID: c.ID, Name: c.Name, Input: inputOf(c.Args)})
 	}
 	return wireMessage{Role: roleAssistant, Content: blocks}
 }
@@ -252,13 +263,26 @@ func thinkingBlocks(details json.RawMessage) []wireContent {
 	}
 	out := make([]wireContent, 0, len(records))
 	for _, r := range records {
+		if r.Type != "thinking" && r.Type != "redacted_thinking" {
+			continue
+		}
+		if r.Type == "thinking" && r.Thinking == "" {
+			continue
+		}
+		if r.Type == "redacted_thinking" && r.Data == "" {
+			continue
+		}
 		out = append(out, wireContent{Type: r.Type, Thinking: r.Thinking, Signature: r.Signature, Data: r.Data})
 	}
 	return out
 }
 
 func (p *provider) toolResultBlock(m core.Message, owner callTable) wireContent {
-	inner := []wireContent{{Type: "text", Text: m.Content}}
+	text := m.Content
+	if text == "" {
+		text = emptyToolResult
+	}
+	inner := []wireContent{{Type: "text", Text: text}}
 	if p.blobs != nil && owner.nameOf(m.ToolID) == viewToolName {
 		if ref, ok := imagemarker.Parse(m.Content); ok {
 			inner = p.imageBlocks(ref)

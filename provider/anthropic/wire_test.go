@@ -338,3 +338,148 @@ func TestMaxTokensFallsBackToTheRowThenRefuses(t *testing.T) {
 		t.Fatalf("err = %v, want the loud max_tokens refusal", err)
 	}
 }
+
+func TestAnEmptyToolResultSendsANote(t *testing.T) {
+	e := captureEndpoint(t)
+	p := anthropic.New(anthropic.Config{BaseURL: e.url, Model: "claude-fake", MaxTokens: 1024})
+	req := core.Request{
+		Messages: []core.Message{
+			{Role: core.RoleUser, Content: "mkdir /tmp/a"},
+			{Role: core.RoleAssistant, ToolCalls: []core.ToolCall{{ID: "toolu_1", Name: "bash", Args: json.RawMessage(`{"command":"mkdir /tmp/a"}`)}}},
+			{Role: core.RoleTool, ToolID: "toolu_1", Content: ""},
+		},
+		MaxTokens: 1024,
+	}
+	if _, err := drain(t, context.Background(), p, req); err != nil {
+		t.Fatalf("stream: %v", err)
+	}
+	want := `"content":[{"type":"text","text":"[no output]"}]`
+	if got := string(e.lastBody(t)); !strings.Contains(got, want) {
+		t.Fatalf("an empty tool result must ride a named text block, the api rejects an empty one:\n%s", got)
+	}
+}
+
+func TestTheThinkingBudgetDropsWhenMaxTokensLeavesNoRoom(t *testing.T) {
+	e := captureEndpoint(t)
+	p := anthropic.New(anthropic.Config{BaseURL: e.url, Model: "claude-fake", Thinking: anthropic.Thinking{Budget: 2048}})
+	req := core.Request{
+		Messages: []core.Message{
+			{Role: core.RoleUser, Content: "go"},
+			{Role: core.RoleAssistant,
+				ReasoningDetails: json.RawMessage(`[{"type":"thinking","thinking":"step","signature":"sig"}]`),
+				Content:          "worked"},
+		},
+		MaxTokens: 1500,
+	}
+	if _, err := drain(t, context.Background(), p, req); err != nil {
+		t.Fatalf("stream: %v", err)
+	}
+	body := string(e.lastBody(t))
+	if strings.Contains(body, `"thinking"`) {
+		t.Fatalf("a budget at or over max_tokens must send no thinking at all:\n%s", body)
+	}
+	req.MaxTokens = 4096
+	if _, err := drain(t, context.Background(), p, req); err != nil {
+		t.Fatalf("stream: %v", err)
+	}
+	body = string(e.lastBody(t))
+	if !strings.Contains(body, `"thinking":{"type":"enabled","budget_tokens":2048}`) {
+		t.Fatalf("the row's budget rides when max_tokens leaves room:\n%s", body)
+	}
+	if !strings.Contains(body, `"type":"thinking","thinking":"step","signature":"sig"`) {
+		t.Fatalf("thinking blocks ride again with thinking on:\n%s", body)
+	}
+}
+
+func TestForeignReasoningRecordsDoNotRideTheWire(t *testing.T) {
+	e := captureEndpoint(t)
+	p := anthropic.New(anthropic.Config{BaseURL: e.url, Model: "claude-fake", MaxTokens: 1024, Thinking: anthropic.Thinking{Budget: 512}})
+	req := core.Request{
+		Messages: []core.Message{
+			{Role: core.RoleUser, Content: "go"},
+			{Role: core.RoleAssistant,
+				ReasoningDetails: json.RawMessage(`[{"type":"reasoning.text","text":"openrouter"},{"type":"reasoning.summary","summary":"s"},{"type":"thinking","thinking":"native","signature":"sig"}]`),
+				Content:          "ok"},
+		},
+		MaxTokens: 1024,
+	}
+	if _, err := drain(t, context.Background(), p, req); err != nil {
+		t.Fatalf("stream: %v", err)
+	}
+	body := string(e.lastBody(t))
+	if strings.Contains(body, "reasoning.") {
+		t.Fatalf("another provider's records are not anthropic block types:\n%s", body)
+	}
+	if !strings.Contains(body, `"type":"thinking","thinking":"native","signature":"sig"`) {
+		t.Fatalf("the native record must ride verbatim:\n%s", body)
+	}
+}
+
+func TestAnAssistantTurnThatEncodesToNoBlocksIsSkipped(t *testing.T) {
+	e := captureEndpoint(t)
+	p := anthropic.New(anthropic.Config{BaseURL: e.url, Model: "claude-fake", MaxTokens: 1024})
+	req := core.Request{
+		Messages: []core.Message{
+			{Role: core.RoleUser, Content: "go"},
+			{Role: core.RoleAssistant,
+				ReasoningDetails: json.RawMessage(`[{"type":"reasoning.text","text":"a local model's reasoning"}]`),
+				Reasoning:        "a local model's reasoning"},
+			{Role: core.RoleUser, Content: "go on"},
+		},
+		MaxTokens: 1024,
+	}
+	if _, err := drain(t, context.Background(), p, req); err != nil {
+		t.Fatalf("stream: %v", err)
+	}
+	body := string(e.lastBody(t))
+	if strings.Contains(body, `"content":null`) {
+		t.Fatalf("an assistant turn with no blocks must be skipped, not sent as null:\n%s", body)
+	}
+	var wire struct {
+		Messages []struct {
+			Role string `json:"role"`
+		} `json:"messages"`
+	}
+	if err := json.Unmarshal(e.lastBody(t), &wire); err != nil {
+		t.Fatal(err)
+	}
+	if len(wire.Messages) != 2 {
+		t.Fatalf("messages = %+v, want the two user turns with the empty assistant skipped", wire.Messages)
+	}
+}
+
+func TestTheAssistantReplayOrderIsThinkingThenTextThenToolUse(t *testing.T) {
+	e := captureEndpoint(t)
+	p := anthropic.New(anthropic.Config{BaseURL: e.url, Model: "claude-fake", MaxTokens: 1024, Thinking: anthropic.Thinking{Budget: 512}})
+	req := core.Request{
+		Messages: []core.Message{
+			{Role: core.RoleUser, Content: "go"},
+			{Role: core.RoleAssistant,
+				ReasoningDetails: json.RawMessage(`[{"type":"thinking","thinking":"hmm","signature":"sig"}]`),
+				Content:          "reading the file",
+				ToolCalls:        []core.ToolCall{{ID: "toolu_1", Name: "read", Args: json.RawMessage(`{"path":"/a"}`)}},
+			},
+		},
+		MaxTokens: 1024,
+	}
+	if _, err := drain(t, context.Background(), p, req); err != nil {
+		t.Fatalf("stream: %v", err)
+	}
+	var wire struct {
+		Messages []struct {
+			Content []struct {
+				Type string `json:"type"`
+			} `json:"content"`
+		} `json:"messages"`
+	}
+	if err := json.Unmarshal(e.lastBody(t), &wire); err != nil {
+		t.Fatal(err)
+	}
+	var order []string
+	for _, b := range wire.Messages[len(wire.Messages)-1].Content {
+		order = append(order, b.Type)
+	}
+	if strings.Join(order, ",") != "thinking,text,tool_use" {
+		t.Fatalf("blocks = %v, want the replay in generation order (thinking, text, tool_use)", order)
+	}
+}

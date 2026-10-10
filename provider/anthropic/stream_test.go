@@ -446,3 +446,41 @@ func TestCancellationTearsDownTheStream(t *testing.T) {
 		t.Fatalf("stream: %v", err)
 	}
 }
+
+func TestCacheReadsArriveFromBothUsageShapes(t *testing.T) {
+	cases := []struct {
+		name   string
+		start  string
+		delta  string
+		read   int
+		prompt int
+	}{
+		// the api reports the cache fields on message_start
+		{name: "from message_start", start: `"input_tokens":100,"cache_read_input_tokens":7`, delta: `"output_tokens":9`, read: 7, prompt: 107},
+		// compat servers report them only on the final message_delta
+		{name: "from message_delta", start: `"input_tokens":100`, delta: `"output_tokens":9,"cache_read_input_tokens":7`, read: 7, prompt: 107},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			e := captureEndpoint(t)
+			e.queue(`data: {"type":"message_start","message":{"id":"msg_1","model":"claude-fake","usage":{` + c.start + `}}}
+
+data: {"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{` + c.delta + `}}
+
+data: {"type":"message_stop"}
+
+`)
+			events, err := drain(t, context.Background(), newTextProvider(e), userReq())
+			if err != nil {
+				t.Fatalf("stream: %v", err)
+			}
+			u := lastDone(t, events).Usage
+			if u.CacheRead != c.read {
+				t.Fatalf("cacheRead = %d, want %d", u.CacheRead, c.read)
+			}
+			if u.Prompt != c.prompt {
+				t.Fatalf("prompt = %d, want input plus the cache read", u.Prompt)
+			}
+		})
+	}
+}

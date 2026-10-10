@@ -354,6 +354,7 @@ func TestAnthropicRowInvariantsRefuse(t *testing.T) {
 			m.Provider = "anthropic"
 			m.ThinkingBudget = m.MaxTokens
 		}, "must be < maxTokens"},
+		{"budget under the api floor", func(m *models.Model) { m.Provider = "anthropic"; m.ThinkingBudget = 999 }, "1024"},
 		{"providerPin on anthropic", func(m *models.Model) {
 			m.Provider = "anthropic"
 			m.ProviderPin = []string{"X"}

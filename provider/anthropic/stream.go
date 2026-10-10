@@ -103,6 +103,7 @@ func (p *provider) pump(ctx context.Context, resp *http.Response, emit func(core
 		order  []int
 		blocks = map[int]*blockState{}
 		usage  core.Usage
+		input  int
 		model  string
 		stop   string
 		done   bool
@@ -140,8 +141,8 @@ func (p *provider) pump(ctx context.Context, resp *http.Response, emit func(core
 		case "message_start":
 			if m := ev.Message; m != nil {
 				model = m.Model
+				input = m.Usage.InputTokens
 				usage = core.Usage{
-					Prompt:     m.Usage.InputTokens + m.Usage.CacheReadInputTokens + m.Usage.CacheCreationInputTokens,
 					CacheRead:  m.Usage.CacheReadInputTokens,
 					CacheWrite: m.Usage.CacheCreationInputTokens,
 				}
@@ -209,8 +210,16 @@ func (p *provider) pump(ctx context.Context, resp *http.Response, emit func(core
 			if ev.Delta != nil && ev.Delta.StopReason != "" {
 				stop = ev.Delta.StopReason
 			}
-			if ev.Usage != nil && ev.Usage.OutputTokens > 0 {
-				usage.Completion = ev.Usage.OutputTokens
+			if ev.Usage != nil {
+				if ev.Usage.OutputTokens > 0 {
+					usage.Completion = ev.Usage.OutputTokens
+				}
+				if ev.Usage.CacheReadInputTokens > 0 {
+					usage.CacheRead = ev.Usage.CacheReadInputTokens
+				}
+				if ev.Usage.CacheCreationInputTokens > 0 {
+					usage.CacheWrite = ev.Usage.CacheCreationInputTokens
+				}
 			}
 		case "message_stop":
 			done = true
@@ -250,6 +259,7 @@ func (p *provider) pump(ctx context.Context, resp *http.Response, emit func(core
 			return
 		}
 	}
+	usage.Prompt = input + usage.CacheRead + usage.CacheWrite
 	usage.Cost = p.cost(usage)
 	emit(core.Done{StopReason: stopReason(stop), Usage: usage, Model: model})
 }

@@ -199,15 +199,24 @@ the package contract is `provider/anthropic/PACKAGE.md`.
   upstream order; `reasoning` names an openai-compatible wire field
   and the thinking blocks carry their own), refuses a `thinkingBudget`
   at or past the row's `maxTokens` (the api requires room to answer),
-  and refuses the prices on any other provider (openrouter reports
-  `usage.cost` itself; a row price there would be a second truth).
+  and under the api's own 1,024 floor (the api rejects smaller
+  budgets), and refuses the prices on any other provider (openrouter
+  reports `usage.cost` itself; a row price there would be a second
+  truth).
 - **The wire**: `provider/anthropic` posts `{BaseURL}/v1/messages`
   with `stream: true`, `x-api-key` and `anthropic-version` (default
   `2023-06-01`); the key never reaches a fault, a notice, a log or a
   test fixture. The system prompt rides the top-level `system` array;
   the tools ride `tools[]` with `input_schema`; the transcript rides
   content blocks with every `core.ToolCall` id round-tripping as the
-  `tool_use` id.
+  `tool_use` id. The encoder carries only what the api would take: an
+  empty tool result rides a named `[no output]` text block (the api
+  rejects an empty one, and the result replays on every later
+  request); the assistant replay orders thinking, then the text, then
+  the tool calls, matching generation; another provider's
+  `reasoning.text`-shaped records and an empty thinking record don't
+  ride; an assistant turn that then encodes to no blocks is skipped
+  rather than sent as `content: null`.
 - **The breakpoint choice**: `cache_control: {"type":"ephemeral"}` on
   exactly three blocks — the last system block, the last tool, and the
   last user block of the prior turn. Anthropic's caching docs name the
@@ -231,8 +240,10 @@ the package contract is `provider/anthropic/PACKAGE.md`.
   message is rebuilt from those records verbatim (the API requires the
   blocks for tool-use continuity, and requires them first in the
   message); when thinking is off no thinking blocks are sent in either
-  direction. An empty signature (the local Maya runtime's) is carried
-  as it arrived.
+  direction, and a request whose `max_tokens` was lowered under the
+  budget — the compact clamp, the summary call — drops thinking for
+  that request, thinking blocks included. An empty signature (the
+  local Maya runtime's) is carried as it arrived.
 - **The cost source**: the row's per-million prices times the usage
   the stream reports — `inputPrice` over the uncached input,
   `cacheWritePrice` over `cache_creation_input_tokens`,
@@ -284,7 +295,10 @@ the package contract is `provider/anthropic/PACKAGE.md`.
   mapped; each error path's words; the truncated stream's fault; 429
   with retry-after; the usage and cost arithmetic from the row's
   prices; a 5-minute header timeout on a silent server and the idle
-  bound. One live smoke behind env vars runs keyless against the
-  operator's Messages-format llama-swap and proves the wire and the
-  stream against a live server; the semantics that server lacks stay
-  pinned by the fakes.
+  bound; the encoder's hard cases pinned failing-first — the empty
+  tool result, the budget under a lowered max_tokens, the foreign
+  reasoning records, the skipped empty assistant turn, the block
+  order, the image bound measured on the encoded bytes. One live smoke
+  behind env vars runs keyless against the operator's Messages-format
+  llama-swap and proves the wire and the stream against a live server;
+  the semantics that server lacks stay pinned by the fakes.

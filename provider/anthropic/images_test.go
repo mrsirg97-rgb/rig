@@ -151,3 +151,41 @@ func TestASmuggledMarkerStaysText(t *testing.T) {
 		t.Fatalf("blocks = %+v, want the marker line as text", res.Content)
 	}
 }
+
+func TestTheInlineBoundMeasuresTheEncodedBytes(t *testing.T) {
+	cases := []struct {
+		name    string
+		payload string
+		rides   bool
+		note    string
+	}{
+		// a 3,932,161-byte file encodes to 5,242,884 base64 bytes: over the api's 5 MiB
+		{name: "over", payload: strings.Repeat("a", 3932161), rides: false, note: "is 5242884 bytes encoded, over the 5242880-byte inline bound"},
+		// one byte shorter encodes to exactly 5,242,880: the bound, so it rides
+		{name: "at", payload: strings.Repeat("a", 3932160), rides: true},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			dir := t.TempDir()
+			e := captureEndpoint(t)
+			sha := writeBlob(t, dir, c.payload)
+			p := anthropic.New(anthropic.Config{BaseURL: e.url, Model: "vision-model", MaxTokens: 1024, BlobsDir: dir})
+			if _, err := drain(t, context.Background(), p, core.Request{Messages: viewTranscript(marker(sha, "image/png", "/tmp/shot.png")), MaxTokens: 1024}); err != nil {
+				t.Fatalf("stream: %v", err)
+			}
+			res := lastToolResult(t, e.lastBody(t))
+			if c.rides {
+				if len(res.Content) != 2 || res.Content[1].Source == nil {
+					t.Fatalf("blocks = %+v, want the label and the image", res.Content)
+				}
+				return
+			}
+			if len(res.Content) != 1 || res.Content[0].Source != nil {
+				t.Fatalf("blocks = %+v, want the text note alone", res.Content)
+			}
+			if !strings.Contains(res.Content[0].Text, c.note) {
+				t.Fatalf("note = %q, want %q", res.Content[0].Text, c.note)
+			}
+		})
+	}
+}

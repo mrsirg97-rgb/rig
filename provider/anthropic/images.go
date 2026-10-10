@@ -13,7 +13,7 @@ import (
 const (
 	viewToolName = "view"
 
-	maxInlineBlobBytes = 8 << 20
+	maxInlineBlobBytes = 5 << 20
 )
 
 type blobStore struct {
@@ -35,8 +35,8 @@ func (s *blobStore) source(ref imagemarker.Ref) (blob, string) {
 	if err != nil {
 		return blob{}, note + " is missing"
 	}
-	if info.Size() > maxInlineBlobBytes {
-		return blob{}, note + " is " + strconv.FormatInt(info.Size(), 10) + " bytes, over the " + strconv.Itoa(maxInlineBlobBytes) + "-byte inline bound"
+	if encoded := base64.StdEncoding.EncodedLen(int(info.Size())); encoded > maxInlineBlobBytes {
+		return blob{}, note + " is " + strconv.Itoa(encoded) + " bytes encoded, over the " + strconv.Itoa(maxInlineBlobBytes) + "-byte inline bound"
 	}
 	data, err := os.ReadFile(path)
 	if err != nil {
