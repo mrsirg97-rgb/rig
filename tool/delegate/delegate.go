@@ -45,7 +45,7 @@ type Opts struct {
 	Room         broadcast.Room
 	Ctx          context.Context
 	Await        bool
-	Cap          *evt.Cap
+	Cap          evt.Cap
 }
 
 type holding struct {
@@ -75,7 +75,10 @@ type Delegate interface {
 }
 
 func New(o Opts) Delegate {
-	a := &adapter{Definition: tool.Def("delegate"), Opts: o, workers: map[int64]workerState{}, stops: map[int]holding{}, subs: map[int]*evt.Submission{}}
+	if o.Cap == nil {
+		o.Cap = evt.NewCap(nil, 0)
+	}
+	a := &adapter{Definition: tool.Def("delegate"), Opts: o, workers: map[int64]workerState{}, stops: map[int]holding{}, subs: map[int]evt.Submission{}}
 	if o.Room != nil {
 		a.member = o.Room.Add(rig.MemberDelegate)
 		a.member.Subscribe(context.Background(), a.receive)
@@ -90,7 +93,7 @@ type adapter struct {
 	seq     int64
 	workers map[int64]workerState
 	stops   map[int]holding
-	subs    map[int]*evt.Submission
+	subs    map[int]evt.Submission
 	member  broadcast.Member
 }
 
@@ -479,7 +482,7 @@ func (a *adapter) end(member broadcast.Member, n int) {
 	a.emit()
 }
 
-func (a *adapter) claim(n int) *evt.Submission {
+func (a *adapter) claim(n int) evt.Submission {
 	a.mu.Lock()
 	sub := a.subs[n]
 	delete(a.subs, n)
@@ -519,7 +522,7 @@ func (a *adapter) receive(err error, messages ...broadcast.Message) {
 		if !ok {
 			continue
 		}
-		switch ev := m.Event().(type) {
+		switch ev := m.Signal().(type) {
 		case nil:
 			w.heartbeat = time.Now()
 		case core.ToolStart:

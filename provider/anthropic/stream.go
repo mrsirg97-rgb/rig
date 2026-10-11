@@ -13,11 +13,11 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/mrsirg97-rgb/evt/event"
+	"github.com/mrsirg97-rgb/evt"
 	"github.com/mrsirg97-rgb/rig/v2/core"
 )
 
-func (p *provider) Stream(ctx context.Context, req core.Request) (<-chan event.Event, error) {
+func (p *provider) Stream(ctx context.Context, req core.Request) (<-chan evt.Signal, error) {
 	if len(req.Messages) == 0 {
 		return nil, fmt.Errorf("anthropic: empty message list")
 	}
@@ -26,8 +26,8 @@ func (p *provider) Stream(ctx context.Context, req core.Request) (<-chan event.E
 		return nil, err
 	}
 
-	ch := make(chan event.Event, 4)
-	emit := func(ev event.Event) bool {
+	ch := make(chan evt.Signal, 4)
+	emit := func(ev evt.Signal) bool {
 		select {
 		case ch <- ev:
 			return true
@@ -86,7 +86,7 @@ func (p *provider) Stream(ctx context.Context, req core.Request) (<-chan event.E
 	return ch, nil
 }
 
-func (p *provider) pump(ctx context.Context, resp *http.Response, emit func(event.Event) bool) {
+func (p *provider) pump(ctx context.Context, resp *http.Response, emit func(evt.Signal) bool) {
 	scanner := bufio.NewScanner(resp.Body)
 	scanner.Buffer(make([]byte, 0, 64*1024), 4*1024*1024)
 
@@ -277,7 +277,7 @@ type blockState struct {
 	args      strings.Builder
 }
 
-func emitRecord(emit func(event.Event) bool, b *blockState) bool {
+func emitRecord(emit func(evt.Signal) bool, b *blockState) bool {
 	raw, _ := json.Marshal([]thinkingRecord{{Type: b.kind, Thinking: b.thinking.String(), Signature: b.signature, Data: b.data}})
 	return emit(core.ReasoningDelta{Details: raw})
 }

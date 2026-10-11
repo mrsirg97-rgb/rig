@@ -8,8 +8,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/mrsirg97-rgb/evt"
 	"github.com/mrsirg97-rgb/evt/broadcast"
-	"github.com/mrsirg97-rgb/evt/event"
 	"github.com/mrsirg97-rgb/rig/v2/core"
 )
 
@@ -79,7 +79,7 @@ func (o *OneShot) stopHeartbeat() {
 	}
 }
 
-func (o *OneShot) Notify(ev event.Event) {
+func (o *OneShot) Notify(ev evt.Signal) {
 	switch e := ev.(type) {
 	case core.TextDelta:
 		if o.Out != nil {
@@ -92,7 +92,7 @@ func (o *OneShot) Notify(ev event.Event) {
 		if o.Fleet != nil && e.Text != "" {
 			o.Fleet.Send(context.Background(), func(error) {}, broadcast.NewMessage(o.Fleet.Id(), true, e))
 		}
-	case event.Notice:
+	case evt.Notice:
 		if o.Err != nil {
 			io.WriteString(o.Err, "\nrig: "+e.Source+": "+e.Text+"\n")
 		}

@@ -7,10 +7,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/mrsirg97-rgb/evt/event"
+	"github.com/mrsirg97-rgb/evt"
 )
 
-func (t *tui) Notify(ev event.Event) {
+func (t *tui) Notify(ev evt.Signal) {
 	switch ev.(type) {
 	case core.ReasoningDelta, core.TextDelta, core.ToolStart, core.ToolResult,
 		core.Done, core.Fault, core.Compacted, core.EmptyTurn, core.TurnEnd:
@@ -181,7 +181,7 @@ func (t *tui) Notify(ev event.Event) {
 		t.stopFrameTickerLocked()
 		t.kickNoticesLocked()
 		t.mu.Unlock()
-	case event.Notice:
+	case evt.Notice:
 		t.mu.Lock()
 		t.enqueueNoticeLocked(e)
 		t.mu.Unlock()

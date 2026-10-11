@@ -173,14 +173,14 @@ that is harder than writing a lot, and it is the bar.
 - `core`: the kernel's contract surface: the seams (Provider,
   ContextPolicy, Tool, ToolMiddleware, Frontend, Command), the wire
   types, the agent vocabulary, and the session type. Types only, no
-  behavior. The event interface, the snapshot, the voice and its level
-  moved with the engine to the module's `event` package; core's types
-  declare themselves events by carrying `event.Marker`.
+  behavior. The signal interface, the snapshot, the voice and its level
+  moved with the engine to the module's root package (`evt.Signal`);
+  core's types declare themselves signals by carrying `evt.Mark`.
 - `loop`: the turn runtime: the one place turn ordering is written
   down; a write is 60 and serializes inline in the drain, a read is 50
   and overlaps (SPEC_WRITES); fault- and cancel-aware.
 - `evt` (the engine): the module `github.com/mrsirg97-rgb/evt` — the
-  engine, the event types and the room left the tree in 2.18.0 (its
+  engine, the signal types and the room left the tree in 2.18.0 (its
   spec moved with it); one consumer, many producers, closures ordered
   by priority then arrival. The turn loop is its consumer: every step
   of a turn is a closure on the loop goroutine.
@@ -311,7 +311,7 @@ that is harder than writing a lot, and it is the bar.
   and regenerate; never hand-edit the generated projections.
 - `broadcast` (the module's): the fleet's message seams: a `Room` of
   `Member`s over a `Transport`, a `Message` with origin, health and an
-  `event.Event` — a message with no event is a heartbeat; a send is a
+  `evt.Signal` — a message with no signal is a heartbeat; a send is a
   post at the receiving member's priority and the queue is the
   durability; `Say` is the one voice a background subsystem notices
   with, and the member ids are named in the kernel. The wire registry —

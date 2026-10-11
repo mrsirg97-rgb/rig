@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/mrsirg97-rgb/evt/event"
+	"github.com/mrsirg97-rgb/evt"
 	"github.com/mrsirg97-rgb/rig/v2/core"
 	"github.com/mrsirg97-rgb/rig/v2/models"
 	compact "github.com/mrsirg97-rgb/rig/v2/policy/compact"
@@ -20,7 +20,7 @@ func TestPolicyCompactSeamForcesBelowTrigger(t *testing.T) {
 	s.Append(core.Message{Role: core.RoleUser, Content: strings.Repeat("p", 800)})
 	s.Append(core.Message{Role: core.RoleAssistant, Content: strings.Repeat("a", 400)})
 
-	summary := []event.Event{core.TextDelta{Text: "SUM"}, core.Done{Usage: core.Usage{Prompt: 812, Completion: 640}}}
+	summary := []evt.Signal{core.TextDelta{Text: "SUM"}, core.Done{Usage: core.Usage{Prompt: 812, Completion: 640}}}
 	prov := &scriptedProvider{turns: []scriptedTurn{{events: summary}}}
 	fe := &captureFrontend{}
 	pol, err := compact.New(prov, fe, s, "S", testRow)
@@ -92,8 +92,8 @@ func TestPolicyCompactSpendsTheBudget(t *testing.T) {
 	s.Append(core.Message{Role: core.RoleUser, Content: strings.Repeat("p", 800)})
 	s.Append(core.Message{Role: core.RoleAssistant, Content: strings.Repeat("a", 400)})
 
-	summary := []event.Event{core.TextDelta{Text: "SUM"}, core.Done{}}
-	fault := []event.Event{core.Fault{Err: errors.New("prompt is too long: context length exceeded")}}
+	summary := []evt.Signal{core.TextDelta{Text: "SUM"}, core.Done{}}
+	fault := []evt.Signal{core.Fault{Err: errors.New("prompt is too long: context length exceeded")}}
 
 	prov := &scriptedProvider{turns: []scriptedTurn{{events: summary}, {events: fault}}}
 	pol, err := compact.New(prov, &captureFrontend{}, s, "S", testRow)
@@ -113,7 +113,7 @@ func TestPolicyCompactSpendsTheBudget(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Stream: %v", err)
 	}
-	var events []event.Event
+	var events []evt.Signal
 	for ev := range ch {
 		events = append(events, ev)
 	}

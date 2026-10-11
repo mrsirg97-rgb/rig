@@ -7,16 +7,17 @@ callers built on it that never touched it. `broadcast` beside it carried
 one thing the module could not: the pipe encoder listed rig's own types
 to put them on the wire. The module `github.com/mrsirg97-rgb/evt` is the
 engine — the same files, the same tests, the same exported names, the
-only diff the import path — the event types in `event` (`Event` closed
-with the marker as its one door, `Snapshot`, `Notice`, `Level`), and
+only diff the import path — the signal types beside it (`Signal` closed
+with `Mark` as its one door, `Snapshot`, `Notice`, `Level`: `evt.Event`
+is work the engine runs, `evt.Signal` is what an application tells), and
 `broadcast` with a generic payload: the room, the transports, `Say`, and
-a wire that takes a registry. An application declares each event type it
+a wire that takes a registry. An application declares each signal type it
 sends, once, by name, with how to encode and decode it; the registry is
 built whole and handed to the codec when it is constructed; an
 unregistered type is the sender's error, an unknown kind the receiver's,
 reported once. Rig imports the module; `evt/` and `broadcast/` leave the
-tree; `core` keeps the agent vocabulary and declares its types events by
-carrying `event.Marker` — the marker moves no bytes, so the fleet pipe
+tree; `core` keeps the agent vocabulary and declares its types signals by
+carrying `evt.Mark` — the mark moves no bytes, so the fleet pipe
 on fd 3 carries the same frames, and the kinds rig registers are the
 ones the wire always spoke. `swarm` and `tool/delegate` change only
 their imports. The design note is the module's `specs/DESIGN_EVT.md`,

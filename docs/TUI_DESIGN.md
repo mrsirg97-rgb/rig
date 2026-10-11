@@ -207,7 +207,7 @@ ticker the batch holds. No new colors: labels and markers dim, counts
 text, the check the success slot, the cross the fault slot; the glyph
 switch carries the ascii fallback (`....`, `~` for the review clock).
 
-The notices (`core.Notice`, source `swarm`) breathe once in the action
+The notices (`evt.Notice`, source `swarm`) breathe once in the action
 indicator's row between turns, in their level's color, and commit nothing
 (2.11.7); before that they committed one dim line per decision in the
 transcript (SPEC_SWARM 7). Both are status-string extensions: the

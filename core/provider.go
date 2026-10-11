@@ -7,44 +7,44 @@ import (
 	"strings"
 	"time"
 
-	"github.com/mrsirg97-rgb/evt/event"
+	"github.com/mrsirg97-rgb/evt"
 )
 
 var (
-	_ event.Event = TextDelta{}
-	_ event.Event = ReasoningDelta{}
-	_ event.Event = ToolCallEvent{}
-	_ event.Event = Done{}
-	_ event.Event = EmptyTurn{}
-	_ event.Event = Fault{}
-	_ event.Event = ToolStart{}
-	_ event.Event = ToolResult{}
-	_ event.Event = TurnEnd{}
-	_ event.Event = TestEvent{}
-	_ event.Event = Compacted{}
-	_ event.Event = SwarmStatus{}
-	_ event.Event = Verdict{}
-	_ event.Event = Phase{}
-	_ event.Event = WorkerDone{}
+	_ evt.Signal = TextDelta{}
+	_ evt.Signal = ReasoningDelta{}
+	_ evt.Signal = ToolCallEvent{}
+	_ evt.Signal = Done{}
+	_ evt.Signal = EmptyTurn{}
+	_ evt.Signal = Fault{}
+	_ evt.Signal = ToolStart{}
+	_ evt.Signal = ToolResult{}
+	_ evt.Signal = TurnEnd{}
+	_ evt.Signal = TestEvent{}
+	_ evt.Signal = Compacted{}
+	_ evt.Signal = SwarmStatus{}
+	_ evt.Signal = Verdict{}
+	_ evt.Signal = Phase{}
+	_ evt.Signal = WorkerDone{}
 )
 
 type TextDelta struct {
 	Text string
 
-	event.Marker
+	evt.Mark
 }
 
 type ReasoningDelta struct {
 	Text    string
 	Details json.RawMessage
 
-	event.Marker
+	evt.Mark
 }
 
 type ToolCallEvent struct {
 	Call ToolCall
 
-	event.Marker
+	evt.Mark
 }
 
 type Done struct {
@@ -52,7 +52,7 @@ type Done struct {
 	Usage      Usage
 	Model      string
 
-	event.Marker
+	evt.Mark
 }
 
 type EmptyTurn struct {
@@ -61,13 +61,13 @@ type EmptyTurn struct {
 	Usage    Usage
 	Model    string
 
-	event.Marker
+	evt.Mark
 }
 
 type Fault struct {
 	Err error
 
-	event.Marker
+	evt.Mark
 }
 
 type Usage struct {
@@ -81,7 +81,7 @@ type Usage struct {
 type ToolStart struct {
 	Call ToolCall
 
-	event.Marker
+	evt.Mark
 }
 
 func (e ToolStart) BoundedCall() string {
@@ -101,7 +101,7 @@ type ToolResult struct {
 	Err      error
 	Duration time.Duration
 
-	event.Marker
+	evt.Mark
 }
 
 type TurnReason string
@@ -115,13 +115,13 @@ const (
 type TurnEnd struct {
 	Reason TurnReason
 
-	event.Marker
+	evt.Mark
 }
 
 type TestEvent struct {
 	Name string
 
-	event.Marker
+	evt.Mark
 }
 
 type Compacted struct {
@@ -131,11 +131,11 @@ type Compacted struct {
 	Usage   Usage
 	Model   string
 
-	event.Marker
+	evt.Mark
 }
 
 type Compacting struct {
-	event.Marker
+	evt.Mark
 }
 
 type SwarmWorker struct {
@@ -155,7 +155,7 @@ type SwarmStatus struct {
 	Pending int
 	Review  int
 
-	event.Marker
+	evt.Mark
 }
 
 func (SwarmStatus) Snapshot() {}
@@ -165,7 +165,7 @@ type Verdict struct {
 	Accept bool
 	Reason string
 
-	event.Marker
+	evt.Mark
 }
 
 type Phase struct {
@@ -175,11 +175,11 @@ type Phase struct {
 	Ok   bool
 	Note string
 
-	event.Marker
+	evt.Mark
 }
 
 type Provider interface {
-	Stream(ctx context.Context, req Request) (<-chan event.Event, error)
+	Stream(ctx context.Context, req Request) (<-chan evt.Signal, error)
 }
 
 type Request struct {
@@ -206,7 +206,7 @@ type WorkerDone struct {
 	Kind     string
 	RunID    string
 
-	event.Marker
+	evt.Mark
 }
 
 func (d WorkerDone) Head() string {

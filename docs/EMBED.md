@@ -89,6 +89,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/mrsirg97-rgb/evt"
 	"github.com/mrsirg97-rgb/rig/v2"
 	"github.com/mrsirg97-rgb/rig/v2/core"
 	"github.com/mrsirg97-rgb/rig/v2/loop"
@@ -98,11 +99,11 @@ import (
 
 type frontend struct {
 	prompt string
-	events []core.Event
+	events []evt.Signal
 }
 
 func (f *frontend) Input(ctx context.Context) (string, error) { return f.prompt, nil }
-func (f *frontend) Notify(ev core.Event) { f.events = append(f.events, ev) }
+func (f *frontend) Notify(ev evt.Signal) { f.events = append(f.events, ev) }
 
 type passthrough struct{}
 
@@ -112,8 +113,8 @@ func (passthrough) Assemble(ctx context.Context, s *core.Session) ([]core.Messag
 
 type stubProvider struct{}
 
-func (stubProvider) Stream(ctx context.Context, req core.Request) (<-chan core.Event, error) {
-	ch := make(chan core.Event, 2)
+func (stubProvider) Stream(ctx context.Context, req core.Request) (<-chan evt.Signal, error) {
+	ch := make(chan evt.Signal, 2)
 	ch <- core.TextDelta{Text: "done"}
 	ch <- core.Done{StopReason: "stop"}
 	close(ch)

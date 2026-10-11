@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/mrsirg97-rgb/evt/event"
+	"github.com/mrsirg97-rgb/evt"
 	"github.com/mrsirg97-rgb/rig/v2/core"
 	"github.com/mrsirg97-rgb/rig/v2/models"
 	"github.com/mrsirg97-rgb/rig/v2/policy"
@@ -58,7 +58,7 @@ func TestBelowTriggerIsPassthroughByteIdentical(t *testing.T) {
 		s.Append(core.Message{Role: core.RoleTool, ToolID: "c1", Content: strings.Repeat("r", 400)})
 
 		prov := &scriptedProvider{turns: []scriptedTurn{{
-			events: []event.Event{core.TextDelta{Text: "SUMMARY"}, core.Done{Usage: core.Usage{Prompt: 10, Completion: 1}}},
+			events: []evt.Signal{core.TextDelta{Text: "SUMMARY"}, core.Done{Usage: core.Usage{Prompt: 10, Completion: 1}}},
 		}}}
 		fe := &captureFrontend{}
 		pol, err := compact.New(prov, fe, s, "S", testRow)
@@ -107,7 +107,7 @@ func TestBelowTriggerIsPassthroughByteIdentical(t *testing.T) {
 		s.Append(core.Message{Role: core.RoleUser, Content: strings.Repeat("p", 1796)})
 		s.Append(core.Message{Role: core.RoleUser, Content: strings.Repeat("q", 1804)})
 		prov := &scriptedProvider{turns: []scriptedTurn{{
-			events: []event.Event{core.TextDelta{Text: "SUM"}, core.Done{}},
+			events: []evt.Signal{core.TextDelta{Text: "SUM"}, core.Done{}},
 		}}}
 		pol, err := compact.New(prov, &captureFrontend{}, s, system, testRow)
 		if err != nil {
@@ -137,7 +137,7 @@ func TestTriggerMathPerModelOneConfig(t *testing.T) {
 		s.Append(core.Message{Role: core.RoleTool, ToolID: "c1", Content: strings.Repeat("r", 800)})
 		return s
 	}
-	summary := []event.Event{core.TextDelta{Text: "SUM"}, core.Done{}}
+	summary := []evt.Signal{core.TextDelta{Text: "SUM"}, core.Done{}}
 
 	sw := fixture()
 	provW := &scriptedProvider{turns: []scriptedTurn{{events: summary}}}
@@ -187,7 +187,7 @@ func TestSummaryMaxTokensClamped(t *testing.T) {
 		s := core.NewSession()
 		s.Append(core.Message{Role: core.RoleUser, Content: strings.Repeat("p", 2000)})
 		s.Append(core.Message{Role: core.RoleUser, Content: strings.Repeat("q", 2000)})
-		prov := &scriptedProvider{turns: []scriptedTurn{{events: []event.Event{core.TextDelta{Text: "S"}, core.Done{}}}}}
+		prov := &scriptedProvider{turns: []scriptedTurn{{events: []evt.Signal{core.TextDelta{Text: "S"}, core.Done{}}}}}
 		pol, err := compact.New(prov, &captureFrontend{}, s, "", row)
 		if err != nil {
 			t.Fatalf("New: %v", err)
@@ -270,7 +270,7 @@ func TestSummarySummarizesRatherThanContinues(t *testing.T) {
 
 	const summary = "The session set up the build: the model called bash with make build (it printed ok); the user then asked to reply with only X."
 	prov := &scriptedProvider{turns: []scriptedTurn{{
-		events: []event.Event{core.TextDelta{Text: summary}, core.Done{Usage: core.Usage{Prompt: 10, Completion: 5}}},
+		events: []evt.Signal{core.TextDelta{Text: summary}, core.Done{Usage: core.Usage{Prompt: 10, Completion: 5}}},
 	}}}
 	fe := &captureFrontend{}
 	pol, err := compact.New(prov, fe, s, "S", row)
@@ -383,9 +383,9 @@ func TestCompactedEventBeforeTheNextCall(t *testing.T) {
 	s.Append(core.Message{Role: core.RoleTool, ToolID: "c1", Content: strings.Repeat("r", 2000)})
 
 	prov := &scriptedProvider{turns: []scriptedTurn{
-		{events: []event.Event{core.TextDelta{Text: "THE SUMMARY"}, core.Done{Usage: core.Usage{Prompt: 777, Completion: 33}}}},
+		{events: []evt.Signal{core.TextDelta{Text: "THE SUMMARY"}, core.Done{Usage: core.Usage{Prompt: 777, Completion: 33}}}},
 
-		{events: []event.Event{core.TextDelta{Text: "next"}, core.Done{}}},
+		{events: []evt.Signal{core.TextDelta{Text: "next"}, core.Done{}}},
 	}}
 	fe := &captureFrontend{}
 	pol, err := compact.New(prov, fe, s, "S", testRow)
@@ -436,8 +436,8 @@ func TestSecondCompactionFoldsTheFirst(t *testing.T) {
 	s.Append(core.Message{Role: core.RoleUser, Content: strings.Repeat("p2", 1000)})
 
 	prov := &scriptedProvider{turns: []scriptedTurn{
-		{events: []event.Event{core.TextDelta{Text: "SUM1"}, core.Done{}}},
-		{events: []event.Event{core.TextDelta{Text: "SUM2"}, core.Done{}}},
+		{events: []evt.Signal{core.TextDelta{Text: "SUM1"}, core.Done{}}},
+		{events: []evt.Signal{core.TextDelta{Text: "SUM2"}, core.Done{}}},
 	}}
 	fe := &captureFrontend{}
 	pol, err := compact.New(prov, fe, s, "S", row)
@@ -485,7 +485,7 @@ func TestCompactionWritesNothingToRem(t *testing.T) {
 	s := core.NewSession()
 	s.Append(core.Message{Role: core.RoleUser, Content: strings.Repeat("p1", 1000)})
 	s.Append(core.Message{Role: core.RoleUser, Content: strings.Repeat("p2", 1000)})
-	prov := &scriptedProvider{turns: []scriptedTurn{{events: []event.Event{core.TextDelta{Text: "S"}, core.Done{}}}}}
+	prov := &scriptedProvider{turns: []scriptedTurn{{events: []evt.Signal{core.TextDelta{Text: "S"}, core.Done{}}}}}
 	pol, err := compact.New(prov, &captureFrontend{}, s, "S", row)
 	if err != nil {
 		t.Fatalf("New: %v", err)
@@ -507,7 +507,7 @@ func TestSummaryEffortIsTheRowsLowest(t *testing.T) {
 		s := core.NewSession()
 		s.Append(core.Message{Role: core.RoleUser, Content: strings.Repeat("p", 2000)})
 		s.Append(core.Message{Role: core.RoleUser, Content: strings.Repeat("q", 2000)})
-		prov := &scriptedProvider{turns: []scriptedTurn{{events: []event.Event{core.TextDelta{Text: "S"}, core.Done{}}}}}
+		prov := &scriptedProvider{turns: []scriptedTurn{{events: []evt.Signal{core.TextDelta{Text: "S"}, core.Done{}}}}}
 		return prov, s
 	}
 	base := models.Model{ID: "local", Window: 1000, MaxTokens: 500, Reserve: 100, KeepRecent: 200, Role: models.RoleInteractive}
@@ -559,7 +559,7 @@ func TestCompactingCueOrder(t *testing.T) {
 	s.Append(core.Message{Role: core.RoleAssistant, Content: strings.Repeat("a", 200), ContextTokens: 801})
 	s.Append(core.Message{Role: core.RoleTool, ToolID: "c1", Content: strings.Repeat("r", 400)})
 	prov := &scriptedProvider{turns: []scriptedTurn{{
-		events: []event.Event{core.TextDelta{Text: "SUMMARY"}, core.Done{}},
+		events: []evt.Signal{core.TextDelta{Text: "SUMMARY"}, core.Done{}},
 	}}}
 	fe := &captureFrontend{}
 	pol, err := compact.New(prov, fe, s, "S", testRow)
@@ -673,7 +673,7 @@ func TestCompactedCarriesTheSummaryCallModel(t *testing.T) {
 	s.Append(core.Message{Role: core.RoleTool, ToolID: "c1", Content: strings.Repeat("r", 2000)})
 
 	prov := &scriptedProvider{turns: []scriptedTurn{
-		{events: []event.Event{core.TextDelta{Text: "SUMMARY"}, core.Done{Model: "ox-alpha", Usage: core.Usage{Prompt: 10, Completion: 1}}}},
+		{events: []evt.Signal{core.TextDelta{Text: "SUMMARY"}, core.Done{Model: "ox-alpha", Usage: core.Usage{Prompt: 10, Completion: 1}}}},
 	}}
 	fe := &captureFrontend{}
 	pol, err := compact.New(prov, fe, s, "S", testRow)
@@ -698,7 +698,7 @@ func TestCompactedCarriesTheSummaryCallModel(t *testing.T) {
 
 func TestTheSummaryCallsThinkingStreamsAsTheSummarizingPhase(t *testing.T) {
 	s := compactFixture()
-	prov := &scriptedProvider{turns: []scriptedTurn{{events: []event.Event{
+	prov := &scriptedProvider{turns: []scriptedTurn{{events: []evt.Signal{
 		core.ReasoningDelta{Text: "weighing "},
 		core.ReasoningDelta{Text: "the tail"},
 		core.TextDelta{Text: "SUM"},

@@ -242,7 +242,7 @@ lands as a printed command: the one `Environment=` line in the unit
 
 `broadcast/` is the fleet's message seam (SPEC_SWARM): a `Room` of
 `Member`s over a `Transport`, exchanging `Message`s that carry origin,
-health, and a `core.Event`. The transport is the loop itself
+health, and a `evt.Signal`. The transport is the loop itself
 (`NewLoopTransport(id, engine, priority)`): a send posts one closure at
 the room's priority and acks on the post — the queue is the durability —
 and a second heartbeat before the first ran is not posted at all. `Say`

@@ -6,10 +6,10 @@ import (
 	"io"
 	"strconv"
 
-	"github.com/mrsirg97-rgb/evt/event"
+	"github.com/mrsirg97-rgb/evt"
 )
 
-func (c *cli) Notify(ev event.Event) {
+func (c *cli) Notify(ev evt.Signal) {
 	switch e := ev.(type) {
 	case core.TextDelta:
 		io.WriteString(c.out, e.Text)
@@ -46,7 +46,7 @@ func (c *cli) Notify(ev event.Event) {
 			formatTokens(e.Usage.Prompt), formatTokens(e.Usage.Completion))
 	case core.Fault:
 		fmt.Fprintf(c.out, "\n[fault] %v\n", e.Err)
-	case event.Notice:
+	case evt.Notice:
 		fmt.Fprintf(c.out, "rig: %s: %s\n", e.Source, e.Text)
 	case core.WorkerDone:
 		c.mu.Lock()

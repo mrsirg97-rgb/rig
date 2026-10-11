@@ -6,7 +6,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/mrsirg97-rgb/evt/event"
+	"github.com/mrsirg97-rgb/evt"
 	rig "github.com/mrsirg97-rgb/rig/v2"
 	"github.com/mrsirg97-rgb/rig/v2/core"
 	"github.com/mrsirg97-rgb/rig/v2/loop"
@@ -17,16 +17,16 @@ type requestLog struct {
 	reqs  [][]core.Message
 }
 
-func (p *requestLog) Stream(ctx context.Context, req core.Request) (<-chan event.Event, error) {
+func (p *requestLog) Stream(ctx context.Context, req core.Request) (<-chan evt.Signal, error) {
 	p.reqs = append(p.reqs, append([]core.Message(nil), req.Messages...))
 	return p.inner.Stream(ctx, req)
 }
 
-func steered(t *testing.T, cut []event.Event, at func(event.Event) bool) (*core.Session, *requestLog) {
+func steered(t *testing.T, cut []evt.Signal, at func(evt.Signal) bool) (*core.Session, *requestLog) {
 	t.Helper()
 	p := &requestLog{inner: &scriptedProvider{turns: []scriptedTurn{
 		{events: cut, holdAfter: true},
-		{events: []event.Event{textEv("delivered"), doneEv()}},
+		{events: []evt.Signal{textEv("delivered"), doneEv()}},
 	}}}
 	f := &steeringFrontend{inputs: []string{"speak", "steer"}, steerAt: at}
 	session := core.NewSession()
@@ -46,14 +46,14 @@ func steered(t *testing.T, cut []event.Event, at func(event.Event) bool) (*core.
 	return session, p
 }
 
-func isText(ev event.Event) bool { _, ok := ev.(core.TextDelta); return ok }
+func isText(ev evt.Signal) bool { _, ok := ev.(core.TextDelta); return ok }
 
-func isReasoning(ev event.Event) bool { _, ok := ev.(core.ReasoningDelta); return ok }
+func isReasoning(ev evt.Signal) bool { _, ok := ev.(core.ReasoningDelta); return ok }
 
-func isCall(ev event.Event) bool { _, ok := ev.(core.ToolCallEvent); return ok }
+func isCall(ev evt.Signal) bool { _, ok := ev.(core.ToolCallEvent); return ok }
 
 func TestAReplyCutDuringReasoningStaysInTheTranscript(t *testing.T) {
-	session, _ := steered(t, []event.Event{core.ReasoningDelta{Text: "weighing "}}, isReasoning)
+	session, _ := steered(t, []evt.Signal{core.ReasoningDelta{Text: "weighing "}}, isReasoning)
 	wantTranscript(t, session,
 		core.Message{Role: core.RoleUser, Content: "speak"},
 		core.Message{Role: core.RoleAssistant, Reasoning: "weighing "},
@@ -64,7 +64,7 @@ func TestAReplyCutDuringReasoningStaysInTheTranscript(t *testing.T) {
 
 func TestACallThatStreamedBeforeTheCutIsNotInTheTranscript(t *testing.T) {
 	call := core.ToolCall{ID: "c1", Name: "echo", Args: json.RawMessage(`{}`)}
-	session, _ := steered(t, []event.Event{textEv("running it "), callEv(call)}, isCall)
+	session, _ := steered(t, []evt.Signal{textEv("running it "), callEv(call)}, isCall)
 	wantTranscript(t, session,
 		core.Message{Role: core.RoleUser, Content: "speak"},
 		core.Message{Role: core.RoleAssistant, Content: "running it "},
@@ -76,7 +76,7 @@ func TestACallThatStreamedBeforeTheCutIsNotInTheTranscript(t *testing.T) {
 func TestACutBeforeTheFirstTokenAppendsNothing(t *testing.T) {
 	p := &scriptedProvider{turns: []scriptedTurn{
 		{holdAfter: true},
-		{events: []event.Event{textEv("delivered"), doneEv()}},
+		{events: []evt.Signal{textEv("delivered"), doneEv()}},
 	}}
 	f := &steeringFrontend{inputs: []string{"speak", "steer"}}
 	hold := &holdingProvider{inner: p, started: func() { f.handle() }}
@@ -103,7 +103,7 @@ type holdingProvider struct {
 	fired   bool
 }
 
-func (p *holdingProvider) Stream(ctx context.Context, req core.Request) (<-chan event.Event, error) {
+func (p *holdingProvider) Stream(ctx context.Context, req core.Request) (<-chan evt.Signal, error) {
 	ch, err := p.inner.Stream(ctx, req)
 	if !p.fired {
 		p.fired = true
@@ -113,7 +113,7 @@ func (p *holdingProvider) Stream(ctx context.Context, req core.Request) (<-chan 
 }
 
 func TestTheRequestAfterASteerExtendsTheRequestBeforeIt(t *testing.T) {
-	_, p := steered(t, []event.Event{core.ReasoningDelta{Text: "weighing "}, textEv("partial ")}, isText)
+	_, p := steered(t, []evt.Signal{core.ReasoningDelta{Text: "weighing "}, textEv("partial ")}, isText)
 	if len(p.reqs) != 2 {
 		t.Fatalf("model calls = %d, want 2", len(p.reqs))
 	}

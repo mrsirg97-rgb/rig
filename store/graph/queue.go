@@ -11,8 +11,8 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/mrsirg97-rgb/evt"
 	"github.com/mrsirg97-rgb/evt/broadcast"
-	"github.com/mrsirg97-rgb/evt/event"
 	"github.com/mrsirg97-rgb/rig/v2/store"
 	"github.com/mrsirg97-rgb/rig/v2/store/scope"
 )
@@ -118,7 +118,7 @@ func (q *Queue) say(format string, args ...any) {
 	q.said[text] = true
 	q.mu.Unlock()
 	if !seen {
-		broadcast.Say(q.voice, "graph", text, event.LevelError)
+		broadcast.Say(q.voice, "graph", text, evt.LevelError)
 	}
 }
 

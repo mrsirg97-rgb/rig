@@ -143,7 +143,7 @@ func TestDelegateWorkerHeartbeatIsPublishedAsItsMember(t *testing.T) {
 	heard := make(chan int64, 8)
 	room.Add(0).Subscribe(context.Background(), func(err error, messages ...broadcast.Message) {
 		for _, m := range messages {
-			if err == nil && m.Event() == nil {
+			if err == nil && m.Signal() == nil {
 				heard <- m.Origin()
 			}
 		}

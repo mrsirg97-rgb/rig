@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mrsirg97-rgb/evt/event"
+	"github.com/mrsirg97-rgb/evt"
 	rigpkg "github.com/mrsirg97-rgb/rig/v2"
 	"github.com/mrsirg97-rgb/rig/v2/command"
 	"github.com/mrsirg97-rgb/rig/v2/core"
@@ -60,11 +60,11 @@ type cliProvider struct {
 	answer string
 }
 
-func (p *cliProvider) Stream(ctx context.Context, req core.Request) (<-chan event.Event, error) {
+func (p *cliProvider) Stream(ctx context.Context, req core.Request) (<-chan evt.Signal, error) {
 	p.mu.Lock()
 	p.reqs = append(p.reqs, req)
 	p.mu.Unlock()
-	out := make(chan event.Event, 2)
+	out := make(chan evt.Signal, 2)
 	go func() {
 		defer close(out)
 		out <- core.TextDelta{Text: p.answer}

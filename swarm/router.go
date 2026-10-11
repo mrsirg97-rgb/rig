@@ -1,7 +1,7 @@
 package swarm
 
 import (
-	"github.com/mrsirg97-rgb/evt/event"
+	"github.com/mrsirg97-rgb/evt"
 	todostore "github.com/mrsirg97-rgb/rig/v2/store/todo"
 )
 
@@ -25,7 +25,7 @@ func (c *Controller) dispatch() {
 		if c.budget > 0 && c.spent >= c.budget {
 			if !c.budgetSaid {
 				c.budgetSaid = true
-				c.say(event.LevelInfo, "budget reached — $%.2f / $%.2f — the swarm stops claiming", c.spent, c.budget)
+				c.say(evt.LevelInfo, "budget reached — $%.2f / $%.2f — the swarm stops claiming", c.spent, c.budget)
 			}
 			return
 		}

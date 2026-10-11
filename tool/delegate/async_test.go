@@ -11,7 +11,6 @@ import (
 
 	"github.com/mrsirg97-rgb/evt"
 	"github.com/mrsirg97-rgb/evt/broadcast"
-	"github.com/mrsirg97-rgb/evt/event"
 	"github.com/mrsirg97-rgb/rig/v2/core"
 	sched "github.com/mrsirg97-rgb/rig/v2/store/scheduler"
 )
@@ -199,7 +198,7 @@ func (c *callSpawn) spawn(ctx context.Context, argv []string, cwd string, env []
 	return sched.SpawnResult{Exit: 0, Stdout: "done"}, nil
 }
 
-func (c *callSpawn) send(ev event.Event) error {
+func (c *callSpawn) send(ev evt.Signal) error {
 	c.mu.Lock()
 	pipe := c.pipe
 	c.mu.Unlock()

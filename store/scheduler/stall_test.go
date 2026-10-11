@@ -384,8 +384,8 @@ func TestRealSpawnHandsTheChildTheFleetPipeAsFdThree(t *testing.T) {
 	}
 	select {
 	case m := <-heard:
-		if m.Origin() != 9 || !m.Ok() || m.Event() != nil {
-			t.Fatalf("frame = %d %v %v, want the child's heartbeat", m.Origin(), m.Ok(), m.Event())
+		if m.Origin() != 9 || !m.Ok() || m.Signal() != nil {
+			t.Fatalf("frame = %d %v %v, want the child's heartbeat", m.Origin(), m.Ok(), m.Signal())
 		}
 	case <-time.After(2 * time.Second):
 		t.Fatal("the child's frame on fd 3 never arrived")

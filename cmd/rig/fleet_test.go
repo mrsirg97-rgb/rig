@@ -11,7 +11,6 @@ import (
 
 	"github.com/mrsirg97-rgb/evt"
 	"github.com/mrsirg97-rgb/evt/broadcast"
-	"github.com/mrsirg97-rgb/evt/event"
 	"github.com/mrsirg97-rgb/rig/v2"
 	"github.com/mrsirg97-rgb/rig/v2/command"
 	"github.com/mrsirg97-rgb/rig/v2/core"
@@ -40,7 +39,7 @@ func TestTheDelegateReturnPostsAboveTheTurnsQueue(t *testing.T) {
 	room.Add(rig.MemberDelegate)
 	other := room.Mint()
 	room.Add(rig.MemberDelegate).Publish(context.Background(), func(error) {}, broadcast.NewMessage(rig.MemberDelegate, true, core.WorkerDone{N: 1, Content: "the worker's return", Exit: 0, Duration: time.Second}))
-	other.Publish(context.Background(), func(error) {}, broadcast.NewMessage(other.Id(), true, event.Notice{Source: "swarm", Text: "a worker says"}))
+	other.Publish(context.Background(), func(error) {}, broadcast.NewMessage(other.Id(), true, evt.Notice{Source: "swarm", Text: "a worker says"}))
 	eng.mu.Lock()
 	defer eng.mu.Unlock()
 	above := 0

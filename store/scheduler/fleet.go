@@ -8,8 +8,8 @@ import (
 	"strconv"
 	"syscall"
 
+	"github.com/mrsirg97-rgb/evt"
 	"github.com/mrsirg97-rgb/evt/broadcast"
-	"github.com/mrsirg97-rgb/evt/event"
 	"github.com/mrsirg97-rgb/rig/v2/core"
 )
 
@@ -37,13 +37,13 @@ func FleetFrom(ctx context.Context) (int64, *os.File, bool) {
 
 func Wire() (broadcast.Registry, error) {
 	reg, err := broadcast.Declare(broadcast.NewRegistry(), "notice",
-		func(n event.Notice) ([]byte, error) { return json.Marshal(n) },
-		func(b []byte) (event.Notice, error) {
-			var n event.Notice
+		func(n evt.Notice) ([]byte, error) { return json.Marshal(n) },
+		func(b []byte) (evt.Notice, error) {
+			var n evt.Notice
 			return n, json.Unmarshal(b, &n)
 		})
 	if err != nil {
-		return broadcast.Registry{}, err
+		return nil, err
 	}
 	reg, err = broadcast.Declare(reg, "swarm_status",
 		func(s core.SwarmStatus) ([]byte, error) { return json.Marshal(s) },
@@ -52,7 +52,7 @@ func Wire() (broadcast.Registry, error) {
 			return s, json.Unmarshal(b, &s)
 		})
 	if err != nil {
-		return broadcast.Registry{}, err
+		return nil, err
 	}
 	reg, err = broadcast.Declare(reg, "verdict",
 		func(v core.Verdict) ([]byte, error) { return json.Marshal(v) },
@@ -61,7 +61,7 @@ func Wire() (broadcast.Registry, error) {
 			return v, json.Unmarshal(b, &v)
 		})
 	if err != nil {
-		return broadcast.Registry{}, err
+		return nil, err
 	}
 	reg, err = broadcast.Declare(reg, "phase",
 		func(p core.Phase) ([]byte, error) { return json.Marshal(p) },
@@ -70,7 +70,7 @@ func Wire() (broadcast.Registry, error) {
 			return p, json.Unmarshal(b, &p)
 		})
 	if err != nil {
-		return broadcast.Registry{}, err
+		return nil, err
 	}
 	reg, err = broadcast.Declare(reg, "reasoning",
 		func(r core.ReasoningDelta) ([]byte, error) { return json.Marshal(r) },
@@ -79,7 +79,7 @@ func Wire() (broadcast.Registry, error) {
 			return r, json.Unmarshal(b, &r)
 		})
 	if err != nil {
-		return broadcast.Registry{}, err
+		return nil, err
 	}
 	reg, err = broadcast.Declare(reg, "tool_start",
 		func(t core.ToolStart) ([]byte, error) { return json.Marshal(t) },
@@ -88,7 +88,7 @@ func Wire() (broadcast.Registry, error) {
 			return t, json.Unmarshal(b, &t)
 		})
 	if err != nil {
-		return broadcast.Registry{}, err
+		return nil, err
 	}
 	return reg, nil
 }

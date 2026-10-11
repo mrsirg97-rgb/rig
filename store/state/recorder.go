@@ -9,7 +9,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/mrsirg97-rgb/evt/event"
+	"github.com/mrsirg97-rgb/evt"
 	"github.com/mrsirg97-rgb/rig/v2/core"
 	"github.com/mrsirg97-rgb/rig/v2/store"
 	"github.com/mrsirg97-rgb/rig/v2/store/state/domain"
@@ -95,7 +95,7 @@ func PromptLabel(content string) string {
 	return string(r)
 }
 
-func (r *Recorder) Notify(ev event.Event) {
+func (r *Recorder) Notify(ev evt.Signal) {
 	if r == nil {
 		return
 	}
@@ -103,7 +103,7 @@ func (r *Recorder) Notify(ev event.Event) {
 	r.inner.Notify(ev)
 }
 
-func (r *Recorder) observe(ev event.Event) {
+func (r *Recorder) observe(ev evt.Signal) {
 	if e := r.ensure(); e != nil {
 		r.loud("session row", e)
 	}

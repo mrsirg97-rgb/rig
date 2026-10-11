@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mrsirg97-rgb/evt/event"
+	"github.com/mrsirg97-rgb/evt"
 	"github.com/mrsirg97-rgb/rig/v2/core"
 	sched "github.com/mrsirg97-rgb/rig/v2/store/scheduler"
 	"github.com/mrsirg97-rgb/rig/v2/swarm"
@@ -15,23 +15,23 @@ import (
 
 type recordFrontend struct {
 	mu     sync.Mutex
-	events []event.Event
+	events []evt.Signal
 }
 
 func (r *recordFrontend) Input(ctx context.Context) (string, error) { return "", io.EOF }
 
-func (r *recordFrontend) Notify(ev event.Event) {
+func (r *recordFrontend) Notify(ev evt.Signal) {
 	r.mu.Lock()
 	r.events = append(r.events, ev)
 	r.mu.Unlock()
 }
 
-func (r *recordFrontend) notices() []event.Notice {
+func (r *recordFrontend) notices() []evt.Notice {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	var out []event.Notice
+	var out []evt.Notice
 	for _, ev := range r.events {
-		if n, ok := ev.(event.Notice); ok && n.Source == "swarm" {
+		if n, ok := ev.(evt.Notice); ok && n.Source == "swarm" {
 			out = append(out, n)
 		}
 	}

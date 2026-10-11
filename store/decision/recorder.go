@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/mrsirg97-rgb/evt"
 	"github.com/mrsirg97-rgb/evt/broadcast"
-	"github.com/mrsirg97-rgb/evt/event"
 	"github.com/mrsirg97-rgb/rig/v2/core"
 	"github.com/mrsirg97-rgb/rig/v2/decision"
 	"github.com/mrsirg97-rgb/rig/v2/store"
@@ -38,6 +38,6 @@ func (r Recorder) Record(ctx context.Context, f decision.Final) {
 		Decider:    f.Decider,
 	})
 	if err != nil && r.Voice != nil {
-		broadcast.Say(r.Voice, "decision", fmt.Sprintf("record %s: %v", f.Site, err), event.LevelError)
+		broadcast.Say(r.Voice, "decision", fmt.Sprintf("record %s: %v", f.Site, err), evt.LevelError)
 	}
 }

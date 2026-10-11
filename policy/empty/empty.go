@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/mrsirg97-rgb/evt/event"
+	"github.com/mrsirg97-rgb/evt"
 	"github.com/mrsirg97-rgb/rig/v2/core"
 )
 
@@ -22,12 +22,12 @@ func Decorator(inner core.Provider) core.Provider {
 	return &decorator{inner: inner}
 }
 
-func (d *decorator) Stream(ctx context.Context, req core.Request) (<-chan event.Event, error) {
+func (d *decorator) Stream(ctx context.Context, req core.Request) (<-chan evt.Signal, error) {
 	ch, err := d.inner.Stream(ctx, req)
 	if err != nil {
 		return nil, err
 	}
-	out := make(chan event.Event, 4)
+	out := make(chan evt.Signal, 4)
 	go func() {
 		defer close(out)
 		d.relay(ctx, out, req, ch)
@@ -35,7 +35,7 @@ func (d *decorator) Stream(ctx context.Context, req core.Request) (<-chan event.
 	return out, nil
 }
 
-func (d *decorator) relay(ctx context.Context, out chan<- event.Event, req core.Request, ch <-chan event.Event) {
+func (d *decorator) relay(ctx context.Context, out chan<- evt.Signal, req core.Request, ch <-chan evt.Signal) {
 	attempt := 1
 	for {
 		usage, model, reasoning, empty := d.relayOnce(ctx, out, ch)
@@ -69,7 +69,7 @@ func (d *decorator) relay(ctx context.Context, out chan<- event.Event, req core.
 	}
 }
 
-func (d *decorator) relayOnce(ctx context.Context, out chan<- event.Event, ch <-chan event.Event) (core.Usage, string, string, bool) {
+func (d *decorator) relayOnce(ctx context.Context, out chan<- evt.Signal, ch <-chan evt.Signal) (core.Usage, string, string, bool) {
 	var (
 		content strings.Builder
 		reason  strings.Builder
@@ -119,7 +119,7 @@ func faultMessage(reasoning string) string {
 	return msg
 }
 
-func emit(ctx context.Context, out chan<- event.Event, ev event.Event) bool {
+func emit(ctx context.Context, out chan<- evt.Signal, ev evt.Signal) bool {
 	select {
 	case out <- ev:
 		return true

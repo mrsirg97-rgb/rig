@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/mrsirg97-rgb/evt"
 	"github.com/mrsirg97-rgb/evt/broadcast"
-	"github.com/mrsirg97-rgb/evt/event"
 	"github.com/mrsirg97-rgb/rig/v2/core"
 	"github.com/mrsirg97-rgb/rig/v2/frontend/oneshot"
 )
@@ -18,7 +18,7 @@ import (
 type wire struct {
 	mu     sync.Mutex
 	beats  int
-	events []event.Event
+	events []evt.Signal
 }
 
 func (w *wire) Id() int64 { return 7 }
@@ -26,11 +26,11 @@ func (w *wire) Id() int64 { return 7 }
 func (w *wire) Send(ctx context.Context, callback func(error), messages ...broadcast.Message) {
 	w.mu.Lock()
 	for _, m := range messages {
-		if m.Origin() == 7 && m.Ok() && m.Event() == nil {
+		if m.Origin() == 7 && m.Ok() && m.Signal() == nil {
 			w.beats++
 		}
-		if m.Event() != nil {
-			w.events = append(w.events, m.Event())
+		if m.Signal() != nil {
+			w.events = append(w.events, m.Signal())
 		}
 	}
 	w.mu.Unlock()

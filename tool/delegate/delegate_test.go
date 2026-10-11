@@ -201,7 +201,7 @@ type harness struct {
 	home    string
 	rigHome string
 	db      sched.DB
-	cap     *evt.Cap
+	cap     evt.Cap
 	engine  evt.Engine
 }
 

@@ -31,7 +31,7 @@ func TestAForeignMessageNeverPublishesTheSwarm(t *testing.T) {
 	h.room.Add(64).Subscribe(context.Background(), func(err error, messages ...broadcast.Message) {
 		for _, m := range messages {
 			if err == nil && m.Origin() == swarm.SupervisorID {
-				if st, ok := m.Event().(core.SwarmStatus); ok {
+				if st, ok := m.Signal().(core.SwarmStatus); ok {
 					pubs <- st
 				}
 			}

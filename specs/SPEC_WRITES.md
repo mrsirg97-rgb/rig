@@ -210,9 +210,9 @@ Named cases, failing first:
 
 ## scope
 
-- `specs/SPEC_WRITES.md` (this file); `specs/SPEC_EVT.md` and
-  `specs/SPEC_CORE.md` carry their own named paragraphs; `specs/
-  SPEC_DELEGATE.md` names the start-as-write rule.
+- `specs/SPEC_WRITES.md` (this file); `SPEC_EVT.md` (the `evt` module's
+  since 2.18.0) and `specs/SPEC_CORE.md` carry their own named
+  paragraphs; `specs/SPEC_DELEGATE.md` names the start-as-write rule.
 - `tool/registry.json`, `tool/registry.go`: the `mutates` field and
   `Mutates`.
 - `cmd/rig/reap.go` (the dead map dies), `cmd/rig/env.go`

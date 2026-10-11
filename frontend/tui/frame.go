@@ -3,7 +3,7 @@ package tui
 import (
 	"time"
 
-	"github.com/mrsirg97-rgb/evt/event"
+	"github.com/mrsirg97-rgb/evt"
 )
 
 const (
@@ -120,7 +120,7 @@ func (t *tui) breatheNoticeLocked() {
 	}
 }
 
-func (t *tui) enqueueNoticeLocked(n event.Notice) {
+func (t *tui) enqueueNoticeLocked(n evt.Notice) {
 	for _, q := range t.notices {
 		if q == n {
 			return
@@ -142,11 +142,11 @@ func (t *tui) kickNoticesLocked() {
 	}
 }
 
-func noticeSlot(l event.Level) string {
+func noticeSlot(l evt.Level) string {
 	switch l {
-	case event.LevelError:
+	case evt.LevelError:
 		return SlotError
-	case event.LevelSuccess:
+	case evt.LevelSuccess:
 		return SlotSuccess
 	}
 	return SlotText

@@ -46,7 +46,7 @@ func TestAnAcceptAndARejectCrossTheFleetAsTheWorker(t *testing.T) {
 	if len(fleet.sent) != 2 || fleet.sent[0].Origin() != 9 {
 		t.Fatalf("two verdicts cross as member 9, got %+v", fleet.sent)
 	}
-	v := fleet.sent[1].Event().(core.Verdict)
+	v := fleet.sent[1].Signal().(core.Verdict)
 	if v.Row != 4 || v.Accept || v.Reason != "the tests are missing" {
 		t.Fatalf("the reject carries its row and trimmed reason: %+v", v)
 	}
@@ -108,7 +108,7 @@ func TestVerdictDeliverAndExecShareTheirChecks(t *testing.T) {
 	if len(fleet.sent) != 2 {
 		t.Fatalf("two verdicts crossed, got %d", len(fleet.sent))
 	}
-	fromGive, fromExec := fleet.sent[0].Event().(core.Verdict), fleet.sent[1].Event().(core.Verdict)
+	fromGive, fromExec := fleet.sent[0].Signal().(core.Verdict), fleet.sent[1].Signal().(core.Verdict)
 	if fromGive != fromExec || fromGive.Row != 4 || fromGive.Accept || fromGive.Reason != "the tests are missing" {
 		t.Fatalf("the same call crosses as the same word: give %+v exec %+v", fromGive, fromExec)
 	}

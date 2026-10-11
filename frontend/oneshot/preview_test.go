@@ -8,14 +8,14 @@ import (
 	"testing"
 	"unicode/utf8"
 
+	"github.com/mrsirg97-rgb/evt"
 	"github.com/mrsirg97-rgb/evt/broadcast"
-	"github.com/mrsirg97-rgb/evt/event"
 	"github.com/mrsirg97-rgb/rig/v2/core"
 )
 
 type capture struct {
 	mu     sync.Mutex
-	events []event.Event
+	events []evt.Signal
 }
 
 func (c *capture) Id() int64 { return 3 }
@@ -23,7 +23,7 @@ func (c *capture) Id() int64 { return 3 }
 func (c *capture) Send(ctx context.Context, callback func(error), messages ...broadcast.Message) {
 	c.mu.Lock()
 	for _, m := range messages {
-		if ev := m.Event(); ev != nil {
+		if ev := m.Signal(); ev != nil {
 			c.events = append(c.events, ev)
 		}
 	}
@@ -34,10 +34,10 @@ func (c *capture) Send(ctx context.Context, callback func(error), messages ...br
 func (c *capture) Recv(context.Context, func(error, ...broadcast.Message)) {}
 func (c *capture) Close()                                                  {}
 
-func (c *capture) sent() []event.Event {
+func (c *capture) sent() []evt.Signal {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	out := make([]event.Event, len(c.events))
+	out := make([]evt.Signal, len(c.events))
 	copy(out, c.events)
 	return out
 }
@@ -96,7 +96,7 @@ func TestAToolCallCrossesWithoutATransportAndWithoutAnErrWriter(t *testing.T) {
 	o.Notify(core.ToolResult{ID: "c1", Content: "y"})
 }
 
-func only(t *testing.T, c *capture) event.Event {
+func only(t *testing.T, c *capture) evt.Signal {
 	t.Helper()
 	events := c.sent()
 	if len(events) != 1 {

@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mrsirg97-rgb/evt/event"
+	"github.com/mrsirg97-rgb/evt"
 	"github.com/mrsirg97-rgb/rig/v2"
 	"github.com/mrsirg97-rgb/rig/v2/core"
 	"github.com/mrsirg97-rgb/rig/v2/loop"
@@ -40,7 +40,7 @@ func (f *waveFront) Input(ctx context.Context) (string, error) {
 	}
 }
 
-func (f *waveFront) Notify(ev event.Event) {
+func (f *waveFront) Notify(ev evt.Signal) {
 	if e, ok := ev.(core.ToolStart); ok {
 		f.starts <- e.Call.ID
 	}
@@ -50,13 +50,13 @@ func TestWaveStartsArriveWhileTheWaveRuns(t *testing.T) {
 	gate := make(chan struct{})
 	tool := &gatedTool{gate: gate}
 	p := &scriptedProvider{turns: []scriptedTurn{
-		{events: []event.Event{
+		{events: []evt.Signal{
 			callEv(core.ToolCall{ID: "a", Name: "gated"}),
 			callEv(core.ToolCall{ID: "b", Name: "gated"}),
 			callEv(core.ToolCall{ID: "c", Name: "gated"}),
 			doneEv(),
 		}},
-		{events: []event.Event{textEv("done"), doneEv()}},
+		{events: []evt.Signal{textEv("done"), doneEv()}},
 	}}
 	f := &waveFront{inputs: make(chan string, 4), starts: make(chan string, 3)}
 	k := rig.New(

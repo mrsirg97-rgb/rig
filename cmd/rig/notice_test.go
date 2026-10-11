@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/mrsirg97-rgb/evt"
 	"github.com/mrsirg97-rgb/evt/broadcast"
-	"github.com/mrsirg97-rgb/evt/event"
 	"github.com/mrsirg97-rgb/rig/v2"
 	"github.com/mrsirg97-rgb/rig/v2/frontend/oneshot"
 	"github.com/mrsirg97-rgb/rig/v2/store"
@@ -37,7 +37,7 @@ func TestANoticeReachesTheFrontendAndNeverStderrWhileItOwnsTheScreen(t *testing.
 	r.rec = recorderFor(r, fe)
 	broadcast.Say(r.room.Add(rig.MemberDecision), "decision", "review: fire: refused")
 	awaitCount(t, fe, 1)
-	n, ok := fe.events[0].(event.Notice)
+	n, ok := fe.events[0].(evt.Notice)
 	if !ok || n.Source != "decision" || n.Text != "review: fire: refused" {
 		t.Fatalf("event = %#v, want the notice with its source and text", fe.events[0])
 	}

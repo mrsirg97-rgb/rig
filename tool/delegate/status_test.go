@@ -10,7 +10,6 @@ import (
 
 	"github.com/mrsirg97-rgb/evt"
 	"github.com/mrsirg97-rgb/evt/broadcast"
-	"github.com/mrsirg97-rgb/evt/event"
 	"github.com/mrsirg97-rgb/rig/v2"
 	"github.com/mrsirg97-rgb/rig/v2/core"
 	sched "github.com/mrsirg97-rgb/rig/v2/store/scheduler"
@@ -19,7 +18,7 @@ import (
 
 type recordFrontend struct {
 	mu     sync.Mutex
-	events []event.Event
+	events []evt.Signal
 }
 
 func (r *recordFrontend) returns() []core.WorkerDone {
@@ -38,8 +37,8 @@ func foldFleet(t *testing.T, room broadcast.Room, fe *recordFrontend) {
 	t.Helper()
 	room.Add(-1).Subscribe(context.Background(), func(err error, messages ...broadcast.Message) {
 		for _, m := range messages {
-			if err == nil && m.Event() != nil {
-				fe.Notify(m.Event())
+			if err == nil && m.Signal() != nil {
+				fe.Notify(m.Signal())
 			}
 		}
 	})
@@ -58,7 +57,7 @@ func newFleetRoom(t *testing.T) (broadcast.Room, *recordFrontend) {
 	return room, fe
 }
 
-func (r *recordFrontend) Notify(ev event.Event) {
+func (r *recordFrontend) Notify(ev evt.Signal) {
 	r.mu.Lock()
 	r.events = append(r.events, ev)
 	r.mu.Unlock()

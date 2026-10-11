@@ -220,7 +220,7 @@ The 2.1.x consolidation rethought the system prompt and the toolset and kept the
 
 **A few thousand bytes of preamble.** The system prompt and the tool schemas are lean, byte-stable, and carefully chosen, and the tests say so: `TestSystemPromptIsByteStableAcrossBuilds`, `TestWireMarshalingIsDeterministic`, `TestWireMessagesAreAppendOnly`. A stray timestamp cannot quietly kill the cache.
 
-**432 lines is the loop** — `loop.go` plus `batch.go`, stdlib only. **664 lines is the whole swarm** — claim, spawn, complete, verdict, reap, and the status throttle. **46,668 lines of Go, 75,290 of tests.** The one store dependency is pure-Go SQLite.
+**431 lines is the loop** — `loop.go` plus `batch.go`, stdlib only. **683 lines is the whole swarm** — claim, spawn, complete, verdict, reap, and the status throttle. **46,675 lines of Go, 75,288 of tests.** The one store dependency is pure-Go SQLite.
 
 <!-- measured:end -->
 

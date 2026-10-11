@@ -11,7 +11,6 @@ import (
 	"os"
 	"strings"
 
-	"github.com/mrsirg97-rgb/evt/event"
 	"github.com/mrsirg97-rgb/rig/v2"
 	"github.com/mrsirg97-rgb/rig/v2/command"
 	"github.com/mrsirg97-rgb/rig/v2/config"
@@ -436,15 +435,15 @@ func (r *root) listen() {
 			return
 		}
 		for _, m := range messages {
-			if m.Event() == nil {
+			if m.Signal() == nil {
 				continue
 			}
-			r.deliver(m.Event())
+			r.deliver(m.Signal())
 		}
 	})
 }
 
-func (r *root) deliver(ev event.Event) {
+func (r *root) deliver(ev evt.Signal) {
 	defer func() {
 		if p := recover(); p != nil {
 			out := r.errOut
@@ -455,7 +454,7 @@ func (r *root) deliver(ev event.Event) {
 		}
 	}()
 	switch ev.(type) {
-	case event.Notice, core.SwarmStatus, core.Phase, core.WorkerDone:
+	case evt.Notice, core.SwarmStatus, core.Phase, core.WorkerDone:
 	default:
 		return
 	}
@@ -463,7 +462,7 @@ func (r *root) deliver(ev event.Event) {
 		fe.Notify(ev)
 		return
 	}
-	if n, ok := ev.(event.Notice); ok {
+	if n, ok := ev.(evt.Notice); ok {
 		out := r.errOut
 		if out == nil {
 			out = os.Stderr

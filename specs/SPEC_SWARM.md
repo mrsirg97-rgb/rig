@@ -289,7 +289,7 @@ stream file is written. The text that follows describes the events,
 which did not change.
 
 The four decision-worthy events emit one-line
-`core.Notice` transcript notices with source `swarm` (`SwarmNotice`
+`evt.Notice` transcript notices with source `swarm` (`SwarmNotice`
 until 2.11.0), and nothing else does — the drain
 loop's ordinary claim/complete/bytes stay out of the transcript (the run
 log and the bare `/swarm` are their audit).
@@ -422,12 +422,12 @@ fake `Swarm` seam.
   `TestSwarmNoticesStop`: each decision-worthy notice with the fake
   spawn — the failed task names its note, the reject names its reason,
   the stop names itself; nothing else is notified, and every one of them
-  is a `core.Notice` with source `swarm` published to the room (2.11.0),
+  is a `evt.Notice` with source `swarm` published to the room (2.11.0),
   not a second event type.
 - `TestSwarmStatusFramesClaimHeartbeatAndFinish`: the controller
   publishes a `SwarmStatus` on claim, heartbeat, complete, verdict and
   exit. There is no throttle and no 250 ms clock: `SwarmStatus` is a
-  `core.Snapshot`, and the transport keeps one pending per sender and
+  `evt.Snapshot`, and the transport keeps one pending per sender and
   replaces it before it runs — the newest truth is the whole truth
   (SPEC_EVT 8).
 - `TestAForeignMessageNeverPublishesTheSwarm` (2.14.7): a delegate

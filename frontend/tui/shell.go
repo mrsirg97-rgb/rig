@@ -14,7 +14,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/mrsirg97-rgb/evt/event"
+	"github.com/mrsirg97-rgb/evt"
 )
 
 type tui struct {
@@ -39,7 +39,7 @@ type tui struct {
 	showReasoning bool
 	turnLive      bool
 	compacting    bool
-	notices       []event.Notice
+	notices       []evt.Notice
 	noticing      bool
 	noticeFrame   int
 	aside         string

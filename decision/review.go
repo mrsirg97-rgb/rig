@@ -12,7 +12,6 @@ import (
 
 	"github.com/mrsirg97-rgb/evt"
 	"github.com/mrsirg97-rgb/evt/broadcast"
-	"github.com/mrsirg97-rgb/evt/event"
 	"github.com/mrsirg97-rgb/rig/v2"
 	"github.com/mrsirg97-rgb/rig/v2/core"
 	"github.com/mrsirg97-rgb/rig/v2/models"
@@ -85,7 +84,7 @@ func (r *Reviewer) receive(err error, messages ...broadcast.Message) {
 		return
 	}
 	for _, m := range messages {
-		switch ev := m.Event().(type) {
+		switch ev := m.Signal().(type) {
 		case core.Verdict:
 			r.verdicts[ev.Row] = ev
 		case core.SwarmStatus:
@@ -240,7 +239,7 @@ func (w turnEndWake) Input(ctx context.Context) (string, error) {
 	return line, err
 }
 
-func (w turnEndWake) Notify(ev event.Event) {
+func (w turnEndWake) Notify(ev evt.Signal) {
 	w.inner.Notify(ev)
 	if _, ok := ev.(core.TurnEnd); ok {
 		w.rev.Wake()
@@ -338,7 +337,7 @@ func (r *Reviewer) settle(ctx context.Context, rows, all []ReviewRow, reviewer s
 }
 
 func (r *Reviewer) say(format string, args ...any) {
-	broadcast.Say(r.self, "decision", fmt.Sprintf(format, args...), event.LevelError)
+	broadcast.Say(r.self, "decision", fmt.Sprintf(format, args...), evt.LevelError)
 }
 
 const reviewContract = "Review these recorded decisions. For each row, judge the answer against the question and the state, then call the verdict tool naming the row: accept when the answer is right, reject with the corrected answer as the reason when it is wrong. When a row is about code, look before you judge: pack the symbol with rem or read the file the state names, and say in the reason what you read; a verdict on code you did not look at is a guess. Name every row; a row you do not name stays pending.\n"

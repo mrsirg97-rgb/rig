@@ -309,8 +309,8 @@ func newCappedHarness(t *testing.T, workers int) *harness {
 func (h *harness) listen(room broadcast.Room) {
 	room.Add(-1).Subscribe(context.Background(), func(err error, messages ...broadcast.Message) {
 		for _, m := range messages {
-			if err == nil && m.Event() != nil {
-				h.fe.Notify(m.Event())
+			if err == nil && m.Signal() != nil {
+				h.fe.Notify(m.Signal())
 			}
 		}
 	})

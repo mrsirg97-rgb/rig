@@ -11,8 +11,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/mrsirg97-rgb/evt"
 	"github.com/mrsirg97-rgb/evt/broadcast"
-	"github.com/mrsirg97-rgb/evt/event"
 	"github.com/mrsirg97-rgb/rig/v2"
 	"github.com/mrsirg97-rgb/rig/v2/config"
 	"github.com/mrsirg97-rgb/rig/v2/core"
@@ -77,7 +77,7 @@ func decisionTrain(args []string) int {
 	defer engine.Stop()
 	room.Add(rig.MemberFrontend).Subscribe(ctx, func(err error, messages ...broadcast.Message) {
 		for _, m := range messages {
-			if n, ok := m.Event().(event.Notice); err == nil && ok {
+			if n, ok := m.Signal().(evt.Notice); err == nil && ok {
 				fmt.Fprintln(os.Stderr, "rig: "+n.Source+": "+n.Text)
 			}
 		}
@@ -241,7 +241,7 @@ func decisionTrain(args []string) int {
 	}
 
 	table := trainTable(trainer, len(gold), set.Skipped, len(trainRows), len(heldRows), constant, incumbent, candidate, promoted, promoteLine)
-	broadcast.Say(voice, "decision", table, event.LevelInfo)
+	broadcast.Say(voice, "decision", table, evt.LevelInfo)
 	fmt.Println(table)
 
 	if failExit {

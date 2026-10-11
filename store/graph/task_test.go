@@ -12,7 +12,6 @@ import (
 
 	"github.com/mrsirg97-rgb/evt"
 	"github.com/mrsirg97-rgb/evt/broadcast"
-	"github.com/mrsirg97-rgb/evt/event"
 	"github.com/mrsirg97-rgb/rig/v2/store"
 	"github.com/mrsirg97-rgb/rig/v2/store/graph"
 	"github.com/mrsirg97-rgb/rig/v2/store/scope"
@@ -164,7 +163,7 @@ func TestAStaleSymbolRowIsDroppedNotSaid(t *testing.T) {
 	said := make(chan string, 64)
 	room.Add(-1).Subscribe(context.Background(), func(err error, messages ...broadcast.Message) {
 		for _, m := range messages {
-			if n, ok := m.Event().(event.Notice); err == nil && ok {
+			if n, ok := m.Signal().(evt.Notice); err == nil && ok {
 				said <- n.Text
 			}
 		}
@@ -214,7 +213,7 @@ func TestTheQueueSaysASentenceOnce(t *testing.T) {
 	said := make(chan string, 64)
 	room.Add(-1).Subscribe(context.Background(), func(err error, messages ...broadcast.Message) {
 		for _, m := range messages {
-			if n, ok := m.Event().(event.Notice); err == nil && ok {
+			if n, ok := m.Signal().(evt.Notice); err == nil && ok {
 				said <- n.Text
 			}
 		}

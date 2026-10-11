@@ -5,7 +5,7 @@ import (
 	"sort"
 	"sync"
 
-	"github.com/mrsirg97-rgb/evt/event"
+	"github.com/mrsirg97-rgb/evt"
 	"github.com/mrsirg97-rgb/rig/v2/core"
 )
 
@@ -128,7 +128,7 @@ type carrier struct {
 	allow []string
 }
 
-func (c carrier) Stream(ctx context.Context, req core.Request) (<-chan event.Event, error) {
+func (c carrier) Stream(ctx context.Context, req core.Request) (<-chan evt.Signal, error) {
 	req.Tools = c.menu()
 	return c.inner.Stream(ctx, req)
 }

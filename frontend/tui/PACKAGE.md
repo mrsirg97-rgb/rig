@@ -44,7 +44,7 @@ width); no core or loop line (decision 10).
   the region redraws only when the rows changed (zero is off, and
   rig's own main never sets it)).
 - **Notices breathe in the indicator's row** (`frame.go`, 2.11.7): a
-  `core.Notice` never commits to the transcript. It joins a queue
+  `evt.Notice` never commits to the transcript. It joins a queue
   (identical notices collapse, no size); when the row is idle, no turn
   live and no compaction, the oldest takes the action indicator's exact
   row and shape, breathes in once on the ember's curve in its level's

@@ -4,7 +4,7 @@
 
 Anthropic's Messages API as a `core.Provider`: the second implementer
 of the one-method seam, beside `provider/openai`. Plain JSON and SSE
-over net/http, stdlib only, no SDK. The loop sees `core.Event` only;
+over net/http, stdlib only, no SDK. The loop sees `evt.Signal` only;
 the wire dialect is this package's problem.
 
 ## What it includes
@@ -56,7 +56,7 @@ the wire dialect is this package's problem.
   pinned byte-for-byte by a test: the prefix cache is byte-keyed, so a
   rewrite, a reorder, or a nondeterministic field in this encoding is
   a cache regression.
-- The stream (`Stream`): SSE in, `core.Event` out. `message_start`
+- The stream (`Stream`): SSE in, `evt.Signal` out. `message_start`
   seeds the usage's input and cache fields and echoes `model`; the
   final `message_delta` may repeat the cache fields — compat runtimes
   report them only there — and `Usage.Prompt` is summed at `Done`
