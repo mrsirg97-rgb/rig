@@ -212,7 +212,7 @@ func TestSessionsIsANonMutatingNative(t *testing.T) {
 		}
 	}
 	if !inNatives {
-		t.Fatal("sessions must be a native (the eighteenth)")
+		t.Fatal("sessions must be a native (the thirteenth)")
 	}
 	r := &root{}
 	r.natives = make(map[string]bool, len(nativeToolNames))
