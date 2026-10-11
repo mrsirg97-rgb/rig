@@ -5,6 +5,9 @@
     "what": "executes a bash command in the session's workspace.",
     "guidelines": "use for shell work, builds, git, and any CLI. to read a file, use the dedicated read tool; for a computation, use python. a timeoutMs delegates the command to a worker; the result arrives on a later turn, killed at the bound; without one, bash runs in-turn unbounded.",
     "reply": "stdout and stderr together, in order; when capped, shows a [TRUNCATED] line with the total size.",
+    "mutates": [
+      "*"
+    ],
     "schema": {
       "type": "object",
       "properties": {
@@ -34,6 +37,7 @@
     "what": "reads a file, or a line range via offset and limit.",
     "guidelines": "the native way to look at a file. read before using edit; edit checks against its content. a capped range says how many lines came back and where to continue; a range past the end refuses, naming the file's total lines; a file that changed since your last read states so. `diff: true` appends the git diff against HEAD.",
     "reply": "the file's text, exactly as edit will match it.",
+    "mutates": [],
     "schema": {
       "type": "object",
       "properties": {
@@ -65,6 +69,9 @@
     "what": "creates or overwrites a file with its full content.",
     "guidelines": "use it for new files and whole rewrites; for a change inside an existing file, use edit. a plugin you write lands in plugins/pending/ until the operator approves it.",
     "reply": "the path and the bytes written.",
+    "mutates": [
+      "*"
+    ],
     "schema": {
       "type": "object",
       "properties": {
@@ -89,6 +96,9 @@
     "what": "replaces exact text in an existing file.",
     "guidelines": "read the file first, then put enough of it in `old` to match exactly once. one change per call: several changes to one file are several calls in one turn and they land in the order they are listed, each seeing what the one before it left; a change to another file is another call. on a file not read this session, a non-matching `old` returns the file's text instead of refusing; the next call edits it. on a read file the call refuses and names why: the old matched zero or several times, or the file changed since your read.",
     "reply": "the path and the bytes replaced.",
+    "mutates": [
+      "*"
+    ],
     "schema": {
       "type": "object",
       "properties": {
@@ -118,6 +128,7 @@
     "what": "handles image files: png, jpeg, webp, or the first frame of a gif.",
     "guidelines": "for pixels only; for text, code or a log use read; for a crop or a resize use bash. anything over 20 MiB, over 16 megapixels, or not an image refuses.",
     "reply": "one line naming the stored image's mime, dimensions, size and source.",
+    "mutates": [],
     "schema": {
       "type": "object",
       "properties": {
@@ -142,6 +153,19 @@
       "accept",
       "reject",
       "move"
+    ],
+    "mutates": [
+      "create",
+      "claim",
+      "complete",
+      "fail",
+      "release",
+      "retry",
+      "move",
+      "note",
+      "prune",
+      "accept",
+      "reject"
     ],
     "schema": {
       "type": "object",
@@ -230,6 +254,12 @@
     "what": "memory across sessions and this project's code map. every call names its scope: the workspace path, or global.",
     "guidelines": "recall before re-deriving a project fact; pack before grepping for who calls what; learn what the next session need not re-derive; supersede by id when the code disagrees; actions: `learn` commits a fact or constraint, once; `recall` finds past solutions by intent (this workspace first, then global; an empty query browses); `reflect` stores a distilled memory with its source; `prune` removes, reduces, or consolidates; `pack` loads the live code around a symbol or file — definition, callers, callees — from disk now; `index` maps the whole project. memory ids (`mN`) come from the replies: copy them, never invent them.",
     "reply": "the hits with their ids, strength and arm, the written row, or the pack with its coverage.",
+    "mutates": [
+      "learn",
+      "reflect",
+      "prune",
+      "index"
+    ],
     "schema": {
       "type": "object",
       "required": [
@@ -334,6 +364,14 @@
     "operator": [
       "remove"
     ],
+    "mutates": [
+      "create",
+      "update",
+      "pause",
+      "resume",
+      "remove",
+      "repair"
+    ],
     "schema": {
       "type": "object",
       "properties": {
@@ -413,6 +451,9 @@
     "what": "fan out bounded sub-tasks to headless workers: starts a worker to run a task now and answers at once; its result comes back on a later turn.",
     "guidelines": "the task should be bounded with a message-shaped result. use for long computations, broad research, or reviews, never a conversation. several delegate calls in one turn run as parallel fan-out. a model that is not resident refuses, naming the holder. the workspace must be under the session's workspace or the rig home. a worker holds only the doing set (bash, read, write, edit, view, python, web, rem), so write the task to fit it. never wait for a worker: keep working, and the returns arrive as a turn of their own. a command is one deterministic bash line on a command worker (no model, no clock); only command workers take timeoutMs.",
     "reply": "one line naming the worker, its session and its log.",
+    "mutates": [
+      "*"
+    ],
     "schema": {
       "type": "object",
       "properties": {
@@ -450,6 +491,10 @@
     "what": "a persistent IPython kernel in the session's workspace: variables, imports and definitions persist across calls. numpy and pandas included.",
     "guidelines": "use for arithmetic, data shaping, parsing and processing bulk text; things that are never estimated. compute once, then query the result in later calls. with timeoutMs the cell cooks in the background and reports on a later turn, killed at the bound; without one, it runs in-turn.",
     "reply": "stdout and the last expression's value; action vars lists the namespace, reset clears it.",
+    "mutates": [
+      "code",
+      "reset"
+    ],
     "schema": {
       "type": "object",
       "properties": {
@@ -481,6 +526,7 @@
     "what": "searches the web or fetches a page. search takes a query; fetch takes a public http(s) URL.",
     "guidelines": "write multi-word natural queries and reword once on junk; never search for code already in the workspace. fetch reads the page as text; refetch a larger size if you genuinely need more scope; an API reply comes back as its shape and a head; parse the rest in python or bash. local files belong to read, local services to bash; private addresses refuse. a fetch with timeoutMs cooks in the background and reports on a later turn, killed at the bound; without one, it runs in-turn.",
     "reply": "search gives compact JSON title/url/snippet; fetch returns text; when capped, shows a [TRUNCATED] line with the total size.",
+    "mutates": [],
     "schema": {
       "type": "object",
       "properties": {
@@ -529,6 +575,12 @@
     "operator": [
       "delete"
     ],
+    "mutates": [
+      "run",
+      "create",
+      "delete",
+      "reload"
+    ],
     "schema": {
       "type": "object",
       "properties": {
@@ -567,6 +619,7 @@
     "what": "the session store. list shows sessions; summary shows an overview: models, faults, cache ratio.",
     "guidelines": "the current workspace by default; project and n widen it.",
     "reply": "a line per session, or the summary: a head, then models, tokens, faults and cache rows.",
+    "mutates": [],
     "schema": {
       "type": "object",
       "required": [
@@ -597,6 +650,7 @@
     "what": "ask one, typed question (covering many items) to the decision server instead of finding it out yourself. answered as a choice (each label described), a binary (yes or no), or a score.",
     "guidelines": "the items never enter your context; state the prompt so one item is answered by one label or value. a server error refuses and nothing was sorted.",
     "reply": "the items grouped by the label, numbered from 1 with the first line; unsure choices return in full for you to judge.",
+    "mutates": [],
     "schema": {
       "type": "object",
       "properties": {
@@ -659,6 +713,9 @@
     "what": "delivers your verdict on the work you were asked to review.",
     "guidelines": "call it once you have decided: accept, or reject with the reason the author needs to fix it. reviewing recorded decisions, call it once per row, naming the row; a row you do not name stays pending; a reject's reason is the corrected answer.",
     "reply": "recorded",
+    "mutates": [
+      "*"
+    ],
     "schema": {
       "type": "object",
       "properties": {

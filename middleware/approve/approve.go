@@ -24,14 +24,14 @@ func Mode(s string) (string, bool) {
 	return "", false
 }
 
-func Gate(mode func() string, ask func(ctx context.Context, prompt string) bool, mutating func(name string) bool, rec ...decision.Recorder) core.ToolMiddleware {
+func Gate(mode func() string, ask func(ctx context.Context, prompt string) bool, mutating func(call core.ToolCall) bool, rec ...decision.Recorder) core.ToolMiddleware {
 	var record decision.Recorder
 	if len(rec) > 0 {
 		record = rec[0]
 	}
 	return core.ToolMiddlewareFunc(func(next core.ToolExec) core.ToolExec {
 		return func(ctx context.Context, call core.ToolCall) (string, error) {
-			if mode() != Manual || !mutating(call.Name) {
+			if mode() != Manual || !mutating(call) {
 				return next(ctx, call)
 			}
 			if ask == nil {

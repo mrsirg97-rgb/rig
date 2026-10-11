@@ -24,6 +24,7 @@ type entry struct {
 	G string          `json:"guidelines"`
 	R string          `json:"reply"`
 	O []string        `json:"operator"`
+	M []string        `json:"mutates"`
 	S json.RawMessage `json:"schema"`
 }
 
@@ -110,6 +111,19 @@ func Operator(name string) []string {
 		return nil
 	}
 	return e.O
+}
+
+func Mutates(name, action string) bool {
+	e, ok := defs[name]
+	if !ok {
+		return true
+	}
+	for _, a := range e.M {
+		if a == "*" || a == action {
+			return true
+		}
+	}
+	return false
 }
 
 func AllNames() []string {

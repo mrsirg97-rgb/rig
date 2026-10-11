@@ -16,6 +16,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/mrsirg97-rgb/rig/v2/core"
 	"github.com/mrsirg97-rgb/rig/v2/models"
 )
 
@@ -89,15 +90,8 @@ func TestViewIsConcurrentAndNeverMutating(t *testing.T) {
 	if !concurrentNatives["view"] {
 		t.Fatal("view is read-only: it runs beside its admitted neighbours")
 	}
-	if mutatingNatives["view"] {
-		t.Fatal("view never writes outside its own store: manual mode must not pause on it")
-	}
 	r := visionRoot(t)
-	r.natives = map[string]bool{}
-	for _, n := range effectiveNativeNames() {
-		r.natives[n] = true
-	}
-	if r.isMutating("view") {
+	if r.isMutating(core.ToolCall{ID: "c1", Name: "view", Args: json.RawMessage(`{}`)}) {
 		t.Fatal("the approval gate must never ask for view")
 	}
 }

@@ -149,3 +149,69 @@ func TestOperatorVerbsRideTheActionEnum(t *testing.T) {
 		t.Fatalf("bash is the doing set: it marks %v", verbs)
 	}
 }
+
+func TestMutatesAnswersTheTableByNameAndAction(t *testing.T) {
+	cases := []struct {
+		name   string
+		action string
+		want   bool
+	}{
+		{"bash", "", true},
+		{"write", "", true},
+		{"edit", "", true},
+		{"delegate", "", true},
+		{"verdict", "", true},
+		{"python", "code", true},
+		{"python", "reset", true},
+		{"python", "vars", false},
+		{"scheduler", "create", true},
+		{"scheduler", "update", true},
+		{"scheduler", "pause", true},
+		{"scheduler", "resume", true},
+		{"scheduler", "remove", true},
+		{"scheduler", "repair", true},
+		{"scheduler", "list", false},
+		{"scheduler", "show", false},
+		{"scheduler", "runs", false},
+		{"plugin", "run", true},
+		{"plugin", "create", true},
+		{"plugin", "delete", true},
+		{"plugin", "reload", true},
+		{"plugin", "list", false},
+		{"plugin", "schema", false},
+		{"todo", "create", true},
+		{"todo", "claim", true},
+		{"todo", "complete", true},
+		{"todo", "fail", true},
+		{"todo", "release", true},
+		{"todo", "retry", true},
+		{"todo", "move", true},
+		{"todo", "note", true},
+		{"todo", "prune", true},
+		{"todo", "accept", true},
+		{"todo", "reject", true},
+		{"todo", "read", false},
+		{"todo", "notes", false},
+		{"todo", "finished", false},
+		{"rem", "learn", true},
+		{"rem", "reflect", true},
+		{"rem", "prune", true},
+		{"rem", "index", true},
+		{"rem", "recall", false},
+		{"rem", "pack", false},
+		{"read", "", false},
+		{"view", "", false},
+		{"web", "search", false},
+		{"web", "fetch", false},
+		{"decide", "", false},
+		{"sessions", "list", false},
+		{"sessions", "summary", false},
+		{"a-plugin-tool", "", true},
+		{"a-plugin-tool", "anything", true},
+	}
+	for _, c := range cases {
+		if got := tool.Mutates(c.name, c.action); got != c.want {
+			t.Fatalf("Mutates(%q, %q) = %v, want %v", c.name, c.action, got, c.want)
+		}
+	}
+}

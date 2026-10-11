@@ -16,7 +16,7 @@ func gateExec(mode string, answer bool, asked *[]string) (core.ToolExec, *int) {
 		calls++
 		return "executed", nil
 	}
-	mutating := func(name string) bool { return name == "bash" || name == "write" }
+	mutating := func(call core.ToolCall) bool { return call.Name == "bash" || call.Name == "write" }
 	ask := func(ctx context.Context, prompt string) bool {
 		if asked != nil {
 			*asked = append(*asked, prompt)
@@ -80,7 +80,7 @@ func TestNilAskDoorFailsClosed(t *testing.T) {
 		calls++
 		return "executed", nil
 	}
-	g := approve.Gate(func() string { return "manual" }, nil, func(string) bool { return true }).Wrap(exec)
+	g := approve.Gate(func() string { return "manual" }, nil, func(core.ToolCall) bool { return true }).Wrap(exec)
 	out, err := g(context.Background(), call("bash", `{}`))
 	if err != nil || calls != 0 || !strings.Contains(out, "no ask door") {
 		t.Fatalf("no door must fail closed with the named reason: (%q, %v), calls %d", out, err, calls)
@@ -95,7 +95,7 @@ func TestDialReadAtCallTime(t *testing.T) {
 		return "executed", nil
 	}
 	g := approve.Gate(func() string { return mode }, func(context.Context, string) bool { return false },
-		func(string) bool { return true }).Wrap(exec)
+		func(core.ToolCall) bool { return true }).Wrap(exec)
 	if out, _ := g(context.Background(), call("bash", `{}`)); out != "executed" {
 		t.Fatalf("auto first: %q", out)
 	}
@@ -148,5 +148,31 @@ func TestDelegatePromptShowsTheTaskFirstLine(t *testing.T) {
 	}
 	if p := approve.Prompt(call("delegate", `not json`)); p == "delegate · " {
 		t.Fatalf("unparseable args must fall back to the generic shape: %q", p)
+	}
+}
+
+func TestManualAsksExactlyForTheWrites(t *testing.T) {
+	var asked []string
+	ask := func(ctx context.Context, prompt string) bool {
+		asked = append(asked, prompt)
+		return true
+	}
+	mutating := func(call core.ToolCall) bool {
+		return strings.Contains(string(call.Args), `"create"`)
+	}
+	exec := approve.Gate(func() string { return "manual" }, ask, mutating).Wrap(func(ctx context.Context, call core.ToolCall) (string, error) {
+		return "ran", nil
+	})
+	if _, err := exec(context.Background(), call("todo", `{"action":"read"}`)); err != nil {
+		t.Fatalf("a read passes silent: %v", err)
+	}
+	if len(asked) != 0 {
+		t.Fatalf("the read must not ask: %v", asked)
+	}
+	if _, err := exec(context.Background(), call("todo", `{"action":"create","text":"x"}`)); err != nil {
+		t.Fatalf("an approved write runs: %v", err)
+	}
+	if len(asked) != 1 {
+		t.Fatalf("the write asks once: %v", asked)
 	}
 }
