@@ -9,7 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mrsirg97-rgb/rig/v2/broadcast"
+	"github.com/mrsirg97-rgb/evt/broadcast"
+	"github.com/mrsirg97-rgb/evt/event"
 	"github.com/mrsirg97-rgb/rig/v2/core"
 	"github.com/mrsirg97-rgb/rig/v2/frontend/oneshot"
 )
@@ -17,7 +18,7 @@ import (
 type wire struct {
 	mu     sync.Mutex
 	beats  int
-	events []core.Event
+	events []event.Event
 }
 
 func (w *wire) Id() int64 { return 7 }

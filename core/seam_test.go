@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/mrsirg97-rgb/evt/event"
 	"github.com/mrsirg97-rgb/rig/v2/core"
 )
 
@@ -87,13 +88,13 @@ func TestInterruptIgnoresForeignValues(t *testing.T) {
 
 func TestHardeningVocabulary(t *testing.T) {
 	var (
-		_ core.Event = core.ReasoningDelta{Text: "t"}
-		_ core.Event = core.ToolStart{Call: core.ToolCall{ID: "c1"}}
-		_ core.Event = core.ToolResult{ID: "c1", Content: "out"}
-		_ core.Event = core.TurnEnd{Reason: core.TurnOver}
-		_ core.Event = core.TestEvent{Name: "x"}
-		_ core.Event = core.Compacted{Summary: "s"}
-		_ core.Event = core.Compacting{}
+		_ event.Event = core.ReasoningDelta{Text: "t"}
+		_ event.Event = core.ToolStart{Call: core.ToolCall{ID: "c1"}}
+		_ event.Event = core.ToolResult{ID: "c1", Content: "out"}
+		_ event.Event = core.TurnEnd{Reason: core.TurnOver}
+		_ event.Event = core.TestEvent{Name: "x"}
+		_ event.Event = core.Compacted{Summary: "s"}
+		_ event.Event = core.Compacting{}
 	)
 	if core.TurnOver != "over" || core.TurnFault != "fault" || core.TurnInterrupt != "interrupt" {
 		t.Fatalf("turn reasons = %q/%q/%q, want over/fault/interrupt", core.TurnOver, core.TurnFault, core.TurnInterrupt)

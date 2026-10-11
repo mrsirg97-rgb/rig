@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/mrsirg97-rgb/evt/event"
 	"github.com/mrsirg97-rgb/rig/v2/core"
 )
 
@@ -391,7 +392,7 @@ func awaitScreen(t *testing.T, s *scriptedSession, text string, present bool) {
 func TestANoticeBreathesInTheIndicatorRowThenGoes(t *testing.T) {
 	th := oledTheme(t)
 	s := idleSession(t, th)
-	s.fe.Notify(core.Notice{Source: "decision", Text: "review: fire: refused", Level: core.LevelError})
+	s.fe.Notify(event.Notice{Source: "decision", Text: "review: fire: refused", Level: event.LevelError})
 	awaitScreen(t, s, "decision: review: fire: refused", true)
 	if n := screenHas(t, s, "decision: review: fire: refused"); n != 1 {
 		t.Fatalf("the notice paints one row while it breathes, got %d", n)
@@ -414,7 +415,7 @@ func TestANoticeWaitsWhileTheTurnIsLive(t *testing.T) {
 	if got := s.prompt(promptMark(th), "go\n"); got != "go" {
 		t.Fatalf("prompt = %q", got)
 	}
-	s.fe.Notify(core.Notice{Source: "graph", Text: "queue full, dropping a.go", Level: core.LevelError})
+	s.fe.Notify(event.Notice{Source: "graph", Text: "queue full, dropping a.go", Level: event.LevelError})
 	breathe(t, s, 3)
 	if n := screenHas(t, s, "graph: queue full"); n != 0 {
 		t.Fatalf("a notice waits while the model works, got %d rows", n)
@@ -428,8 +429,8 @@ func TestANoticeWaitsWhileTheTurnIsLive(t *testing.T) {
 func TestNoticesShowInOrderAndADuplicateCollapses(t *testing.T) {
 	th := oledTheme(t)
 	s := idleSession(t, th)
-	first := core.Notice{Source: "swarm", Text: "w1 died — t1 restarted", Level: core.LevelError}
-	second := core.Notice{Source: "swarm", Text: "/swarm exited — 2 workers stopped", Level: core.LevelSuccess}
+	first := event.Notice{Source: "swarm", Text: "w1 died — t1 restarted", Level: event.LevelError}
+	second := event.Notice{Source: "swarm", Text: "/swarm exited — 2 workers stopped", Level: event.LevelSuccess}
 	s.fe.Notify(first)
 	s.fe.Notify(first)
 	s.fe.Notify(second)
@@ -456,7 +457,7 @@ func TestANoticeBreathesInItsLevelsSlot(t *testing.T) {
 	th := oledTheme(t)
 	s := idleSession(t, th)
 	text := "swarm: /swarm exited — 1 worker stopped"
-	s.fe.Notify(core.Notice{Source: "swarm", Text: "/swarm exited — 1 worker stopped", Level: core.LevelSuccess})
+	s.fe.Notify(event.Notice{Source: "swarm", Text: "/swarm exited — 1 worker stopped", Level: event.LevelSuccess})
 	awaitScreen(t, s, text, true)
 	stream := s.out.String()
 	ok := false

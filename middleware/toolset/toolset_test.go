@@ -9,6 +9,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/mrsirg97-rgb/evt/event"
 	"github.com/mrsirg97-rgb/rig/v2/core"
 )
 
@@ -91,9 +92,9 @@ type recordingProvider struct {
 	stamped [][]core.ToolSpec
 }
 
-func (p *recordingProvider) Stream(ctx context.Context, req core.Request) (<-chan core.Event, error) {
+func (p *recordingProvider) Stream(ctx context.Context, req core.Request) (<-chan event.Event, error) {
 	p.stamped = append(p.stamped, append([]core.ToolSpec(nil), req.Tools...))
-	ch := make(chan core.Event, 1)
+	ch := make(chan event.Event, 1)
 	ch <- core.Done{}
 	close(ch)
 	return ch, nil
@@ -240,11 +241,11 @@ type captureProvider struct {
 	request core.Request
 }
 
-func (p *captureProvider) Stream(ctx context.Context, req core.Request) (<-chan core.Event, error) {
+func (p *captureProvider) Stream(ctx context.Context, req core.Request) (<-chan event.Event, error) {
 	p.mu.Lock()
 	p.request = req
 	p.mu.Unlock()
-	ch := make(chan core.Event, 1)
+	ch := make(chan event.Event, 1)
 	ch <- core.Done{}
 	close(ch)
 	return ch, nil

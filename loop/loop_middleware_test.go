@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/mrsirg97-rgb/evt/event"
 	"github.com/mrsirg97-rgb/rig/v2"
 	"github.com/mrsirg97-rgb/rig/v2/core"
 	"github.com/mrsirg97-rgb/rig/v2/loop"
@@ -39,11 +40,11 @@ func (t *countingTool) Exec(ctx context.Context, args json.RawMessage) (string, 
 func TestDenialIsFedBackAndBounded(t *testing.T) {
 	bash := &countingTool{name: "bash"}
 	p := &scriptedProvider{turns: []scriptedTurn{
-		{events: []core.Event{
+		{events: []event.Event{
 			callEv(core.ToolCall{ID: "c1", Name: "bash"}),
 			doneEv(),
 		}},
-		{events: []core.Event{textEv("understood"), doneEv()}},
+		{events: []event.Event{textEv("understood"), doneEv()}},
 	}}
 	f := &recorderFrontend{inputs: make(chan string, 8)}
 	session := core.NewSession()
@@ -86,11 +87,11 @@ func TestDenialIsFedBackAndBounded(t *testing.T) {
 func TestToolFailureIsBoundedAndRecoverable(t *testing.T) {
 	bash := &countingTool{name: "bash", fail: 999}
 	p := &scriptedProvider{turns: []scriptedTurn{
-		{events: []core.Event{callEv(core.ToolCall{ID: "c1", Name: "bash"}), doneEv()}},
-		{events: []core.Event{callEv(core.ToolCall{ID: "c1", Name: "bash"}), doneEv()}},
-		{events: []core.Event{callEv(core.ToolCall{ID: "c1", Name: "bash"}), doneEv()}},
-		{events: []core.Event{callEv(core.ToolCall{ID: "c1", Name: "bash"}), doneEv()}},
-		{events: []core.Event{textEv("recovered"), doneEv()}},
+		{events: []event.Event{callEv(core.ToolCall{ID: "c1", Name: "bash"}), doneEv()}},
+		{events: []event.Event{callEv(core.ToolCall{ID: "c1", Name: "bash"}), doneEv()}},
+		{events: []event.Event{callEv(core.ToolCall{ID: "c1", Name: "bash"}), doneEv()}},
+		{events: []event.Event{callEv(core.ToolCall{ID: "c1", Name: "bash"}), doneEv()}},
+		{events: []event.Event{textEv("recovered"), doneEv()}},
 	}}
 	f := &recorderFrontend{inputs: make(chan string, 8)}
 	session := core.NewSession()

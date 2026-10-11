@@ -6,10 +6,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/mrsirg97-rgb/evt"
+	"github.com/mrsirg97-rgb/evt/broadcast"
 	"github.com/mrsirg97-rgb/rig/v2"
-	"github.com/mrsirg97-rgb/rig/v2/broadcast"
 	"github.com/mrsirg97-rgb/rig/v2/core"
-	"github.com/mrsirg97-rgb/rig/v2/evt"
 	"github.com/mrsirg97-rgb/rig/v2/swarm"
 )
 

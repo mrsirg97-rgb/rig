@@ -10,10 +10,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/mrsirg97-rgb/evt"
+	"github.com/mrsirg97-rgb/evt/broadcast"
 	"github.com/mrsirg97-rgb/rig/v2"
-	"github.com/mrsirg97-rgb/rig/v2/broadcast"
 	"github.com/mrsirg97-rgb/rig/v2/core"
-	"github.com/mrsirg97-rgb/rig/v2/evt"
 	"github.com/mrsirg97-rgb/rig/v2/models"
 	"github.com/mrsirg97-rgb/rig/v2/store"
 	sched "github.com/mrsirg97-rgb/rig/v2/store/scheduler"
@@ -187,7 +187,11 @@ func speakVerdict(ctx context.Context, stdout string) {
 		}
 		kind, reason, _ := strings.Cut(strings.TrimSpace(rest), " ")
 		v := core.Verdict{Accept: kind == "accept", Reason: reason}
-		broadcast.NewPipeTransport(id, w, broadcast.NewJSONEncoder()).Send(ctx, func(error) {}, broadcast.NewMessage(id, true, v))
+		wreg, werr := sched.Wire()
+		if werr != nil {
+			panic(werr)
+		}
+		broadcast.NewPipeTransport(id, w, broadcast.NewJSONEncoder(wreg)).Send(ctx, func(error) {}, broadcast.NewMessage(id, true, v))
 	}
 }
 
@@ -196,7 +200,11 @@ func beat(ctx context.Context, n int) {
 	if !ok {
 		panic("the spawn context carries no fleet pipe")
 	}
-	wire := broadcast.NewPipeTransport(id, w, broadcast.NewJSONEncoder())
+	wreg, werr := sched.Wire()
+	if werr != nil {
+		panic(werr)
+	}
+	wire := broadcast.NewPipeTransport(id, w, broadcast.NewJSONEncoder(wreg))
 	for i := 0; i < n; i++ {
 		wire.Send(ctx, func(error) {}, broadcast.Heartbeat(id, true))
 	}

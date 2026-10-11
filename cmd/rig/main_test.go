@@ -13,6 +13,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/mrsirg97-rgb/evt/event"
 	"github.com/mrsirg97-rgb/rig/v2/command"
 	"github.com/mrsirg97-rgb/rig/v2/core"
 	"github.com/mrsirg97-rgb/rig/v2/middleware/approve"
@@ -131,7 +132,7 @@ func (fakeWeb) Exec(ctx context.Context, args json.RawMessage) (string, error) {
 }
 
 func (nullFrontend) Input(ctx context.Context) (string, error) { return "", io.EOF }
-func (nullFrontend) Notify(ev core.Event)                      {}
+func (nullFrontend) Notify(ev event.Event)                     {}
 
 type oneLineFrontend struct{ line string }
 
@@ -143,7 +144,7 @@ func (f *oneLineFrontend) Input(ctx context.Context) (string, error) {
 	f.line = ""
 	return l, nil
 }
-func (*oneLineFrontend) Notify(ev core.Event) {}
+func (*oneLineFrontend) Notify(ev event.Event) {}
 
 func testTools() map[string]core.Tool {
 	return map[string]core.Tool{

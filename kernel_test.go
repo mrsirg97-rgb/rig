@@ -3,7 +3,7 @@ package rig
 import (
 	"context"
 	"encoding/json"
-	"github.com/mrsirg97-rgb/rig/v2/evt"
+	"github.com/mrsirg97-rgb/evt"
 	"strings"
 	"testing"
 

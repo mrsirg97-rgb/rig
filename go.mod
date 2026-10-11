@@ -4,6 +4,7 @@ go 1.26.6
 
 require (
 	github.com/mattn/go-runewidth v0.0.16
+	github.com/mrsirg97-rgb/evt v0.1.0
 	golang.org/x/crypto v0.56.0
 	golang.org/x/image v0.45.0
 	golang.org/x/sys v0.47.0

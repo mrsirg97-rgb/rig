@@ -9,7 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mrsirg97-rgb/rig/v2/broadcast"
+	"github.com/mrsirg97-rgb/evt/broadcast"
+	"github.com/mrsirg97-rgb/evt/event"
 	"github.com/mrsirg97-rgb/rig/v2/core"
 	sched "github.com/mrsirg97-rgb/rig/v2/store/scheduler"
 )
@@ -179,7 +180,11 @@ func (c *callSpawn) spawn(ctx context.Context, argv []string, cwd string, env []
 	if !ok {
 		panic("a delegate worker's spawn context carries the fleet pipe")
 	}
-	pipe := broadcast.NewPipeTransport(id, w, broadcast.NewJSONEncoder())
+	wreg, werr := sched.Wire()
+	if werr != nil {
+		panic(werr)
+	}
+	pipe := broadcast.NewPipeTransport(id, w, broadcast.NewJSONEncoder(wreg))
 	c.mu.Lock()
 	c.pipe = pipe
 	c.mu.Unlock()
@@ -193,7 +198,7 @@ func (c *callSpawn) spawn(ctx context.Context, argv []string, cwd string, env []
 	return sched.SpawnResult{Exit: 0, Stdout: "done"}, nil
 }
 
-func (c *callSpawn) send(ev core.Event) error {
+func (c *callSpawn) send(ev event.Event) error {
 	c.mu.Lock()
 	pipe := c.pipe
 	c.mu.Unlock()

@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/mrsirg97-rgb/evt/event"
 	"github.com/mrsirg97-rgb/rig/v2/core"
 	"github.com/mrsirg97-rgb/rig/v2/models"
 	compact "github.com/mrsirg97-rgb/rig/v2/policy/compact"
@@ -30,7 +31,7 @@ func TestKeepRecentCutsAtPairBoundary(t *testing.T) {
 		s.Append(core.Message{Role: core.RoleTool, ToolID: "c2", Content: strings.Repeat("r", 200)})
 		s.Append(core.Message{Role: core.RoleTool, ToolID: "c3", Content: strings.Repeat("r", 200)})
 
-		prov := &scriptedProvider{turns: []scriptedTurn{{events: []core.Event{core.TextDelta{Text: "S"}, core.Done{}}}}}
+		prov := &scriptedProvider{turns: []scriptedTurn{{events: []event.Event{core.TextDelta{Text: "S"}, core.Done{}}}}}
 		fe := &captureFrontend{}
 		pol, err := compact.New(prov, fe, s, "S", row)
 		if err != nil {
@@ -100,7 +101,7 @@ func TestKeepRecentCutsAtPairBoundary(t *testing.T) {
 		})
 		s.Append(core.Message{Role: core.RoleTool, ToolID: "c1", Content: strings.Repeat("r", 400)})
 
-		prov := &scriptedProvider{turns: []scriptedTurn{{events: []core.Event{core.TextDelta{Text: "S"}, core.Done{}}}}}
+		prov := &scriptedProvider{turns: []scriptedTurn{{events: []event.Event{core.TextDelta{Text: "S"}, core.Done{}}}}}
 		pol, err := compact.New(prov, &captureFrontend{}, s, "S", row)
 		if err != nil {
 			t.Fatalf("New: %v", err)

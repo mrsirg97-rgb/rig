@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/mrsirg97-rgb/evt/event"
 	"github.com/mrsirg97-rgb/rig/v2"
 	"github.com/mrsirg97-rgb/rig/v2/core"
 	"github.com/mrsirg97-rgb/rig/v2/loop"
@@ -15,7 +16,7 @@ import (
 
 type overlapFrontend struct {
 	inputs    chan string
-	events    []core.Event
+	events    []event.Event
 	inNotify  atomic.Int32
 	overlaps  atomic.Int32
 	inTurn    atomic.Bool
@@ -37,7 +38,7 @@ func (f *overlapFrontend) Input(ctx context.Context) (string, error) {
 	}
 }
 
-func (f *overlapFrontend) Notify(ev core.Event) {
+func (f *overlapFrontend) Notify(ev event.Event) {
 	if !f.inNotify.CompareAndSwap(0, 1) {
 		f.overlaps.Add(1)
 	}
@@ -52,15 +53,15 @@ func (f *overlapFrontend) Notify(ev core.Event) {
 func TestConsumerIsOneGoroutine(t *testing.T) {
 	read := newTimed("read")
 	calls := []core.ToolCall{timedCall("c1", "read", 40), timedCall("c2", "read", 5), timedCall("c3", "read", 20), timedCall("c4", "read", 1)}
-	evs := make([]core.Event, 0, len(calls)+1)
+	evs := make([]event.Event, 0, len(calls)+1)
 	for _, c := range calls {
 		evs = append(evs, callEv(c))
 	}
 	evs = append(evs, doneEv())
 	p := &scriptedProvider{turns: []scriptedTurn{
 		{events: evs},
-		{events: []core.Event{textEv("a"), textEv("b"), textEv("c"), doneEv()}},
-		{events: []core.Event{textEv("second"), doneEv()}},
+		{events: []event.Event{textEv("a"), textEv("b"), textEv("c"), doneEv()}},
+		{events: []event.Event{textEv("second"), doneEv()}},
 	}}
 	f := &overlapFrontend{inputs: make(chan string, 2)}
 	k := rig.New(rig.WithProvider(p), rig.WithFrontend(&turnMarking{f}), rig.WithPolicy(&transcriptPolicy{}), rig.WithTools(read), rig.WithPriority(writesFirst))
@@ -109,7 +110,7 @@ func TestStaleCompletionIsIgnored(t *testing.T) {
 	slow := &slowCancelTool{delay: 50 * time.Millisecond}
 	call := core.ToolCall{ID: "c1", Name: "slow", Args: json.RawMessage(`{}`)}
 	p := &scriptedProvider{turns: []scriptedTurn{
-		{events: []core.Event{callEv(call), doneEv()}},
+		{events: []event.Event{callEv(call), doneEv()}},
 		{holdCtx: true},
 	}}
 	f := &recorderFrontend{inputs: make(chan string, 1)}

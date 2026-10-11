@@ -6,7 +6,8 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/mrsirg97-rgb/rig/v2/broadcast"
+	"github.com/mrsirg97-rgb/evt/broadcast"
+	"github.com/mrsirg97-rgb/evt/event"
 	"github.com/mrsirg97-rgb/rig/v2/core"
 )
 
@@ -103,6 +104,6 @@ func (s *PackScorer) record(ctx context.Context, state string, a Answer) {
 
 func (s *PackScorer) say(format string, args ...any) {
 	if s.voice != nil {
-		broadcast.Say(s.voice, "decision", fmt.Sprintf(format, args...), core.LevelError)
+		broadcast.Say(s.voice, "decision", fmt.Sprintf(format, args...), event.LevelError)
 	}
 }

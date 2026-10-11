@@ -15,7 +15,7 @@ import (
 
 	"github.com/mrsirg97-rgb/rig/v2/models"
 
-	"github.com/mrsirg97-rgb/rig/v2/broadcast"
+	"github.com/mrsirg97-rgb/evt/broadcast"
 	"github.com/mrsirg97-rgb/rig/v2/store"
 	sched "github.com/mrsirg97-rgb/rig/v2/store/scheduler"
 	"github.com/mrsirg97-rgb/rig/v2/store/state"

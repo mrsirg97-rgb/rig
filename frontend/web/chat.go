@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/mrsirg97-rgb/evt/event"
 	"github.com/mrsirg97-rgb/rig/v2/command"
 	"github.com/mrsirg97-rgb/rig/v2/core"
 )
@@ -325,7 +326,7 @@ func usageOf(u core.Usage) map[string]any {
 	return map[string]any{"prompt": u.Prompt, "completion": u.Completion, "cache_read": u.CacheRead, "cache_write": u.CacheWrite, "cost": u.Cost}
 }
 
-func (c *chat) Notify(ev core.Event) {
+func (c *chat) Notify(ev event.Event) {
 	switch e := ev.(type) {
 	case core.TextDelta:
 		c.publish(map[string]any{"kind": "text", "text": e.Text})
@@ -361,7 +362,7 @@ func (c *chat) Notify(ev core.Event) {
 		}
 		c.hub.Unlock()
 		c.publish(frame)
-	case core.Notice:
+	case event.Notice:
 		c.publish(map[string]any{"kind": "notice", "source": e.Source, "text": e.Text, "level": e.Level.String()})
 	case core.WorkerDone:
 		c.mu.Lock()
@@ -420,7 +421,7 @@ func capResult(s string) string {
 }
 
 func (s *Server) Input(ctx context.Context) (string, error) { return s.chat.Input(ctx) }
-func (s *Server) Notify(ev core.Event)                      { s.chat.Notify(ev) }
+func (s *Server) Notify(ev event.Event)                     { s.chat.Notify(ev) }
 func (s *Server) Ask(ctx context.Context, prompt string) bool {
 	return s.chat.Ask(ctx, prompt)
 }

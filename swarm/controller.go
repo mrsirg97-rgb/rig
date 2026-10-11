@@ -9,10 +9,11 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/mrsirg97-rgb/evt"
+	"github.com/mrsirg97-rgb/evt/broadcast"
+	"github.com/mrsirg97-rgb/evt/event"
 	"github.com/mrsirg97-rgb/rig/v2"
-	"github.com/mrsirg97-rgb/rig/v2/broadcast"
 	"github.com/mrsirg97-rgb/rig/v2/core"
-	"github.com/mrsirg97-rgb/rig/v2/evt"
 	"github.com/mrsirg97-rgb/rig/v2/models"
 	"github.com/mrsirg97-rgb/rig/v2/store"
 	sched "github.com/mrsirg97-rgb/rig/v2/store/scheduler"
@@ -303,7 +304,7 @@ func (c *Controller) Stop() (string, error) {
 	}
 	c.call(func() {
 		c.emit()
-		c.say(core.LevelSuccess, "/swarm exited — %d %s stopped", count, plural(count, "worker"))
+		c.say(event.LevelSuccess, "/swarm exited — %d %s stopped", count, plural(count, "worker"))
 	})
 	return fmt.Sprintf("swarm: stopped %d %s", count, plural(count, "agent")), nil
 }
@@ -329,7 +330,7 @@ func (c *Controller) status() core.SwarmStatus {
 	return core.SwarmStatus{Workers: workers, Pending: counts.Pending, Review: counts.Review}
 }
 
-func (c *Controller) say(level core.Level, format string, args ...any) {
+func (c *Controller) say(level event.Level, format string, args ...any) {
 	broadcast.Say(c.self, "swarm", strings.TrimRight(fmt.Sprintf(format, args...), "\n"), level)
 }
 
@@ -337,7 +338,7 @@ func (c *Controller) loud(w *worker, format string, args ...any) {
 	if w.ctx.Err() != nil {
 		return
 	}
-	c.say(core.LevelError, format, args...)
+	c.say(event.LevelError, format, args...)
 }
 
 func (c *Controller) brief(w *worker, task todostore.TaskInfo) string {

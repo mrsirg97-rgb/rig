@@ -4,13 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/mrsirg97-rgb/rig/v2/broadcast"
-	"github.com/mrsirg97-rgb/rig/v2/evt"
+	"github.com/mrsirg97-rgb/evt"
+	"github.com/mrsirg97-rgb/evt/broadcast"
 	"github.com/mrsirg97-rgb/rig/v2/store/graph"
 	"io"
 	"os"
 	"strings"
 
+	"github.com/mrsirg97-rgb/evt/event"
 	"github.com/mrsirg97-rgb/rig/v2"
 	"github.com/mrsirg97-rgb/rig/v2/command"
 	"github.com/mrsirg97-rgb/rig/v2/config"
@@ -443,7 +444,7 @@ func (r *root) listen() {
 	})
 }
 
-func (r *root) deliver(ev core.Event) {
+func (r *root) deliver(ev event.Event) {
 	defer func() {
 		if p := recover(); p != nil {
 			out := r.errOut
@@ -454,7 +455,7 @@ func (r *root) deliver(ev core.Event) {
 		}
 	}()
 	switch ev.(type) {
-	case core.Notice, core.SwarmStatus, core.Phase, core.WorkerDone:
+	case event.Notice, core.SwarmStatus, core.Phase, core.WorkerDone:
 	default:
 		return
 	}
@@ -462,7 +463,7 @@ func (r *root) deliver(ev core.Event) {
 		fe.Notify(ev)
 		return
 	}
-	if n, ok := ev.(core.Notice); ok {
+	if n, ok := ev.(event.Notice); ok {
 		out := r.errOut
 		if out == nil {
 			out = os.Stderr

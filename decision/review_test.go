@@ -10,11 +10,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/mrsirg97-rgb/evt"
+	"github.com/mrsirg97-rgb/evt/broadcast"
+	"github.com/mrsirg97-rgb/evt/event"
 	"github.com/mrsirg97-rgb/rig/v2"
-	"github.com/mrsirg97-rgb/rig/v2/broadcast"
 	"github.com/mrsirg97-rgb/rig/v2/core"
 	"github.com/mrsirg97-rgb/rig/v2/decision"
-	"github.com/mrsirg97-rgb/rig/v2/evt"
 	"github.com/mrsirg97-rgb/rig/v2/models"
 	"github.com/mrsirg97-rgb/rig/v2/store"
 	decisionstore "github.com/mrsirg97-rgb/rig/v2/store/decision"
@@ -634,7 +635,7 @@ func voice(t *testing.T) (broadcast.Member, <-chan string) {
 	said := make(chan string, 8)
 	room.Add(-1).Subscribe(context.Background(), func(err error, messages ...broadcast.Message) {
 		for _, m := range messages {
-			if n, ok := m.Event().(core.Notice); err == nil && ok {
+			if n, ok := m.Event().(event.Notice); err == nil && ok {
 				said <- n.Source + ": " + n.Text
 			}
 		}
@@ -726,7 +727,7 @@ type lineFrontend struct {
 }
 
 func (f lineFrontend) Input(context.Context) (string, error) { return f.line, nil }
-func (lineFrontend) Notify(core.Event)                       {}
+func (lineFrontend) Notify(event.Event)                      {}
 
 func haltReviewer(t *testing.T, fire decision.Fire) (*decision.Reviewer, <-chan core.Phase, <-chan string, store.DB) {
 	t.Helper()
@@ -747,7 +748,7 @@ func haltReviewer(t *testing.T, fire decision.Fire) (*decision.Reviewer, <-chan 
 			switch ev := m.Event().(type) {
 			case core.Phase:
 				phases <- ev
-			case core.Notice:
+			case event.Notice:
 				notices <- ev.Source + ": " + ev.Text
 			}
 		}

@@ -6,69 +6,69 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/mrsirg97-rgb/evt/event"
 )
-
-type Event interface{ event() }
-
-type Snapshot interface {
-	Event
-	Snapshot()
-}
 
 var (
-	_ Event = TextDelta{}
-	_ Event = ReasoningDelta{}
-	_ Event = ToolCallEvent{}
-	_ Event = Done{}
-	_ Event = EmptyTurn{}
-	_ Event = Fault{}
-	_ Event = ToolStart{}
-	_ Event = ToolResult{}
-	_ Event = TurnEnd{}
-	_ Event = TestEvent{}
-	_ Event = Compacted{}
-	_ Event = SwarmStatus{}
-	_ Event = Notice{}
-	_ Event = Verdict{}
-	_ Event = Phase{}
-	_ Event = WorkerDone{}
+	_ event.Event = TextDelta{}
+	_ event.Event = ReasoningDelta{}
+	_ event.Event = ToolCallEvent{}
+	_ event.Event = Done{}
+	_ event.Event = EmptyTurn{}
+	_ event.Event = Fault{}
+	_ event.Event = ToolStart{}
+	_ event.Event = ToolResult{}
+	_ event.Event = TurnEnd{}
+	_ event.Event = TestEvent{}
+	_ event.Event = Compacted{}
+	_ event.Event = SwarmStatus{}
+	_ event.Event = Verdict{}
+	_ event.Event = Phase{}
+	_ event.Event = WorkerDone{}
 )
 
-type TextDelta struct{ Text string }
+type TextDelta struct {
+	Text string
 
-func (TextDelta) event() {}
+	event.Marker
+}
 
 type ReasoningDelta struct {
 	Text    string
 	Details json.RawMessage
+
+	event.Marker
 }
 
-func (ReasoningDelta) event() {}
+type ToolCallEvent struct {
+	Call ToolCall
 
-type ToolCallEvent struct{ Call ToolCall }
-
-func (ToolCallEvent) event() {}
+	event.Marker
+}
 
 type Done struct {
 	StopReason string
 	Usage      Usage
 	Model      string
-}
 
-func (Done) event() {}
+	event.Marker
+}
 
 type EmptyTurn struct {
 	Resample int
 	Limit    int
 	Usage    Usage
 	Model    string
+
+	event.Marker
 }
 
-func (EmptyTurn) event() {}
+type Fault struct {
+	Err error
 
-type Fault struct{ Err error }
-
-func (Fault) event() {}
+	event.Marker
+}
 
 type Usage struct {
 	Prompt     int
@@ -78,9 +78,11 @@ type Usage struct {
 	Cost       float64
 }
 
-type ToolStart struct{ Call ToolCall }
+type ToolStart struct {
+	Call ToolCall
 
-func (ToolStart) event() {}
+	event.Marker
+}
 
 func (e ToolStart) BoundedCall() string {
 	var arg string
@@ -98,9 +100,9 @@ type ToolResult struct {
 	Content  string
 	Err      error
 	Duration time.Duration
-}
 
-func (ToolResult) event() {}
+	event.Marker
+}
 
 type TurnReason string
 
@@ -110,13 +112,17 @@ const (
 	TurnInterrupt TurnReason = "interrupt"
 )
 
-type TurnEnd struct{ Reason TurnReason }
+type TurnEnd struct {
+	Reason TurnReason
 
-func (TurnEnd) event() {}
+	event.Marker
+}
 
-type TestEvent struct{ Name string }
+type TestEvent struct {
+	Name string
 
-func (TestEvent) event() {}
+	event.Marker
+}
 
 type Compacted struct {
 	Summary string
@@ -124,13 +130,13 @@ type Compacted struct {
 	Kept    int
 	Usage   Usage
 	Model   string
+
+	event.Marker
 }
 
-func (Compacted) event() {}
-
-type Compacting struct{}
-
-func (Compacting) event() {}
+type Compacting struct {
+	event.Marker
+}
 
 type SwarmWorker struct {
 	ID        int
@@ -148,45 +154,19 @@ type SwarmStatus struct {
 	Workers []SwarmWorker
 	Pending int
 	Review  int
-}
 
-func (SwarmStatus) event() {}
+	event.Marker
+}
 
 func (SwarmStatus) Snapshot() {}
-
-type Level int
-
-const (
-	LevelInfo Level = iota
-	LevelSuccess
-	LevelError
-)
-
-func (l Level) String() string {
-	switch l {
-	case LevelSuccess:
-		return "success"
-	case LevelError:
-		return "error"
-	}
-	return "info"
-}
-
-type Notice struct {
-	Source string
-	Text   string
-	Level  Level
-}
-
-func (Notice) event() {}
 
 type Verdict struct {
 	Row    int64
 	Accept bool
 	Reason string
-}
 
-func (Verdict) event() {}
+	event.Marker
+}
 
 type Phase struct {
 	Name string
@@ -194,12 +174,12 @@ type Phase struct {
 	Done bool
 	Ok   bool
 	Note string
+
+	event.Marker
 }
 
-func (Phase) event() {}
-
 type Provider interface {
-	Stream(ctx context.Context, req Request) (<-chan Event, error)
+	Stream(ctx context.Context, req Request) (<-chan event.Event, error)
 }
 
 type Request struct {
@@ -225,9 +205,9 @@ type WorkerDone struct {
 	Log      string
 	Kind     string
 	RunID    string
-}
 
-func (WorkerDone) event() {}
+	event.Marker
+}
 
 func (d WorkerDone) Head() string {
 	if d.Kind == "" {

@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/mrsirg97-rgb/evt/event"
 	"github.com/mrsirg97-rgb/rig/v2/core"
 	"github.com/mrsirg97-rgb/rig/v2/store"
 	"github.com/mrsirg97-rgb/rig/v2/store/state"
@@ -234,12 +235,12 @@ func (f *promptFrontend) Input(context.Context) (string, error) {
 	f.line = ""
 	return l, nil
 }
-func (*promptFrontend) Notify(core.Event) {}
+func (*promptFrontend) Notify(event.Event) {}
 
 type nullFrontend struct{}
 
 func (*nullFrontend) Input(context.Context) (string, error) { return "", io.EOF }
-func (*nullFrontend) Notify(core.Event)                     {}
+func (*nullFrontend) Notify(event.Event)                    {}
 
 func TestListSessionsCarriesLabelAndTokens(t *testing.T) {
 	db := openStore(t)

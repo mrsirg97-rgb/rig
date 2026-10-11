@@ -14,8 +14,9 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/mrsirg97-rgb/evt/broadcast"
+	"github.com/mrsirg97-rgb/evt/event"
 	"github.com/mrsirg97-rgb/rig/v2"
-	"github.com/mrsirg97-rgb/rig/v2/broadcast"
 	"github.com/mrsirg97-rgb/rig/v2/command"
 	"github.com/mrsirg97-rgb/rig/v2/config"
 	"github.com/mrsirg97-rgb/rig/v2/core"
@@ -807,7 +808,7 @@ func runJob(args []string) int {
 		defer engine.Stop()
 		room.Add(rig.MemberFrontend).Subscribe(context.Background(), func(err error, messages ...broadcast.Message) {
 			for _, m := range messages {
-				if n, ok := m.Event().(core.Notice); err == nil && ok {
+				if n, ok := m.Event().(event.Notice); err == nil && ok {
 					fmt.Fprintln(os.Stderr, "rig: "+n.Source+": "+n.Text)
 				}
 			}

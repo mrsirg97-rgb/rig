@@ -8,9 +8,10 @@ import (
 	"io"
 	"strings"
 
+	"github.com/mrsirg97-rgb/evt"
+	"github.com/mrsirg97-rgb/evt/event"
 	"github.com/mrsirg97-rgb/rig/v2"
 	"github.com/mrsirg97-rgb/rig/v2/core"
-	"github.com/mrsirg97-rgb/rig/v2/evt"
 )
 
 type turn struct {
@@ -190,7 +191,7 @@ func (r *run) model(t *turn) {
 	}()
 }
 
-func (r *run) streamEvent(t *turn, ev core.Event) {
+func (r *run) streamEvent(t *turn, ev event.Event) {
 	if t != r.turn {
 		return
 	}

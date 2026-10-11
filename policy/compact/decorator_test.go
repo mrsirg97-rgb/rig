@@ -9,6 +9,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/mrsirg97-rgb/evt/event"
 	"github.com/mrsirg97-rgb/rig/v2"
 	"github.com/mrsirg97-rgb/rig/v2/core"
 	"github.com/mrsirg97-rgb/rig/v2/loop"
@@ -19,18 +20,18 @@ import (
 const contextFault = "openai: 400: prompt is too long: context length exceeded"
 
 func summaryTurn(body string, usage core.Usage) scriptedTurn {
-	return scriptedTurn{events: []core.Event{core.TextDelta{Text: body}, core.Done{Usage: usage}}}
+	return scriptedTurn{events: []event.Event{core.TextDelta{Text: body}, core.Done{Usage: usage}}}
 }
 
 func healthyTurn(text string, usage core.Usage) scriptedTurn {
-	return scriptedTurn{events: []core.Event{core.TextDelta{Text: text}, core.Done{Usage: usage}}}
+	return scriptedTurn{events: []event.Event{core.TextDelta{Text: text}, core.Done{Usage: usage}}}
 }
 
 func TestOverflowRecoversOnce(t *testing.T) {
 	t.Run("pre-stream fault is swallowed and recovered", func(t *testing.T) {
 		s := compactFixture()
 		prov := &scriptedProvider{turns: []scriptedTurn{
-			{events: []core.Event{core.Fault{Err: errors.New(contextFault)}}},
+			{events: []event.Event{core.Fault{Err: errors.New(contextFault)}}},
 			summaryTurn("SUMMARY", core.Usage{Prompt: 77, Completion: 8}),
 			healthyTurn("retry answer", core.Usage{Prompt: 100, Completion: 5}),
 		}}
@@ -98,7 +99,7 @@ func TestOverflowRecoversOnce(t *testing.T) {
 
 		s := compactFixture()
 		prov := &scriptedProvider{turns: []scriptedTurn{
-			{events: []core.Event{core.TextDelta{Text: "partial "}, core.Fault{Err: errors.New(contextFault)}}},
+			{events: []event.Event{core.TextDelta{Text: "partial "}, core.Fault{Err: errors.New(contextFault)}}},
 			summaryTurn("SUM", core.Usage{Prompt: 10, Completion: 1}),
 			healthyTurn("done", core.Usage{Prompt: 20, Completion: 2}),
 		}}
@@ -140,10 +141,10 @@ func TestOverflowRecoversOnce(t *testing.T) {
 func TestOverflowRecoversOnceThenSurfaces(t *testing.T) {
 	s := compactFixture()
 	prov := &scriptedProvider{turns: []scriptedTurn{
-		{events: []core.Event{core.Fault{Err: errors.New(contextFault)}}},
+		{events: []event.Event{core.Fault{Err: errors.New(contextFault)}}},
 		summaryTurn("SUM1", core.Usage{Prompt: 10, Completion: 1}),
-		{events: []core.Event{core.Fault{Err: errors.New(contextFault)}}},
-		{events: []core.Event{core.Fault{Err: errors.New(contextFault)}}},
+		{events: []event.Event{core.Fault{Err: errors.New(contextFault)}}},
+		{events: []event.Event{core.Fault{Err: errors.New(contextFault)}}},
 		summaryTurn("SUM2", core.Usage{Prompt: 10, Completion: 1}),
 		healthyTurn("ANSWER", core.Usage{Prompt: 20, Completion: 2}),
 	}}
@@ -223,7 +224,7 @@ func TestOverflowClassifier(t *testing.T) {
 		t.Run(phrase, func(t *testing.T) {
 			s := compactFixture()
 			prov := &scriptedProvider{turns: []scriptedTurn{
-				{events: []core.Event{core.Fault{Err: errors.New(phrase)}}},
+				{events: []event.Event{core.Fault{Err: errors.New(phrase)}}},
 				summaryTurn("S", core.Usage{Prompt: 1, Completion: 1}),
 				healthyTurn("ok", core.Usage{Prompt: 1, Completion: 1}),
 			}}
@@ -259,7 +260,7 @@ func TestOverflowClassifier(t *testing.T) {
 		t.Run(phrase, func(t *testing.T) {
 			s := compactFixture()
 			prov := &scriptedProvider{turns: []scriptedTurn{
-				{events: []core.Event{core.Fault{Err: errors.New(phrase)}}},
+				{events: []event.Event{core.Fault{Err: errors.New(phrase)}}},
 			}}
 			fe := &captureFrontend{}
 			pol, err := compact.New(prov, fe, s, "S", overflowRow)
@@ -305,7 +306,7 @@ func TestCalibrationShiftsTheTrigger(t *testing.T) {
 		row := models.Model{Role: models.RoleInteractive, ID: "local", Window: 1050, MaxTokens: 500, Reserve: 100, KeepRecent: 100}
 		s := base()
 		prov := &scriptedProvider{turns: []scriptedTurn{
-			{events: []core.Event{core.Done{Usage: core.Usage{Prompt: anchor + 2*100, Completion: 10}}}},
+			{events: []event.Event{core.Done{Usage: core.Usage{Prompt: anchor + 2*100, Completion: 10}}}},
 		}}
 		pol, err := compact.New(prov, &captureFrontend{}, s, "S", row)
 		if err != nil {
@@ -336,7 +337,7 @@ func TestCalibrationShiftsTheTrigger(t *testing.T) {
 		s.Append(core.Message{Role: core.RoleTool, ToolID: "c1", Content: strings.Repeat("r", 1800)})
 
 		prov := &scriptedProvider{turns: []scriptedTurn{
-			{events: []core.Event{core.Done{Usage: core.Usage{Prompt: anchor + 225, Completion: 5}}}},
+			{events: []event.Event{core.Done{Usage: core.Usage{Prompt: anchor + 225, Completion: 5}}}},
 		}}
 		pol, err := compact.New(prov, &captureFrontend{}, s, "S", row)
 		if err != nil {
@@ -360,7 +361,7 @@ func TestCalibrationShiftsTheTrigger(t *testing.T) {
 	t.Run("a 10x report clamps to 2", func(t *testing.T) {
 		s := base()
 		prov := &scriptedProvider{turns: []scriptedTurn{
-			{events: []core.Event{core.Done{Usage: core.Usage{Prompt: anchor + 10*100, Completion: 1}}}},
+			{events: []event.Event{core.Done{Usage: core.Usage{Prompt: anchor + 10*100, Completion: 1}}}},
 		}}
 		pol, err := compact.New(prov, &captureFrontend{}, s, "S", row)
 		if err != nil {
@@ -390,7 +391,7 @@ func TestCalibrationShiftsTheTrigger(t *testing.T) {
 		s.Append(core.Message{Role: core.RoleAssistant, Content: strings.Repeat("a", 400), ContextTokens: anchor})
 		s.Append(core.Message{Role: core.RoleTool, ToolID: "c1", Content: strings.Repeat("r", 20)})
 		prov := &scriptedProvider{turns: []scriptedTurn{
-			{events: []core.Event{core.Done{Usage: core.Usage{Prompt: anchor + 500, Completion: 1}}}},
+			{events: []event.Event{core.Done{Usage: core.Usage{Prompt: anchor + 500, Completion: 1}}}},
 		}}
 		pol, err := compact.New(prov, &captureFrontend{}, s, "S", row)
 		if err != nil {
@@ -416,7 +417,7 @@ func TestCalibrationShiftsTheTrigger(t *testing.T) {
 	t.Run("a 0.1x report clamps to 0.5", func(t *testing.T) {
 		s := base()
 		prov := &scriptedProvider{turns: []scriptedTurn{
-			{events: []core.Event{core.Done{Usage: core.Usage{Prompt: anchor + 10, Completion: 1}}}},
+			{events: []event.Event{core.Done{Usage: core.Usage{Prompt: anchor + 10, Completion: 1}}}},
 			summaryTurn("S01", core.Usage{Prompt: 5, Completion: 5}),
 		}}
 		pol, err := compact.New(prov, &captureFrontend{}, s, "S", row)
@@ -447,7 +448,7 @@ func TestCalibrationShiftsTheTrigger(t *testing.T) {
 		s.Append(core.Message{Role: core.RoleUser, Content: strings.Repeat("p", 1796)})
 		s.Append(core.Message{Role: core.RoleUser, Content: strings.Repeat("q", 1800)})
 		prov := &scriptedProvider{turns: []scriptedTurn{
-			{events: []core.Event{core.Done{Usage: core.Usage{Prompt: 3600, Completion: 0}}}},
+			{events: []event.Event{core.Done{Usage: core.Usage{Prompt: 3600, Completion: 0}}}},
 		}}
 		pol, err := compact.New(prov, &captureFrontend{}, s, "S", row)
 		if err != nil {
@@ -473,7 +474,7 @@ func TestCalibrationShiftsTheTrigger(t *testing.T) {
 		s := base()
 		spec := core.ToolSpec{Name: "bash", Description: strings.Repeat("d", 2000), Schema: []byte(strings.Repeat("s", 4000))}
 		prov := &scriptedProvider{turns: []scriptedTurn{
-			{events: []core.Event{core.Done{Usage: core.Usage{Prompt: anchor + 100, Completion: 5}}}},
+			{events: []event.Event{core.Done{Usage: core.Usage{Prompt: anchor + 100, Completion: 5}}}},
 		}}
 		pol, err := compact.New(prov, &captureFrontend{}, s, "S", row)
 		if err != nil {
@@ -506,7 +507,7 @@ func TestMainCallMaxTokensClamped(t *testing.T) {
 		s.Append(core.Message{Role: core.RoleAssistant, Content: strings.Repeat("a", 400), ContextTokens: 500})
 		s.Append(core.Message{Role: core.RoleTool, ToolID: "c1", Content: strings.Repeat("r", 800)})
 
-		prov := &scriptedProvider{turns: []scriptedTurn{{events: []core.Event{core.Done{}}}}}
+		prov := &scriptedProvider{turns: []scriptedTurn{{events: []event.Event{core.Done{}}}}}
 		pol, err := compact.New(prov, &captureFrontend{}, s, "S", row)
 		if err != nil {
 			t.Fatalf("New: %v", err)
@@ -529,7 +530,7 @@ func TestMainCallMaxTokensClamped(t *testing.T) {
 		s.Append(core.Message{Role: core.RoleAssistant, Content: strings.Repeat("a", 400), ContextTokens: 500})
 		s.Append(core.Message{Role: core.RoleTool, ToolID: "c1", Content: strings.Repeat("r", 1600)})
 
-		prov := &scriptedProvider{turns: []scriptedTurn{{events: []core.Event{core.Done{}}}}}
+		prov := &scriptedProvider{turns: []scriptedTurn{{events: []event.Event{core.Done{}}}}}
 		pol, err := compact.New(prov, &captureFrontend{}, s, "S", row)
 		if err != nil {
 			t.Fatalf("New: %v", err)
@@ -551,7 +552,7 @@ func TestMainCallMaxTokensClamped(t *testing.T) {
 		s.Append(core.Message{Role: core.RoleUser, Content: strings.Repeat("p", 1400)})
 		s.Append(core.Message{Role: core.RoleUser, Content: strings.Repeat("q", 1400)})
 
-		prov := &scriptedProvider{turns: []scriptedTurn{{events: []core.Event{core.Done{}}}}}
+		prov := &scriptedProvider{turns: []scriptedTurn{{events: []event.Event{core.Done{}}}}}
 		pol, err := compact.New(prov, &captureFrontend{}, s, strings.Repeat("s", 200), row)
 		if err != nil {
 			t.Fatalf("New: %v", err)
@@ -573,7 +574,7 @@ func TestMainCallMaxTokensClamped(t *testing.T) {
 		s.Append(core.Message{Role: core.RoleAssistant, Content: strings.Repeat("a", 400), ContextTokens: 500})
 		s.Append(core.Message{Role: core.RoleTool, ToolID: "c1", Content: strings.Repeat("r", 2400)})
 
-		prov := &scriptedProvider{turns: []scriptedTurn{{events: []core.Event{core.Done{}}}}}
+		prov := &scriptedProvider{turns: []scriptedTurn{{events: []event.Event{core.Done{}}}}}
 		pol, err := compact.New(prov, &captureFrontend{}, s, "S", row)
 		if err != nil {
 			t.Fatalf("New: %v", err)
@@ -599,7 +600,7 @@ func TestRecoveryKeptBatchOverrunsWindow(t *testing.T) {
 	s := core.NewSession()
 	s.Append(core.Message{Role: core.RoleUser, Content: strings.Repeat("p", 400)})
 	prov := &scriptedProvider{turns: []scriptedTurn{
-		{events: []core.Event{core.Fault{Err: errors.New(contextFault)}}},
+		{events: []event.Event{core.Fault{Err: errors.New(contextFault)}}},
 		summaryTurn(strings.Repeat("S", 800), core.Usage{Prompt: 5, Completion: 5}),
 	}}
 	fe := &captureFrontend{}
@@ -641,7 +642,7 @@ type steerFrontend struct {
 	mu     sync.Mutex
 	inputs []string
 	cancel context.CancelFunc
-	events []core.Event
+	events []event.Event
 }
 
 func (f *steerFrontend) Input(ctx context.Context) (string, error) {
@@ -661,7 +662,7 @@ func (f *steerFrontend) Input(ctx context.Context) (string, error) {
 	return s, nil
 }
 
-func (f *steerFrontend) Notify(ev core.Event) {
+func (f *steerFrontend) Notify(ev event.Event) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.events = append(f.events, ev)
@@ -675,10 +676,10 @@ func (f *steerFrontend) steal() context.CancelFunc {
 	return c
 }
 
-func (f *steerFrontend) snapshot() []core.Event {
+func (f *steerFrontend) snapshot() []event.Event {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	return append([]core.Event(nil), f.events...)
+	return append([]event.Event(nil), f.events...)
 }
 
 func TestSteerDuringRetry(t *testing.T) {
@@ -694,7 +695,7 @@ func TestSteerDuringRetry(t *testing.T) {
 	summaryCalled := make(chan struct{})
 	block := make(chan struct{})
 	prov := &scriptedProvider{turns: []scriptedTurn{
-		{events: []core.Event{core.Fault{Err: errors.New(contextFault)}}},
+		{events: []event.Event{core.Fault{Err: errors.New(contextFault)}}},
 		{signal: func() { close(summaryCalled) }, blockOn: block, err: errors.New("steered: context canceled")},
 		healthyTurn("ok", core.Usage{Prompt: 10, Completion: 1}),
 	}}
@@ -745,7 +746,7 @@ func TestRecoveryRewriteRaceFree(t *testing.T) {
 	})
 	s.Append(core.Message{Role: core.RoleTool, ToolID: "c1", Content: strings.Repeat("r", 2000)})
 	prov := &scriptedProvider{turns: []scriptedTurn{
-		{events: []core.Event{core.Fault{Err: errors.New(contextFault)}}},
+		{events: []event.Event{core.Fault{Err: errors.New(contextFault)}}},
 		summaryTurn("SUM", core.Usage{Prompt: 5, Completion: 5}),
 		healthyTurn("retry", core.Usage{Prompt: 6, Completion: 6}),
 	}}

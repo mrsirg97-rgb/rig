@@ -13,6 +13,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/mrsirg97-rgb/evt/event"
 	"github.com/mrsirg97-rgb/rig/v2/core"
 )
 
@@ -27,7 +28,7 @@ func styleFor(name string) wireStyle {
 	return wireStyle{reasoning: "reasoning_content"}
 }
 
-func (p *provider) Stream(ctx context.Context, req core.Request) (<-chan core.Event, error) {
+func (p *provider) Stream(ctx context.Context, req core.Request) (<-chan event.Event, error) {
 	if len(req.Messages) == 0 {
 		return nil, fmt.Errorf("openai: empty message list")
 	}
@@ -60,8 +61,8 @@ func (p *provider) Stream(ctx context.Context, req core.Request) (<-chan core.Ev
 		return nil, fmt.Errorf("openai: encode request: %w", err)
 	}
 
-	ch := make(chan core.Event, 4)
-	emit := func(ev core.Event) bool {
+	ch := make(chan event.Event, 4)
+	emit := func(ev event.Event) bool {
 		select {
 		case ch <- ev:
 			return true

@@ -12,6 +12,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/mrsirg97-rgb/evt/event"
 	"github.com/mrsirg97-rgb/rig/v2/core"
 	"github.com/mrsirg97-rgb/rig/v2/store"
 	"github.com/mrsirg97-rgb/rig/v2/store/state"
@@ -35,7 +36,7 @@ func (s *scripted) Input(ctx context.Context) (string, error) {
 	return s.inputs[s.inputed-1], nil
 }
 
-func (s *scripted) Notify(ev core.Event) {
+func (s *scripted) Notify(ev event.Event) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.named = append(s.named, fmt.Sprintf("%T", ev))

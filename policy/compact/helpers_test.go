@@ -7,12 +7,13 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/mrsirg97-rgb/evt/event"
 	"github.com/mrsirg97-rgb/rig/v2/core"
 	"github.com/mrsirg97-rgb/rig/v2/models"
 )
 
 type scriptedTurn struct {
-	events  []core.Event
+	events  []event.Event
 	err     error
 	signal  func()
 	blockOn chan struct{}
@@ -25,7 +26,7 @@ type scriptedProvider struct {
 	captured []core.Request
 }
 
-func (p *scriptedProvider) Stream(ctx context.Context, req core.Request) (<-chan core.Event, error) {
+func (p *scriptedProvider) Stream(ctx context.Context, req core.Request) (<-chan event.Event, error) {
 	p.mu.Lock()
 	if p.n >= len(p.turns) {
 		p.mu.Unlock()
@@ -48,7 +49,7 @@ func (p *scriptedProvider) Stream(ctx context.Context, req core.Request) (<-chan
 	if turn.err != nil {
 		return nil, turn.err
 	}
-	out := make(chan core.Event, len(turn.events)+1)
+	out := make(chan event.Event, len(turn.events)+1)
 	go func() {
 		defer close(out)
 		for _, ev := range turn.events {
@@ -76,21 +77,21 @@ func (p *scriptedProvider) reqs() []core.Request {
 
 type captureFrontend struct {
 	mu     sync.Mutex
-	events []core.Event
+	events []event.Event
 }
 
 func (f *captureFrontend) Input(context.Context) (string, error) { return "", io.EOF }
 
-func (f *captureFrontend) Notify(ev core.Event) {
+func (f *captureFrontend) Notify(ev event.Event) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.events = append(f.events, ev)
 }
 
-func (f *captureFrontend) snapshot() []core.Event {
+func (f *captureFrontend) snapshot() []event.Event {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	return append([]core.Event(nil), f.events...)
+	return append([]event.Event(nil), f.events...)
 }
 
 var overflowRow = models.Model{Role: models.RoleInteractive, ID: "local", Window: 4000, MaxTokens: 500, Reserve: 100, KeepRecent: 200}
@@ -106,9 +107,9 @@ func compactFixture() *core.Session {
 	return s
 }
 
-func stringify(ev core.Event) string { return fmt.Sprintf("%T %+v", ev, ev) }
+func stringify(ev event.Event) string { return fmt.Sprintf("%T %+v", ev, ev) }
 
-func stripCue(evs []core.Event) []core.Event {
+func stripCue(evs []event.Event) []event.Event {
 	out := evs[:0:0]
 	for _, ev := range evs {
 		switch ev.(type) {

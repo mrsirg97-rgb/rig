@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/mrsirg97-rgb/evt/event"
 	"github.com/mrsirg97-rgb/rig/v2/core"
 	"github.com/mrsirg97-rgb/rig/v2/testenv"
 )
@@ -310,7 +311,7 @@ func TestSwarmAndDelegateStatusesSitSideBySide(t *testing.T) {
 func TestANoticePublishesOneFrameWithItsSource(t *testing.T) {
 	srv, tok := newChatServer(t)
 	ts := testenv.Server(t, srv.Handler())
-	srv.Notify(core.Notice{Source: "decision", Text: "queue full, dropping the bash proposal"})
+	srv.Notify(event.Notice{Source: "decision", Text: "queue full, dropping the bash proposal"})
 	got := frames(t, ts.URL, tok, "0", 2, 3*time.Second)
 	if k := kinds(got); k != "hello,notice" {
 		t.Fatalf("kinds %s", k)

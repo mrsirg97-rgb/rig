@@ -12,9 +12,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/mrsirg97-rgb/evt"
+	"github.com/mrsirg97-rgb/evt/broadcast"
 	"github.com/mrsirg97-rgb/rig/v2"
-	"github.com/mrsirg97-rgb/rig/v2/broadcast"
-	"github.com/mrsirg97-rgb/rig/v2/evt"
 	"github.com/mrsirg97-rgb/rig/v2/models"
 	"github.com/mrsirg97-rgb/rig/v2/store"
 	sched "github.com/mrsirg97-rgb/rig/v2/store/scheduler"
@@ -156,7 +156,11 @@ func TestDelegateWorkerHeartbeatIsPublishedAsItsMember(t *testing.T) {
 			t.Error("the spawn context carries no fleet pipe")
 			return
 		}
-		broadcast.NewPipeTransport(id, w, broadcast.NewJSONEncoder()).Send(ctx, func(error) {}, broadcast.Heartbeat(id, true))
+		wreg, werr := sched.Wire()
+		if werr != nil {
+			panic(werr)
+		}
+		broadcast.NewPipeTransport(id, w, broadcast.NewJSONEncoder(wreg)).Send(ctx, func(error) {}, broadcast.Heartbeat(id, true))
 	}
 	in := delegateInput(t, delegateFetch(t, false, ""), func(ctx context.Context, argv []string, cwd string, e []string, observe func([]byte)) (sched.SpawnResult, error) {
 		env = e

@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mrsirg97-rgb/rig/v2/broadcast"
+	"github.com/mrsirg97-rgb/evt/broadcast"
 	"github.com/mrsirg97-rgb/rig/v2/store"
 	sched "github.com/mrsirg97-rgb/rig/v2/store/scheduler"
 )
@@ -230,7 +230,11 @@ func TestRunJobKeepsAFireThatHeartbeatsOnTheFleet(t *testing.T) {
 		if !ok {
 			t.Error("the fire's spawn context carries no fleet pipe")
 		}
-		wire := broadcast.NewPipeTransport(id, w, broadcast.NewJSONEncoder())
+		wreg, werr := sched.Wire()
+		if werr != nil {
+			panic(werr)
+		}
+		wire := broadcast.NewPipeTransport(id, w, broadcast.NewJSONEncoder(wreg))
 		for i := 0; i < 8; i++ {
 			wire.Send(ctx, func(error) {}, broadcast.Heartbeat(id, true))
 			time.Sleep(50 * time.Millisecond)
@@ -361,7 +365,11 @@ func TestRealSpawnHandsTheChildTheFleetPipeAsFdThree(t *testing.T) {
 		t.Fatal(err)
 	}
 	heard := make(chan broadcast.Message, 1)
-	wire := broadcast.NewPipeTransport(9, r, broadcast.NewJSONEncoder())
+	wreg, werr := sched.Wire()
+	if werr != nil {
+		panic(werr)
+	}
+	wire := broadcast.NewPipeTransport(9, r, broadcast.NewJSONEncoder(wreg))
 	wire.Recv(context.Background(), func(err error, messages ...broadcast.Message) {
 		for _, m := range messages {
 			heard <- m
