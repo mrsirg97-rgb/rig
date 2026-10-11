@@ -49,7 +49,7 @@ import (
 	webtool "github.com/mrsirg97-rgb/rig/v2/tool/web"
 )
 
-const Version = "2.15.2"
+const Version = "2.16.0"
 
 func main() {
 	if i := execDoor(os.Args, os.Getenv(sched.LandlockEnv)); i >= 0 {
@@ -257,9 +257,84 @@ func main() {
 		}
 	}
 
-	py := pythontool.New(cwd)
+	engine, room := newFleet()
+	voice := room.Add(rig.MemberDecision)
+
+	remPath := remstore.FilePath(cfgDir)
+	if err := os.MkdirAll(filepath.Dir(remPath), 0o755); err != nil {
+		fmt.Fprintln(os.Stderr, "rig:", err)
+		os.Exit(1)
+	}
+	rdb, remQuarantined, remReport, remErr := store.Open(remPath, remstore.Statements(), remstore.SchemaVersion, remstore.Migration(cwd))
+	if remErr != nil {
+		fmt.Fprintln(os.Stderr, "rig: rem store:", remErr)
+		os.Exit(1)
+	}
+	if remQuarantined != "" {
+		fmt.Fprintf(os.Stderr, "rig: quarantined corrupt rem file: %s\n", remQuarantined)
+	}
+	if remReport != "" {
+		fmt.Fprintf(os.Stderr, "rig: %s\n", remReport)
+	}
+	defer rdb.DB.Close()
+
+	schedHome := filepath.Join(cfgDir, "scheduler")
+	if err := os.MkdirAll(schedHome, 0o755); err != nil {
+		fmt.Fprintln(os.Stderr, "rig:", err)
+		os.Exit(1)
+	}
+	self, err := os.Executable()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "rig:", err)
+		os.Exit(1)
+	}
+	scdb, sQuarantined, sReport, sErr := store.Open(filepath.Join(schedHome, "global.sqlite"), sched.Statements(), sched.SchemaVersion, sched.Migration(schedHome, cfgDir, self+" run-job", sched.RealCrontab("")))
+	if sErr != nil {
+		fmt.Fprintln(os.Stderr, "rig: scheduler store:", sErr)
+		os.Exit(1)
+	}
+	if sQuarantined != "" {
+		fmt.Fprintf(os.Stderr, "rig: quarantined corrupt scheduler file: %s\n", sQuarantined)
+	}
+	if sReport != "" {
+		fmt.Fprintf(os.Stderr, "rig: %s\n", sReport)
+	}
+	defer scdb.DB.Close()
+
+	swapURL := cfg.Settings.SwapURL
+	if v := os.Getenv("RIG_SWAP_URL"); v != "" {
+		swapURL = v
+	}
+
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	rt := runtimeTable(cfg.Models, modelID, row)
+	piped := *prompt != ""
+	workerCap := sched.NewWorkerCap(cfg.Settings.MaxWorkers)
+	del := delegate.New(delegate.Opts{
+		Ctx:          ctx,
+		Await:        piped,
+		DB:           scdb,
+		Home:         schedHome,
+		RigHome:      cfgDir,
+		StateDir:     filepath.Join(cfgDir, "sessions"),
+		SwapURL:      swapURL,
+		WorkerCmd:    []string{self},
+		DefaultModel: modelID,
+		Sandbox:      cfg.Settings.Sandbox,
+		SandboxBinds: cfg.Settings.SandboxBinds,
+		Allow:        allowList,
+		Fetch:        sched.RealFetch(0),
+		Spawn:        sched.RealSpawn,
+		Models:       func() models.Table { return rt },
+		Room:         room,
+		Cap:          workerCap,
+	})
+
+	py := pythontool.New(del)
 	if python := envOr("RIG_PYTHON", cfg.Settings.Python); python != "" {
-		py = pythontool.NewWith(python, pythontool.DefaultHost(), cwd)
+		py = pythontool.NewWith(python, pythontool.DefaultHost(), del, cwd)
 	}
 	defer py.Close()
 	fmt.Fprintf(os.Stderr, "rig: python kernel host: %s\n", py.Host())
@@ -276,8 +351,9 @@ func main() {
 		traf = &v
 	}
 	webTool := webtool.New(webtool.Config{
-		Search: webtool.SearchConfig{BaseURL: envOr("RIG_SEARXNG_URL", cfg.Settings.SearXNG)},
-		Fetch:  webtool.FetchConfig{Proxy: proxy, Trafilatura: traf},
+		Search:     webtool.SearchConfig{BaseURL: envOr("RIG_SEARXNG_URL", cfg.Settings.SearXNG)},
+		Fetch:      webtool.FetchConfig{Proxy: proxy, Trafilatura: traf},
+		Background: del,
 	})
 
 	pluginsDir := filepath.Join(cfgDir, "plugins")
@@ -392,59 +468,7 @@ func main() {
 	}
 	defer decdb.DB.Close()
 
-	engine, room := newFleet()
-	voice := room.Add(rig.MemberDecision)
-
-	remPath := remstore.FilePath(cfgDir)
-	if err := os.MkdirAll(filepath.Dir(remPath), 0o755); err != nil {
-		fmt.Fprintln(os.Stderr, "rig:", err)
-		os.Exit(1)
-	}
-	rdb, remQuarantined, remReport, remErr := store.Open(remPath, remstore.Statements(), remstore.SchemaVersion, remstore.Migration(cwd))
-	if remErr != nil {
-		fmt.Fprintln(os.Stderr, "rig: rem store:", remErr)
-		os.Exit(1)
-	}
-	if remQuarantined != "" {
-		fmt.Fprintf(os.Stderr, "rig: quarantined corrupt rem file: %s\n", remQuarantined)
-	}
-	if remReport != "" {
-		fmt.Fprintf(os.Stderr, "rig: %s\n", remReport)
-	}
-	defer rdb.DB.Close()
-
-	schedHome := filepath.Join(cfgDir, "scheduler")
-	if err := os.MkdirAll(schedHome, 0o755); err != nil {
-		fmt.Fprintln(os.Stderr, "rig:", err)
-		os.Exit(1)
-	}
-	self, err := os.Executable()
-	if err != nil {
-		fmt.Fprintln(os.Stderr, "rig:", err)
-		os.Exit(1)
-	}
-	scdb, sQuarantined, sReport, sErr := store.Open(filepath.Join(schedHome, "global.sqlite"), sched.Statements(), sched.SchemaVersion, sched.Migration(schedHome, cfgDir, self+" run-job", sched.RealCrontab("")))
-	if sErr != nil {
-		fmt.Fprintln(os.Stderr, "rig: scheduler store:", sErr)
-		os.Exit(1)
-	}
-	if sQuarantined != "" {
-		fmt.Fprintf(os.Stderr, "rig: quarantined corrupt scheduler file: %s\n", sQuarantined)
-	}
-	if sReport != "" {
-		fmt.Fprintf(os.Stderr, "rig: %s\n", sReport)
-	}
-	defer scdb.DB.Close()
-
-	swapURL := cfg.Settings.SwapURL
-	if v := os.Getenv("RIG_SWAP_URL"); v != "" {
-		swapURL = v
-	}
-
 	drec := decisionstore.Recorder{DB: decdb, Scope: scope.Key(cwd), Voice: voice}
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
-
 	r := &root{
 		pluginMax:  cfg.Settings.Plugins.Max,
 		baseURL:    baseURLV,
@@ -464,7 +488,7 @@ func main() {
 		activeID:   modelID,
 		row:        row,
 		effort:     effortLevel,
-		runtime:    runtimeTable(cfg.Models, modelID, row),
+		runtime:    rt,
 
 		approve:        firstNonEmpty(cfg.Settings.Approve, approve.Auto),
 		approveDefault: firstNonEmpty(cfg.Settings.Approve, approve.Auto),
@@ -472,12 +496,10 @@ func main() {
 		themeDoc:       cfg.Theme,
 		themeTrueColor: tuiTrueColor(),
 		tools: map[string]core.Tool{
-			"bash": bash.New(), "read": file.NewRead(), "write": file.NewWrite(), "edit": file.NewEdit(),
-			"python": py, "web": webTool,
+			"read": file.NewRead(), "write": file.NewWrite(), "edit": file.NewEdit(),
 			"sessions": sessionstool.New(cfgDir, cwd),
 		},
 		pluginTools: pluginTools,
-		py:          py,
 		pluginsHome: cfgDir,
 		pluginInfos: pluginInfos,
 		engine:      engine,
@@ -488,34 +510,15 @@ func main() {
 	if verdictOn {
 		r.tools["verdict"] = verdicttool.New(fleet)
 	}
+	r.tools["bash"] = bash.New(del)
+	r.tools["python"] = py
+	r.tools["web"] = webTool
+	r.py = py
+	stopWorkers := del.StopAll
 	r.listen()
 	delegateOn, swarmWhy := fleetWiring(sched.RealFetch(0), swapURL, modelID, cfg.Models, cfg.Settings.Workers == nil || *cfg.Settings.Workers)
-	piped := *prompt != ""
-	var del delegate.Delegate
-	var stopWorkers func()
-	workerCap := sched.NewWorkerCap(cfg.Settings.MaxWorkers)
 	if delegateOn {
-		del = delegate.New(delegate.Opts{
-			Ctx:          ctx,
-			Await:        piped,
-			DB:           scdb,
-			Home:         schedHome,
-			RigHome:      cfgDir,
-			StateDir:     filepath.Join(cfgDir, "sessions"),
-			SwapURL:      swapURL,
-			WorkerCmd:    []string{self},
-			DefaultModel: modelID,
-			Sandbox:      cfg.Settings.Sandbox,
-			SandboxBinds: cfg.Settings.SandboxBinds,
-			Allow:        allowList,
-			Fetch:        sched.RealFetch(0),
-			Spawn:        sched.RealSpawn,
-			Models:       func() models.Table { return r.runtime },
-			Room:         r.room,
-			Cap:          workerCap,
-		})
 		r.tools["delegate"] = del
-		stopWorkers = del.StopAll
 	}
 	if delegateOn {
 		r.swarm = swarm.New(swarm.Opts{

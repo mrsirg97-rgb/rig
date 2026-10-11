@@ -148,3 +148,10 @@ nothing scheduled) and a resumable transcript in the state store.
   spawn).
 - `Exec` reads `os.Getwd()` for the session cwd, so the tests pin the
   real test cwd, not a fixture path.
+- A worker is a model or a command line (2.16.0): `command` runs one
+  deterministic `bash -c` line on the same spawn seam — no model, no
+  tools, no transcript, cost zero — with `timeoutMs` as its kill bound
+  (partial output attached to the report), while a model worker keeps
+  its no-clock rule; `Submit` runs in-process kinds (the python cell,
+  the web fetch) on the session's context through the same record,
+  log and fold.

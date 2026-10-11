@@ -33,11 +33,12 @@ type delegateCall struct {
 	Argv []string
 	Cwd  string
 	Ctx  context.Context
+	Env  []string
 }
 
 func (f *delegateSpawn) spawn(ctx context.Context, argv []string, cwd string, env []string, observe func([]byte)) (sched.SpawnResult, error) {
 	f.mu.Lock()
-	f.calls = append(f.calls, delegateCall{Argv: argv, Cwd: cwd, Ctx: ctx})
+	f.calls = append(f.calls, delegateCall{Argv: argv, Cwd: cwd, Ctx: ctx, Env: env})
 	f.mu.Unlock()
 	if f.onSpawn != nil {
 		f.onSpawn(ctx, observe)
@@ -439,5 +440,132 @@ func TestADelegateFireLeavesItsJobDone(t *testing.T) {
 		if state != "done" {
 			t.Fatalf("the projection of %s is %q, want done", id, state)
 		}
+	}
+}
+
+func commandInput(t *testing.T, spawn sched.Spawn, mutate func(*sched.DelegateInput)) sched.DelegateInput {
+	t.Helper()
+	home := t.TempDir()
+	db, _, _, err := store.Open(filepath.Join(home, "global.sqlite"), sched.Statements(), sched.SchemaVersion)
+	if err != nil {
+		t.Fatalf("open scheduler store: %v", err)
+	}
+	in := sched.DelegateInput{
+		DB:      db,
+		Home:    home,
+		Session: "sess-super",
+		Cwd:     t.TempDir(),
+		Command: "echo hello",
+		Spawn:   spawn,
+		Timeout: -1,
+		Sandbox: "off",
+	}
+	if mutate != nil {
+		mutate(&in)
+	}
+	return in
+}
+
+func TestACommandWorkerSpawnsBashAndRecordsTheRun(t *testing.T) {
+	spawn := &delegateSpawn{result: sched.SpawnResult{Exit: 0, Stdout: "hello\n"}}
+	in := commandInput(t, spawn.spawn, nil)
+	del, err := sched.DelegateStart(in)
+	if err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	res, err := del.Wait()
+	if err != nil {
+		t.Fatalf("wait: %v", err)
+	}
+	if len(spawn.calls) != 1 {
+		t.Fatalf("one spawn: %d", spawn.count())
+	}
+	if got := spawn.calls[0].Argv; !slices.Equal(got, []string{"bash", "-c", "echo hello"}) {
+		t.Fatalf("argv = %v", got)
+	}
+	envHasMarker := false
+	for _, e := range spawn.calls[0].Env {
+		if e == "RIG_DELEGATE=1" {
+			envHasMarker = true
+		}
+	}
+	if !envHasMarker {
+		t.Fatalf("the command worker carries the delegation marker: %v", spawn.calls[0].Env)
+	}
+	if res.Exit != 0 || res.Stdout != "hello\n" {
+		t.Fatalf("result = %+v", res)
+	}
+	if res.SessionID != "" {
+		t.Fatalf("a command worker has no transcript session: %q", res.SessionID)
+	}
+	var command, prompt, model string
+	if err := in.DB.DB.QueryRow(`SELECT command, prompt, model FROM jobs WHERE id = ?`, del.ID).Scan(&command, &prompt, &model); err != nil {
+		t.Fatal(err)
+	}
+	if command != "echo hello" || prompt != "" || model != "" {
+		t.Fatalf("the job row must carry the command: %q %q %q", command, prompt, model)
+	}
+	var status string
+	if err := in.DB.DB.QueryRow(`SELECT status FROM runs WHERE job_id = ?`, del.ID).Scan(&status); err != nil {
+		t.Fatalf("the run must be recorded: %v", err)
+	}
+	if status != "ok" {
+		t.Fatalf("run status = %q", status)
+	}
+	if _, err := os.Stat(filepath.Join(in.Home, del.Log)); err != nil {
+		t.Fatalf("the run log must exist: %v", err)
+	}
+}
+
+func TestACommandWorkerTakesNoClockWithoutABound(t *testing.T) {
+	spawn := &delegateSpawn{result: sched.SpawnResult{Exit: 0, Stdout: "hello\n"}}
+	in := commandInput(t, spawn.spawn, nil)
+	del, err := sched.DelegateStart(in)
+	if err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	if _, err := del.Wait(); err != nil {
+		t.Fatalf("wait: %v", err)
+	}
+	deadline, ok := spawn.calls[0].Ctx.Deadline()
+	if ok {
+		t.Fatalf("no bound means no clock: %v", deadline)
+	}
+}
+
+func TestACommandWorkerDiesAtItsBoundAndKeepsPartialOutput(t *testing.T) {
+	in := commandInput(t, sched.RealSpawn, func(i *sched.DelegateInput) {
+		i.Command = "echo partial; sleep 5"
+		i.Timeout = 300 * time.Millisecond
+	})
+	res, err := sched.Delegate(in)
+	if err != nil {
+		t.Fatalf("delegate: %v", err)
+	}
+	if !res.TimedOut {
+		t.Fatalf("the bound must kill the worker: %+v", res)
+	}
+	if !strings.Contains(res.Stdout, "partial") {
+		t.Fatalf("partial output must survive the kill: %q", res.Stdout)
+	}
+	var status string
+	if err := in.DB.DB.QueryRow(`SELECT status FROM runs WHERE job_id = ?`, res.ID).Scan(&status); err != nil {
+		t.Fatal(err)
+	}
+	if status == "ok" {
+		t.Fatalf("a killed worker must not record ok: %q", status)
+	}
+}
+
+func TestACommandWorkerRefusesTheJailByName(t *testing.T) {
+	spawn := &delegateSpawn{result: sched.SpawnResult{Exit: 0}}
+	in := commandInput(t, spawn.spawn, func(i *sched.DelegateInput) {
+		i.Sandbox = "jailed"
+	})
+	if _, err := sched.DelegateStart(in); err == nil || !strings.Contains(err.Error(), "unjailed") {
+		t.Fatalf("the jail refusal must be loud: %v", err)
+	}
+	if spawn.count() != 0 {
+		t.Fatalf("a refused command worker never spawns: %d", spawn.count())
 	}
 }

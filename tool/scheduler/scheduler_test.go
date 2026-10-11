@@ -2,6 +2,7 @@ package scheduler_test
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -504,6 +505,120 @@ func TestSchedulerVerbsAndExecShareTheirChecks(t *testing.T) {
 	}
 	if fromVerb != fromDoor {
 		t.Fatalf("one listing replies the same bytes through either door:\nverb %q\ndoor %q", fromVerb, fromDoor)
+	}
+}
+
+func timeoutColumn(t *testing.T, h *harness, id string) sql.NullInt64 {
+	t.Helper()
+	var n sql.NullInt64
+	if err := h.db.DB.QueryRow(`SELECT timeout FROM jobs WHERE id = ?`, id).Scan(&n); err != nil {
+		t.Fatal(err)
+	}
+	return n
+}
+
+func TestExecTimeoutMsRoundsUpToWholeMinutes(t *testing.T) {
+	cases := []struct {
+		name      string
+		timeoutMs int64
+		want      int64
+	}{
+		{"a minute is a minute", 60_000, 1},
+		{"a millisecond under a minute rounds up", 59_999, 1},
+		{"a millisecond over a minute is two", 61_000, 2},
+		{"an hour is sixty", 3_600_000, 60},
+		{"the ceiling is a day in minutes", 86_400_000, 1440},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			h := newHarness(t, "/ws/tms")
+			if _, err := exec(t, h, map[string]any{
+				"action": "create", "name": "t", "prompt": "p", "cron": "0 3 * * *",
+				"timeoutMs": c.timeoutMs,
+			}); err != nil {
+				t.Fatalf("create: %v", err)
+			}
+			got := timeoutColumn(t, h, "j1")
+			if !got.Valid || got.Int64 != c.want {
+				t.Fatalf("timeoutMs %d must land as %d minutes, got %v", c.timeoutMs, c.want, got)
+			}
+		})
+	}
+}
+
+func TestExecTimeoutMsAboveTheCeilingRefusesByName(t *testing.T) {
+	h := newHarness(t, "/ws/tmx")
+	_, err := exec(t, h, map[string]any{
+		"action": "create", "name": "t", "prompt": "p", "cron": "0 3 * * *",
+		"timeoutMs": 86_400_001,
+	})
+	if err == nil || !strings.Contains(err.Error(), "timeoutMs ceiling") {
+		t.Fatalf("the ceiling refusal must name the ms bound: %v", err)
+	}
+}
+
+func TestExecTimeoutMsBelowMinusOneRefusesByName(t *testing.T) {
+	h := newHarness(t, "/ws/tmn")
+	_, err := exec(t, h, map[string]any{
+		"action": "create", "name": "t", "prompt": "p", "cron": "0 3 * * *",
+		"timeoutMs": -60_000,
+	})
+	if err == nil || !strings.Contains(err.Error(), "positive milliseconds") {
+		t.Fatalf("the refusal must speak in milliseconds: %v", err)
+	}
+}
+
+func TestExecTimeoutMsZeroMeansAbsent(t *testing.T) {
+	h := newHarness(t, "/ws/tmz")
+	if _, err := exec(t, h, map[string]any{
+		"action": "create", "name": "t", "prompt": "p", "cron": "0 3 * * *",
+		"timeoutMs": 0,
+	}); err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	if got := timeoutColumn(t, h, "j1"); got.Valid {
+		t.Fatalf("timeoutMs 0 is absent: the column must stay NULL, got %v", got)
+	}
+	if _, err := exec(t, h, map[string]any{"action": "update", "id": "j1", "timeoutMs": 0}); err == nil || !strings.Contains(err.Error(), "needs a change") {
+		t.Fatalf("a zero-only update is no change: %v", err)
+	}
+}
+
+func TestExecUpdateTimeoutMsSetsAndResets(t *testing.T) {
+	h := newHarness(t, "/ws/tmr")
+	if _, err := exec(t, h, map[string]any{
+		"action": "create", "name": "t", "prompt": "p", "cron": "0 3 * * *",
+	}); err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	if _, err := exec(t, h, map[string]any{
+		"action": "update", "id": "j1", "timeoutMs": 1_800_000,
+	}); err != nil {
+		t.Fatalf("update: %v", err)
+	}
+	if got := timeoutColumn(t, h, "j1"); !got.Valid || got.Int64 != 30 {
+		t.Fatalf("1800000ms must land as 30 minutes, got %v", got)
+	}
+	if _, err := exec(t, h, map[string]any{
+		"action": "update", "id": "j1", "timeoutMs": -1,
+	}); err != nil {
+		t.Fatalf("reset: %v", err)
+	}
+	if got := timeoutColumn(t, h, "j1"); got.Valid {
+		t.Fatalf("timeoutMs -1 must reset the column to NULL, got %v", got)
+	}
+}
+
+func TestExecMinutesKeyIsGone(t *testing.T) {
+	h := newHarness(t, "/ws/tmk")
+	if _, err := exec(t, h, map[string]any{
+		"action": "create", "name": "t", "prompt": "p", "cron": "0 3 * * *",
+		"timeout": 60,
+	}); err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	if got := timeoutColumn(t, h, "j1"); got.Valid {
+		t.Fatalf("the old minutes key is gone and must not set a cap: %v", got)
 	}
 }
 

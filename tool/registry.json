@@ -3,7 +3,7 @@
     "name": "bash",
     "enabled": true,
     "what": "executes a bash command in the session's workspace.",
-    "guidelines": "use for shell work, builds, git, and any CLI. to read a file, use the dedicated read tool; for a computation, use python.",
+    "guidelines": "use for shell work, builds, git, and any CLI. to read a file, use the dedicated read tool; for a computation, use python. a timeoutMs delegates the command to a worker; the result arrives on a later turn, killed at the bound; without one, bash runs in-turn unbounded.",
     "reply": "stdout and stderr together, in order; when capped, shows a [TRUNCATED] line with the total size.",
     "schema": {
       "type": "object",
@@ -15,6 +15,12 @@
         "workspace": {
           "type": "string",
           "description": "the workspace to run in; the session's workspace when omitted."
+        },
+        "timeoutMs": {
+          "type": "integer",
+          "minimum": 1000,
+          "maximum": 86400000,
+          "description": "the command delegates; the result arrives on a later turn, killed at the bound"
         }
       },
       "required": [
@@ -370,12 +376,6 @@
           "type": "string",
           "description": "the worker model id; omit it and the job runs on whatever is resident (default {default_model} when nothing is)"
         },
-        "timeout": {
-          "type": "integer",
-          "minimum": -1,
-          "maximum": 1440,
-          "description": "wall-clock cap per fire, minutes (default 30, ceiling 1440); -1 resets."
-        },
         "budget": {
           "type": "number",
           "minimum": -1,
@@ -394,6 +394,12 @@
           "minimum": 1,
           "maximum": 100,
           "description": "for runs: how many recent runs to list; 5 when omitted"
+        },
+        "timeoutMs": {
+          "type": "integer",
+          "minimum": -1,
+          "maximum": 86400000,
+          "description": "wall-clock cap per fire in ms, rounded up to whole minutes (default 30, ceiling 1440); -1 resets."
         }
       },
       "required": [
@@ -405,7 +411,7 @@
     "name": "delegate",
     "enabled": true,
     "what": "fan out bounded sub-tasks to headless workers: starts a worker to run a task now and answers at once; its result comes back on a later turn.",
-    "guidelines": "the task should be bounded with a message-shaped result. use for long computations, broad research, or reviews, never a conversation. several delegate calls in one turn run as parallel fan-out. a model that is not resident refuses, naming the holder. the workspace must be under the session's workspace or the rig home. a worker holds only the doing set (bash, read, write, edit, view, python, web, rem), so write the task to fit it. never wait for a worker: keep working, and the returns arrive as a turn of their own.",
+    "guidelines": "the task should be bounded with a message-shaped result. use for long computations, broad research, or reviews, never a conversation. several delegate calls in one turn run as parallel fan-out. a model that is not resident refuses, naming the holder. the workspace must be under the session's workspace or the rig home. a worker holds only the doing set (bash, read, write, edit, view, python, web, rem), so write the task to fit it. never wait for a worker: keep working, and the returns arrive as a turn of their own. a command is one deterministic bash line on a command worker (no model, no clock); only command workers take timeoutMs.",
     "reply": "one line naming the worker, its session and its log.",
     "schema": {
       "type": "object",
@@ -421,6 +427,16 @@
         "model": {
           "type": "string",
           "description": "worker model id"
+        },
+        "command": {
+          "type": "string",
+          "description": "one deterministic bash line for a command worker; exclusive with task"
+        },
+        "timeoutMs": {
+          "type": "integer",
+          "minimum": 1000,
+          "maximum": 86400000,
+          "description": "the command worker's kill bound; model workers have no clock"
         }
       },
       "required": [
@@ -432,7 +448,7 @@
     "name": "python",
     "enabled": true,
     "what": "a persistent IPython kernel in the session's workspace: variables, imports and definitions persist across calls. numpy and pandas included.",
-    "guidelines": "use for arithmetic, data shaping, parsing and processing bulk text; things that are never estimated. compute once, then query the result in later calls.",
+    "guidelines": "use for arithmetic, data shaping, parsing and processing bulk text; things that are never estimated. compute once, then query the result in later calls. with timeoutMs the cell cooks in the background and reports on a later turn, killed at the bound; without one, it runs in-turn.",
     "reply": "stdout and the last expression's value; action vars lists the namespace, reset clears it.",
     "schema": {
       "type": "object",
@@ -463,7 +479,7 @@
     "name": "web",
     "enabled": true,
     "what": "searches the web or fetches a page. search takes a query; fetch takes a public http(s) URL.",
-    "guidelines": "write multi-word natural queries and reword once on junk; never search for code already in the workspace. fetch reads the page as text; refetch a larger size if you genuinely need more scope; an API reply comes back as its shape and a head; parse the rest in python or bash. local files belong to read, local services to bash; private addresses refuse.",
+    "guidelines": "write multi-word natural queries and reword once on junk; never search for code already in the workspace. fetch reads the page as text; refetch a larger size if you genuinely need more scope; an API reply comes back as its shape and a head; parse the rest in python or bash. local files belong to read, local services to bash; private addresses refuse. a fetch with timeoutMs cooks in the background and reports on a later turn, killed at the bound; without one, it runs in-turn.",
     "reply": "search gives compact JSON title/url/snippet; fetch returns text; when capped, shows a [TRUNCATED] line with the total size.",
     "schema": {
       "type": "object",

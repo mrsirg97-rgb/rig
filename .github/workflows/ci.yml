@@ -44,7 +44,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       MENU_AIM: '15000'
-      MENU_WALL: '15500'
+      MENU_WALL: '16500'
     steps:
       - uses: actions/checkout@v4
         with:

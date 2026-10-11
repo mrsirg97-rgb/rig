@@ -33,6 +33,20 @@ var (
 	_ core.GuidelineContributor = bothCaps{}
 )
 
+func TestACommandWorkerNamesItsRun(t *testing.T) {
+	command := core.WorkerDone{N: 2, Kind: core.KindCommand, Task: "go test -race ./...", Content: "ok 0.3s", Exit: 0, Duration: 12 * time.Second, RunID: "j69"}
+	if got := command.Head(); got != "delegate #2 returned · exit 0 · 12s · run j69" {
+		t.Fatalf("a command worker names its run: %q", got)
+	}
+	if got := core.WorkerBlock([]core.WorkerDone{command}); got != "delegate #2 returned · exit 0 · 12s · run j69\nok 0.3s" {
+		t.Fatalf("block = %q", got)
+	}
+	model := core.WorkerDone{N: 1, Content: "one", Exit: 0, Duration: 62 * time.Second, Session: "s1"}
+	if got := model.Head(); got != "delegate #1 returned · exit 0 · 1m2s · session s1" {
+		t.Fatalf("the model worker's head is unchanged: %q", got)
+	}
+}
+
 func TestOptionalCapabilitiesAreAssertions(t *testing.T) {
 	var mw core.ToolMiddleware = core.ToolMiddlewareFunc(func(next core.ToolExec) core.ToolExec { return next })
 	if _, ok := mw.(core.TurnObserver); ok {

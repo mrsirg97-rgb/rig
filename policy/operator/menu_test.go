@@ -179,7 +179,7 @@ func TestTheHeadlessMenuKeepsTheLiveNameEnumAndTheExec(t *testing.T) {
 }
 
 func TestTheMenuLeavesAToolWithoutOperatorVerbsAlone(t *testing.T) {
-	spec := bash.New()
+	spec := bash.New(nil)
 	if Menu(spec) != spec {
 		t.Fatal("a tool the registry marks no operator verbs for is handed back, not wrapped")
 	}

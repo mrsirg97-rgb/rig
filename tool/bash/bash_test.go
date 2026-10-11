@@ -22,7 +22,7 @@ func argsJSON(t *testing.T, args map[string]any) json.RawMessage {
 }
 
 func TestExecutesCommandAndReturnsOutput(t *testing.T) {
-	tool := bash.New()
+	tool := bash.New(nil)
 	if tool.Name() != "bash" {
 		t.Fatalf("name = %q, want bash", tool.Name())
 	}
@@ -38,7 +38,7 @@ func TestExecutesCommandAndReturnsOutput(t *testing.T) {
 }
 
 func TestNonZeroExitIsAFedBackError(t *testing.T) {
-	tool := bash.New()
+	tool := bash.New(nil)
 	_, err := tool.Exec(context.Background(), argsJSON(t, map[string]any{
 		"command": "echo visible; exit 3",
 	}))
@@ -53,7 +53,7 @@ func TestFailureNamesTheCwd(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	tool := bash.New()
+	tool := bash.New(nil)
 
 	got, err := tool.Exec(context.Background(), argsJSON(t, map[string]any{
 		"command": "echo visible; exit 3",
@@ -78,7 +78,7 @@ func TestFailureNamesTheCwd(t *testing.T) {
 }
 
 func TestMissingCwdNamesTheReason(t *testing.T) {
-	tool := bash.New()
+	tool := bash.New(nil)
 	got, err := tool.Exec(context.Background(), argsJSON(t, map[string]any{
 		"command":   "pwd",
 		"workspace": filepath.Join(t.TempDir(), "missing"),
@@ -100,7 +100,7 @@ func TestUnreadableCwdNamesTheReason(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { os.Chmod(dir, 0o755) })
-	tool := bash.New()
+	tool := bash.New(nil)
 	got, err := tool.Exec(context.Background(), argsJSON(t, map[string]any{
 		"command":   "pwd",
 		"workspace": dir,
@@ -114,7 +114,7 @@ func TestUnreadableCwdNamesTheReason(t *testing.T) {
 }
 
 func TestSuccessStaysByteIdentical(t *testing.T) {
-	tool := bash.New()
+	tool := bash.New(nil)
 	got, err := tool.Exec(context.Background(), argsJSON(t, map[string]any{
 		"command": "echo hello",
 	}))
@@ -138,7 +138,7 @@ func TestSuccessStaysByteIdentical(t *testing.T) {
 }
 
 func TestStderrIsIncluded(t *testing.T) {
-	tool := bash.New()
+	tool := bash.New(nil)
 	got, err := tool.Exec(context.Background(), argsJSON(t, map[string]any{
 		"command": "echo noise >&2",
 	}))
@@ -152,7 +152,7 @@ func TestStderrIsIncluded(t *testing.T) {
 
 func TestCwdIsRespected(t *testing.T) {
 	dir := t.TempDir()
-	tool := bash.New()
+	tool := bash.New(nil)
 	got, err := tool.Exec(context.Background(), argsJSON(t, map[string]any{
 		"command":   "pwd",
 		"workspace": dir,
@@ -166,7 +166,7 @@ func TestCwdIsRespected(t *testing.T) {
 }
 
 func TestMissingCommandFailsLoud(t *testing.T) {
-	tool := bash.New()
+	tool := bash.New(nil)
 	_, err := tool.Exec(context.Background(), argsJSON(t, map[string]any{
 		"command": "/definitely/not/a/binary",
 	}))
@@ -176,7 +176,7 @@ func TestMissingCommandFailsLoud(t *testing.T) {
 }
 
 func TestEmptyCommandFailsLoud(t *testing.T) {
-	tool := bash.New()
+	tool := bash.New(nil)
 	_, err := tool.Exec(context.Background(), argsJSON(t, map[string]any{
 		"command": "",
 	}))
@@ -186,7 +186,7 @@ func TestEmptyCommandFailsLoud(t *testing.T) {
 }
 
 func TestUnknownArgFailsLoud(t *testing.T) {
-	tool := bash.New()
+	tool := bash.New(nil)
 	_, err := tool.Exec(context.Background(), argsJSON(t, map[string]any{
 		"command": "true",
 		"bogus":   true,
@@ -197,7 +197,7 @@ func TestUnknownArgFailsLoud(t *testing.T) {
 }
 
 func TestCancellationKillsTheProcess(t *testing.T) {
-	tool := bash.New()
+	tool := bash.New(nil)
 	ctx, cancel := context.WithCancel(context.Background())
 	start := time.Now()
 	done := make(chan struct{})
@@ -218,7 +218,7 @@ func TestCancellationKillsTheProcess(t *testing.T) {
 }
 
 func TestBackgroundChildDoesNotHoldTheTurn(t *testing.T) {
-	tool := bash.New()
+	tool := bash.New(nil)
 	start := time.Now()
 	got, err := tool.Exec(context.Background(), argsJSON(t, map[string]any{
 		"command": "sleep 30 & echo started",
@@ -236,7 +236,7 @@ func TestBackgroundChildDoesNotHoldTheTurn(t *testing.T) {
 }
 
 func TestOutputIsCapped(t *testing.T) {
-	tool := bash.New()
+	tool := bash.New(nil)
 
 	got, err := tool.Exec(context.Background(), argsJSON(t, map[string]any{
 		"command": "yes | head -c 1048576",
@@ -253,7 +253,7 @@ func TestOutputIsCapped(t *testing.T) {
 }
 
 func TestHugeOutputIsBoundedWithTheMarker(t *testing.T) {
-	tool := bash.New()
+	tool := bash.New(nil)
 	got, err := tool.Exec(context.Background(), argsJSON(t, map[string]any{
 		"command": "head -c 300000 /dev/zero | tr '\\0' 'x'",
 	}))
@@ -267,7 +267,7 @@ func TestHugeOutputIsBoundedWithTheMarker(t *testing.T) {
 }
 
 func TestBashRunAndExecShareTheirChecks(t *testing.T) {
-	tool := bash.New()
+	tool := bash.New(nil)
 	ctx := context.Background()
 
 	_, runErr := tool.Run(ctx, "   ", "")
@@ -300,5 +300,77 @@ func TestBashRunAndExecShareTheirChecks(t *testing.T) {
 	}
 	if runErr.Error() != execErr.Error() {
 		t.Fatalf("the workspace refusal is the same words on either door: run %q exec %q", runErr, execErr)
+	}
+}
+
+type fakeWorker struct {
+	command   string
+	workspace string
+	bound     time.Duration
+	calls     int
+	handBack  string
+}
+
+func (f *fakeWorker) Command(ctx context.Context, command, workspace string, bound time.Duration) (string, error) {
+	f.calls++
+	f.command, f.workspace, f.bound = command, workspace, bound
+	return f.handBack, nil
+}
+
+func TestABoundedCommandDelegatesAndHandsBack(t *testing.T) {
+	worker := &fakeWorker{handBack: "delegate: worker #1 started · run j1 · log runs/j1/x.log"}
+	tool := bash.New(worker)
+	out, err := tool.Exec(context.Background(), argsJSON(t, map[string]any{
+		"command":   "go test -race ./...",
+		"workspace": "/ws/elsewhere",
+		"timeoutMs": 300_000,
+	}))
+	if err != nil {
+		t.Fatalf("hand-back: %v", err)
+	}
+	if worker.calls != 1 {
+		t.Fatalf("one delegation: %d", worker.calls)
+	}
+	if worker.command != "go test -race ./..." || worker.workspace != "/ws/elsewhere" || worker.bound != 300_000*time.Millisecond {
+		t.Fatalf("the worker received the command, the workspace and the bound: %+v", worker)
+	}
+	if out != worker.handBack {
+		t.Fatalf("the hand-back is the worker's answer: %q", out)
+	}
+}
+
+func TestABoundedCommandRefusesByName(t *testing.T) {
+	cases := []struct {
+		name string
+		ms   int64
+		want string
+	}{
+		{"zero", 0, "at least 1000"},
+		{"tiny", 500, "at least 1000"},
+		{"negative", -5, "at least 1000"},
+		{"over the ceiling", 86_400_001, "ceiling"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			worker := &fakeWorker{}
+			tool := bash.New(worker)
+			if _, err := tool.Exec(context.Background(), argsJSON(t, map[string]any{
+				"command": "echo hi", "timeoutMs": c.ms,
+			})); err == nil || !strings.Contains(err.Error(), c.want) {
+				t.Fatalf("%s: want %q, got %v", c.name, c.want, err)
+			}
+			if worker.calls != 0 {
+				t.Fatalf("a refused bound never delegates: %d", worker.calls)
+			}
+		})
+	}
+}
+
+func TestABoundedCommandWithoutAWorkerRefuses(t *testing.T) {
+	tool := bash.New(nil)
+	if _, err := tool.Exec(context.Background(), argsJSON(t, map[string]any{
+		"command": "echo hi", "timeoutMs": 5000,
+	})); err == nil || !strings.Contains(err.Error(), "no worker") {
+		t.Fatalf("the refusal must name the missing worker: %v", err)
 	}
 }

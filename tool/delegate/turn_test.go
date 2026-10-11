@@ -81,19 +81,30 @@ func TestTheTurnsContextDoesNotRuleTheWorkerButTheSessionsDoes(t *testing.T) {
 	waitForReturn(t, fe, 1)
 }
 
-func TestDelegateSchemaCarriesNoClock(t *testing.T) {
+func TestDelegateSchemaCarriesTheCommandWorkersClock(t *testing.T) {
 	h := newHarness(t, "/ws/sess")
 	spawn := &fakeSpawn{result: sched.SpawnResult{Exit: 0, Stdout: "done"}}
 	tool := h.newTool(t, fakeFetch(""), spawn.spawn)
-	for _, knob := range []string{"timeoutMs", "stallMs"} {
-		if strings.Contains(string(tool.Schema()), knob) {
-			t.Fatalf("%s is off the schema: %s", knob, tool.Schema())
-		}
+	if strings.Contains(string(tool.Schema()), "stallMs") {
+		t.Fatalf("stallMs is off the schema: %s", tool.Schema())
+	}
+	var schema struct {
+		Properties map[string]any `json:"properties"`
+	}
+	if err := json.Unmarshal(tool.Schema(), &schema); err != nil {
+		t.Fatal(err)
+	}
+	knob, ok := schema.Properties["timeoutMs"].(map[string]any)
+	if !ok {
+		t.Fatalf("timeoutMs rides the schema for command workers: %s", tool.Schema())
+	}
+	if knob["minimum"].(float64) != 1000 || knob["maximum"].(float64) != 86400000 {
+		t.Fatalf("the command worker's clock bounds: %v", knob)
 	}
 	b, _ := json.Marshal(map[string]any{"task": "t", "timeoutMs": 1000})
 	out, err := tool.Exec(context.Background(), b)
-	if err == nil || !strings.Contains(err.Error(), "timeoutMs") {
-		t.Fatalf("a call carrying the gone clock refuses by naming it: (%q, %v)", out, err)
+	if err == nil || !strings.Contains(err.Error(), "no clock") {
+		t.Fatalf("a model worker has no clock, named: (%q, %v)", out, err)
 	}
 	if spawn.count() != 0 {
 		t.Fatalf("a refused call spawns nothing, got %d", spawn.count())

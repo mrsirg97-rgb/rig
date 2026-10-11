@@ -283,3 +283,8 @@ A command job's fire skips the busy probe and
   the fleet end onto a context the caller owns, so a worker that
   outlives the call that started it can be bound to a context of its
   own.
+- `DelegateInput` carries two more worker shapes (2.16.0): `command`
+  (one deterministic `bash -c` line, no model, no jail, `timeoutMs` the
+  kill bound, the ad-hoc record naming the command) and `Work` (an
+  in-process kind that records and reports without spawning);
+  `Delegation` carries its clamped `Bound`.

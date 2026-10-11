@@ -19,6 +19,21 @@ per-session flocks are retired — the worker model resolves at claim
 time (the resident model, else the session's default) and the gate is
 the live free-slot read; decision 6's slot bounds below are historical.
 
+**Amended in 2.16.0 (SPEC_ASYNC: the worker kinds)**: the delegate is
+the async tool-call primitive, and a worker is a model or a command
+line. `command` joins the schema, exclusive with `task`: one
+deterministic `bash -c` line on the same spawn seam — no model, no GPU
+gate, no swap, no tools, no transcript session, its cost zero — with
+the delegation marker set and the jail refused by name (the jail binds
+the model worker's homes). The command worker's clock is `timeoutMs`
+(1,000–86,400,000 ms, the kill bound, the process group killed the
+spawn's way with the partial output attached), while the model worker
+keeps 2.12.7's no-clock rule — `timeoutMs` with `task` refuses by name.
+`Delegation` carries its clamped `Bound`, and the ad-hoc record names
+the command. The python and web promotions ride the same seam as
+in-process kinds (`Work` on `DelegateInput`), and the delegate adapter
+is the root-wired background seam for them.
+
 **Amended in 2.14.0 (the delegate lets go)**: the tool no longer waits.
 `Run` starts the worker and answers in the same turn with one line — the
 worker's number, its session, its log — and the worker's message comes

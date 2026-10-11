@@ -28,8 +28,8 @@ import (
 
 func TestVersionIsTheFreeze(t *testing.T) {
 
-	if Version != "2.15.2" {
-		t.Fatalf("Version = %q, want 2.15.2", Version)
+	if Version != "2.16.0" {
+		t.Fatalf("Version = %q, want 2.16.0", Version)
 	}
 
 	if !regexp.MustCompile(`^\d+\.\d+\.\d+$`).MatchString(Version) {
@@ -147,7 +147,7 @@ func (*oneLineFrontend) Notify(ev core.Event) {}
 
 func testTools() map[string]core.Tool {
 	return map[string]core.Tool{
-		"bash": bash.New(), "read": file.NewRead(), "write": file.NewWrite(), "edit": file.NewEdit(),
+		"bash": bash.New(nil), "read": file.NewRead(), "write": file.NewWrite(), "edit": file.NewEdit(),
 		"todo": fakeTodo{}, "rem": fakeRem{}, "scheduler": fakeSched{}, "delegate": fakeDelegate{}, "python": fakePython{},
 		"web": fakeWeb{},
 
