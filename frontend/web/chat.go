@@ -194,7 +194,10 @@ func (c *chat) Input(ctx context.Context) (string, error) {
 			if strings.TrimSpace(line) == "" {
 				continue
 			}
-			return c.take(ctx, line), nil
+			if out, ok := c.take(ctx, line); ok {
+				return out, nil
+			}
+			continue
 		default:
 		}
 		select {
@@ -205,12 +208,19 @@ func (c *chat) Input(ctx context.Context) (string, error) {
 			if strings.TrimSpace(line) == "" {
 				continue
 			}
-			return c.take(ctx, line), nil
+			if out, ok := c.take(ctx, line); ok {
+				return out, nil
+			}
+			continue
 		}
 	}
 }
 
-func (c *chat) take(ctx context.Context, line string) string {
+func (c *chat) take(ctx context.Context, line string) (string, bool) {
+	if c.commands != nil && command.IsCommandLine(line) {
+		c.dispatch(ctx, line)
+		return "", false
+	}
 	if strings.HasPrefix(line, "//") {
 		line = command.Unescape(line)
 	}
@@ -219,7 +229,7 @@ func (c *chat) take(ctx context.Context, line string) string {
 	c.steeredLive = false
 	c.mu.Unlock()
 	c.publish(map[string]any{"kind": "prompt", "text": line})
-	return line
+	return line, true
 }
 
 func (c *chat) dispatch(ctx context.Context, line string) map[string]any {
