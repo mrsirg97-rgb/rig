@@ -172,7 +172,7 @@ own. The sidecar model is rig's own, trained on rig's own traffic.
 **words are the budget.** Everything the model is told about its tools
 crosses the wire every turn, so the system prompt and the tool schemas
 are lean, byte-stable, and carefully chosen. The whole menu aims under
-15,000 characters and the wire job fails the build past 15,500 —
+15,000 characters and the wire job fails the build past 16,500 —
 trimming is a decision, not a leak. Nothing is goldened: the wire job
 renders the request bodies at the merge-base and at the head and posts
 their diff, so a byte that moves is reviewed, not trusted. The
@@ -228,7 +228,7 @@ The 2.1.x consolidation rethought the system prompt and the toolset and kept the
 
 | OS concept | rig | where |
 |---|---|---|
-| kernel | `loop.Run(ctx, kernel)` over the typed seams; `loop.go` + `batch.go` are 409 lines, stdlib-only | `loop/`, `core/`, `kernel.go` |
+| kernel | `loop.Run(ctx, kernel)` over the typed seams; `loop.go` + `batch.go` are 431 lines, stdlib-only | `loop/`, `core/`, `kernel.go` |
 | scheduler | the turn's batch: concurrent reads beside each other, bounded by the kernel's Parallel (8), effects in call order; background jobs on the operator's crontab, model fires jailed | `loop/batch.go`, `tool/scheduler`, `store/scheduler` |
 | processes | sessions (TUI, piped, one-shot), delegates, drain workers; each worker owns a transcript, sandboxed and resumable | `frontend/`, `tool/delegate`, `swarm/` |
 | IPC | the event stream (`TextDelta`, `ToolCallEvent`, `ToolResult`, `TurnEnd`) and tool calls through the middleware chain; the stores are the shared state across processes | `core/provider.go`, `evt/`, `store/` |
