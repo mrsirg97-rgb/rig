@@ -124,7 +124,7 @@ func (w *web) submitFetch(ctx context.Context, url string, maxChars, timeoutMs i
 	if w.bg == nil {
 		return "", errors.New("web: no worker is wired for bounded fetches")
 	}
-	return w.bg.Submit(ctx, core.KindFetch, firstLine(url), time.Duration(timeoutMs)*time.Millisecond, func(wctx context.Context) (string, int) {
+	return w.bg.Submit(ctx, core.KindFetch, tool.FirstLine(url), time.Duration(timeoutMs)*time.Millisecond, func(wctx context.Context) (string, int) {
 		body, err := w.fetch.exec(wctx, url, maxChars, timeoutMs)
 		if err != nil {
 			if strings.TrimSpace(body) == "" {
@@ -134,15 +134,6 @@ func (w *web) submitFetch(ctx context.Context, url string, maxChars, timeoutMs i
 		}
 		return body, 0
 	})
-}
-
-func firstLine(s string) string {
-	line := strings.SplitN(strings.TrimSpace(s), "\n", 2)[0]
-	line = strings.TrimSpace(line)
-	if len(line) > 60 {
-		line = line[:60] + "…"
-	}
-	return line
 }
 
 func DefaultTrafilatura() string {

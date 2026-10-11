@@ -63,7 +63,7 @@ func TestWaveStartsArriveWhileTheWaveRuns(t *testing.T) {
 		rig.WithFrontend(f),
 		rig.WithPolicy(&transcriptPolicy{}),
 		rig.WithTools(tool),
-		rig.WithConcurrent(func(c core.ToolCall) bool { return true }),
+		rig.WithPriority(func(core.ToolCall) int { return rig.PriorityRead }),
 	)
 	k.Session = core.NewSession()
 

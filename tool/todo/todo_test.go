@@ -265,7 +265,6 @@ func TestDescriptionAndSchemaSpeakWorkspace(t *testing.T) {
 	d := tool.Description()
 	for _, want := range []string{
 		"the task queue for the current workspace",
-		"every call names its scope: the workspace path, or global.",
 		"scoped by its workspace ([rig]).",
 	} {
 		if !strings.Contains(d, want) {
@@ -295,7 +294,7 @@ func TestDescriptionAndSchemaSpeakWorkspace(t *testing.T) {
 
 func TestDescriptionAndSchemaCarryTheLinkContract(t *testing.T) {
 	tool := todoapi.New(newDB(t), todoapi.Interactive)
-	for _, want := range []string{"one task per create", "create the task it waits for first, then link", "a link to a task that does not exist refuses", "copy them, never invent them"} {
+	for _, want := range []string{"one task per create", "create the task it waits for first, then link", "a link to a task that does not exist refuses", "its reply gives the id"} {
 		if !strings.Contains(tool.Description(), want) {
 			t.Fatalf("the description must carry %q:\n%s", want, tool.Description())
 		}

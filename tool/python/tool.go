@@ -136,7 +136,7 @@ func (t *pyTool) submit(ctx context.Context, a given) (string, error) {
 			return "no code supplied", errors.New("no code supplied")
 		}
 		req = request{Code: &code}
-		name = firstLine(code)
+		name = tool.FirstLine(code)
 	case "vars":
 		req = request{Cmd: strPtr("vars")}
 		name = "vars"
@@ -154,15 +154,6 @@ func (t *pyTool) submit(ctx context.Context, a given) (string, error) {
 		}
 		return out, 0
 	})
-}
-
-func firstLine(s string) string {
-	line := strings.SplitN(strings.TrimSpace(s), "\n", 2)[0]
-	line = strings.TrimSpace(line)
-	if len(line) > 60 {
-		line = line[:60] + "…"
-	}
-	return line
 }
 
 func (t *pyTool) Code(ctx context.Context, code string, timeoutMs int) (string, error) {

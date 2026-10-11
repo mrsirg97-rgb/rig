@@ -109,7 +109,7 @@ func (a *adapter) Exec(ctx context.Context, data json.RawMessage) (string, error
 	if err := strictDecode(data, &g); err != nil {
 		return "", fmt.Errorf("delegate: args: %w", err)
 	}
-	bound, err := boundMs(g.TimeoutMs)
+	bound, err := tool.BoundMs("delegate", g.TimeoutMs)
 	if err != nil {
 		return "", err
 	}
@@ -126,21 +126,6 @@ func (a *adapter) Exec(ctx context.Context, data json.RawMessage) (string, error
 		return "", errors.New("delegate: a model worker has no clock (2.12.7) — command workers take timeoutMs")
 	}
 	return a.Run(ctx, g.Task, g.Workspace, g.Model)
-}
-
-const maxCommandBoundMs = 86_400_000
-
-func boundMs(raw *int64) (time.Duration, error) {
-	if raw == nil {
-		return 0, nil
-	}
-	if *raw < 1000 {
-		return 0, fmt.Errorf("delegate: timeoutMs must be at least 1000 ms (omit the field for no bound), got %d", *raw)
-	}
-	if *raw > maxCommandBoundMs {
-		return 0, fmt.Errorf("delegate: timeoutMs ceiling is %d ms (24h), got %d", maxCommandBoundMs, *raw)
-	}
-	return time.Duration(*raw) * time.Millisecond, nil
 }
 
 func (a *adapter) Run(ctx context.Context, task, workspace, model string) (string, error) {
@@ -182,10 +167,7 @@ func (a *adapter) Submit(ctx context.Context, kind, name string, bound time.Dura
 		if err != nil {
 			return "", err
 		}
-		content := capOutput(res.Stdout) + "\n" + fmt.Sprintf("%s: exit %d · %dms · run %s · log %s", kind, res.Exit, res.Duration.Milliseconds(), del.ID, res.LogRel)
-		if res.TimedOut && del.Bound > 0 {
-			content += fmt.Sprintf(" · killed at timeoutMs=%d", del.Bound.Milliseconds())
-		}
+		content := capOutput(res.Stdout) + "\n" + tool.ExitTrailer(kind, res.Exit, res.Duration, del.ID, res.LogRel, res.TimedOut, del.Bound)
 		if res.Exit != 0 {
 			return content, fmt.Errorf("delegate: the worker failed (exit %d)", res.Exit)
 		}
@@ -193,16 +175,13 @@ func (a *adapter) Submit(ctx context.Context, kind, name string, bound time.Dura
 	}
 	go func() {
 		res, err := del.Wait()
-		content := capOutput(res.Stdout) + "\n" + fmt.Sprintf("%s: exit %d · %dms · run %s · log %s", kind, res.Exit, res.Duration.Milliseconds(), del.ID, res.LogRel)
-		if res.TimedOut && del.Bound > 0 {
-			content += fmt.Sprintf(" · killed at timeoutMs=%d", del.Bound.Milliseconds())
-		}
+		content := capOutput(res.Stdout) + "\n" + tool.ExitTrailer(kind, res.Exit, res.Duration, del.ID, res.LogRel, res.TimedOut, del.Bound)
 		if err != nil {
 			content = err.Error()
 		}
 		if a.member != nil {
 			a.member.Publish(context.Background(), func(error) {}, broadcast.NewMessage(rig.MemberDelegate, true, core.WorkerDone{
-				N: n, Task: firstLine(name), Content: content, Exit: res.Exit, Duration: res.Duration,
+				N: n, Task: tool.FirstLine(name), Content: content, Exit: res.Exit, Duration: res.Duration,
 				Log: res.LogRel, Kind: kind, RunID: del.ID,
 			}))
 		}
@@ -349,7 +328,7 @@ func (a *adapter) queued(ctx context.Context, member broadcast.Member, n int, in
 func (a *adapter) fail(member broadcast.Member, n int, task string, err error) {
 	a.end(member, n)
 	if a.member != nil {
-		done := core.WorkerDone{N: n, Task: firstLine(task), Content: err.Error(), Exit: -1}
+		done := core.WorkerDone{N: n, Task: tool.FirstLine(task), Content: err.Error(), Exit: -1}
 		a.member.Publish(context.Background(), func(error) {}, broadcast.NewMessage(rig.MemberDelegate, true, done))
 	}
 }
@@ -402,11 +381,7 @@ func (a *adapter) settle(member broadcast.Member, n int, in sched.DelegateInput,
 			content += "\n" + fmt.Sprintf("delegate: exit %d · %dms · session %s · log %s",
 				res.Exit, res.Duration.Milliseconds(), out.Session, out.Log)
 		} else {
-			content += "\n" + fmt.Sprintf("delegate: exit %d · %dms · run %s · log %s",
-				res.Exit, res.Duration.Milliseconds(), del.ID, out.Log)
-		}
-		if res.TimedOut && del.Bound > 0 {
-			content += fmt.Sprintf(" · killed at timeoutMs=%d", del.Bound.Milliseconds())
+			content += "\n" + tool.ExitTrailer("delegate", res.Exit, res.Duration, del.ID, out.Log, res.TimedOut, del.Bound)
 		}
 		if res.Note != "" {
 			content += " · " + res.Note
@@ -419,7 +394,7 @@ func (a *adapter) settle(member broadcast.Member, n int, in sched.DelegateInput,
 	a.end(member, n)
 	if a.member != nil {
 		done := core.WorkerDone{
-			N: n, Task: firstLine(name), Content: out.Content, Exit: out.Exit,
+			N: n, Task: tool.FirstLine(name), Content: out.Content, Exit: out.Exit,
 			Duration: out.Duration, Session: out.Session, Log: out.Log,
 			Kind: kind, RunID: del.ID,
 		}
@@ -465,7 +440,7 @@ func (a *adapter) begin(task string, stop context.CancelFunc, state string) (bro
 	}
 	member := a.Room.Mint()
 	a.mu.Lock()
-	a.workers[member.Id()] = workerState{n: n, task: firstLine(task), heartbeat: time.Now(), state: state}
+	a.workers[member.Id()] = workerState{n: n, task: tool.FirstLine(task), heartbeat: time.Now(), state: state}
 	a.mu.Unlock()
 	a.emit()
 	return member, n
@@ -547,13 +522,4 @@ func (a *adapter) snapshot() core.SwarmStatus {
 	a.mu.Unlock()
 	sort.Slice(ws, func(i, j int) bool { return ws[i].ID < ws[j].ID })
 	return core.SwarmStatus{Workers: ws}
-}
-
-func firstLine(s string) string {
-	l := strings.SplitN(strings.TrimSpace(s), "\n", 2)[0]
-	l = strings.TrimSpace(l)
-	if len(l) > 60 {
-		l = l[:60] + "…"
-	}
-	return l
 }

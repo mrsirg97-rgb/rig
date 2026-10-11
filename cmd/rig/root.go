@@ -162,7 +162,12 @@ func wire(r *root) *rig.Kernel {
 			r.pluginTools...,
 		)...),
 		rig.WithMiddleware(mw...),
-		rig.WithConcurrent(func(c core.ToolCall) bool { return concurrentNatives[c.Name] }),
+		rig.WithPriority(func(c core.ToolCall) int {
+			if r.isMutating(c) {
+				return rig.PriorityWrite
+			}
+			return rig.PriorityRead
+		}),
 		rig.WithEngine(r.engine),
 	)
 	k.Session = r.session
@@ -191,10 +196,20 @@ func (r *root) buildSystem() string {
 	if r.project != "" {
 		parts = append(parts, r.project)
 	}
+	parts = append(parts, asyncSection())
+	parts = append(parts, idsSection())
 	if g := guidelinesOf(mw); g != "" {
 		parts = append(parts, g)
 	}
 	return strings.Join(parts, "\n\n")
+}
+
+func asyncSection() string {
+	return "when a tool offers timeoutMs and you pass a valid integer, the tool runs in the background: the result arrives on a later turn, and a run past its bound is killed; without it the tool runs in-turn."
+}
+
+func idsSection() string {
+	return "ids come from the tool replies: copy them, never invent them."
 }
 
 func sessionSection(cwd, home string) string {

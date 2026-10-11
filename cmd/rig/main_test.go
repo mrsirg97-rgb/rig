@@ -28,8 +28,8 @@ import (
 
 func TestVersionIsTheFreeze(t *testing.T) {
 
-	if Version != "2.16.0" {
-		t.Fatalf("Version = %q, want 2.16.0", Version)
+	if Version != "2.17.0" {
+		t.Fatalf("Version = %q, want 2.17.0", Version)
 	}
 
 	if !regexp.MustCompile(`^\d+\.\d+\.\d+$`).MatchString(Version) {
@@ -212,18 +212,15 @@ func TestSessionsIsANonMutatingNative(t *testing.T) {
 	if !inNatives {
 		t.Fatal("sessions must be a native (the eighteenth)")
 	}
-	if mutatingNatives["sessions"] {
-		t.Fatal("sessions must be absent from mutatingNatives (it never pauses; a read's migration is the store's own)")
-	}
 	r := &root{}
 	r.natives = make(map[string]bool, len(nativeToolNames))
 	for _, n := range nativeToolNames {
 		r.natives[n] = true
 	}
-	if r.isMutating("sessions") {
+	if r.isMutating(core.ToolCall{ID: "c1", Name: "sessions", Args: json.RawMessage(`{"action":"list"}`)}) {
 		t.Fatal("sessions must pass the approval gate silently (isMutating false)")
 	}
-	if !r.isMutating("bash") {
+	if !r.isMutating(core.ToolCall{ID: "c1", Name: "bash"}) {
 		t.Fatal("the control: bash must stay mutating")
 	}
 }
@@ -299,12 +296,13 @@ func TestGuidelinesAreCollectedIntoTheSystemPrompt(t *testing.T) {
 }
 
 func TestWireSystemPromptCarriesTheBase(t *testing.T) {
-	k := wire(testRoot(nullFrontend{}))
+	r := testRoot(nullFrontend{})
+	k := wire(r)
 	msgs, err := k.Policy.Assemble(context.Background(), core.NewSession())
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(msgs) == 0 || msgs[0].Role != core.RoleSystem || msgs[0].Content != "be terse" {
+	if len(msgs) == 0 || msgs[0].Role != core.RoleSystem || msgs[0].Content != r.fullSystem {
 		t.Fatalf("the base system prompt must ride the policy verbatim: %+v", msgs)
 	}
 }
@@ -443,7 +441,7 @@ func TestDefaultRoleIsByteIdentical(t *testing.T) {
 	r := testRoot(nullFrontend{})
 	r.agents = "G\n\nP"
 	got := r.buildSystem()
-	want := "be terse" + "\n\n" + "G\n\nP"
+	want := "be terse" + "\n\n" + "G\n\nP" + "\n\n" + asyncSection() + "\n\n" + idsSection()
 	if got != want {
 		t.Fatalf("the default assembly = %q, want today's bytes %q (the role sits between system and AGENTS.md only when set)", got, want)
 	}
@@ -457,7 +455,7 @@ func TestSystemPromptNamesTheSessionCwdAndHome(t *testing.T) {
 	got := r.buildSystem()
 	want := "be terse" + "\n\n" +
 		"The session's workspace is /work/proj and the rig home is /home/ng. A leading ~ in a tool path expands to the rig home." +
-		"\n\n" + "G\n\nP"
+		"\n\n" + "G\n\nP" + "\n\n" + asyncSection() + "\n\n" + idsSection()
 	if got != want {
 		t.Fatalf("the session assembly = %q, want %q (the workspace and the home are named so the model never guesses)", got, want)
 	}
@@ -468,7 +466,7 @@ func TestRoleAssemblySitsBetweenSystemAndAgents(t *testing.T) {
 	r.agents = "G\n\nP"
 	r.role = "architect"
 	got := r.buildSystem()
-	want := "be terse" + "\n\n" + command.RoleProse("architect") + "\n\n" + "G\n\nP"
+	want := "be terse" + "\n\n" + command.RoleProse("architect") + "\n\n" + "G\n\nP" + "\n\n" + asyncSection() + "\n\n" + idsSection()
 	if got != want {
 		t.Fatalf("the architect assembly = %q, want %q (system, the stance, then AGENTS.md)", got, want)
 	}
@@ -505,7 +503,7 @@ func TestRoleSwitchDefaultInjectsNothing(t *testing.T) {
 		t.Fatal(err)
 	}
 	got := r.fullSystem
-	want := "be terse" + "\n\n" + "G\n\nP"
+	want := "be terse" + "\n\n" + "G\n\nP" + "\n\n" + asyncSection() + "\n\n" + idsSection()
 	if got != want {
 		t.Fatalf("back to default = %q, want today's bytes %q", got, want)
 	}
@@ -662,18 +660,27 @@ func TestDelegateIsAConcurrentNative(t *testing.T) {
 
 func TestIsMutatingPredicate(t *testing.T) {
 	r := testRoot(nullFrontend{})
-	r.natives = map[string]bool{}
-	for _, n := range nativeToolNames {
-		r.natives[n] = true
-	}
-	for _, n := range []string{"bash", "write", "edit", "python", "scheduler", "plugin", "delegate", "gpu_stats"} {
-		if !r.isMutating(n) {
-			t.Errorf("%s must pause (a mutating native, or a plugin)", n)
-		}
-	}
-	for _, n := range []string{"read", "web", "todo", "rem"} {
-		if r.isMutating(n) {
-			t.Errorf("%s must pass silently", n)
+	for _, c := range []struct {
+		name  string
+		args  string
+		write bool
+	}{
+		{"bash", `{}`, true},
+		{"write", `{}`, true},
+		{"edit", `{}`, true},
+		{"python", `{"action":"code"}`, true},
+		{"scheduler", `{"action":"create"}`, true},
+		{"plugin", `{"action":"run"}`, true},
+		{"delegate", `{}`, true},
+		{"gpu_stats", `{}`, true},
+		{"read", `{}`, false},
+		{"web", `{"action":"search"}`, false},
+		{"todo", `{"action":"read"}`, false},
+		{"rem", `{"action":"recall"}`, false},
+	} {
+		call := core.ToolCall{ID: "c1", Name: c.name, Args: json.RawMessage(c.args)}
+		if r.isMutating(call) != c.write {
+			t.Errorf("isMutating(%s, %s) must be %v", c.name, c.args, c.write)
 		}
 	}
 }
@@ -774,4 +781,29 @@ func mustReadSession(t *testing.T, db store.DB, id string) *domain.Session {
 		t.Fatalf("session %s: no row", id)
 	}
 	return s
+}
+
+func TestIsMutatingAnswersTheRegistryByCall(t *testing.T) {
+	r := &root{}
+	cases := []struct {
+		name string
+		args string
+		want bool
+	}{
+		{"todo", `{"action":"create"}`, true},
+		{"todo", `{"action":"read"}`, false},
+		{"rem", `{"action":"learn"}`, true},
+		{"rem", `{"action":"recall"}`, false},
+		{"scheduler", `{"action":"list"}`, false},
+		{"plugin", `{"action":"schema"}`, false},
+		{"bash", `{}`, true},
+		{"a-plugin-tool", `{}`, true},
+		{"todo", `not-json`, true},
+	}
+	for _, c := range cases {
+		call := core.ToolCall{ID: "c1", Name: c.name, Args: json.RawMessage(c.args)}
+		if got := r.isMutating(call); got != c.want {
+			t.Fatalf("isMutating(%s, %s) = %v, want %v", c.name, c.args, got, c.want)
+		}
+	}
 }

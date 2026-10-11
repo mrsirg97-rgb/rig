@@ -402,7 +402,7 @@ func TestRigHomeOverrideBeatsTheOldHome(t *testing.T) {
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("the run must succeed: %v\n%s", err, out)
 	}
-	want := "FROM-RIG-HOME\n\n" + sessionSection(cmdDir, scratch)
+	want := "FROM-RIG-HOME\n\n" + sessionSection(cmdDir, scratch) + "\n\n" + asyncSection() + "\n\n" + idsSection()
 	if got := systemOf(t, s.last()); got != want {
 		t.Fatalf("the override's settings must win, got %q, want %q", got, want)
 	}
@@ -619,7 +619,7 @@ def run(args):
 	if err != nil {
 		t.Fatalf("the run must succeed: %v\n%s", err, out)
 	}
-	want := "FROM-OVERRIDE\n\n" + sessionSection(cmdDir, scratch)
+	want := "FROM-OVERRIDE\n\n" + sessionSection(cmdDir, scratch) + "\n\n" + asyncSection() + "\n\n" + idsSection()
 	if got := systemOf(t, s.last()); got != want {
 		t.Fatalf("the override's settings must win, got %q, want %q", got, want)
 	}

@@ -35,7 +35,7 @@ func TestTheAskRecordsItsVerdict(t *testing.T) {
 		return "executed", nil
 	}
 	g := approve.Gate(func() string { return "manual" }, func(context.Context, string) bool { return true },
-		func(string) bool { return true }, rec).Wrap(exec)
+		func(core.ToolCall) bool { return true }, rec).Wrap(exec)
 	out, err := g(context.Background(), call("bash", `{"cmd":"go test"}`))
 	if err != nil || out != "executed" {
 		t.Fatalf("an approved call must run unchanged: (%q, %v)", out, err)
@@ -58,7 +58,7 @@ func TestTheDeclineRecordsNoAndTeaches(t *testing.T) {
 		return "executed", nil
 	}
 	g := approve.Gate(func() string { return "manual" }, func(context.Context, string) bool { return false },
-		func(string) bool { return true }, rec).Wrap(exec)
+		func(core.ToolCall) bool { return true }, rec).Wrap(exec)
 	out, err := g(context.Background(), call("bash", `{"cmd":"rm -rf /"}`))
 	if err != nil || out == "executed" {
 		t.Fatalf("the decline must stand: (%q, %v)", out, err)
@@ -75,7 +75,7 @@ func TestAutoRecordsNothing(t *testing.T) {
 		return "executed", nil
 	}
 	g := approve.Gate(func() string { return "auto" }, func(context.Context, string) bool { return false },
-		func(string) bool { return true }, rec).Wrap(exec)
+		func(core.ToolCall) bool { return true }, rec).Wrap(exec)
 	if _, err := g(context.Background(), call("bash", `{"cmd":"go test"}`)); err != nil {
 		t.Fatal(err)
 	}
@@ -96,11 +96,11 @@ func TestAStoreThatCannotBeWrittenLeavesTheResultUnchanged(t *testing.T) {
 		return "executed", nil
 	}
 	refusing := approve.Gate(func() string { return "manual" }, func(context.Context, string) bool { return false },
-		func(string) bool { return true }).Wrap(exec)
+		func(core.ToolCall) bool { return true }).Wrap(exec)
 	want, _ := refusing(context.Background(), call("bash", `{"cmd":"rm -rf /"}`))
 
 	g := approve.Gate(func() string { return "manual" }, func(context.Context, string) bool { return false },
-		func(string) bool { return true }, rec).Wrap(exec)
+		func(core.ToolCall) bool { return true }, rec).Wrap(exec)
 	got, err := g(context.Background(), call("bash", `{"cmd":"rm -rf /"}`))
 	if err != nil || got != want {
 		t.Fatalf("the refusal must be byte-identical with a dead store: (%q, %v) want %q", got, err, want)

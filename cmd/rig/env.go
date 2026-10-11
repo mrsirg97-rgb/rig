@@ -19,6 +19,7 @@ import (
 	remstore "github.com/mrsirg97-rgb/rig/v2/store/rem"
 	"github.com/mrsirg97-rgb/rig/v2/store/scope"
 	"github.com/mrsirg97-rgb/rig/v2/store/state"
+	"github.com/mrsirg97-rgb/rig/v2/tool"
 	"github.com/mrsirg97-rgb/rig/v2/tool/file"
 )
 
@@ -156,8 +157,14 @@ func (r *root) switchEffort(ctx context.Context, level string) error {
 	return nil
 }
 
-func (r *root) isMutating(name string) bool {
-	return mutatingNatives[name] || !r.natives[name]
+func (r *root) isMutating(call core.ToolCall) bool {
+	var a struct {
+		Action string `json:"action"`
+	}
+	if err := json.Unmarshal(call.Args, &a); err != nil {
+		return true
+	}
+	return tool.Mutates(call.Name, a.Action)
 }
 
 func (r *root) switchApprove(ctx context.Context, mode string) error {

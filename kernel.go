@@ -19,7 +19,7 @@ type Kernel struct {
 
 	Commands []core.Command
 
-	Concurrent func(call core.ToolCall) bool
+	Priority func(call core.ToolCall) int
 
 	Parallel int
 
@@ -31,6 +31,8 @@ const DefaultParallel = 8
 const (
 	PriorityInput    = 90
 	PriorityDelegate = 70
+	PriorityWrite    = 60
+	PriorityRead     = 50
 	PriorityStream   = 50
 	PriorityTool     = 50
 	PriorityFleet    = 30
@@ -92,8 +94,8 @@ func WithMiddleware(mw ...core.ToolMiddleware) Option {
 	return func(k *Kernel) { k.Middleware = append(k.Middleware, mw...) }
 }
 
-func WithConcurrent(pred func(call core.ToolCall) bool) Option {
-	return func(k *Kernel) { k.Concurrent = pred }
+func WithPriority(pred func(call core.ToolCall) int) Option {
+	return func(k *Kernel) { k.Priority = pred }
 }
 
 func WithParallel(n int) Option {

@@ -367,3 +367,18 @@ The Go cases (`evt/queue_test.go`, `engine_test.go`,
 - Prior art, credited: `~/Projects/libtrdr/src/libevt` (queue, event,
   context, engine, scheduler, clock); the C is the reference
   implementation; a divergence is a named decision above.
+
+### 9. A write outranks a read (2.17.0)
+
+`loop/` is reopened by name (SPEC_WRITES): the kernel's concurrency flag
+dies, a priority function takes its place, and the priority is the
+batch's only ordering input — a write is 60, a read is 50. The batch
+submits every call to the engine at the call's own priority and nothing
+else: a write's closure runs its exec inline, so the writes serialize in
+the drain in index order and chain through their own completions; a
+read's closure hands its exec to a goroutine bounded by the semaphore,
+so the reads overlap; and the engine's drain is already highest-first,
+so the reads wait behind every write's closure and completion, on the
+state the writes left. The loop's cursor still appends the results in
+call order, so the transcript does not move. `dispatch` loses its
+run-scanning; the flag and its predicate are gone.

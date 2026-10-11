@@ -63,7 +63,7 @@ func TestConsumerIsOneGoroutine(t *testing.T) {
 		{events: []core.Event{textEv("second"), doneEv()}},
 	}}
 	f := &overlapFrontend{inputs: make(chan string, 2)}
-	k := rig.New(rig.WithProvider(p), rig.WithFrontend(&turnMarking{f}), rig.WithPolicy(&transcriptPolicy{}), rig.WithTools(read), rig.WithConcurrent(onlyRead))
+	k := rig.New(rig.WithProvider(p), rig.WithFrontend(&turnMarking{f}), rig.WithPolicy(&transcriptPolicy{}), rig.WithTools(read), rig.WithPriority(writesFirst))
 	k.Session = core.NewSession()
 	f.inputs <- "go"
 	f.inputs <- "again"

@@ -224,7 +224,7 @@ func TestPrecedenceFlagOverEnvOverFileOverEmbedded(t *testing.T) {
 			if out, err := cmd.CombinedOutput(); err != nil {
 				t.Fatalf("the run must succeed: %v\n%s", err, out)
 			}
-			want := c.want + "\n\n" + sessionSection(cmdDir, scratch)
+			want := c.want + "\n\n" + sessionSection(cmdDir, scratch) + "\n\n" + asyncSection() + "\n\n" + idsSection()
 			if got := systemOf(t, s.last()); got != want {
 				t.Fatalf("the system message = %q, want %q (%s wins)", got, want, c.name)
 			}
@@ -334,7 +334,7 @@ func TestFlagPresenceWins(t *testing.T) {
 		if err != nil {
 			t.Fatalf("the run must succeed: %v\n%s", err, out)
 		}
-		want := sessionSection(cmdDir, home)
+		want := sessionSection(cmdDir, home) + "\n\n" + asyncSection() + "\n\n" + idsSection()
 		if got := systemOf(t, s.last()); got != want {
 			t.Fatalf("the system message = %q, want %q (-system \"\" drops the default; the session section stays)", got, want)
 		}
@@ -747,7 +747,7 @@ func TestRunJobWorkerInheritsJobCwdAgents(t *testing.T) {
 	sys := workerSystem
 	sysMu.Unlock()
 	const defaultSystem = "you are an agent operating in rig, a minimal, general purpose harness, designed to help you get more done with less friction. you act on the session's workspace, using the available tools to inspect, change, and run things in it. the toolset is focused on purpose, with each tool's description saying when to use it. do not attempt to use a tool that does not exist in rig. the harness has guards: an allowlist, a retry guard (three identical failing calls to one tool in a turn exhaust the bound; a corrected call always executes), an approval gate, a plugin landing zone. every refusal names its rule and is there to guide you, not punish you. a refusal is final for that call: change the call or ask, never reach the same effect through another tool. when a tool fails, read the error and work out why before calling again. do not retry blindly, and stop when the environment or the plan is wrong. a capability you build twice belongs in a plugin. for any job of three or more steps, or one that touches several files, plan it in todo before the first edit: create the tasks, complete or fail each when done, and leave the queue empty at the end. when the work is done, answer in plain text: what changed, what you verified, what is left."
-	want := defaultSystem + "\n\n" + sessionSection(workDir, scratch) + "\n\n" + global + "\n\n" + jobAgents
+	want := defaultSystem + "\n\n" + sessionSection(workDir, scratch) + "\n\n" + global + "\n\n" + jobAgents + "\n\n" + asyncSection() + "\n\n" + idsSection()
 	if sys != want {
 		t.Fatalf("the worker's system message = %q, want the default plus the session section, the global and the job cwd's AGENTS.md (not the session's):\n%q", sys, want)
 	}
@@ -762,9 +762,9 @@ func TestAgentsOrderAgainstGuidelines(t *testing.T) {
 	r.agents = "G\n\nP"
 	r.middleware = []core.ToolMiddleware{perm.Allowlist("bash"), gw}
 	wire(r)
-	want := "be terse" + "\n\n" + "G\n\nP" + "\n\n" + "GUIDELINE-PROSE"
+	want := "be terse" + "\n\n" + "G\n\nP" + "\n\n" + asyncSection() + "\n\n" + idsSection() + "\n\n" + "GUIDELINE-PROSE"
 	if r.fullSystem != want {
-		t.Fatalf("fullSystem = %q, want %q (system, then AGENTS.md, then the guidelines)", r.fullSystem, want)
+		t.Fatalf("fullSystem = %q, want %q (system, then AGENTS.md, then the standing rules, then the guidelines)", r.fullSystem, want)
 	}
 }
 

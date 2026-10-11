@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 )
 
 //go:embed registry.json
@@ -24,6 +25,7 @@ type entry struct {
 	G string          `json:"guidelines"`
 	R string          `json:"reply"`
 	O []string        `json:"operator"`
+	M []string        `json:"mutates"`
 	S json.RawMessage `json:"schema"`
 }
 
@@ -104,12 +106,57 @@ func Names() []string {
 	return out
 }
 
+const MaxCommandBoundMs = 86_400_000
+
+func BoundMs(who string, raw *int64) (time.Duration, error) {
+	if raw == nil {
+		return 0, nil
+	}
+	if *raw < 1000 {
+		return 0, fmt.Errorf("%s: timeoutMs must be at least 1000 ms (omit the field for no bound), got %d", who, *raw)
+	}
+	if *raw > MaxCommandBoundMs {
+		return 0, fmt.Errorf("%s: timeoutMs ceiling is %d ms (24h), got %d", who, MaxCommandBoundMs, *raw)
+	}
+	return time.Duration(*raw) * time.Millisecond, nil
+}
+
+func FirstLine(s string) string {
+	line := strings.SplitN(strings.TrimSpace(s), "\n", 2)[0]
+	line = strings.TrimSpace(line)
+	if len(line) > 60 {
+		line = line[:60] + "…"
+	}
+	return line
+}
+
+func ExitTrailer(who string, exit int, dur time.Duration, id, log string, timedOut bool, bound time.Duration) string {
+	s := fmt.Sprintf("%s: exit %d · %dms · run %s · log %s", who, exit, dur.Milliseconds(), id, log)
+	if timedOut && bound > 0 {
+		s += fmt.Sprintf(" · killed at timeoutMs=%d", bound.Milliseconds())
+	}
+	return s
+}
+
 func Operator(name string) []string {
 	e, ok := defs[name]
 	if !ok {
 		return nil
 	}
 	return e.O
+}
+
+func Mutates(name, action string) bool {
+	e, ok := defs[name]
+	if !ok {
+		return true
+	}
+	for _, a := range e.M {
+		if a == "*" || a == action {
+			return true
+		}
+	}
+	return false
 }
 
 func AllNames() []string {

@@ -116,3 +116,11 @@ the session at the boundary, clean.
   and every `Notify` and `Append` stays on the loop goroutine. Execution
   order is never rearranged; only emission is ordered, so a call with
   effects must not be admitted by the predicate.
+- The batch feeds the engine, and the engine sorts (2.17.0, SPEC_WRITES):
+  the kernel's priority function replaces the concurrency flag — a write
+  is 60, a read is 50. A write's closure runs its exec inline, so the
+  writes serialize in the drain in index order and chain through their
+  own completions; a read's closure hands its exec to a semaphore-bounded
+  goroutine, so the reads overlap; the engine's drain is highest-first,
+  so the reads wait behind every write. The results still emit in call
+  order: the transcript does not move.

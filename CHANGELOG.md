@@ -1,4 +1,33 @@
 # Changelog
+## [2.17.0]: a write outranks a read
+
+rig answered "is this a write?" twice, by tool name, and the answers
+disagreed: `concurrentNatives` said read, view, web, delegate and decide
+may overlap, `mutatingNatives` said bash, write, edit, python,
+scheduler, plugin and delegate must ask — `delegate` in both, `todo`,
+`rem`, `sessions` and `verdict` in neither. Measured over the
+operator's session stores (52,747 assistant messages with tool calls):
+8,427 carry two or more calls, 1,023 mix reads and writes, 541 place a
+read before a write (2 on a path the same batch then edits), 509 place
+a read after a write (11 verify-after-edit), 6 mixed batches include a
+delegate. One predicate answers now, in the registry beside `operator`:
+the actions that mutate, or `["*"]`, an unknown tool a write. Two named
+priorities sit beside the kernel's table — a write is 60, a read is 50 —
+and the batch feeds the engine closures at the calls' own priorities:
+the writes run inline, serialize in the drain in index order, and chain
+through their own completions; the reads ride goroutines bounded by the
+semaphore and wait behind every write, on the state the writes left.
+The engine's drain is highest-first already, so the operator's input
+(90) and a delegate's return (70) land between two writes, and the
+turn's stream (50) and the fleet (30) wait until the writes are done.
+The results still append in call order — the transcript does not move —
+and the approval gate asks exactly for the writes: todo create, rem
+learn, verdict and every plugin tool ask; plugin list/schema, python
+vars, scheduler list/show/runs and the todo/rem reads pass silent. The
+menu shed what it said three ways: the timeoutMs mechanism and the ids
+rule live once in the system prompt, and the tool menu reads 15,466
+against the wall of 16,500.
+
 ## [2.16.0]: a bound cooks in the background
 
 The exec family read four time stories off one board, and the model

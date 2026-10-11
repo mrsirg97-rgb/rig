@@ -71,9 +71,8 @@ func TestDescriptionCarriesTheVoices(t *testing.T) {
 	h := newHarness(t, "/ws/sa")
 	d := h.tool.Description()
 	for _, want := range []string{
-		"come from `list` — copy them, never invent them",
 		"if a different model is resident at fire time the send skips and names it",
-		"eviction policy falls on the operator",
+		"eviction falls on the operator",
 		"omit it and the job runs on what is resident",
 		"until their notes clear",
 		"re-create it to retry",
