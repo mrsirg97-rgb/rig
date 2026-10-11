@@ -25,19 +25,22 @@ the session at the boundary, clean.
   specs, the live turn (its context, accumulators, batch, cursor); the
   handlers `prompt`, `input`, `model`, `streamEvent`, `streamEnd`,
   `toolDone`, `advance`, `end`, `stop`. Priorities are the kernel's
-  (`rig.PriorityInput`, `PriorityStream`, `PriorityTool`, and
-  `PriorityFleet` below them for the room and `PriorityReview` below
-  that for the decision review, SPEC_EVT 8); the engine is
+  (`rig.PriorityInput` 90, `PriorityDelegate` 70 for a delegate's
+  return, `PriorityWrite` 60, `PriorityRead` 50, `PriorityStream` and
+  `PriorityTool` 50, `PriorityFleet` 30 below them for the room, and
+  `PriorityReview` 10 below that for the decision review, SPEC_EVT 8);
+  the engine is
   the kernel's when it has one (`rig.WithEngine`), minted here
   otherwise.
 - `directExec(tools)`: the innermost exec: lookup and run.
-- `batch` (`batch.go`, SPEC_EVT 2a): the tool-call batch: runs of
-  calls the kernel's `Concurrent` predicate admits are dispatched as
-  goroutines (at most `Parallel`, default 8); a refused call is a
-  barrier; `dispatch(i)` starts the run the cursor reached, every call
-  in a goroutine, each posting its completion; `dispatch` returns the
-  wave's exclusive end and the caller owns the `ToolStart` for every
-  call in `[i, end)`, so a wave's starts all land before any result.
+- `batch` (`batch.go`): the tool-call batch: the kernel's priority
+  function mints one priority per call — a write at 60 runs its exec
+  inline and chains its own completion through the engine, so the
+  writes serialize in the drain in index order; a read at 50 hands its
+  exec to a semaphore-bounded goroutine (at most `Parallel`, default 8)
+  and posts its completion at its own priority, so the reads overlap.
+  The results emit in call order and the transcript does not move
+  (SPEC_WRITES 6).
 
 ## How it is consumed
 
@@ -68,11 +71,12 @@ the session at the boundary, clean.
 - **L7**: the boundary `TurnEnd{Reason}` event, after the turn's last other
   event.
 - **L8**: the `ContextTokens` stamp (`usage.Prompt + usage.Completion`)
-  rides both assistant-append branches; 0 when unreported.
-- **L9**: the batch (SPEC_EVT 2a): admitted calls overlap, barriers
-  run alone in order, emission and the transcript are in call order,
-  each `ToolResult` carries its own duration. A nil predicate is the
-  sequential loop, byte-identical.
+  rides the three assistant-append branches — the interrupt's included
+  (2.17.1); 0 when unreported.
+- **L9**: the batch: writes serialize inline in the drain, reads
+  overlap, emission and the transcript are in call order, each
+  `ToolResult` carries its own duration. A nil priority function makes
+  every call a write — the sequential loop, byte-identical.
 
 ## Gotchas
 
@@ -116,8 +120,8 @@ the session at the boundary, clean.
   loop goroutine: a middleware with state locks it (the guard does), a
   tool that writes the session locks its writes (the file tool does),
   and every `Notify` and `Append` stays on the loop goroutine. Execution
-  order is never rearranged; only emission is ordered, so a call with
-  effects must not be admitted by the predicate.
+  order is never rearranged; only emission is ordered, and a call with
+  effects is a write at 60, serialized inline in the drain.
 - The batch feeds the engine, and the engine sorts (2.17.0, SPEC_WRITES):
   the kernel's priority function replaces the concurrency flag — a write
   is 60, a read is 50. A write's closure runs its exec inline, so the
