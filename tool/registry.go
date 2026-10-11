@@ -26,6 +26,7 @@ type entry struct {
 	R string          `json:"reply"`
 	O []string        `json:"operator"`
 	M []string        `json:"mutates"`
+	D string          `json:"defaultAction"`
 	S json.RawMessage `json:"schema"`
 }
 
@@ -150,6 +151,9 @@ func Mutates(name, action string) bool {
 	e, ok := defs[name]
 	if !ok {
 		return true
+	}
+	if action == "" {
+		action = e.D
 	}
 	for _, a := range e.M {
 		if a == "*" || a == action {

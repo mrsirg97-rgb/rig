@@ -164,6 +164,7 @@ func TestMutatesAnswersTheTableByNameAndAction(t *testing.T) {
 		{"python", "code", true},
 		{"python", "reset", true},
 		{"python", "vars", false},
+		{"python", "", true},
 		{"scheduler", "create", true},
 		{"scheduler", "update", true},
 		{"scheduler", "pause", true},

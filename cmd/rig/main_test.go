@@ -670,6 +670,8 @@ func TestIsMutatingPredicate(t *testing.T) {
 		{"write", `{}`, true},
 		{"edit", `{}`, true},
 		{"python", `{"action":"code"}`, true},
+		{"python", `{}`, true},
+		{"python", `{"action":"vars"}`, false},
 		{"scheduler", `{"action":"create"}`, true},
 		{"plugin", `{"action":"run"}`, true},
 		{"delegate", `{}`, true},
