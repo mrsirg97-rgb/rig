@@ -110,3 +110,5 @@ reopen core/seam_test.go 2.0.1
 reopen core/session_test.go 2.0.1
 reopen core/provider.go 2.8.3
 reopen core/provider.go 2.16.0
+reopen loop/ 2.17.0
+reopen kernel.go 2.17.0

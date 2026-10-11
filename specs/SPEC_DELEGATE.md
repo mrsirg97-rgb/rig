@@ -538,3 +538,11 @@ no operator allow stands (SPEC_CONFIG 12).
   set grew).
 - `docs/USAGE.md`, `CHANGELOG.md`: the tool, named.
 - `core/`, `loop/` frozen: the middleware set unchanged.
+
+### 10. The delegate call is a write (2.17.0)
+
+SPEC_WRITES makes the delegate call a write: its start drains with the
+batch's writes, in index order, so a worker started beside an edit of
+the same tree starts after that edit lands. The fan-out survives — a
+start answers at once, the workers run concurrently — only the starts
+serialize, and each records its run.

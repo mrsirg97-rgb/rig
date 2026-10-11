@@ -296,12 +296,13 @@ func TestGuidelinesAreCollectedIntoTheSystemPrompt(t *testing.T) {
 }
 
 func TestWireSystemPromptCarriesTheBase(t *testing.T) {
-	k := wire(testRoot(nullFrontend{}))
+	r := testRoot(nullFrontend{})
+	k := wire(r)
 	msgs, err := k.Policy.Assemble(context.Background(), core.NewSession())
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(msgs) == 0 || msgs[0].Role != core.RoleSystem || msgs[0].Content != "be terse" {
+	if len(msgs) == 0 || msgs[0].Role != core.RoleSystem || msgs[0].Content != r.fullSystem {
 		t.Fatalf("the base system prompt must ride the policy verbatim: %+v", msgs)
 	}
 }
@@ -440,7 +441,7 @@ func TestDefaultRoleIsByteIdentical(t *testing.T) {
 	r := testRoot(nullFrontend{})
 	r.agents = "G\n\nP"
 	got := r.buildSystem()
-	want := "be terse" + "\n\n" + "G\n\nP"
+	want := "be terse" + "\n\n" + "G\n\nP" + "\n\n" + asyncSection() + "\n\n" + idsSection()
 	if got != want {
 		t.Fatalf("the default assembly = %q, want today's bytes %q (the role sits between system and AGENTS.md only when set)", got, want)
 	}
@@ -454,7 +455,7 @@ func TestSystemPromptNamesTheSessionCwdAndHome(t *testing.T) {
 	got := r.buildSystem()
 	want := "be terse" + "\n\n" +
 		"The session's workspace is /work/proj and the rig home is /home/ng. A leading ~ in a tool path expands to the rig home." +
-		"\n\n" + "G\n\nP"
+		"\n\n" + "G\n\nP" + "\n\n" + asyncSection() + "\n\n" + idsSection()
 	if got != want {
 		t.Fatalf("the session assembly = %q, want %q (the workspace and the home are named so the model never guesses)", got, want)
 	}
@@ -465,7 +466,7 @@ func TestRoleAssemblySitsBetweenSystemAndAgents(t *testing.T) {
 	r.agents = "G\n\nP"
 	r.role = "architect"
 	got := r.buildSystem()
-	want := "be terse" + "\n\n" + command.RoleProse("architect") + "\n\n" + "G\n\nP"
+	want := "be terse" + "\n\n" + command.RoleProse("architect") + "\n\n" + "G\n\nP" + "\n\n" + asyncSection() + "\n\n" + idsSection()
 	if got != want {
 		t.Fatalf("the architect assembly = %q, want %q (system, the stance, then AGENTS.md)", got, want)
 	}
@@ -502,7 +503,7 @@ func TestRoleSwitchDefaultInjectsNothing(t *testing.T) {
 		t.Fatal(err)
 	}
 	got := r.fullSystem
-	want := "be terse" + "\n\n" + "G\n\nP"
+	want := "be terse" + "\n\n" + "G\n\nP" + "\n\n" + asyncSection() + "\n\n" + idsSection()
 	if got != want {
 		t.Fatalf("back to default = %q, want today's bytes %q", got, want)
 	}
