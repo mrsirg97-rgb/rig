@@ -209,6 +209,12 @@ type Request struct {
 	ReasoningEffort string
 }
 
+const (
+	KindCommand = "command"
+	KindKernel  = "kernel"
+	KindFetch   = "fetch"
+)
+
 type WorkerDone struct {
 	N        int
 	Task     string
@@ -217,13 +223,19 @@ type WorkerDone struct {
 	Duration time.Duration
 	Session  string
 	Log      string
+	Kind     string
+	RunID    string
 }
 
 func (WorkerDone) event() {}
 
 func (d WorkerDone) Head() string {
+	if d.Kind == "" {
+		return "delegate #" + strconv.Itoa(d.N) + " returned · exit " + strconv.Itoa(d.Exit) +
+			" · " + d.Duration.Round(time.Second).String() + " · session " + d.Session
+	}
 	return "delegate #" + strconv.Itoa(d.N) + " returned · exit " + strconv.Itoa(d.Exit) +
-		" · " + d.Duration.Round(time.Second).String() + " · session " + d.Session
+		" · " + d.Duration.Round(time.Second).String() + " · run " + d.RunID
 }
 
 func WorkerBlock(returns []WorkerDone) string {

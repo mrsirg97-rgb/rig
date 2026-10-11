@@ -606,6 +606,14 @@ details field back to nil. The re-freeze closed the clause and the
 gate measures `core/` again — frozen at 1.5.0's bytes, and the next
 core change opens it by name.
 
+Core surface: 2.16.0 reopens `core/provider.go`, named (SPEC_ASYNC): the
+async tool calls' report envelope — `WorkerDone` gains `Kind` and `RunID`
+(pure addition; the empty `Kind` is the model worker and reproduces
+1.5.0's head bytes), the kind constants (`KindCommand`, `KindKernel`,
+`KindFetch`), and `Head()`'s branch that names a worker's run for the
+kinds that have no session. The model-worker head and `WorkerBlock` keep
+1.5.0's bytes.
+
 State machine per turn: `awaiting_input -> awaiting_model -> executing_tools
 -> awaiting_model -> ... -> done`. Deliverable 7 leaves it unchanged; its
 additions are inside the states. Tool execution was sequential through
