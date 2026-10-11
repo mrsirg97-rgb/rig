@@ -22,6 +22,7 @@ import (
 	"github.com/mrsirg97-rgb/rig/v2/store"
 	"github.com/mrsirg97-rgb/rig/v2/store/state"
 	"github.com/mrsirg97-rgb/rig/v2/store/state/domain"
+	"github.com/mrsirg97-rgb/rig/v2/tool"
 	"github.com/mrsirg97-rgb/rig/v2/tool/bash"
 	"github.com/mrsirg97-rgb/rig/v2/tool/file"
 	sessionstool "github.com/mrsirg97-rgb/rig/v2/tool/sessions"
@@ -653,9 +654,9 @@ func TestNewResetsApproveToTheSettingsDefault(t *testing.T) {
 	}
 }
 
-func TestDelegateIsAConcurrentNative(t *testing.T) {
-	if !concurrentNatives["delegate"] {
-		t.Fatal("delegate must be concurrent (fan-out: several calls in one turn run as a batch)")
+func TestDelegateIsAWrite(t *testing.T) {
+	if !tool.Mutates("delegate", "") {
+		t.Fatal("delegate is a write (mutates everything): it serializes inline in the drain")
 	}
 }
 

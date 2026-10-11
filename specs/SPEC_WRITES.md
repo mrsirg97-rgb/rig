@@ -79,8 +79,10 @@ The table, tool by tool:
 - rem: `["learn", "reflect", "prune", "index"]` — `recall`, `pack` read.
 - read, view, web, decide, sessions: `[]` — pure reads.
 
-`concurrentNatives`, `mutatingNatives` and `isMutating` are gone; the
-one predicate answers for the ordering, the overlap and the gate.
+`concurrentNatives` and `mutatingNatives` are gone — the dead map
+deleted with its tests moved to the predicate; the one predicate, the
+registry's `Mutates` behind the widened call seam (`isMutating`), answers
+for the ordering, the overlap and the gate.
 
 ### 2. The two numbers, and where they act
 
@@ -213,9 +215,10 @@ Named cases, failing first:
   SPEC_DELEGATE.md` names the start-as-write rule.
 - `tool/registry.json`, `tool/registry.go`: the `mutates` field and
   `Mutates`.
-- `cmd/rig/reap.go` (the lists die), `cmd/rig/env.go` (`isMutating`),
-  `cmd/rig/root.go` (the wiring), `cmd/rig/kernel.go` (the two numbers,
-  the `Priority` field, `WithPriority`), `cmd/rig/middleware.go`.
+- `cmd/rig/reap.go` (the dead map dies), `cmd/rig/env.go`
+  (`isMutating`), `cmd/rig/root.go` (the wiring), the root `kernel.go`
+  (the two numbers, the `Priority` field, `WithPriority`),
+  `cmd/rig/middleware.go`.
 - `loop/batch.go`: the pump. `loop/loop.go`: the wiring only.
 - `tool/registry.json`'s menu sentence, paid for by trimming.
 - `CHANGELOG.md`, the touched `PACKAGE.md`s, the version, the measured

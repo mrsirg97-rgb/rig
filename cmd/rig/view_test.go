@@ -18,6 +18,7 @@ import (
 
 	"github.com/mrsirg97-rgb/rig/v2/core"
 	"github.com/mrsirg97-rgb/rig/v2/models"
+	"github.com/mrsirg97-rgb/rig/v2/tool"
 )
 
 func visionRow() models.Model {
@@ -86,8 +87,8 @@ func TestTheWireToolPrefixGrowsByViewAndNothingElse(t *testing.T) {
 	}
 }
 
-func TestViewIsConcurrentAndNeverMutating(t *testing.T) {
-	if !concurrentNatives["view"] {
+func TestViewIsAReadAndNeverMutating(t *testing.T) {
+	if tool.Mutates("view", "") {
 		t.Fatal("view is read-only: it runs beside its admitted neighbours")
 	}
 	r := visionRoot(t)
