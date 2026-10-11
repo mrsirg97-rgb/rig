@@ -70,9 +70,9 @@ a result; a step that waits on the world spawns and its completion posts
 back at the same priority, so the event is the wakeup.
 
 The kernel carries the named priorities (`PriorityInput` 90,
-`PriorityDelegate` 70, `PriorityStream` 50, `PriorityTool` 50,
-`PriorityFleet` 30, `PriorityReview` 10); the loop reads them, the root
-assigns them. The session's frontend member posts a delegate's return at
+`PriorityDelegate` 70, `PriorityWrite` 60, `PriorityRead` 50,
+`PriorityStream` and `PriorityTool` 50, `PriorityFleet` 30,
+`PriorityReview` 10); the loop reads them, the root assigns them. The session's frontend member posts a delegate's return at
 70 and the fleet's other deliveries at 30, and the reviewer bites at 10
 — that is the whole mechanism behind "the delegation work is in hand at
 the turn's boundary, and the fleet's chatter runs in the gaps of a turn
@@ -93,15 +93,17 @@ Every turn exit inside the run emits `TurnEnd{Reason}` (`over`, `fault`,
 none. The loop fans out `TurnStart` to registered observers once per
 turn, before the first Assemble.
 
-**Batching.** Tool calls execute in batches: a call the kernel's
-`Concurrent` predicate admits runs beside its admitted neighbours,
-bounded by the kernel's `Parallel` (default 8); any other call is a
-barrier in call order. Results are emitted and appended in the order the
-model asked — three parallel reads land as if nothing ran in parallel.
-The root admits the observations and the waits (`read`, `view`, `web`,
-`decide`) and the hand-off (`delegate`); everything with effects — the
-stores (`todo`, `rem`, `sessions`, `scheduler`), the shared kernel
-(`python`, plugins), or the disk — stays sequential.
+**Batching.** Tool calls execute through one batch: the kernel's
+priority function — the registry's `Mutates` behind the root's wiring —
+mints one priority per call, a write at 60 and a read at 50, and the
+engine's drain sorts. A write's closure runs its exec inline, so the
+writes serialize in the drain in index order; a read's closure hands its
+exec to a semaphore-bounded goroutine (`Parallel`, default 8), so the
+reads overlap and wait behind every write. The hand-off (`delegate`) is
+itself a write — its calls serialize inline too, answering at once and
+returning on a later turn. Results are emitted and appended in the order
+the model asked — three parallel reads land as if nothing ran in
+parallel.
 
 The turn boundary is the runtime's contract, enforced and tested:
 
