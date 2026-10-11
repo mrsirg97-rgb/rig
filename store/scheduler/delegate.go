@@ -13,6 +13,7 @@ import (
 
 	"github.com/mrsirg97-rgb/rig/v2/broadcast"
 	"github.com/mrsirg97-rgb/rig/v2/models"
+	"github.com/mrsirg97-rgb/rig/v2/tool/execwrap"
 )
 
 const DelegateEnv = "RIG_DELEGATE"
@@ -23,6 +24,7 @@ type DelegateInput struct {
 	Session       string
 	Cwd           string
 	Task          string
+	Command       string
 	Model         string
 	Effort        string
 	WorkerSession string
@@ -171,25 +173,34 @@ func Delegate(in DelegateInput) (DelegateResult, error) {
 
 func DelegateStart(in DelegateInput) (Delegation, error) {
 	in = delegateInput(in)
-	if in.Fetch == nil || in.Spawn == nil {
-		return Delegation{}, fmt.Errorf("delegate: fetch and spawn seams are required")
+	if in.Spawn == nil {
+		return Delegation{}, fmt.Errorf("delegate: the spawn seam is required")
 	}
-	if in.WorkerSession == "" {
-		return Delegation{}, fmt.Errorf("delegate: worker session is required")
+	if in.Command == "" {
+		if in.Fetch == nil {
+			return Delegation{}, fmt.Errorf("delegate: the fetch seam is required")
+		}
+		if in.WorkerSession == "" {
+			return Delegation{}, fmt.Errorf("delegate: worker session is required")
+		}
 	}
 
 	if os.Getenv(DelegateEnv) != "" {
 		return Delegation{}, fmt.Errorf("delegate: a worker cannot delegate (RIG_DELEGATE is set — no recursion)")
 	}
 
-	model, gateModel, err := resolveWorkerModel(in)
-	if err != nil {
-		return Delegation{}, fmt.Errorf("delegate: %w", err)
-	}
-	in.Model = model
-	if !isRemoteRow(in) {
-		if err := gateOnce(in.Fetch, in.SwapURL, gateModel); err != nil {
+	model, gateModel := "", ""
+	if in.Command == "" {
+		var err error
+		model, gateModel, err = resolveWorkerModel(in)
+		if err != nil {
 			return Delegation{}, fmt.Errorf("delegate: %w", err)
+		}
+		in.Model = model
+		if !isRemoteRow(in) {
+			if err := gateOnce(in.Fetch, in.SwapURL, gateModel); err != nil {
+				return Delegation{}, fmt.Errorf("delegate: %w", err)
+			}
 		}
 	}
 
@@ -207,6 +218,9 @@ func DelegateStart(in DelegateInput) (Delegation, error) {
 		workerCmd = []string{exe}
 	}
 	prompt := in.Task + ReportBack(in.Cwd)
+	if in.Command != "" {
+		prompt = ""
+	}
 	allow := joinAllow(in.Allow)
 	if in.Bare {
 		prompt = in.Task
@@ -235,7 +249,14 @@ func DelegateStart(in DelegateInput) (Delegation, error) {
 			proxy.Close()
 		}
 	}
-	if profile == "off" {
+	if in.Command != "" {
+		if profile != "off" {
+			return Delegation{}, fmt.Errorf("delegate: a command worker runs unjailed (the jail binds the model worker's homes)")
+		}
+		note = "sandbox off: the worker ran unjailed (the operator's choice)"
+		argv = execwrap.Args([]string{"bash", "-c", in.Command})
+		spawnEnv = append(os.Environ(), DelegateEnv+"=1")
+	} else if profile == "off" {
 		note = "sandbox off: the worker ran unjailed (the operator's choice)"
 		argv = append(append([]string{}, workerCmd...),
 			"-p", PromptStdin,
@@ -407,8 +428,12 @@ func adHocCreate(ctx context.Context, db DB, in DelegateInput) (string, error) {
 	}
 	id := f.mintID()
 	at := in.Now().UTC().Format(time.RFC3339)
+	name := firstLine(in.Task)
+	if in.Command != "" {
+		name = firstLine(in.Command)
+	}
 	argsJSON, _ := json.Marshal(map[string]any{
-		"id": id, "name": "delegate:" + firstLine(in.Task), "prompt": in.Task,
+		"id": id, "name": "delegate:" + name, "prompt": in.Task, "command": in.Command,
 		"cron": "once", "at": at, "cwd": in.Cwd, "model": in.Model, "busy": "skip",
 	})
 	seq, err := appendEvent(bound, f.maxSeq+1, "create", string(argsJSON), in.Session)
