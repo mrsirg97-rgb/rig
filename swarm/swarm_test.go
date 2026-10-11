@@ -255,7 +255,7 @@ func newHarness(t *testing.T) *harness {
 	return newCappedHarness(t, nil)
 }
 
-func newCappedHarness(t *testing.T, workerCap sched.WorkerCap) *harness {
+func newCappedHarness(t *testing.T, workerCap *evt.Cap) *harness {
 	t.Helper()
 	h := &harness{}
 	h.engine = evt.NewEngine()
@@ -999,7 +999,7 @@ func TestStoppedWorkerIsOutBeforeTheRouterWakes(t *testing.T) {
 }
 
 func TestSwarmWorkersPastTheCapWaitForAReturn(t *testing.T) {
-	h := newCappedHarness(t, sched.NewWorkerCap(2))
+	h := newCappedHarness(t, evt.NewCap(2))
 	h.create(t, "one", "two", "three", "four")
 	h.spawn.block = make(chan struct{})
 	h.start(t, swarm.StartOpts{Count: 4, Role: "worker"})

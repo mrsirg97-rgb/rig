@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/mrsirg97-rgb/evt"
 	"github.com/mrsirg97-rgb/evt/broadcast"
 	"github.com/mrsirg97-rgb/evt/event"
 	"github.com/mrsirg97-rgb/rig/v2/core"
@@ -299,7 +300,7 @@ func TestWaitingADelegationThatNeverWasRefuses(t *testing.T) {
 
 func TestTheCapQueuesTheRestAndStartsEachAsOneReturns(t *testing.T) {
 	h := newHarness(t, "/ws/sess")
-	h.cap = sched.NewWorkerCap(2)
+	h.cap = evt.NewCap(2)
 	release := make(chan struct{})
 	spawn := &fakeSpawn{result: sched.SpawnResult{Exit: 0, Stdout: "done"}, block: release}
 	tool, fe := h.asyncTool(t, fakeFetch(""), spawn.spawn)
@@ -339,7 +340,7 @@ func TestTheCapQueuesTheRestAndStartsEachAsOneReturns(t *testing.T) {
 
 func TestAQueuedWorkerStoppedBeforeItStartsReturnsAndNeverSpawns(t *testing.T) {
 	h := newHarness(t, "/ws/sess")
-	h.cap = sched.NewWorkerCap(1)
+	h.cap = evt.NewCap(1)
 	release := make(chan struct{})
 	spawn := &fakeSpawn{result: sched.SpawnResult{Exit: 0}, block: release}
 	tool, fe := h.asyncTool(t, fakeFetch(""), spawn.spawn)

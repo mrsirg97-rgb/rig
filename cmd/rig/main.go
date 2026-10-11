@@ -14,6 +14,7 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/mrsirg97-rgb/evt"
 	"github.com/mrsirg97-rgb/evt/broadcast"
 	"github.com/mrsirg97-rgb/evt/event"
 	"github.com/mrsirg97-rgb/rig/v2"
@@ -312,7 +313,7 @@ func main() {
 
 	rt := runtimeTable(cfg.Models, modelID, row)
 	piped := *prompt != ""
-	workerCap := sched.NewWorkerCap(cfg.Settings.MaxWorkers)
+	handoff := evt.NewCap(cfg.Settings.MaxWorkers)
 	del := delegate.New(delegate.Opts{
 		Ctx:          ctx,
 		Await:        piped,
@@ -330,7 +331,7 @@ func main() {
 		Spawn:        sched.RealSpawn,
 		Models:       func() models.Table { return rt },
 		Room:         room,
-		Cap:          workerCap,
+		Cap:          handoff,
 	})
 
 	py := pythontool.New(del)
@@ -543,7 +544,7 @@ func main() {
 			Models:       func() models.Table { return r.runtime },
 			Engine:       r.engine,
 			Room:         r.room,
-			Cap:          workerCap,
+			Cap:          handoff,
 		})
 	}
 	r.swarmWhy = swarmWhy

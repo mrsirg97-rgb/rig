@@ -15,6 +15,7 @@ import (
 
 	"github.com/mrsirg97-rgb/rig/v2/models"
 
+	"github.com/mrsirg97-rgb/evt"
 	"github.com/mrsirg97-rgb/evt/broadcast"
 	"github.com/mrsirg97-rgb/rig/v2/store"
 	sched "github.com/mrsirg97-rgb/rig/v2/store/scheduler"
@@ -200,7 +201,7 @@ type harness struct {
 	home    string
 	rigHome string
 	db      sched.DB
-	cap     sched.WorkerCap
+	cap     *evt.Cap
 }
 
 func newHarness(t *testing.T, sessionCwd string) *harness {

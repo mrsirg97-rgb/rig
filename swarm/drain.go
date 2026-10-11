@@ -1,9 +1,11 @@
 package swarm
 
 import (
+	"context"
 	"errors"
 	"time"
 
+	"github.com/mrsirg97-rgb/evt"
 	"github.com/mrsirg97-rgb/evt/event"
 	"github.com/mrsirg97-rgb/rig/v2/core"
 	sched "github.com/mrsirg97-rgb/rig/v2/store/scheduler"
@@ -55,10 +57,22 @@ func (c *Controller) work(w *worker, id string) workResult {
 		c.loud(w, "w%d: task %s: %v", w.id, id, err)
 		return workResult{}
 	}
-	if err := c.opts.Cap.Hold(w.ctx); err != nil {
-		return workResult{holder: err}
+	var res workResult
+	sub := c.opts.Cap.Submit(w.ctx, evt.Func(func(gate context.Context) {
+		if gate.Err() != nil {
+			res = workResult{holder: gate.Err()}
+			return
+		}
+		defer c.opts.Cap.Release()
+		res = c.delegateWork(w, id, task)
+	}))
+	if !sub.Started() {
+		<-sub.Settled()
 	}
-	defer c.opts.Cap.Free()
+	return res
+}
+
+func (c *Controller) delegateWork(w *worker, id string, task todostore.TaskInfo) workResult {
 	res, err := c.delegate(sched.DelegateInput{
 		DB:            c.opts.SchedDB,
 		Home:          c.opts.Home,
