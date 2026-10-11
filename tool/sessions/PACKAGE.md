@@ -36,12 +36,11 @@ rows are touched.
 
 ## How it is consumed
 
-- Registered at the root as a native tool (`sessions`, the nineteenth).
-  It is absent from the root's `mutatingNatives`, so the approval gate
+- Registered at the root as a native tool (`sessions`, the thirteenth).
+  The registry answers it a read (`mutates: []`), so the approval gate
   passes it silently: a read never pauses a session, and the only write a
   read can do is the store's own bounded, versioned schema migration. It
-  is also absent from `concurrentNatives`; it opens a store, like
-  `todo`/`rem`/`scheduler`,
+  opens a store, like `todo`/`rem`/`scheduler`,
   so it is not a pure observation.
 
 ## Gotchas

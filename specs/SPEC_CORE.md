@@ -725,8 +725,9 @@ the loop consumes. No third-party line; the stdlib-only rule holds.
   guarded refusal riding `ToolResult`; `TurnEnd` at every turn exit with
   its reason; reasoning accumulation in both assistant branches; steering
   (the `InterruptFrom` handle cancels the turn and the run continues; the
-  slot delivers on the next `Input`; latest wins; the recorder discards
-  the unlanded partial at `TurnEnd`; a mid-tool interrupt keeps the
+  slot delivers on the next `Input`; latest wins; the recorder lands an
+  interrupt's unlanded partial (2.17.1) and discards it at any other
+  `TurnEnd`; a mid-tool interrupt keeps the
   batch's results with the exec's error string); the guard's name keying,
   per-turn clear, and bound-th note; the compat rule (`TestEvent`
   forwarded untouched by the loop, ignored by the frontends); the resume

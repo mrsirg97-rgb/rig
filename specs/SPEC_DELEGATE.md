@@ -327,10 +327,10 @@ one line and never the answer:
   `SpawnCtx` stay as amended below.
 
 - **Four swarm amendments (SPEC_SWARM)**, all defaulted to today's
-  behavior. `WaitBusy` (false): a busy GPU is waited on — the busy
-  check polls `busyState` on a short interval until the model runs or
-  the call's context ends; the swarm's parallelism is the GPU slots,
-  and a busy-check failure still fails closed. `Member` (nil): the
+  behavior. `WaitBusy` (false) is the historical record: a busy GPU
+  waited on — the busy check polled `busyState` on a short interval —
+  and the field retired with the slot read (the 2.6.0 amendment,
+  SPEC_WORKERS); `DelegateInput` carries no `WaitBusy`. `Member` (nil): the
   worker's member in the session's room (2.11.0); with one, the spawn
   gets the fleet pipe and every frame the child sends is published as
   the worker. `SpawnCtx` (Background): the
