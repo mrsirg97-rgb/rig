@@ -36,13 +36,14 @@ them once (the command set rides the frontend dispatchers, and
 | `WithPolicy` | message assembly | `compact.New` (the per-model trigger) |
 | `WithCommands` | the slash-command set | unwired at the root; commands dispatch at the frontend seam |
 | `WithMiddleware` | the tool-exec chain | toolset, approve, cutoff, perm, guard, paths; the graph tap inside, the decision links outside, the operator link on a delegated worker's wire only |
-| `WithConcurrent` | the batch's admit predicate | the concurrent natives: read, view, web, delegate, decide |
+| `WithPriority` | the batch's priority per call | the root wires the registry's predicate: a write is 60, a read is 50 |
 | `WithParallel` | the in-flight bound | unset; `DefaultParallel` is 8 |
 | `WithEngine` | the event engine | the root's engine, the fleet room's queue |
 
-Beside the options the kernel names the queue's six priorities
-(`PriorityInput` 90, `PriorityDelegate` 70, `PriorityStream` 50,
-`PriorityTool` 50, `PriorityFleet` 30, `PriorityReview` 10) and the room's four member
+Beside the options the kernel names the queue's eight priorities
+(`PriorityInput` 90, `PriorityDelegate` 70, `PriorityWrite` 60,
+`PriorityRead` 50, `PriorityStream` and `PriorityTool` 50,
+`PriorityFleet` 30, `PriorityReview` 10) and the room's four member
 ids (`MemberFrontend`, `MemberDelegate`, `MemberGraph`,
 `MemberDecision`).
 
