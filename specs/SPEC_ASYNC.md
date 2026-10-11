@@ -98,48 +98,39 @@ today.
   field is omitted, not reset; the one stored knob keeps its reset and
   it is documented in its own decision.
 
-The description sentence, one shape, per tool:
+The description sentence was drafted as one shape, per tool:
 
     when present, the call answers at once and the result arrives on a
     later turn, killed at the bound; absent, runs in-turn under the
     default ceiling.
 
-scheduler's variant swaps the async sentence for the rounding one
-(decision 6).
+2.17.0 (fdb39b4) moved the rule out of the menu: the mechanism lives
+once in the system prompt ("when a tool offers timeoutMs and you pass a
+valid integer, the tool runs in the background — bound, background,
+notify; without it the tool runs in-turn"), and the tool words carry
+only their own bounds. scheduler's schema keeps the rounding variant,
+not the async one (decision 6).
 
 ### 2. The primitive: one seam, worker kinds behind it
 
 The delegate seam split in 2.14.0 — `DelegateStart` does everything
 that can refuse, `Wait` collects the outcome — is the primitive. The
-spec promotes it to a named interface set in the broadcast style
-(`Member`, `Message`, `Room`, `Transport` are the precedent), so tools
-depend on the seam, never on the store:
+spec drafted a named interface set in the broadcast style
+(`Member`, `Message`, `Room`, `Transport` are the precedent); the delta
+shipped the seam flatter and the envelope flat with it:
 
 ```go
-type Worker interface {
-    Kind() Kind // model | command | kernel | fetch
-    Run(ctx context.Context, bound time.Duration, report func(Report))
-}
-
-type Report struct {
-    Kind      Kind
-    RunID     string
-    OK        bool
-    Exit      int         // command workers
-    Output    string      // capped, the loud marker, all kinds
-    Fault     string      // why it did not finish
-    Duration  time.Duration
-    SessionID string      // model workers; resumable transcripts
-    Log       string      // the run's log path
-}
+func (a *adapter) Submit(ctx context.Context, kind string, task string, bound time.Duration) (string, error)
 ```
 
-`core.WorkerDone` carries a `Report` to the frontends' inbox; the fold
-(`WorkerBlock`) is unchanged. The runner keeps its spawn, its jail
+The in-process kinds (`kernel`, `fetch`) ride `bg.Submit` beside
+`DelegateStart`/`Wait`; there is no `Worker` interface and no `Report`
+type in Go. The return is the flat `core.WorkerDone{Kind, RunID}`
+(`core/provider.go`), the empty kind reproducing the model worker's
+head bytes exactly. The runner keeps its spawn, its jail
 (SPEC_SANDBOX 1, verbatim), its record (the ad-hoc `jN` run, decision
-4 of SPEC_DELEGATE, verbatim), and its pipe. The interface set lands in
-a leaf package; the root wires it once; the loop never names a
-concrete kind.
+4 of SPEC_DELEGATE, verbatim), and its pipe. The fold (`WorkerBlock`)
+is unchanged; the loop never names a concrete kind.
 
 ### 3. The command worker: deterministic bash
 
@@ -162,8 +153,8 @@ concrete kind.
 
 - `task` xor `command`: both set, or neither, refuses by name.
 - `command` runs one bash line through the same spawn seam — `execwrap`
-  argv, the jail as configured, pathguard, the workspace resolved as
-  bash resolves it. No model, no tools, no `-allow`, no
+  argv, the jail refused by name (the jail binds the model worker's
+  homes), pathguard, the workspace resolved as bash resolves it. No model, no tools, no `-allow`, no
   model-server queue: the worker is `bash -c` on the runner's spawn.
 - `model` with `command` refuses (`a command worker has no model`).
 - `timeoutMs` with `command` is the kill bound, ms-native, capped at
@@ -211,8 +202,8 @@ today's behavior verbatim.
   carries the fetched body, capped. The bound kills a slow fetch at
   expiry, naming itself. The absent case is the standing 30 s ceiling,
   unchanged.
-- Both kinds report through the same `Report` envelope and the same
-  inbox fold as the spawned kinds. Reports arrive in completion order;
+- Both kinds report through the same flat `WorkerDone` envelope and the
+  same inbox fold as the spawned kinds. Reports arrive in completion order;
   the hand-back line carries the run id the return will name.
 
 ### 6. scheduler joins the vocabulary
@@ -230,8 +221,9 @@ cap, not a mode switch.
 
 ### 7. The fold, unchanged
 
-`core.WorkerDone` gains the `Report`; `WorkerBlock` renders one block
-per kind with the same trailer grammar (`exit N · duration · session ·
+`core.WorkerDone` gains `Kind` and `RunID` (the flat envelope, no
+`Report` type); `WorkerBlock` renders one block per kind with the same
+trailer grammar (`exit N · duration · session ·
 log`), command workers naming the run id instead of a session. The
 inbox keeps 2.14.0's shape: returns append in arrival order, a live
 turn is never interrupted, a batch that fills while no turn is live is
@@ -270,10 +262,10 @@ Named cases, failing first:
   `60_000→1`, `61_000→2`, `86_400_000→1440`, `86_400_001` refuses,
   `-1` resets, `0` absent); store rows keep minutes (fold golden);
   the crontab line is untouched.
-- **core**: the `Report` envelope round-trips `WorkerDone`;
+- **core**: the flat `Kind`/`RunID` envelope round-trips `WorkerDone`;
   `WorkerBlock` renders one block per kind with the one trailer
   grammar; two returns in one turn arrive as one batch, in order.
-- **cmd/rig**: no stored goldens — the wire-check job re-renders base and head and diffs; the menu wall moves 15,500 → 16,500 (measured: the spec's diffs cost ~0.9k against 33 chars of headroom);
+- **cmd/rig**: no stored goldens — the wire-check job re-renders base and head and diffs; the menu wall moves 15,500 → 16,500 (measured: the spec's diffs cost 969 chars, 15,467 → 16,436, headroom 64 against the new wall);
   the native set is unchanged; the wiring is registration lines only.
 
 ## scope
@@ -287,8 +279,9 @@ Named cases, failing first:
 - `tool/delegate`: `command`, `timeoutMs` (command only), the
   refusals; `tool/bash`: the field and the sugar; `tool/python`,
   `tool/web`: the promotion and the in-process kinds.
-- `core/provider.go`: the `Report` on `WorkerDone`.
+- `core/provider.go`: the flat `Kind`/`RunID` on `WorkerDone`.
 - `tool/registry.json`: the schema diffs and the description
-  sentences; the wire sha and the goldens move once, deliberately.
+  sentences; there are no stored goldens — the wire-check job re-renders
+  base and head and diffs.
 - `cmd/rig`: the wiring, registration lines only.
 - `CHANGELOG.md`, the touched `PACKAGE.md`s: the rule, named.
