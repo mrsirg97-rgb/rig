@@ -62,7 +62,7 @@ type given struct {
 	At      string  `json:"at"`
 	Model   *string `json:"model"`
 
-	Timeout int `json:"timeout"`
+	TimeoutMs int64 `json:"timeoutMs"`
 
 	Budget float64 `json:"budget"`
 	ID     string  `json:"id"`
@@ -81,6 +81,22 @@ type adapter struct {
 
 func New(db sched.DB, ct sched.Crontab, runnerCmd, defModel, home string) Scheduler {
 	return adapter{Definition: tool.Fill(tool.Def("scheduler"), "{default_model}", defModel), db: db, ct: ct, runnerCmd: runnerCmd, home: home}
+}
+
+const maxTimeoutMs = int64(sched.MaxTimeoutMinutes) * 60_000
+
+func normalizeTimeoutMs(ms int64) (int, error) {
+	switch {
+	case ms == 0:
+		return 0, nil
+	case ms == -1:
+		return -1, nil
+	case ms < -1:
+		return 0, fmt.Errorf("scheduler: timeoutMs must be 0 (absent), -1 (reset) or positive milliseconds, got %d", ms)
+	case ms > maxTimeoutMs:
+		return 0, fmt.Errorf("scheduler: timeoutMs ceiling is %d ms (%d minutes), got %d", maxTimeoutMs, sched.MaxTimeoutMinutes, ms)
+	}
+	return int((ms + 59_999) / 60_000), nil
 }
 
 func updateModelArg(args json.RawMessage) (*string, error) {
@@ -113,18 +129,26 @@ func (a adapter) Exec(ctx context.Context, args json.RawMessage) (string, error)
 		if g.Model != nil {
 			model = *g.Model
 		}
+		timeout, err := normalizeTimeoutMs(g.TimeoutMs)
+		if err != nil {
+			return "", err
+		}
 		return a.Create(ctx, CreateInput{
 			Name: g.Name, Prompt: g.Prompt, Command: g.Command, Cron: g.Cron, At: g.At,
-			Workspace: g.Workspace, Model: model, Timeout: g.Timeout, Budget: g.Budget,
+			Workspace: g.Workspace, Model: model, Timeout: timeout, Budget: g.Budget,
 		})
 	case "update":
 		model, err := updateModelArg(args)
 		if err != nil {
 			return "", err
 		}
+		timeout, err := normalizeTimeoutMs(g.TimeoutMs)
+		if err != nil {
+			return "", err
+		}
 		return a.Update(ctx, g.ID, UpdateInput{
 			Name: g.Name, Prompt: g.Prompt, Command: g.Command, Cron: g.Cron, At: g.At,
-			Workspace: g.Workspace, Model: model, Timeout: g.Timeout, Budget: g.Budget,
+			Workspace: g.Workspace, Model: model, Timeout: timeout, Budget: g.Budget,
 		})
 	case "list":
 		return a.List(ctx)

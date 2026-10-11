@@ -268,7 +268,7 @@ Named cases, failing first:
   reports the capped body; a slow fetch dies at the bound, naming it.
 - **store/scheduler**: the ms normalization edges (`59_999→1`,
   `60_000→1`, `61_000→2`, `86_400_000→1440`, `86_400_001` refuses,
-  `-1` resets, `0` clears); store rows keep minutes (fold golden);
+  `-1` resets, `0` absent); store rows keep minutes (fold golden);
   the crontab line is untouched.
 - **core**: the `Report` envelope round-trips `WorkerDone`;
   `WorkerBlock` renders one block per kind with the one trailer
