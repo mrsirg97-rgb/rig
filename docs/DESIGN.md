@@ -15,7 +15,7 @@ disagree.
                          ▼
                   loop.Run(ctx, kernel)   the concrete turn runtime
                   │  ├─ seam: ContextPolicy ─► policy        (per-turn Assemble)
-                  │  └─ seam: Provider      ─► provider/openai (stream out, events in)
+                  │  └─ seam: Provider      ─► provider/openai · provider/anthropic (stream out, events in)
                   └─ seam: Tool ─► ToolMiddleware chain
                                    └─ toolset.Resolve → approve.Gate → cutoff
                                        → perm.Plugins → perm.Allowlist
