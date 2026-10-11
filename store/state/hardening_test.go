@@ -70,12 +70,43 @@ func TestRecorderLandsGuardedFailuresFromTheEvent(t *testing.T) {
 	}
 }
 
-func TestRecorderTurnEndDiscardsTheUnlandedPartial(t *testing.T) {
+func TestRecorderLandsTheReplyAnInterruptCut(t *testing.T) {
 	db := openState(t)
 	rec := state.NewRecorder(&scripted{}, db, "/tmp/wt", "model-x", "0.1.0", "rec-turnend", core.NewSession())
 	rec.Notify(core.TextDelta{Text: "PARTIAL "})
 	rec.Notify(core.ReasoningDelta{Text: "PARTIAL thinking "})
+	rec.Notify(core.ToolCallEvent{Call: core.ToolCall{ID: "c1", Name: "bash"}})
 	rec.Notify(core.TurnEnd{Reason: core.TurnInterrupt})
+	rec.Notify(core.TextDelta{Text: "fresh"})
+	rec.Notify(core.Done{StopReason: "end_turn"})
+	if err := rec.Close("ok"); err != nil {
+		t.Fatal(err)
+	}
+	first := mustRead(t, db, func(c context.Context) (any, error) {
+		return domain.NewMessageDomain().GetMessage(c, 1).Row()
+	}).(*domain.Message)
+	if first == nil || first.Role != "assistant" || first.Content != "PARTIAL " {
+		t.Fatalf("the cut reply must land as its own row, got %+v", first)
+	}
+	if first.Reasoning == nil || *first.Reasoning != "PARTIAL thinking " {
+		t.Fatalf("the cut reply keeps its reasoning: %+v", first.Reasoning)
+	}
+	if first.ToolId != nil {
+		t.Fatalf("a call that never ran must not land with the cut reply: %+v", first.ToolId)
+	}
+	second := mustRead(t, db, func(c context.Context) (any, error) {
+		return domain.NewMessageDomain().GetMessage(c, 2).Row()
+	}).(*domain.Message)
+	if second == nil || second.Content != "fresh" {
+		t.Fatalf("the next reply lands clean after it, got %+v", second)
+	}
+}
+
+func TestRecorderDiscardsThePartialOfATurnThatEndedAnyOtherWay(t *testing.T) {
+	db := openState(t)
+	rec := state.NewRecorder(&scripted{}, db, "/tmp/wt", "model-x", "0.1.0", "rec-turnfault", core.NewSession())
+	rec.Notify(core.TextDelta{Text: "PARTIAL "})
+	rec.Notify(core.TurnEnd{Reason: core.TurnFault})
 	rec.Notify(core.TextDelta{Text: "fresh"})
 	rec.Notify(core.Done{StopReason: "end_turn"})
 	if err := rec.Close("ok"); err != nil {
@@ -86,15 +117,6 @@ func TestRecorderTurnEndDiscardsTheUnlandedPartial(t *testing.T) {
 	}).(*domain.Message)
 	if first == nil || first.Content != "fresh" {
 		t.Fatalf("the first landed row must be the clean one, got %+v", first)
-	}
-	if first.Reasoning != nil {
-		t.Fatalf("the partial reasoning must not persist: %+v", first.Reasoning)
-	}
-	second := mustRead(t, db, func(c context.Context) (any, error) {
-		return domain.NewMessageDomain().GetMessage(c, 2).Row()
-	}).(*domain.Message)
-	if second != nil {
-		t.Fatalf("a concatenated or partial row landed: %+v", second)
 	}
 }
 

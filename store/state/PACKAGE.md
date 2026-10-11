@@ -18,7 +18,9 @@ loop already emits; the read side rebuilds a session from the log.
   Input/Notify untouched, appends rows for the loop's events. On
   `core.EmptyTurn` (SPEC_EMPTY) it discards the partial buffer and adds
   the discarded attempt's usage, so the totals count it while the empty
-  turn leaves no message row.
+  turn leaves no message row. On `core.TurnEnd{interrupt}` it lands the
+  reply the interrupt cut as its own assistant row, without the calls
+  that never ran; at any other `TurnEnd` an unlanded partial is discarded.
 - `resume.go`: the read-side projection: rebuild a `core.Session` from
   the log (SPEC_HARDENING decision 5).
 - `sessions.go`: the sessions list rows (`ErrNoSuchSession`,

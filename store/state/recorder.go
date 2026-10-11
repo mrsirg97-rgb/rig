@@ -163,8 +163,19 @@ func (r *Recorder) observe(ev core.Event) {
 		r.discardPartial()
 	case core.TurnEnd:
 
+		if e.Reason == core.TurnInterrupt {
+			r.landInterrupted()
+			return
+		}
 		r.discardPartial()
 	}
+}
+
+func (r *Recorder) landInterrupted() {
+	r.mu.Lock()
+	r.pending = nil
+	r.mu.Unlock()
+	r.land("")
 }
 
 func (r *Recorder) discardPartial() {

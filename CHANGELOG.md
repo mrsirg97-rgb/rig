@@ -1,4 +1,30 @@
 # Changelog
+## [2.17.1]: an interrupted reply stays in the transcript
+
+When the operator steered mid-reply, the loop dropped what the model had
+said so far: `streamEnd` appended the assistant's message only on `Done`,
+and the session recorder discarded its partial at `TurnEnd`. The next
+request then held the operator's message where the one before it had
+opened the assistant's reply, and a server that keeps a conversation's
+state up to that point could not take it back. Measured on the Maya
+engine (2026-10-11): 175,260 tokens read again in 70 s and 198,266 in
+78 s in one evening, both after a steer; every long kept conversation
+that diverged from a sibling diverged in that one place, the largest at
+457,644 tokens. The rule now: what the model has already said is part of
+the conversation. On an interrupt the loop appends the cut reply (text,
+reasoning, reasoning details) as the assistant's message and the
+operator's message follows it; the recorder lands the same row, so a
+resumed session matches the live one. The transcript only grows at its
+end, and the request after a steer extends the request before it.
+
+- The calls that streamed before the cut are not kept: none ran, and a
+  call with no result is not a transcript.
+- A fault still discards its partial, in the loop and in the recorder.
+- A steer before the first token appends nothing, so that case still
+  costs the server a re-read.
+- The loop builds the assistant's message in one place (`reply`) for the
+  three paths that append one.
+
 ## [2.17.0]: a write outranks a read
 
 rig answered "is this a write?" twice, by tool name, and the answers

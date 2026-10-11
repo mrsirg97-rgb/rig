@@ -30,6 +30,21 @@ type turn struct {
 	started          int
 }
 
+func (t *turn) spoke() bool {
+	return t.text.Len() > 0 || t.reasoning.Len() > 0
+}
+
+func (t *turn) reply(calls []core.ToolCall) core.Message {
+	return core.Message{
+		Role:             core.RoleAssistant,
+		Content:          t.text.String(),
+		Reasoning:        t.reasoning.String(),
+		ReasoningDetails: marshalDetails(t.reasoningDetails),
+		ToolCalls:        calls,
+		ContextTokens:    t.usage.Prompt + t.usage.Completion,
+	}
+}
+
 type run struct {
 	ctx    context.Context
 	k      *rig.Kernel
@@ -228,6 +243,9 @@ func (r *run) streamEnd(t *turn) {
 		}
 		if t.ctx.Err() != nil {
 			t.reason = core.TurnInterrupt
+			if t.spoke() {
+				session.Append(t.reply(nil))
+			}
 			r.end(t)
 			return
 		}
@@ -237,19 +255,12 @@ func (r *run) streamEnd(t *turn) {
 		r.k.Frontend.Notify(core.TurnEnd{Reason: core.TurnFault})
 		r.stop(err)
 	case len(t.calls) == 0:
-		if t.text.Len() > 0 || t.reasoning.Len() > 0 {
-			session.Append(core.Message{Role: core.RoleAssistant, Content: t.text.String(), Reasoning: t.reasoning.String(), ReasoningDetails: marshalDetails(t.reasoningDetails), ContextTokens: t.usage.Prompt + t.usage.Completion})
+		if t.spoke() {
+			session.Append(t.reply(nil))
 		}
 		r.end(t)
 	default:
-		session.Append(core.Message{
-			Role:             core.RoleAssistant,
-			Content:          t.text.String(),
-			Reasoning:        t.reasoning.String(),
-			ReasoningDetails: marshalDetails(t.reasoningDetails),
-			ToolCalls:        t.calls,
-			ContextTokens:    t.usage.Prompt + t.usage.Completion,
-		})
+		session.Append(t.reply(t.calls))
 		t.batch = newBatch(core.WithSession(t.ctx, session), r.exec, t.calls, r.k.Priority, r.k.Parallel, func(x int, out outcome) {
 			r.post(rig.PriorityTool, func() { r.toolDone(t, x, out) })
 		}, r.post)

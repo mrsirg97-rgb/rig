@@ -58,7 +58,9 @@ the session at the boundary, clean.
 - **L2**: turn death at the prompt is an interrupt, not a fault: the loop
   re-enters awaiting_input.
 - **L3**: an interrupted teardown (stream dead + turn ctx dead) breaks the
-  turn; the run continues.
+  turn; the run continues. The reply the interrupt cut is appended as the
+  assistant's message first (text and reasoning, never its calls), so the
+  transcript only grows at its end (2.17.1).
 - **L4**: the tool-execution bracket wraps the whole middleware chain; the
   `ToolResult` carries the guarded result, and the loop measures duration.
 - **L5**: `ReasoningDelta` is forwarded and accumulated.
