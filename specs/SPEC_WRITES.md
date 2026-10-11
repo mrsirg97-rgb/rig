@@ -86,31 +86,32 @@ one predicate answers for the ordering, the overlap and the gate.
 
 `kernel.go` gains `PriorityWrite = 60` and `PriorityRead = 50` beside
 the table (`PriorityInput` 90, `PriorityDelegate` 70, `PriorityStream`
-and `PriorityTool` 50, `PriorityFleet` 30, `PriorityReview` 10).
-`core.ToolCall` gains `Priority int` — pure addition, the zero value
-unstamped — and the kernel's `Concurrent func(call) bool` becomes
-`Priority func(call) int`, wired at the root from the registry
-predicate; `newBatch` stamps each call's field from it, and the batch
-reads the field. No flag at the call site: a write is a call whose
-priority is 60, a read is a call whose priority is 50.
+and `PriorityTool` 50, `PriorityFleet` 30, `PriorityReview` 10). The
+kernel's `Concurrent func(call) bool` becomes `Priority func(call) int`,
+wired at the root from the registry predicate; the batch carries the
+priorities it computes from it — the priority belongs to the call, and
+rides the call's submission to the engine, not the call's wire struct,
+so `core` does not change. No flag at the call site: a write is a call
+whose priority is 60, a read is a call whose priority is 50.
 
 The two numbers act in two places, one mechanism:
 
 - **The batch's order.** `dispatch` loses its run-scanning. The batch
-  dispatches the next write — one at a time, in index order, the loop's
-  trip through the event loop between each; when the writes are drained,
-  the batch dispatches every remaining read together, bounded by the
-  semaphore, on the state the writes left. The reads self-pump off the
-  last write's completion, so a read placed before a write in the wire
-  still runs after it.
-- **The call's completion event.** `toolDone` posts at the call's own
-  priority: a write's completion at 60, a read's at 50. The engine's
-  drain is highest-first, and while a write is in flight the loop holds
-  the drain's floor at 60: input (90) and a delegate's return (70) may
-  land between two writes; the turn's stream (50) and the fleet (30)
-  wait until the writes are done. The floor is the engine's (`evt` is
-  gate-open): `Hold(at)` raises it, release lowers it, and the loop
-  releases the moment the reads' turn begins.
+  submits every call to the engine at the call's own priority and
+  nothing else: a write's closure runs its exec inline, so the writes
+  serialize in the drain in index order and chain through their own
+  completions; a read's closure hands its exec to a goroutine bounded by
+  the semaphore, so the reads overlap. The engine's drain is already
+  highest-first, so the sort alone makes the reads wait behind every
+  write's closure and completion, on the state the writes left. The
+  loop's cursor still appends the results in call order.
+- **The call's completion event.** Each call's completion returns to the
+  engine at the call's own priority: a write's at 60, a read's at 50.
+  Input (90) and a delegate's return (70) land between two writes; the
+  turn's stream (50) and the fleet (30) wait until the writes are done.
+  No floor: the writes chain through their own completions, so the drain
+  never drops below 60 while a write is outstanding, and `evt` does not
+  change.
 
 What may still land between two writes: the operator's input, and a
 delegate's return. Nothing else in the turn: not the stream, not the
@@ -165,26 +166,24 @@ does not move.
 
 ### 6. The batch, rewritten
 
-`newBatch` takes the priority function and stamps the calls; `dispatch`
-loses the run-scanning and becomes the pump:
+`newBatch` takes the priority function and the engine's poster; `dispatch`
+loses the run-scanning and becomes a single pump: at the turn's first
+gate it submits every call — the writes' closures at 60, the reads' at
+50 — and the engine's sort does the rest. A write's closure runs its
+exec inline and posts its own completion at 60, so the writes serialize
+in index order with the drain's trips between them; a read's closure
+hands its exec to a goroutine bounded by the semaphore, so the reads run
+together. An interrupt mid-drain cancels the writes not yet started
+(their execs return at once on the dead context, doing no work) and the
+reads never do work; a failed write does not stop the ones after it
+(the closures queue in index order, not in outcome order).
 
-- the next write, one per call, in index order — the loop's trip through
-  the event loop between each, so input and returns may land;
-- when the last write's completion arrives, every remaining read
-  together, bounded by the semaphore;
-- a read-only batch dispatches all its reads at the first pump.
+### 7. The engine sorts
 
-An interrupt mid-drain cancels the writes not yet started (their
-contexts die unborn) and the reads never start; a failed write does not
-stop the ones after it (the pump walks the index, not the outcomes).
-
-### 7. The drain's floor
-
-`evt.Engine` gains `Hold(at int)` and the matching release: while held,
-the drain runs only closures at `at` or above, waiting on the rest. The
-loop holds at `PriorityWrite` from the batch's first write and releases
-when the reads' turn begins. `evt/` is gate-open; the engine's wait is
-the existing condition variable, no poll.
+`evt` does not change. The drain is highest-first and always was; the
+batch feeds it closures at the calls' own priorities and the ordering
+falls out: input (90), a delegate's return (70), the writes' chain
+(60), the reads (50), the fleet (30). No floor, no hold, no locks.
 
 ## testing
 
@@ -200,8 +199,9 @@ Named cases, failing first:
 - **A read-only batch still overlaps**: two reads run together.
 - **The writes run in index order** with none of the turn's own events
   between them; input and a delegate's return may land.
-- **An interrupt mid-drain** cancels the writes not yet started, and the
-  reads never start.
+- **An interrupt mid-drain** cancels the writes not yet started: their
+  execs return at once on the dead context and do no work, and the
+  reads never do work.
 - **A failed write does not stop the ones after it.**
 - **Manual approval asks exactly for the writes**: a read passes silent,
   a write asks once.
@@ -216,12 +216,7 @@ Named cases, failing first:
 - `cmd/rig/reap.go` (the lists die), `cmd/rig/env.go` (`isMutating`),
   `cmd/rig/root.go` (the wiring), `cmd/rig/kernel.go` (the two numbers,
   the `Priority` field, `WithPriority`), `cmd/rig/middleware.go`.
-- `loop/batch.go`, `loop/loop.go`: the pump, the stamped calls, the
-  floor's hold and release.
-- `core/provider.go`: `ToolCall.Priority` (pure addition, reopened by
-  name).
-- `evt/engine.go`, `evt/queue.go`: the drain's floor.
-- `middleware/approve`: the predicate widens to the call.
+- `loop/batch.go`: the pump. `loop/loop.go`: the wiring only.
 - `tool/registry.json`'s menu sentence, paid for by trimming.
 - `CHANGELOG.md`, the touched `PACKAGE.md`s, the version, the measured
   block in the last commit.
