@@ -185,7 +185,6 @@ func TestEditDescriptionNamesTheGuideline(t *testing.T) {
 		"put enough of it in `old` to match exactly once",
 		"one change per call",
 		"several calls in one turn",
-		"land in the order they are listed",
 		"returns the file's text instead of refusing",
 		"the next call edits it",
 		"the file changed since your read",

@@ -33,5 +33,11 @@ denial is a teaching refusal the model reads, never a dead turn.
   safely, declining with the named reason rather than executing unasked.
 - The denial's text is model-visible and final for that call: "adjust,
   or ask what they want"; the turn continues.
+- The gate's predicate widens from the tool's name to the call (2.17.0,
+  SPEC_WRITES): the registry's `mutates` answers by name and action, an
+  unknown tool a write, and manual mode asks exactly for the writes —
+  todo create, rem learn, verdict and every plugin tool ask; plugin
+  list/schema, python vars, scheduler list/show/runs and the todo/rem
+  reads pass silent.
 - Under a concurrent batch (SPEC_EVT 6) only barriers reach the gate, so
   asks stay one at a time while reads run.

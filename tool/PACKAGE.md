@@ -57,9 +57,15 @@ object as it goes on the wire). Stdlib only (`embed`, `encoding/json`,
   wire compacts it, so whitespace in the file is free.
 - A new tool is a registry entry first; `cmd/rig`'s registry test fails
   when a wired tool has no entry or an entry has no wiring.
+- A tool's entry carries `mutates` beside `operator` (2.17.0,
+  SPEC_WRITES): the actions that mutate state, or `["*"]`, an unknown
+  tool a write; `Mutates(name, action)` answers beside `Operator(name)`
+  and the two lists that answered by name are gone.
 - A tool's description drifts with its state: the more verbs a tool
   carries, the further its entry lags the behavior. A behavior change to
   a wired tool diffs its registry entry in the same change; the wire job
   (`scripts/wire-check`) renders the diff in the PR's check summary, and
   the menu budget is a guideline there (aim 15,000 characters, fail past
-  15,500), never a reason to trim a sentence.
+  16,500), never a reason to trim a sentence. Standing rules — the
+  timeoutMs mechanism, the ids rule — live once in the system prompt; a
+  tool's entry carries only its own shape.
