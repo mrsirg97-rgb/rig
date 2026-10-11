@@ -48,6 +48,9 @@ func (t bashTool) Exec(ctx context.Context, data json.RawMessage) (string, error
 	if err := strictDecode(data, &a); err != nil {
 		return "", fmt.Errorf("bash: args: %w", err)
 	}
+	if strings.TrimSpace(a.Command) == "" {
+		return "", errors.New("bash: empty command")
+	}
 	if a.TimeoutMs != nil {
 		bound, err := tool.BoundMs("bash", a.TimeoutMs)
 		if err != nil {

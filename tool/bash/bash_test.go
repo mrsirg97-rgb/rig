@@ -272,11 +272,12 @@ func TestBashRunAndExecShareTheirChecks(t *testing.T) {
 
 	_, runErr := tool.Run(ctx, "   ", "")
 	_, execErr := tool.Exec(ctx, argsJSON(t, map[string]any{"command": "   "}))
-	if runErr == nil || execErr == nil {
-		t.Fatalf("the empty command refuses on both doors, run=%v exec=%v", runErr, execErr)
+	_, boundErr := tool.Exec(ctx, argsJSON(t, map[string]any{"command": "   ", "timeoutMs": 5000}))
+	if runErr == nil || execErr == nil || boundErr == nil {
+		t.Fatalf("the empty command refuses on all three doors, run=%v exec=%v bound=%v", runErr, execErr, boundErr)
 	}
-	if runErr.Error() != "bash: empty command" || execErr.Error() != "bash: empty command" {
-		t.Fatalf("the refusal is the same words on either door: run %q exec %q", runErr, execErr)
+	if runErr.Error() != "bash: empty command" || execErr.Error() != "bash: empty command" || boundErr.Error() != "bash: empty command" {
+		t.Fatalf("the refusal is the same words on every door: run %q exec %q bound %q", runErr, execErr, boundErr)
 	}
 
 	dir := t.TempDir()
