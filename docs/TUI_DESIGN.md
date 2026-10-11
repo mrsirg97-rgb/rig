@@ -286,7 +286,7 @@ into the store's `listLimit`, so a listing shows what fits here.
 
 ## the theme tables
 
-Seventeen named slots, five shipped palettes plus the `oled` alias of warm
+Sixteen named slots, five shipped palettes plus the `oled` alias of warm
 (warm is the default), two glyph sets; warm and cool are the dashboard's
 two looks on the same slots. The phosphor ramps (p1 green, p3 amber) are
 four brightnesses of one hue: text on the brightest, accent and success
