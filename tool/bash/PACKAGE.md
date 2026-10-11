@@ -34,3 +34,7 @@ bounded. Stdlib only.
   drops the rest, so a huge stream cannot pin memory: the child's
   writes are always fully consumed (it never blocks) and the kept output
   is byte-identical to the post-hoc truncation (head + marker).
+- `timeoutMs` hands the command to a delegate command worker: the call
+  answers with the hand-back and the result arrives on a later turn,
+  killed at the bound; without it the exec path is byte-identical to
+  the synchronous tool (2.16.0).

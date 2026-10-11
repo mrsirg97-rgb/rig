@@ -1,4 +1,41 @@
 # Changelog
+## [2.16.0]: a bound cooks in the background
+
+The exec family read four time stories off one board, and the model
+guessed: eighteen bash calls in the recorded session stores carried
+`timeout` or `timeoutMs`, every one refused as an unknown field, every
+one recovered by a naked retry — and the values were round minutes
+converted to milliseconds under both spellings, so the confusion was
+never units. The board never said what a bound *means*. One rule does
+now: a call that carries `timeoutMs` says *I cannot promise when this
+finishes* — it does not block the turn; it is bounded, it cooks in the
+background, and its result arrives on a later turn. A call that omits
+it says *this is fast* — it runs in-turn under the tool's own ceiling.
+
+The mechanism is the delegate pattern generalized into the primitive it
+already was. `DelegateStart`/`Wait` gains worker kinds behind one seam:
+the model worker that exists, the command worker (one deterministic
+`bash -c` line — no model, no tools, no transcript, cost zero, its
+`timeoutMs` the kill bound that kills the process group with the
+partial output attached), and the in-process kinds the python and web
+tools promote into (the kernel queue in submission order, the deferred
+fetch behind the `Do` seam). The record, the log and the fold are the
+ones that existed: every delegation is a recorded ad-hoc run, every
+report rides `core.WorkerDone` into the inbox, and a batch that fills
+while no turn is live is itself an input. The model worker keeps
+2.12.7's no-clock rule — `timeoutMs` with `task` refuses by name — and
+`core/provider.go` opens by name for the envelope: `WorkerDone` gains
+`Kind` and `RunID`, the empty kind reproducing the head bytes exactly.
+
+bash joins the time-carrying set as sugar: `timeoutMs` present hands
+the command line to a command worker and answers with the hand-back;
+absent, the exec path is byte-identical. scheduler's cap joins the
+vocabulary: `timeoutMs`, milliseconds in, rounded up to whole minutes
+at the tool's input boundary, the store keeping minutes and migrating
+nothing, the operator's `/scheduler` line keeping minutes. The menu
+carries the rule in one sentence per tool; the wire-check measures
+16,436 chars (base 15,467) under the wall, which moves 15,500 → 16,500.
+
 ## [2.15.2]: the delegate's return outruns the turn's queue
 
 A delegate is async, but its return only has value while the work it

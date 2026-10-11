@@ -64,3 +64,7 @@ client, no new venv.
   stdlib text pass), not an unset.
 - One name means one gate: there is no way to allow `search` while
   refusing `fetch`.
+- A fetch with `timeoutMs` cooks in the background: the call answers at
+  once and the body reports on a later turn, killed at the bound;
+  without it the fetch runs in-turn under the default ceiling
+  (2.16.0).

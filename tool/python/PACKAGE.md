@@ -52,3 +52,9 @@ The shared kernel is also the plugin discovery/execution surface
   `cwd`, wired at the root before first start); relative paths in kernel
   code resolve against the project, not wherever the rig process
   happened to start.
+- `timeoutMs` promotes the cell to the kernel queue: the call answers
+  at once and the result reports on a later turn, the kernel's own
+  restart named in it; without it the cell runs in-turn under the
+  default ceiling (2.16.0). The kernel is the worker — calls serialize
+  in submission order, and a dead session takes pending results with
+  it.
