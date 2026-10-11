@@ -273,7 +273,7 @@ Named cases, failing first:
 - **core**: the `Report` envelope round-trips `WorkerDone`;
   `WorkerBlock` renders one block per kind with the one trailer
   grammar; two returns in one turn arrive as one batch, in order.
-- **cmd/rig**: the goldens regenerate once; the menu budget holds;
+- **cmd/rig**: no stored goldens — the wire-check job re-renders base and head and diffs; the menu wall moves 15,500 → 16,500 (measured: the spec's diffs cost ~0.9k against 33 chars of headroom);
   the native set is unchanged; the wiring is registration lines only.
 
 ## scope
