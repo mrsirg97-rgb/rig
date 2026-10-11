@@ -529,8 +529,9 @@ no operator allow stands (SPEC_CONFIG 12).
   `busyState` with the state-store bind; the run record, the log
   path.
 - `middleware/approve`: the `delegate` prompt branch.
-- `cmd/rig`: the wiring (`delegate` native, `mutatingNatives`,
-  the worker `-allow` construction), `main_test.go`'s native-set pin.
+- `cmd/rig`: the wiring (`delegate` native, the registry's predicate
+  answering the delegate a write, the worker `-allow` construction),
+  `main_test.go`'s native-set pin.
 - `config/settings.json`: the embedded allow default gains
   `delegate`.
 - `frontend/tui/freeze_test.go`: the allowlist gains `tool/delegate`.
