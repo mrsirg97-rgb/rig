@@ -206,7 +206,7 @@ the core is frozen.
 <!-- measured:begin (scripts/readme-measured; do not hand-edit) -->
 Numbers, not adjectives — and each one names its mechanism. The block is computed: `scripts/readme-measured` reads the stores and the tree, CI refuses drift, so it cannot go stale on you. One SQL read of the state store: the store is the receipt.
 
-**98.3% of 5.5 billion prompt tokens served from cache**, across 2,475 sessions and 50,572 recorded turns — the earliest on v0.2.0. The ratio is `cache_read / prompt`, the arithmetic `sessions summary` runs; the byte-stable prefix is why the provider can reuse so much of it. Cost per turn, era by era:
+**98.3% of 5.6 billion prompt tokens served from cache**, across 2,487 sessions and 50,856 recorded turns — the earliest on v0.2.0. The ratio is `cache_read / prompt`, the arithmetic `sessions summary` runs; the byte-stable prefix is why the provider can reuse so much of it. Cost per turn, era by era:
 
 | era | turns | new tokens / turn | completion / turn | cache |
 |---------|--------|------|------|--------|
@@ -214,13 +214,13 @@ Numbers, not adjectives — and each one names its mechanism. The block is compu
 | 1.0–1.3 | 7,440 | 933 | 676 | 99.13% |
 | 1.4–1.9 | 10,045 | 962 | 525 | 99.26% |
 | 2.0–2.9 | 7,360 | 906 | 503 | 99.09% |
-| 2.10.x | 11,721 | 4,290 | 626 | 95.51% |
+| 2.10.x | 12,005 | 4,338 | 630 | 95.63% |
 
 The 2.1.x consolidation rethought the system prompt and the toolset and kept the machinery — the kink is visible. The 2.10.x row is the fleet's own traffic: swarm workers and delegates are short-lived sessions whose first turns cannot hit a cache that does not exist yet, and the models rotate; the interactive sessions of that era hold the ~98% line.
 
 **A few thousand bytes of preamble.** The system prompt and the tool schemas are lean, byte-stable, and carefully chosen, and the tests say so: `TestSystemPromptIsByteStableAcrossBuilds`, `TestWireMarshalingIsDeterministic`, `TestWireMessagesAreAppendOnly`. A stray timestamp cannot quietly kill the cache.
 
-**409 lines is the loop** — `loop.go` plus `batch.go`, stdlib only. **662 lines is the whole swarm** — claim, spawn, complete, verdict, reap, and the status throttle. **47,483 lines of Go, 75,699 of tests.** The one store dependency is pure-Go SQLite.
+**420 lines is the loop** — `loop.go` plus `batch.go`, stdlib only. **662 lines is the whole swarm** — claim, spawn, complete, verdict, reap, and the status throttle. **47,496 lines of Go, 75,993 of tests.** The one store dependency is pure-Go SQLite.
 
 <!-- measured:end -->
 
