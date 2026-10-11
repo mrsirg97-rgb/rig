@@ -86,8 +86,18 @@ type adapter struct {
 
 type args struct {
 	Task      string `json:"task"`
+	Command   string `json:"command"`
 	Workspace string `json:"workspace,omitempty"`
 	Model     string `json:"model,omitempty"`
+	TimeoutMs *int64 `json:"timeoutMs"`
+}
+
+type delegateCall struct {
+	task      string
+	command   string
+	workspace string
+	model     string
+	bound     time.Duration
 }
 
 func (a *adapter) Exec(ctx context.Context, data json.RawMessage) (string, error) {
@@ -95,11 +105,54 @@ func (a *adapter) Exec(ctx context.Context, data json.RawMessage) (string, error
 	if err := strictDecode(data, &g); err != nil {
 		return "", fmt.Errorf("delegate: args: %w", err)
 	}
+	bound, err := boundMs(g.TimeoutMs)
+	if err != nil {
+		return "", err
+	}
+	if g.Command != "" {
+		if strings.TrimSpace(g.Task) != "" {
+			return "", errors.New("delegate: take task or command (one worker per call)")
+		}
+		if g.Model != "" {
+			return "", errors.New("delegate: a command worker takes no model")
+		}
+		return a.runCommand(ctx, g.Command, g.Workspace, bound)
+	}
+	if g.TimeoutMs != nil {
+		return "", errors.New("delegate: a model worker has no clock (2.12.7) — command workers take timeoutMs")
+	}
 	return a.Run(ctx, g.Task, g.Workspace, g.Model)
 }
 
+const maxCommandBoundMs = 86_400_000
+
+func boundMs(raw *int64) (time.Duration, error) {
+	if raw == nil {
+		return 0, nil
+	}
+	if *raw < 1000 {
+		return 0, fmt.Errorf("delegate: timeoutMs must be at least 1000 ms (omit the field for no bound), got %d", *raw)
+	}
+	if *raw > maxCommandBoundMs {
+		return 0, fmt.Errorf("delegate: timeoutMs ceiling is %d ms (24h), got %d", maxCommandBoundMs, *raw)
+	}
+	return time.Duration(*raw) * time.Millisecond, nil
+}
+
 func (a *adapter) Run(ctx context.Context, task, workspace, model string) (string, error) {
-	if strings.TrimSpace(task) == "" {
+	return a.run(ctx, delegateCall{task: task, workspace: workspace, model: model})
+}
+
+func (a *adapter) runCommand(ctx context.Context, command, workspace string, bound time.Duration) (string, error) {
+	return a.run(ctx, delegateCall{command: command, workspace: workspace, bound: bound})
+}
+
+func (a *adapter) run(ctx context.Context, c delegateCall) (string, error) {
+	if c.command != "" {
+		if strings.TrimSpace(c.command) == "" {
+			return "", errors.New("delegate: command is required")
+		}
+	} else if strings.TrimSpace(c.task) == "" {
 		return "", errors.New("delegate: task is required")
 	}
 	session := "anon"
@@ -111,8 +164,8 @@ func (a *adapter) Run(ctx context.Context, task, workspace, model string) (strin
 		return "", fmt.Errorf("delegate: %v", err)
 	}
 	cwd := sessionCwd
-	if workspace != "" {
-		cwd, err = pathguard.Within(workspace, sessionCwd, a.RigHome)
+	if c.workspace != "" {
+		cwd, err = pathguard.Within(c.workspace, sessionCwd, a.RigHome)
 		if err != nil {
 			return "", fmt.Errorf("delegate: %w", err)
 		}
@@ -131,15 +184,20 @@ func (a *adapter) Run(ctx context.Context, task, workspace, model string) (strin
 	if !held {
 		state = "queued"
 	}
-	member, n := a.begin(task, stop, state)
+	name := c.task
+	if c.command != "" {
+		name = c.command
+	}
+	member, n := a.begin(name, stop, state)
 	in := sched.DelegateInput{
 		DB:            a.DB,
 		Home:          a.Home,
 		Session:       session,
 		Cwd:           cwd,
-		Task:          task,
-		Model:         model,
-		WorkerSession: core.NewSession().ID,
+		Task:          c.task,
+		Command:       c.command,
+		Model:         c.model,
+		WorkerSession: workerSessionID(c),
 		DefaultModel:  a.DefaultModel,
 		Models:        a.Models,
 		Fetch:         a.Fetch,
@@ -155,9 +213,12 @@ func (a *adapter) Run(ctx context.Context, task, workspace, model string) (strin
 		Member:        member,
 		SpawnCtx:      workerCtx,
 	}
+	if c.bound > 0 {
+		in.Timeout = c.bound
+	}
 
 	if !held {
-		go a.queued(workerCtx, member, n, task, in)
+		go a.queued(workerCtx, member, n, in)
 		return fmt.Sprintf("delegate: worker #%d queued · %d workers run at once (settings maxWorkers); it starts when one returns", n, cap(a.Cap)), nil
 	}
 
@@ -171,7 +232,7 @@ func (a *adapter) Run(ctx context.Context, task, workspace, model string) (strin
 	}
 
 	if a.Await {
-		res, err := a.settle(member, n, task, del)
+		res, err := a.settle(member, n, in, del)
 		if err != nil {
 			return "", err
 		}
@@ -183,29 +244,39 @@ func (a *adapter) Run(ctx context.Context, task, workspace, model string) (strin
 
 	go func() {
 		defer a.Cap.Free()
-		_, _ = a.settle(member, n, task, del)
+		_, _ = a.settle(member, n, in, del)
 	}()
 
 	line := fmt.Sprintf("delegate: worker #%d started · session %s · log %s", n, del.Session, del.Log)
+	if c.command != "" {
+		line = fmt.Sprintf("delegate: worker #%d started · run %s · log %s", n, del.ID, del.Log)
+	}
 	if del.Note != "" {
 		line += " · " + del.Note
 	}
 	return line, nil
 }
 
-func (a *adapter) queued(ctx context.Context, member broadcast.Member, n int, task string, in sched.DelegateInput) {
+func workerSessionID(c delegateCall) string {
+	if c.command != "" {
+		return ""
+	}
+	return core.NewSession().ID
+}
+
+func (a *adapter) queued(ctx context.Context, member broadcast.Member, n int, in sched.DelegateInput) {
 	if err := a.Cap.Hold(ctx); err != nil {
-		a.fail(member, n, task, fmt.Errorf("delegate: worker #%d stopped while queued", n))
+		a.fail(member, n, workerName(in), fmt.Errorf("delegate: worker #%d stopped while queued", n))
 		return
 	}
 	defer a.Cap.Free()
 	a.running(member)
 	del, err := sched.DelegateStart(in)
 	if err != nil {
-		a.fail(member, n, task, err)
+		a.fail(member, n, workerName(in), err)
 		return
 	}
-	_, _ = a.settle(member, n, task, del)
+	_, _ = a.settle(member, n, in, del)
 }
 
 func (a *adapter) fail(member broadcast.Member, n int, task string, err error) {
@@ -247,18 +318,33 @@ type settled struct {
 	Log      string
 }
 
-func (a *adapter) settle(member broadcast.Member, n int, task string, del sched.Delegation) (settled, error) {
+func (a *adapter) settle(member broadcast.Member, n int, in sched.DelegateInput, del sched.Delegation) (settled, error) {
 	res, err := del.Wait()
+	kind := ""
+	name := workerName(in)
+	if in.Command != "" {
+		kind = core.KindCommand
+	}
 	out := settled{
 		Exit: res.Exit, Duration: res.Duration,
 		Session: firstNonEmpty(res.SessionID, del.Session), Log: firstNonEmpty(res.LogRel, del.Log),
 	}
 	if err == nil {
-		out.Content = capOutput(res.Stdout) + "\n" + fmt.Sprintf("delegate: exit %d · %dms · session %s · log %s",
-			res.Exit, res.Duration.Milliseconds(), out.Session, out.Log)
-		if res.Note != "" {
-			out.Content += " · " + res.Note
+		content := capOutput(res.Stdout)
+		if kind == "" {
+			content += "\n" + fmt.Sprintf("delegate: exit %d · %dms · session %s · log %s",
+				res.Exit, res.Duration.Milliseconds(), out.Session, out.Log)
+		} else {
+			content += "\n" + fmt.Sprintf("delegate: exit %d · %dms · run %s · log %s",
+				res.Exit, res.Duration.Milliseconds(), del.ID, out.Log)
 		}
+		if res.TimedOut && del.Bound > 0 {
+			content += fmt.Sprintf(" · killed at timeoutMs=%d", del.Bound.Milliseconds())
+		}
+		if res.Note != "" {
+			content += " · " + res.Note
+		}
+		out.Content = content
 	} else {
 		out.Exit = -1
 		out.Content = err.Error()
@@ -266,12 +352,17 @@ func (a *adapter) settle(member broadcast.Member, n int, task string, del sched.
 	a.end(member, n)
 	if a.member != nil {
 		done := core.WorkerDone{
-			N: n, Task: firstLine(task), Content: out.Content, Exit: out.Exit,
+			N: n, Task: firstLine(name), Content: out.Content, Exit: out.Exit,
 			Duration: out.Duration, Session: out.Session, Log: out.Log,
+			Kind: kind, RunID: del.ID,
 		}
 		a.member.Publish(context.Background(), func(error) {}, broadcast.NewMessage(rig.MemberDelegate, true, done))
 	}
 	return out, err
+}
+
+func workerName(in sched.DelegateInput) string {
+	return firstNonEmpty(in.Command, in.Task)
 }
 
 func firstNonEmpty(values ...string) string {

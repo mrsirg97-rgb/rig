@@ -362,3 +362,110 @@ func TestAQueuedWorkerStoppedBeforeItStartsReturnsAndNeverSpawns(t *testing.T) {
 		t.Fatalf("the queued worker returns its stop: %+v", done)
 	}
 }
+
+func TestACommandWorkerHandsBackItsRun(t *testing.T) {
+	h := newHarness(t, "/ws/sess")
+	spawn := &fakeSpawn{result: sched.SpawnResult{Exit: 0, Stdout: "hi\n"}}
+	tool, fe := h.asyncTool(t, fakeFetch(""), spawn.spawn)
+
+	out, err := tool.Exec(context.Background(), marshalArgs(map[string]any{
+		"command":   "echo hi",
+		"timeoutMs": 60000,
+	}))
+	if err != nil {
+		t.Fatalf("hand-back: %v", err)
+	}
+	if !strings.HasPrefix(out, "delegate: worker #1 started · run j1 · ") || !strings.Contains(out, " · log runs/") {
+		t.Fatalf("a command worker's hand-back names its run:\n%q", out)
+	}
+	waitUntil(t, "the command spawn", func() bool { return spawn.count() == 1 })
+	if got := spawn.calls[0].Argv; len(got) != 3 || got[0] != "bash" || got[1] != "-c" || got[2] != "echo hi" {
+		t.Fatalf("the command worker is bash -c: %v", got)
+	}
+	if deadline, ok := spawn.calls[0].Ctx.Deadline(); !ok {
+		t.Fatalf("the bound must ride the spawn context: %v", deadline)
+	}
+	done := waitForReturn(t, fe, 1)
+	if done[0].Kind != core.KindCommand || done[0].RunID == "" {
+		t.Fatalf("the return names its kind and its run: %+v", done[0])
+	}
+	if done[0].Session != "" {
+		t.Fatalf("a command worker has no session: %q", done[0].Session)
+	}
+	if !strings.Contains(done[0].Content, "hi\n") || !strings.Contains(done[0].Content, "delegate: exit 0 · ") || !strings.Contains(done[0].Content, "· run "+done[0].RunID+" · ") {
+		t.Fatalf("the return carries the output and the run trailer:\n%q", done[0].Content)
+	}
+	if done[0].Task != "echo hi" {
+		t.Fatalf("the return's task is the command's first line: %q", done[0].Task)
+	}
+}
+
+func TestACommandWorkerTakesNoClockWhenUnbounded(t *testing.T) {
+	h := newHarness(t, "/ws/sess")
+	spawn := &fakeSpawn{result: sched.SpawnResult{Exit: 0, Stdout: "hi\n"}}
+	tool, _ := h.asyncTool(t, fakeFetch(""), spawn.spawn)
+	if _, err := tool.Exec(context.Background(), marshalArgs(map[string]any{"command": "echo hi"})); err != nil {
+		t.Fatalf("hand-back: %v", err)
+	}
+	waitUntil(t, "the command spawn", func() bool { return spawn.count() == 1 })
+	if deadline, ok := spawn.calls[0].Ctx.Deadline(); ok {
+		t.Fatalf("no bound, no clock: %v", deadline)
+	}
+}
+
+func TestDelegateCommandRefusals(t *testing.T) {
+	cases := []struct {
+		name string
+		args map[string]any
+		want string
+	}{
+		{"both", map[string]any{"task": "t", "command": "c"}, "task or command"},
+		{"neither", map[string]any{}, "task is required"},
+		{"model on a command worker", map[string]any{"command": "c", "model": "brain"}, "no model"},
+		{"bound on a model worker", map[string]any{"task": "t", "timeoutMs": 60000}, "no clock"},
+		{"zero bound", map[string]any{"command": "c", "timeoutMs": 0}, "at least 1000"},
+		{"tiny bound", map[string]any{"command": "c", "timeoutMs": 500}, "at least 1000"},
+		{"over the ceiling", map[string]any{"command": "c", "timeoutMs": 86_400_001}, "ceiling"},
+		{"negative bound", map[string]any{"command": "c", "timeoutMs": -5}, "at least 1000"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			h := newHarness(t, "/ws/sess")
+			spawn := &fakeSpawn{result: sched.SpawnResult{Exit: 0}}
+			tool, _ := h.asyncTool(t, fakeFetch(""), spawn.spawn)
+			if _, err := tool.Exec(context.Background(), marshalArgs(c.args)); err == nil || !strings.Contains(err.Error(), c.want) {
+				t.Fatalf("%s: want %q, got %v", c.name, c.want, err)
+			}
+			if spawn.count() != 0 {
+				t.Fatalf("a refused call never spawns: %d", spawn.count())
+			}
+		})
+	}
+}
+
+func TestACommandWorkerDiesAtItsBoundAndNamesIt(t *testing.T) {
+	h := newHarness(t, "/ws/sess")
+	release := make(chan struct{})
+	spawn := &fakeSpawn{result: sched.SpawnResult{Exit: 1, Stdout: "partial", TimedOut: true}, block: release}
+	tool, fe := h.asyncTool(t, fakeFetch(""), spawn.spawn)
+	if _, err := tool.Exec(context.Background(), marshalArgs(map[string]any{"command": "echo partial; sleep 5", "timeoutMs": 1000})); err != nil {
+		t.Fatalf("hand-back: %v", err)
+	}
+	waitUntil(t, "the command spawn", func() bool { return spawn.count() == 1 })
+	close(release)
+	done := waitForReturn(t, fe, 1)
+	if !strings.Contains(done[0].Content, "killed at timeoutMs=1000") {
+		t.Fatalf("the return must name the bound: %q", done[0].Content)
+	}
+	if !strings.Contains(done[0].Content, "partial") {
+		t.Fatalf("partial output must ride the return: %q", done[0].Content)
+	}
+	if done[0].Exit != 1 {
+		t.Fatalf("the killed worker's exit rides the return: %+v", done[0])
+	}
+}
+
+func marshalArgs(m map[string]any) json.RawMessage {
+	b, _ := json.Marshal(m)
+	return b
+}

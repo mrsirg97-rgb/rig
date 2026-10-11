@@ -144,6 +144,7 @@ type Delegation struct {
 	Log     string
 	Model   string
 	Note    string
+	Bound   time.Duration
 	done    chan delegateOutcome
 }
 
@@ -302,11 +303,12 @@ func DelegateStart(in DelegateInput) (Delegation, error) {
 		spawnEnv = append(spawnEnv, pipe.env())
 	}
 
+	limit := delegateTimeout(in.Timeout)
 	done := make(chan delegateOutcome, 1)
 	go func() {
 		ctx := base
 		var cancel context.CancelFunc
-		if limit := delegateTimeout(in.Timeout); limit > 0 {
+		if limit > 0 {
 			ctx, cancel = context.WithTimeout(base, limit)
 		}
 		if pipe != nil {
@@ -329,7 +331,8 @@ func DelegateStart(in DelegateInput) (Delegation, error) {
 
 	return Delegation{
 		ID: id, Session: in.WorkerSession, Log: logRel, Model: model, Note: note,
-		done: done,
+		Bound: limit,
+		done:  done,
 	}, nil
 }
 
