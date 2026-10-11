@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/mrsirg97-rgb/rig/v2/core"
 	"github.com/mrsirg97-rgb/rig/v2/tool"
 )
 
@@ -60,19 +61,24 @@ type Python interface {
 	Close()
 }
 
+type background interface {
+	Submit(ctx context.Context, kind, name string, bound time.Duration, work func(ctx context.Context) (string, int)) (string, error)
+}
+
 type pyTool struct {
 	tool.Definition
-	k *kernel
+	k  *kernel
+	bg background
 }
 
 var _ Python = (*pyTool)(nil)
 
-func New(cwd ...string) Python {
-	return &pyTool{Definition: tool.Def("python"), k: &kernel{python: defaultInterpreter(), host: DefaultHost(), queue: make(chan struct{}, 1), cwd: firstCwd(cwd)}}
+func New(bg background, cwd ...string) Python {
+	return &pyTool{Definition: tool.Def("python"), bg: bg, k: &kernel{python: defaultInterpreter(), host: DefaultHost(), queue: make(chan struct{}, 1), cwd: firstCwd(cwd)}}
 }
 
-func NewWith(python, host string, cwd ...string) Python {
-	return &pyTool{Definition: tool.Def("python"), k: &kernel{python: python, host: host, queue: make(chan struct{}, 1), noBootstrap: true, cwd: firstCwd(cwd)}}
+func NewWith(python, host string, bg background, cwd ...string) Python {
+	return &pyTool{Definition: tool.Def("python"), bg: bg, k: &kernel{python: python, host: host, queue: make(chan struct{}, 1), noBootstrap: true, cwd: firstCwd(cwd)}}
 }
 
 func firstCwd(cwd []string) string {
@@ -89,10 +95,10 @@ func (t *pyTool) Exec(ctx context.Context, data json.RawMessage) (string, error)
 	if err := json.Unmarshal(data, &a); err != nil {
 		return "", fmt.Errorf("python: %v", err)
 	}
-	timeoutMs := defaultTimeoutMs
 	if a.TimeoutMs != nil {
-		timeoutMs = *a.TimeoutMs
+		return t.submit(ctx, a)
 	}
+	timeoutMs := defaultTimeoutMs
 	switch a.Action {
 	case "", "code":
 		code := ""
@@ -108,6 +114,55 @@ func (t *pyTool) Exec(ctx context.Context, data json.RawMessage) (string, error)
 		msg := fmt.Sprintf("python: unknown action %q; the actions are code (or omit it), vars, reset", a.Action)
 		return msg, errors.New(msg)
 	}
+}
+
+func (t *pyTool) submit(ctx context.Context, a given) (string, error) {
+	ms := *a.TimeoutMs
+	if ms < minTimeoutMs || ms > maxTimeoutMs {
+		return "", fmt.Errorf("python: timeoutMs must be between %d and %d, got %d", minTimeoutMs, maxTimeoutMs, ms)
+	}
+	if t.bg == nil {
+		return "", errors.New("python: no worker is wired for bounded cells")
+	}
+	var req request
+	name := ""
+	switch a.Action {
+	case "", "code":
+		code := ""
+		if a.Code != nil {
+			code = *a.Code
+		}
+		if strings.TrimSpace(code) == "" {
+			return "no code supplied", errors.New("no code supplied")
+		}
+		req = request{Code: &code}
+		name = firstLine(code)
+	case "vars":
+		req = request{Cmd: strPtr("vars")}
+		name = "vars"
+	case "reset":
+		req = request{Cmd: strPtr("reset")}
+		name = "reset"
+	default:
+		msg := fmt.Sprintf("python: unknown action %q; the actions are code (or omit it), vars, reset", a.Action)
+		return msg, errors.New(msg)
+	}
+	return t.bg.Submit(ctx, core.KindKernel, name, time.Duration(ms)*time.Millisecond, func(wctx context.Context) (string, int) {
+		out, err := t.run(wctx, req, ms)
+		if err != nil {
+			return err.Error(), 1
+		}
+		return out, 0
+	})
+}
+
+func firstLine(s string) string {
+	line := strings.SplitN(strings.TrimSpace(s), "\n", 2)[0]
+	line = strings.TrimSpace(line)
+	if len(line) > 60 {
+		line = line[:60] + "…"
+	}
+	return line
 }
 
 func (t *pyTool) Code(ctx context.Context, code string, timeoutMs int) (string, error) {

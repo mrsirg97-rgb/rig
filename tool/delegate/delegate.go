@@ -64,6 +64,8 @@ type Delegate interface {
 
 	Command(ctx context.Context, command, workspace string, bound time.Duration) (string, error)
 
+	Submit(ctx context.Context, kind, name string, bound time.Duration, work func(ctx context.Context) (string, int)) (string, error)
+
 	StopAll()
 }
 
@@ -147,6 +149,65 @@ func (a *adapter) Run(ctx context.Context, task, workspace, model string) (strin
 
 func (a *adapter) Command(ctx context.Context, command, workspace string, bound time.Duration) (string, error) {
 	return a.runCommand(ctx, command, workspace, bound)
+}
+
+func (a *adapter) Submit(ctx context.Context, kind, name string, bound time.Duration, work func(ctx context.Context) (string, int)) (string, error) {
+	if kind != core.KindKernel && kind != core.KindFetch {
+		return "", fmt.Errorf("delegate: unknown worker kind %q", kind)
+	}
+	session := "anon"
+	if s, ok := core.SessionFrom(ctx); ok && s != nil {
+		session = s.ID
+	}
+	a.mu.Lock()
+	a.seq++
+	n := int(a.seq)
+	a.mu.Unlock()
+	in := sched.DelegateInput{
+		DB: a.DB, Home: a.Home, Session: session, Task: name, Work: work,
+		SpawnCtx: a.session(),
+	}
+	if bound > 0 {
+		in.Timeout = bound
+	}
+	if cwd, err := os.Getwd(); err == nil {
+		in.Cwd = cwd
+	}
+	del, err := sched.DelegateStart(in)
+	if err != nil {
+		return "", fmt.Errorf("delegate: %w", err)
+	}
+	if a.Await {
+		res, err := del.Wait()
+		if err != nil {
+			return "", err
+		}
+		content := capOutput(res.Stdout) + "\n" + fmt.Sprintf("%s: exit %d · %dms · run %s · log %s", kind, res.Exit, res.Duration.Milliseconds(), del.ID, res.LogRel)
+		if res.TimedOut && del.Bound > 0 {
+			content += fmt.Sprintf(" · killed at timeoutMs=%d", del.Bound.Milliseconds())
+		}
+		if res.Exit != 0 {
+			return content, fmt.Errorf("delegate: the worker failed (exit %d)", res.Exit)
+		}
+		return content, nil
+	}
+	go func() {
+		res, err := del.Wait()
+		content := capOutput(res.Stdout) + "\n" + fmt.Sprintf("%s: exit %d · %dms · run %s · log %s", kind, res.Exit, res.Duration.Milliseconds(), del.ID, res.LogRel)
+		if res.TimedOut && del.Bound > 0 {
+			content += fmt.Sprintf(" · killed at timeoutMs=%d", del.Bound.Milliseconds())
+		}
+		if err != nil {
+			content = err.Error()
+		}
+		if a.member != nil {
+			a.member.Publish(context.Background(), func(error) {}, broadcast.NewMessage(rig.MemberDelegate, true, core.WorkerDone{
+				N: n, Task: firstLine(name), Content: content, Exit: res.Exit, Duration: res.Duration,
+				Log: res.LogRel, Kind: kind, RunID: del.ID,
+			}))
+		}
+	}()
+	return fmt.Sprintf("delegate: worker #%d started · run %s · log %s", n, del.ID, del.Log), nil
 }
 
 func (a *adapter) runCommand(ctx context.Context, command, workspace string, bound time.Duration) (string, error) {

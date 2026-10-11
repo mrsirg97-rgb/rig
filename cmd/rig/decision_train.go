@@ -83,7 +83,7 @@ func decisionTrain(args []string) int {
 	})
 	voice := room.Add(rig.MemberDecision)
 
-	k := pythontool.NewWith(trainPython, pythontool.DefaultHost(), cwd)
+	k := pythontool.NewWith(trainPython, pythontool.DefaultHost(), nil, cwd)
 	defer k.Close()
 
 	if err := os.MkdirAll(filepath.Join(cfgDir, "train", "pending"), 0o755); err != nil {

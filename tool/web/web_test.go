@@ -415,11 +415,21 @@ func TestE2ETimeoutSurfacesAsAClearError(t *testing.T) {
 	defer srv.Close()
 	defer close(release)
 
-	w := webTool(Config{Fetch: FetchConfig{Lookup: publicLookup, Do: direct()}})
+	w := webTool(Config{Fetch: FetchConfig{Lookup: publicLookup, Do: direct()}, Background: inlineBG{}})
 	_, err := execArgs(t, w, `{"action":"fetch","target":"`+srv.URL+`/slow","timeoutMs":1000}`)
 	if err == nil || !regexp.MustCompile(`(?i)timed out`).MatchString(err.Error()) {
 		t.Fatalf("want a timeout error, got %v", err)
 	}
+}
+
+type inlineBG struct{}
+
+func (inlineBG) Submit(ctx context.Context, kind, name string, bound time.Duration, work func(ctx context.Context) (string, int)) (string, error) {
+	out, exit := work(ctx)
+	if exit != 0 {
+		return out, errors.New(out)
+	}
+	return out, nil
 }
 
 func TestExecuteReportsGuardRefusalsAsToolErrorsNotThrows(t *testing.T) {

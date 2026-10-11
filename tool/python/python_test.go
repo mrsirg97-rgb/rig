@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -17,8 +18,18 @@ import (
 
 var suite Python
 
+type inlineBG struct{}
+
+func (inlineBG) Submit(ctx context.Context, kind, name string, bound time.Duration, work func(ctx context.Context) (string, int)) (string, error) {
+	out, exit := work(ctx)
+	if exit != 0 {
+		return out, errors.New(out)
+	}
+	return out, nil
+}
+
 func TestMain(m *testing.M) {
-	suite = New()
+	suite = New(inlineBG{})
 	code := m.Run()
 	suite.Close()
 	os.Exit(code)
@@ -149,7 +160,7 @@ func TestActionCodeRunsTheCode(t *testing.T) {
 }
 
 func TestUnknownActionRefusesLoudBeforeTheKernel(t *testing.T) {
-	tl := NewWith("/nonexistent/python", "/nonexistent/host.py")
+	tl := NewWith("/nonexistent/python", "/nonexistent/host.py", nil)
 	text, err := call(t, tl, map[string]any{"action": "run", "code": "1"})
 	if err == nil {
 		t.Fatalf("unknown action succeeded: %s", text)
@@ -304,7 +315,7 @@ func TestUnwritableKernelFailsFastInsteadOfWaitingOutTheTimeout(t *testing.T) {
 	py := pythonAvailable(t)
 	host := filepath.Join(t.TempDir(), "fake-host.py")
 	writeHost(t, host, unwritableHostSrc)
-	kt := NewWith(py, host)
+	kt := NewWith(py, host, inlineBG{})
 	defer kt.Close()
 
 	text, err := call(t, kt, map[string]any{"code": "1", "timeoutMs": 5000})
@@ -332,7 +343,7 @@ func TestUnwritableKernelFailsFastInsteadOfWaitingOutTheTimeout(t *testing.T) {
 func TestMissingHostSurfacesStderrDiagnosticsAndSelfHeals(t *testing.T) {
 	py := requireKernel(t)
 	host := filepath.Join(t.TempDir(), "kernel_host.py")
-	kt := NewWith(py, host)
+	kt := NewWith(py, host, inlineBG{})
 	defer kt.Close()
 
 	text, err := call(t, kt, map[string]any{"code": "1 + 1"})
@@ -372,7 +383,7 @@ func TestUnexpectedMidCallDeathIsAnnouncedToTheDyingCallAndTheNextCall(t *testin
 
 func TestQuiescentDeathBetweenCallsIsAnnouncedOnTheNextCallOnce(t *testing.T) {
 	py := requireKernel(t)
-	kt := NewWith(py, DefaultHost())
+	kt := NewWith(py, DefaultHost(), inlineBG{})
 	defer kt.Close()
 
 	seed, err := call(t, kt, map[string]any{"code": "seed = 1", "timeoutMs": 5000})
@@ -440,7 +451,7 @@ func TestConstructorOptionsSelectInterpreterAndHostInjectionSeam(t *testing.T) {
 	py := pythonAvailable(t)
 	host := filepath.Join(t.TempDir(), "fake-host.py")
 	writeHost(t, host, fakePongHostSrc)
-	kt := NewWith(py, host)
+	kt := NewWith(py, host, inlineBG{})
 	defer kt.Close()
 
 	text, err := call(t, kt, map[string]any{"code": "whatever", "timeoutMs": 5000})
@@ -489,7 +500,7 @@ func fakeKernel(t *testing.T, mode string) Python {
 	writeHost(t, host, fakeHostSrc)
 	t.Setenv("RIG_FAKE_STATE_DIR", dir)
 	t.Setenv("RIG_FAKE_MODE", mode)
-	kt := NewWith(py, host)
+	kt := NewWith(py, host, inlineBG{})
 	t.Cleanup(kt.Close)
 	return kt
 }
@@ -542,7 +553,7 @@ func TestTimeoutMessageDescribesTheLazyRestartAccurately(t *testing.T) {
 }
 
 func TestNewWithSkipsTheDefaultVenvBootstrapTheDefaultPathKeepsIt(t *testing.T) {
-	seam := NewWith("/opt/operator/python3", "/tmp/whatever/kernel_host.py").(*pyTool)
+	seam := NewWith("/opt/operator/python3", "/tmp/whatever/kernel_host.py", nil).(*pyTool)
 	if seam.k.python != "/opt/operator/python3" {
 		t.Fatalf("interpreter = %q, want the explicit one", seam.k.python)
 	}
@@ -550,7 +561,7 @@ func TestNewWithSkipsTheDefaultVenvBootstrapTheDefaultPathKeepsIt(t *testing.T) 
 		t.Fatal("the seam must skip the default-venv bootstrap")
 	}
 
-	def := New().(*pyTool)
+	def := New(nil).(*pyTool)
 	defer def.Close()
 	if def.k.python != defaultInterpreter() {
 		t.Fatalf("default interpreter = %q, want the shared venv", def.k.python)
@@ -567,7 +578,7 @@ func TestNewWithSkipsTheDefaultVenvBootstrapTheDefaultPathKeepsIt(t *testing.T) 
 func TestKernelIsBornInTheConfiguredCwd(t *testing.T) {
 	requireKernel(t)
 	dir := t.TempDir()
-	tool := New(dir)
+	tool := New(nil, dir)
 	defer tool.Close()
 	payload, _ := json.Marshal(map[string]any{"code": "import os; os.getcwd()"})
 	text, err := tool.Exec(context.Background(), payload)
@@ -580,14 +591,14 @@ func TestKernelIsBornInTheConfiguredCwd(t *testing.T) {
 }
 
 func TestNoCwdInheritsTheProcessDirectory(t *testing.T) {
-	seam := New().(*pyTool)
+	seam := New(nil).(*pyTool)
 	if seam.k.cwd != "" {
 		t.Fatalf("cwd = %q, want the process directory", seam.k.cwd)
 	}
 }
 
 func TestOutOfRangeTimeoutMsRefuses(t *testing.T) {
-	tool := NewWith("false", "/nonexistent-kernel-host.py")
+	tool := NewWith("false", "/nonexistent-kernel-host.py", nil)
 	for _, n := range []int{0, 1, 999, 600001, 1 << 30} {
 		_, err := tool.Exec(context.Background(), []byte(fmt.Sprintf(`{"action":"code","code":"1","timeoutMs":%d}`, n)))
 		if err == nil || !strings.Contains(err.Error(), "timeoutMs must be between") {
@@ -597,7 +608,7 @@ func TestOutOfRangeTimeoutMsRefuses(t *testing.T) {
 }
 
 func TestPythonCodeVarsResetAndExecShareTheirChecks(t *testing.T) {
-	seam := NewWith("false", "/nonexistent-kernel-host.py")
+	seam := NewWith("false", "/nonexistent-kernel-host.py", nil)
 	ctx := context.Background()
 
 	_, codeErr := seam.Code(ctx, "   ", defaultTimeoutMs)

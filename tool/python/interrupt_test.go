@@ -10,7 +10,7 @@ import (
 
 func TestInterruptTearsDownTheBusyKernel(t *testing.T) {
 	py := requireKernel(t)
-	kt := NewWith(py, DefaultHost())
+	kt := NewWith(py, DefaultHost(), inlineBG{})
 	defer kt.Close()
 
 	seed, err := call(t, kt, map[string]any{"code": "seed = 1", "timeoutMs": 5000})

@@ -25,6 +25,7 @@ type DelegateInput struct {
 	Cwd           string
 	Task          string
 	Command       string
+	Work          func(ctx context.Context) (string, int)
 	Model         string
 	Effort        string
 	WorkerSession string
@@ -174,10 +175,10 @@ func Delegate(in DelegateInput) (DelegateResult, error) {
 
 func DelegateStart(in DelegateInput) (Delegation, error) {
 	in = delegateInput(in)
-	if in.Spawn == nil {
+	if in.Spawn == nil && in.Work == nil {
 		return Delegation{}, fmt.Errorf("delegate: the spawn seam is required")
 	}
-	if in.Command == "" {
+	if in.Command == "" && in.Work == nil {
 		if in.Fetch == nil {
 			return Delegation{}, fmt.Errorf("delegate: the fetch seam is required")
 		}
@@ -191,7 +192,7 @@ func DelegateStart(in DelegateInput) (Delegation, error) {
 	}
 
 	model, gateModel := "", ""
-	if in.Command == "" {
+	if in.Command == "" && in.Work == nil {
 		var err error
 		model, gateModel, err = resolveWorkerModel(in)
 		if err != nil {
@@ -257,6 +258,8 @@ func DelegateStart(in DelegateInput) (Delegation, error) {
 		note = "sandbox off: the worker ran unjailed (the operator's choice)"
 		argv = execwrap.Args([]string{"bash", "-c", in.Command})
 		spawnEnv = append(os.Environ(), DelegateEnv+"=1")
+	} else if in.Work != nil {
+		spawnEnv = append(os.Environ(), DelegateEnv+"=1")
 	} else if profile == "off" {
 		note = "sandbox off: the worker ran unjailed (the operator's choice)"
 		argv = append(append([]string{}, workerCmd...),
@@ -314,7 +317,14 @@ func DelegateStart(in DelegateInput) (Delegation, error) {
 		if pipe != nil {
 			ctx = pipe.into(ctx)
 		}
-		res, err := in.Spawn(WithPrompt(ctx, prompt), argv, in.Cwd, spawnEnv, nil)
+		var res SpawnResult
+		var err error
+		if in.Work != nil {
+			output, wexit := in.Work(ctx)
+			res = SpawnResult{Exit: wexit, Stdout: output, TimedOut: errors.Is(ctx.Err(), context.DeadlineExceeded)}
+		} else {
+			res, err = in.Spawn(WithPrompt(ctx, prompt), argv, in.Cwd, spawnEnv, nil)
+		}
 		var outcome delegateOutcome
 		if err != nil {
 			outcome.err = fmt.Errorf("delegate: spawn: %w", err)

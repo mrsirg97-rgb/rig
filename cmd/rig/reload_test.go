@@ -521,7 +521,7 @@ import numpy as _np
 def run(args: dict) -> str:
     return str(int(_np.int64(args["x"])) * 2)
 `
-	kernel := pythontool.NewWith(py, pythontool.DefaultHost())
+	kernel := pythontool.NewWith(py, pythontool.DefaultHost(), nil)
 	t.Cleanup(kernel.Close)
 
 	s := &pluginSrv{

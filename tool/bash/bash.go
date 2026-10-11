@@ -38,9 +38,9 @@ type bashTool struct {
 func New(worker Worker) Bash { return &bashTool{tool.Def("bash"), worker} }
 
 type args struct {
-	Command   string  `json:"command"`
-	Workspace string  `json:"workspace,omitempty"`
-	TimeoutMs *int64  `json:"timeoutMs"`
+	Command   string `json:"command"`
+	Workspace string `json:"workspace,omitempty"`
+	TimeoutMs *int64 `json:"timeoutMs"`
 }
 
 func (t bashTool) Exec(ctx context.Context, data json.RawMessage) (string, error) {

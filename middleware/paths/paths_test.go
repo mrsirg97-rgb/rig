@@ -77,7 +77,7 @@ func TestToolsExpandTheLeadingTildeAtTheBoundary(t *testing.T) {
 	inner := func(ctx context.Context, call core.ToolCall) (string, error) {
 		switch call.Name {
 		case "bash":
-			return bash.New().Exec(ctx, call.Args)
+			return bash.New(nil).Exec(ctx, call.Args)
 		case "read":
 			return file.NewRead().Exec(ctx, call.Args)
 		default:
