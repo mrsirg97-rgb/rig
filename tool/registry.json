@@ -459,7 +459,7 @@
       "properties": {
         "task": {
           "type": "string",
-          "description": "the prompt the worker runs (required)"
+          "description": "the prompt the worker runs (the model worker's door refuses without one)"
         },
         "workspace": {
           "type": "string",
@@ -480,9 +480,7 @@
           "description": "the command worker's kill bound; model workers have no clock"
         }
       },
-      "required": [
-        "task"
-      ]
+      "required": []
     }
   },
   {
