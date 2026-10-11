@@ -10,10 +10,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/mrsirg97-rgb/evt"
+	"github.com/mrsirg97-rgb/evt/broadcast"
 	"github.com/mrsirg97-rgb/rig/v2"
-	"github.com/mrsirg97-rgb/rig/v2/broadcast"
 	"github.com/mrsirg97-rgb/rig/v2/core"
-	"github.com/mrsirg97-rgb/rig/v2/evt"
 	"github.com/mrsirg97-rgb/rig/v2/models"
 	"github.com/mrsirg97-rgb/rig/v2/store"
 	sched "github.com/mrsirg97-rgb/rig/v2/store/scheduler"
@@ -187,7 +187,11 @@ func speakVerdict(ctx context.Context, stdout string) {
 		}
 		kind, reason, _ := strings.Cut(strings.TrimSpace(rest), " ")
 		v := core.Verdict{Accept: kind == "accept", Reason: reason}
-		broadcast.NewPipeTransport(id, w, broadcast.NewJSONEncoder()).Send(ctx, func(error) {}, broadcast.NewMessage(id, true, v))
+		wreg, werr := sched.Wire()
+		if werr != nil {
+			panic(werr)
+		}
+		broadcast.NewPipeTransport(id, w, broadcast.NewJSONEncoder(wreg)).Send(ctx, func(error) {}, broadcast.NewMessage(id, true, v))
 	}
 }
 
@@ -196,7 +200,11 @@ func beat(ctx context.Context, n int) {
 	if !ok {
 		panic("the spawn context carries no fleet pipe")
 	}
-	wire := broadcast.NewPipeTransport(id, w, broadcast.NewJSONEncoder())
+	wreg, werr := sched.Wire()
+	if werr != nil {
+		panic(werr)
+	}
+	wire := broadcast.NewPipeTransport(id, w, broadcast.NewJSONEncoder(wreg))
 	for i := 0; i < n; i++ {
 		wire.Send(ctx, func(error) {}, broadcast.Heartbeat(id, true))
 	}
@@ -244,15 +252,16 @@ type harness struct {
 
 func newHarness(t *testing.T) *harness {
 	t.Helper()
-	return newCappedHarness(t, nil)
+	return newCappedHarness(t, 0)
 }
 
-func newCappedHarness(t *testing.T, workerCap sched.WorkerCap) *harness {
+func newCappedHarness(t *testing.T, workers int) *harness {
 	t.Helper()
 	h := &harness{}
 	h.engine = evt.NewEngine()
 	go h.engine.Start(context.Background())
 	t.Cleanup(h.engine.Stop)
+	cap := evt.NewCap(h.engine, workers)
 	h.room = broadcast.NewRoom("fleet", func(origin int64) broadcast.Transport {
 		return broadcast.NewLoopTransport(origin, h.engine, rig.PriorityFleet)
 	})
@@ -291,7 +300,7 @@ func newCappedHarness(t *testing.T, workerCap sched.WorkerCap) *harness {
 		Models:       func() models.Table { return modelRows(t) },
 		Engine:       h.engine,
 		Room:         h.room,
-		Cap:          workerCap,
+		Cap:          cap,
 	})
 	t.Cleanup(func() { h.ctl.Stop() })
 	return h
@@ -300,8 +309,8 @@ func newCappedHarness(t *testing.T, workerCap sched.WorkerCap) *harness {
 func (h *harness) listen(room broadcast.Room) {
 	room.Add(-1).Subscribe(context.Background(), func(err error, messages ...broadcast.Message) {
 		for _, m := range messages {
-			if err == nil && m.Event() != nil {
-				h.fe.Notify(m.Event())
+			if err == nil && m.Signal() != nil {
+				h.fe.Notify(m.Signal())
 			}
 		}
 	})
@@ -991,7 +1000,7 @@ func TestStoppedWorkerIsOutBeforeTheRouterWakes(t *testing.T) {
 }
 
 func TestSwarmWorkersPastTheCapWaitForAReturn(t *testing.T) {
-	h := newCappedHarness(t, sched.NewWorkerCap(2))
+	h := newCappedHarness(t, 2)
 	h.create(t, "one", "two", "three", "four")
 	h.spawn.block = make(chan struct{})
 	h.start(t, swarm.StartOpts{Count: 4, Role: "worker"})

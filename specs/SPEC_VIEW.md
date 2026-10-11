@@ -190,9 +190,9 @@ Named cases, the real filesystem in `t.TempDir()`, the real encoder:
 New: `imagemarker/` (one file plus its tests), `tool/view/` (one file plus its
 tests), `provider/openai/images.go`, this spec, and the package docs.
 Changed: `models` (`Model.Vision`), `config` (the `vision` key, its row
-table), `cmd/rig` (one import, one name in `nativeToolNames`, one in
-`concurrentNatives`, the gated registration, the provider options, the
-embedded `allow`), `provider/openai` (`wireMessage.Content`'s type,
+table), `cmd/rig` (one import, one name in `nativeToolNames`, one
+registry row answering it a read, the gated registration, the provider
+options, the embedded `allow`), `provider/openai` (`wireMessage.Content`'s type,
 `wireMessages`' signature), `frontend/tui` (one detail function and one
 preview skip), the freeze allowlist, and the docs.
 

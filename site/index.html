@@ -319,20 +319,20 @@ up 214k down 18k · cache r 211k <span class="g">99%</span></div>
   </section>
 
   <section class="rating" aria-label="measured">
-    <div><span class="n">5.0<small>B</small></span><span class="l">prompt tokens served, 98.8% of them from cache — the prefix never changes a byte</span></div>
+    <div><span class="n">5.7<small>B</small></span><span class="l">prompt tokens served, 98.3% of them from cache — the prefix never changes a byte</span></div>
     <div><span class="n">{{RIG_LOOP_LINES}}</span><span class="l">lines is the whole agent loop, batch included, stdlib only</span></div>
     <div><span class="n">{{RIG_COMMITS}}</span><span class="l">commits, most of them written by rig, running inside rig</span></div>
   </section>
 
   <section class="sheet" aria-labelledby="trend-heading">
     <p class="eyebrow" id="trend-heading">the consolidation, measured</p>
-    <p class="sheet-intro">Every recorded turn since the first store — 2,204 sessions, 45,845 turns — one SQL read of the state store. The 2.1.x consolidation rethought the system prompt and the toolset and kept the machinery: the turn got cheaper and never went back. The last row is the fleet's own traffic: short-lived workers against caches that do not exist yet, so its ratio dips and the reason is on the row.</p>
+    <p class="sheet-intro">Every recorded turn since the first store — 2,531 sessions, 51,650 turns — one SQL read of the state store. The 2.1.x consolidation rethought the system prompt and the toolset and kept the machinery: the turn got cheaper and never went back. The last row is the fleet's own traffic: short-lived workers against caches that do not exist yet, so its ratio dips and the reason is on the row.</p>
     <div class="table" role="list">
       <div class="row" role="listitem"><span class="os">0.x</span><p class="what">14,006 turns · 1,499 new tokens a turn · 722 out · 98.65% cache</p></div>
       <div class="row" role="listitem"><span class="os">1.0–1.3</span><p class="what">7,440 turns · 933 new tokens a turn · 676 out · 99.13% cache</p></div>
       <div class="row" role="listitem"><span class="os">1.4–1.9</span><p class="what">10,045 turns · 962 new tokens a turn · 525 out · 99.26% cache</p></div>
       <div class="row" role="listitem"><span class="os">2.0–2.9</span><p class="what">7,360 turns · 906 new tokens a turn · 503 out · 99.09% cache</p></div>
-      <div class="row" role="listitem"><span class="os">2.10.x</span><p class="what">6,994 turns · 2,419 new tokens a turn · 590 out · 97.38% cache</p></div>
+      <div class="row" role="listitem"><span class="os">2.10.x</span><p class="what">12,799 turns · 4,202 new tokens a turn · 640 out · 95.76% cache</p></div>
     </div>
   </section>
 

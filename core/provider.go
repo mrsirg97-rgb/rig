@@ -6,69 +6,69 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/mrsirg97-rgb/evt"
 )
-
-type Event interface{ event() }
-
-type Snapshot interface {
-	Event
-	Snapshot()
-}
 
 var (
-	_ Event = TextDelta{}
-	_ Event = ReasoningDelta{}
-	_ Event = ToolCallEvent{}
-	_ Event = Done{}
-	_ Event = EmptyTurn{}
-	_ Event = Fault{}
-	_ Event = ToolStart{}
-	_ Event = ToolResult{}
-	_ Event = TurnEnd{}
-	_ Event = TestEvent{}
-	_ Event = Compacted{}
-	_ Event = SwarmStatus{}
-	_ Event = Notice{}
-	_ Event = Verdict{}
-	_ Event = Phase{}
-	_ Event = WorkerDone{}
+	_ evt.Signal = TextDelta{}
+	_ evt.Signal = ReasoningDelta{}
+	_ evt.Signal = ToolCallEvent{}
+	_ evt.Signal = Done{}
+	_ evt.Signal = EmptyTurn{}
+	_ evt.Signal = Fault{}
+	_ evt.Signal = ToolStart{}
+	_ evt.Signal = ToolResult{}
+	_ evt.Signal = TurnEnd{}
+	_ evt.Signal = TestEvent{}
+	_ evt.Signal = Compacted{}
+	_ evt.Signal = SwarmStatus{}
+	_ evt.Signal = Verdict{}
+	_ evt.Signal = Phase{}
+	_ evt.Signal = WorkerDone{}
 )
 
-type TextDelta struct{ Text string }
+type TextDelta struct {
+	Text string
 
-func (TextDelta) event() {}
+	evt.Mark
+}
 
 type ReasoningDelta struct {
 	Text    string
 	Details json.RawMessage
+
+	evt.Mark
 }
 
-func (ReasoningDelta) event() {}
+type ToolCallEvent struct {
+	Call ToolCall
 
-type ToolCallEvent struct{ Call ToolCall }
-
-func (ToolCallEvent) event() {}
+	evt.Mark
+}
 
 type Done struct {
 	StopReason string
 	Usage      Usage
 	Model      string
-}
 
-func (Done) event() {}
+	evt.Mark
+}
 
 type EmptyTurn struct {
 	Resample int
 	Limit    int
 	Usage    Usage
 	Model    string
+
+	evt.Mark
 }
 
-func (EmptyTurn) event() {}
+type Fault struct {
+	Err error
 
-type Fault struct{ Err error }
-
-func (Fault) event() {}
+	evt.Mark
+}
 
 type Usage struct {
 	Prompt     int
@@ -78,9 +78,11 @@ type Usage struct {
 	Cost       float64
 }
 
-type ToolStart struct{ Call ToolCall }
+type ToolStart struct {
+	Call ToolCall
 
-func (ToolStart) event() {}
+	evt.Mark
+}
 
 func (e ToolStart) BoundedCall() string {
 	var arg string
@@ -98,9 +100,9 @@ type ToolResult struct {
 	Content  string
 	Err      error
 	Duration time.Duration
-}
 
-func (ToolResult) event() {}
+	evt.Mark
+}
 
 type TurnReason string
 
@@ -110,13 +112,17 @@ const (
 	TurnInterrupt TurnReason = "interrupt"
 )
 
-type TurnEnd struct{ Reason TurnReason }
+type TurnEnd struct {
+	Reason TurnReason
 
-func (TurnEnd) event() {}
+	evt.Mark
+}
 
-type TestEvent struct{ Name string }
+type TestEvent struct {
+	Name string
 
-func (TestEvent) event() {}
+	evt.Mark
+}
 
 type Compacted struct {
 	Summary string
@@ -124,13 +130,13 @@ type Compacted struct {
 	Kept    int
 	Usage   Usage
 	Model   string
+
+	evt.Mark
 }
 
-func (Compacted) event() {}
-
-type Compacting struct{}
-
-func (Compacting) event() {}
+type Compacting struct {
+	evt.Mark
+}
 
 type SwarmWorker struct {
 	ID        int
@@ -148,45 +154,19 @@ type SwarmStatus struct {
 	Workers []SwarmWorker
 	Pending int
 	Review  int
-}
 
-func (SwarmStatus) event() {}
+	evt.Mark
+}
 
 func (SwarmStatus) Snapshot() {}
-
-type Level int
-
-const (
-	LevelInfo Level = iota
-	LevelSuccess
-	LevelError
-)
-
-func (l Level) String() string {
-	switch l {
-	case LevelSuccess:
-		return "success"
-	case LevelError:
-		return "error"
-	}
-	return "info"
-}
-
-type Notice struct {
-	Source string
-	Text   string
-	Level  Level
-}
-
-func (Notice) event() {}
 
 type Verdict struct {
 	Row    int64
 	Accept bool
 	Reason string
-}
 
-func (Verdict) event() {}
+	evt.Mark
+}
 
 type Phase struct {
 	Name string
@@ -194,12 +174,12 @@ type Phase struct {
 	Done bool
 	Ok   bool
 	Note string
+
+	evt.Mark
 }
 
-func (Phase) event() {}
-
 type Provider interface {
-	Stream(ctx context.Context, req Request) (<-chan Event, error)
+	Stream(ctx context.Context, req Request) (<-chan evt.Signal, error)
 }
 
 type Request struct {
@@ -225,9 +205,9 @@ type WorkerDone struct {
 	Log      string
 	Kind     string
 	RunID    string
-}
 
-func (WorkerDone) event() {}
+	evt.Mark
+}
 
 func (d WorkerDone) Head() string {
 	if d.Kind == "" {

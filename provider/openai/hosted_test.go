@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/mrsirg97-rgb/evt"
 	"github.com/mrsirg97-rgb/rig/v2/core"
 )
 
@@ -18,7 +19,7 @@ func userReq() core.Request {
 	return core.Request{Messages: []core.Message{{Role: core.RoleUser, Content: "hi"}}}
 }
 
-func kinds(events []core.Event) string {
+func kinds(events []evt.Signal) string {
 	var out []string
 	for _, ev := range events {
 		switch ev.(type) {
@@ -35,7 +36,7 @@ func kinds(events []core.Event) string {
 	return strings.Join(out, ",")
 }
 
-func lastFault(t *testing.T, events []core.Event) core.Fault {
+func lastFault(t *testing.T, events []evt.Signal) core.Fault {
 	t.Helper()
 	for i := len(events) - 1; i >= 0; i-- {
 		if ft, ok := events[i].(core.Fault); ok {
@@ -46,13 +47,13 @@ func lastFault(t *testing.T, events []core.Event) core.Fault {
 	return core.Fault{}
 }
 
-func hostedDrain(t *testing.T, ctx context.Context, p core.Provider, req core.Request) ([]core.Event, error) {
+func hostedDrain(t *testing.T, ctx context.Context, p core.Provider, req core.Request) ([]evt.Signal, error) {
 	t.Helper()
 	ch, err := p.Stream(ctx, req)
 	if err != nil {
 		return nil, err
 	}
-	var events []core.Event
+	var events []evt.Signal
 	for ev := range ch {
 		events = append(events, ev)
 	}

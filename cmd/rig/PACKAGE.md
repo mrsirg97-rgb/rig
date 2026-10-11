@@ -74,7 +74,8 @@ sees core and models and nothing else.
 - **Resolution helpers**: `rigHome` (the migration), `resolveModel`,
   `tuiTrueColor`, `tuiStatusIn`, `tuiNews`, `sessionFor`,
   `checkOneShot`, `splitCSV`, `firstNonEmpty`, `hasLevel`,
-  `effortForWire`, `isMutating`, `mutatingNatives`.
+  `effortForWire`, `isMutating` (the widened call seam over
+  `tool.Mutates`).
 
 ## How it is consumed
 
@@ -111,7 +112,8 @@ sees core and models and nothing else.
   swap is visible with no re-wiring. The Steer seam is the frontend's;
   the dispatcher fills it in its `WithCommands`.
 - The frontend: the REPL by default, one-shot under `-p`, the TUI under
-  `-tui`. The REPL is the only frontend that dispatches commands.
+  `-tui`, the dashboard over the web door. All four dispatch
+  `/`-commands, at the quiet prompt and at re-entry.
 - `loop.Run(ctx, k)` drives the kernel: interrupt cancels the turn at
   its next boundary. The session row closes with what the run was
   (ok / fault / cancelled).
@@ -205,10 +207,11 @@ into a `Phase`. A notice with no recorder yet goes to stderr.
   redo. The door tools hold the live table as their seam, so the root
   builds the empty table first, the doors over it, then fills it from
   the natives (the doors among them) and the plugins.
-- `sessions` is the fifteenth native (read-only introspection of the
-  session store, SPEC_STATE). It is absent from `mutatingNatives` (it
-  never pauses at the gate) and from `concurrentNatives` (it opens a
-  store, like `todo`/`rem`/`scheduler`, so it is not a pure observation);
+- `sessions` is the thirteenth of the registry's fifteen entries
+  (read-only introspection of the session store, SPEC_STATE). The
+  registry answers it a read (`mutates: []`), so it never pauses at the
+  gate, and it opens a store, like `todo`/`rem`/`scheduler`, so it is
+  not a pure observation;
   `tool/sessions.New(cfgDir, cwd)` is wired in the root's tools map and
   in the embedded `allow` default.
 - The worker tools are not fleet-gated (SPEC_WORKERS 5):

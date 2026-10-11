@@ -8,13 +8,6 @@ import (
 	todostore "github.com/mrsirg97-rgb/rig/v2/store/todo"
 )
 
-var concurrentNatives = map[string]bool{
-	"read": true, "view": true,
-	"web":      true,
-	"delegate": true,
-	"decide":   true,
-}
-
 func sessionQueue(ctx context.Context, tdb store.DB, cwd, session string) (todostore.Project, error) {
 	return todostore.ProjectOf(cwd), nil
 }

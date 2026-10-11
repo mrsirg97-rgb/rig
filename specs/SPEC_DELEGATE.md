@@ -327,10 +327,10 @@ one line and never the answer:
   `SpawnCtx` stay as amended below.
 
 - **Four swarm amendments (SPEC_SWARM)**, all defaulted to today's
-  behavior. `WaitBusy` (false): a busy GPU is waited on — the busy
-  check polls `busyState` on a short interval until the model runs or
-  the call's context ends; the swarm's parallelism is the GPU slots,
-  and a busy-check failure still fails closed. `Member` (nil): the
+  behavior. `WaitBusy` (false) is the historical record: a busy GPU
+  waited on — the busy check polled `busyState` on a short interval —
+  and the field retired with the slot read (the 2.6.0 amendment,
+  SPEC_WORKERS); `DelegateInput` carries no `WaitBusy`. `Member` (nil): the
   worker's member in the session's room (2.11.0); with one, the spawn
   gets the fleet pipe and every frame the child sends is published as
   the worker. `SpawnCtx` (Background): the
@@ -529,8 +529,9 @@ no operator allow stands (SPEC_CONFIG 12).
   `busyState` with the state-store bind; the run record, the log
   path.
 - `middleware/approve`: the `delegate` prompt branch.
-- `cmd/rig`: the wiring (`delegate` native, `mutatingNatives`,
-  the worker `-allow` construction), `main_test.go`'s native-set pin.
+- `cmd/rig`: the wiring (`delegate` native, the registry's predicate
+  answering the delegate a write, the worker `-allow` construction),
+  `main_test.go`'s native-set pin.
 - `config/settings.json`: the embedded allow default gains
   `delegate`.
 - `frontend/tui/freeze_test.go`: the allowlist gains `tool/delegate`.

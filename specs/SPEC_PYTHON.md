@@ -25,9 +25,10 @@ stdio; no third-party Go client.
   until deliverable 7's hooks is one `Close()` call at the root.
 - No new dependencies. `go.mod` is unchanged.
 - No parallel tool execution (amended: the loop now runs a bounded
-  concurrent batch, SPEC_EVT 2a — `loop/batch.go`, `rig.DefaultParallel`
-  8 — and python is deliberately not in the admitted set: the root keeps
-  it a barrier beside the mutating calls, `cmd/rig/reap.go`). The kernel
+  batch, `loop/batch.go`, `rig.DefaultParallel` 8). The admitted set
+  retired with 2.17.0: the registry's predicate answers python's
+  `code`/`reset` (and the omitted action) a write at `PriorityWrite` —
+  the barrier by priority — and `vars` a read that overlaps. The kernel
   client is still safe under concurrent `Exec` (queue plus id routing),
   which pane's tests exercise directly.
 - No Go-side output cap beyond the host's (amended: superseded; every
@@ -67,8 +68,8 @@ lifecycle method the root calls on the way out; pane's
 
 ```go
 type Python interface{ /* tool.Definition + Exec, plus the kernel's five */ }
-func New(cwd ...string) Python                        // pane's defaults: venv interpreter, host, lazy bootstrap
-func NewWith(python, host string, cwd ...string) Python // the injection seam (pane's constructor opts): no bootstrap
+func New(bg background, cwd ...string) Python                        // pane's defaults: venv interpreter, host, lazy bootstrap
+func NewWith(python, host string, bg background, cwd ...string) Python // the injection seam (pane's constructor opts): no bootstrap
 func DefaultHost() string                 // the host resolution, named (RIG_PYTHON pairs with it)
 // the concrete is the unexported pyTool (tool.Definition + one kernel);
 // Host() is which host a session runs on (the root logs it), Close() is

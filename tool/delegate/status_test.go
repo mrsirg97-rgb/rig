@@ -8,17 +8,17 @@ import (
 	"testing"
 	"time"
 
+	"github.com/mrsirg97-rgb/evt"
+	"github.com/mrsirg97-rgb/evt/broadcast"
 	"github.com/mrsirg97-rgb/rig/v2"
-	"github.com/mrsirg97-rgb/rig/v2/broadcast"
 	"github.com/mrsirg97-rgb/rig/v2/core"
-	"github.com/mrsirg97-rgb/rig/v2/evt"
 	sched "github.com/mrsirg97-rgb/rig/v2/store/scheduler"
 	"github.com/mrsirg97-rgb/rig/v2/tool/delegate"
 )
 
 type recordFrontend struct {
 	mu     sync.Mutex
-	events []core.Event
+	events []evt.Signal
 }
 
 func (r *recordFrontend) returns() []core.WorkerDone {
@@ -37,8 +37,8 @@ func foldFleet(t *testing.T, room broadcast.Room, fe *recordFrontend) {
 	t.Helper()
 	room.Add(-1).Subscribe(context.Background(), func(err error, messages ...broadcast.Message) {
 		for _, m := range messages {
-			if err == nil && m.Event() != nil {
-				fe.Notify(m.Event())
+			if err == nil && m.Signal() != nil {
+				fe.Notify(m.Signal())
 			}
 		}
 	})
@@ -57,7 +57,7 @@ func newFleetRoom(t *testing.T) (broadcast.Room, *recordFrontend) {
 	return room, fe
 }
 
-func (r *recordFrontend) Notify(ev core.Event) {
+func (r *recordFrontend) Notify(ev evt.Signal) {
 	r.mu.Lock()
 	r.events = append(r.events, ev)
 	r.mu.Unlock()
@@ -90,7 +90,11 @@ func (f *statusSpawn) spawn(ctx context.Context, argv []string, cwd string, env 
 	if !ok {
 		panic("the spawn context carries no fleet pipe")
 	}
-	wire := broadcast.NewPipeTransport(id, w, broadcast.NewJSONEncoder())
+	wreg, werr := sched.Wire()
+	if werr != nil {
+		panic(werr)
+	}
+	wire := broadcast.NewPipeTransport(id, w, broadcast.NewJSONEncoder(wreg))
 	for i := 0; i < 30; i++ {
 		wire.Send(ctx, func(error) {}, broadcast.Heartbeat(id, true))
 	}

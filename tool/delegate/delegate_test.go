@@ -15,7 +15,8 @@ import (
 
 	"github.com/mrsirg97-rgb/rig/v2/models"
 
-	"github.com/mrsirg97-rgb/rig/v2/broadcast"
+	"github.com/mrsirg97-rgb/evt"
+	"github.com/mrsirg97-rgb/evt/broadcast"
 	"github.com/mrsirg97-rgb/rig/v2/store"
 	sched "github.com/mrsirg97-rgb/rig/v2/store/scheduler"
 	"github.com/mrsirg97-rgb/rig/v2/store/state"
@@ -200,7 +201,8 @@ type harness struct {
 	home    string
 	rigHome string
 	db      sched.DB
-	cap     sched.WorkerCap
+	cap     evt.Cap
+	engine  evt.Engine
 }
 
 func newHarness(t *testing.T, sessionCwd string) *harness {
@@ -214,7 +216,10 @@ func newHarness(t *testing.T, sessionCwd string) *harness {
 	if err != nil {
 		t.Fatalf("open scheduler store: %v", err)
 	}
-	return &harness{home: home, rigHome: rigHome, db: db}
+	eng := evt.NewEngine()
+	go eng.Start(context.Background())
+	t.Cleanup(eng.Stop)
+	return &harness{home: home, rigHome: rigHome, db: db, engine: eng}
 }
 
 func (h *harness) newTool(t *testing.T, fetch sched.Fetch, spawn sched.Spawn) delegate.Delegate {

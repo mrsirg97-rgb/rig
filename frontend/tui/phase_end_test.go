@@ -5,6 +5,7 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/mrsirg97-rgb/evt"
 	"github.com/mrsirg97-rgb/rig/v2/core"
 )
 
@@ -47,7 +48,7 @@ func TestANoticeBreathesAfterAnInTurnCompaction(t *testing.T) {
 	summarizeOutLoud(t, s)
 	s.fe.Notify(core.Compacted{Summary: "s", Dropped: 1200, Kept: 400})
 	s.fe.Notify(core.TurnEnd{Reason: core.TurnOver})
-	s.fe.Notify(core.Notice{Source: "graph", Text: "the map moved"})
+	s.fe.Notify(evt.Notice{Source: "graph", Text: "the map moved"})
 	awaitScreen(t, s, "graph: the map moved", true)
 }
 

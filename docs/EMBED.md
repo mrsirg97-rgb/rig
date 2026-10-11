@@ -36,13 +36,14 @@ them once (the command set rides the frontend dispatchers, and
 | `WithPolicy` | message assembly | `compact.New` (the per-model trigger) |
 | `WithCommands` | the slash-command set | unwired at the root; commands dispatch at the frontend seam |
 | `WithMiddleware` | the tool-exec chain | toolset, approve, cutoff, perm, guard, paths; the graph tap inside, the decision links outside, the operator link on a delegated worker's wire only |
-| `WithConcurrent` | the batch's admit predicate | the concurrent natives: read, view, web, delegate, decide |
+| `WithPriority` | the batch's priority per call | the root wires the registry's predicate: a write is 60, a read is 50 |
 | `WithParallel` | the in-flight bound | unset; `DefaultParallel` is 8 |
 | `WithEngine` | the event engine | the root's engine, the fleet room's queue |
 
-Beside the options the kernel names the queue's six priorities
-(`PriorityInput` 90, `PriorityDelegate` 70, `PriorityStream` 50,
-`PriorityTool` 50, `PriorityFleet` 30, `PriorityReview` 10) and the room's four member
+Beside the options the kernel names the queue's eight priorities
+(`PriorityInput` 90, `PriorityDelegate` 70, `PriorityWrite` 60,
+`PriorityRead` 50, `PriorityStream` and `PriorityTool` 50,
+`PriorityFleet` 30, `PriorityReview` 10) and the room's four member
 ids (`MemberFrontend`, `MemberDelegate`, `MemberGraph`,
 `MemberDecision`).
 
@@ -88,6 +89,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/mrsirg97-rgb/evt"
 	"github.com/mrsirg97-rgb/rig/v2"
 	"github.com/mrsirg97-rgb/rig/v2/core"
 	"github.com/mrsirg97-rgb/rig/v2/loop"
@@ -97,11 +99,11 @@ import (
 
 type frontend struct {
 	prompt string
-	events []core.Event
+	events []evt.Signal
 }
 
 func (f *frontend) Input(ctx context.Context) (string, error) { return f.prompt, nil }
-func (f *frontend) Notify(ev core.Event) { f.events = append(f.events, ev) }
+func (f *frontend) Notify(ev evt.Signal) { f.events = append(f.events, ev) }
 
 type passthrough struct{}
 
@@ -111,8 +113,8 @@ func (passthrough) Assemble(ctx context.Context, s *core.Session) ([]core.Messag
 
 type stubProvider struct{}
 
-func (stubProvider) Stream(ctx context.Context, req core.Request) (<-chan core.Event, error) {
-	ch := make(chan core.Event, 2)
+func (stubProvider) Stream(ctx context.Context, req core.Request) (<-chan evt.Signal, error) {
+	ch := make(chan evt.Signal, 2)
 	ch <- core.TextDelta{Text: "done"}
 	ch <- core.Done{StopReason: "stop"}
 	close(ch)

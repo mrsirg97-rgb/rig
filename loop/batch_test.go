@@ -15,6 +15,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/mrsirg97-rgb/evt"
 	"github.com/mrsirg97-rgb/rig/v2"
 	"github.com/mrsirg97-rgb/rig/v2/core"
 	"github.com/mrsirg97-rgb/rig/v2/loop"
@@ -94,14 +95,14 @@ func itoa(n int) string {
 
 func batchKernel(t *testing.T, tools []core.Tool, calls []core.ToolCall, opts ...rig.Option) (*rig.Kernel, *recorderFrontend, *core.Session) {
 	t.Helper()
-	evs := make([]core.Event, 0, len(calls)+1)
+	evs := make([]evt.Signal, 0, len(calls)+1)
 	for _, c := range calls {
 		evs = append(evs, callEv(c))
 	}
 	evs = append(evs, doneEv())
 	p := &scriptedProvider{turns: []scriptedTurn{
 		{events: evs},
-		{events: []core.Event{textEv("done"), doneEv()}},
+		{events: []evt.Signal{textEv("done"), doneEv()}},
 	}}
 	f := &recorderFrontend{inputs: make(chan string, 1)}
 	s := core.NewSession()
@@ -237,7 +238,7 @@ func TestBatchCancellationMidRunDrainsTheBatch(t *testing.T) {
 	read := newTimed("read")
 	read.cancel = cancel
 	calls := []core.ToolCall{timedCall("c1", "read", 30), timedCall("c2", "read", 30)}
-	evs := []core.Event{callEv(calls[0]), callEv(calls[1]), doneEv()}
+	evs := []evt.Signal{callEv(calls[0]), callEv(calls[1]), doneEv()}
 	p := &scriptedProvider{turns: []scriptedTurn{{events: evs}, {holdCtx: true}}}
 	f := &recorderFrontend{inputs: make(chan string, 1)}
 	s := core.NewSession()
@@ -532,7 +533,7 @@ func TestInterruptMidDrainCancelsTheRest(t *testing.T) {
 	edit, read := newTimed("edit"), newTimed("read")
 	edit.cancel = cancel
 	calls := []core.ToolCall{timedCall("c1", "edit", 30), timedCall("c2", "edit", 30), timedCall("c3", "read", 30)}
-	evs := []core.Event{callEv(calls[0]), callEv(calls[1]), callEv(calls[2]), doneEv()}
+	evs := []evt.Signal{callEv(calls[0]), callEv(calls[1]), callEv(calls[2]), doneEv()}
 	p := &scriptedProvider{turns: []scriptedTurn{{events: evs}, {holdCtx: true}}}
 	f := &recorderFrontend{inputs: make(chan string, 1)}
 	s := core.NewSession()

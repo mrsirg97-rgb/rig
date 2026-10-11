@@ -10,11 +10,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/mrsirg97-rgb/evt"
+	"github.com/mrsirg97-rgb/evt/broadcast"
 	"github.com/mrsirg97-rgb/rig/v2"
-	"github.com/mrsirg97-rgb/rig/v2/broadcast"
 	"github.com/mrsirg97-rgb/rig/v2/core"
 	"github.com/mrsirg97-rgb/rig/v2/decision"
-	"github.com/mrsirg97-rgb/rig/v2/evt"
 	"github.com/mrsirg97-rgb/rig/v2/models"
 	"github.com/mrsirg97-rgb/rig/v2/store"
 	decisionstore "github.com/mrsirg97-rgb/rig/v2/store/decision"
@@ -634,7 +634,7 @@ func voice(t *testing.T) (broadcast.Member, <-chan string) {
 	said := make(chan string, 8)
 	room.Add(-1).Subscribe(context.Background(), func(err error, messages ...broadcast.Message) {
 		for _, m := range messages {
-			if n, ok := m.Event().(core.Notice); err == nil && ok {
+			if n, ok := m.Signal().(evt.Notice); err == nil && ok {
 				said <- n.Source + ": " + n.Text
 			}
 		}
@@ -672,7 +672,7 @@ func TestABiteIsAReviewingPhaseWithItsThinking(t *testing.T) {
 	phases := make(chan core.Phase, 16)
 	room.Add(-1).Subscribe(context.Background(), func(err error, messages ...broadcast.Message) {
 		for _, m := range messages {
-			if p, ok := m.Event().(core.Phase); err == nil && ok {
+			if p, ok := m.Signal().(core.Phase); err == nil && ok {
 				phases <- p
 			}
 		}
@@ -726,7 +726,7 @@ type lineFrontend struct {
 }
 
 func (f lineFrontend) Input(context.Context) (string, error) { return f.line, nil }
-func (lineFrontend) Notify(core.Event)                       {}
+func (lineFrontend) Notify(evt.Signal)                       {}
 
 func haltReviewer(t *testing.T, fire decision.Fire) (*decision.Reviewer, <-chan core.Phase, <-chan string, store.DB) {
 	t.Helper()
@@ -744,10 +744,10 @@ func haltReviewer(t *testing.T, fire decision.Fire) (*decision.Reviewer, <-chan 
 			if err != nil {
 				continue
 			}
-			switch ev := m.Event().(type) {
+			switch ev := m.Signal().(type) {
 			case core.Phase:
 				phases <- ev
-			case core.Notice:
+			case evt.Notice:
 				notices <- ev.Source + ": " + ev.Text
 			}
 		}

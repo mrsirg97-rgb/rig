@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/mrsirg97-rgb/evt"
 	"github.com/mrsirg97-rgb/rig/v2"
 	"github.com/mrsirg97-rgb/rig/v2/core"
 	"github.com/mrsirg97-rgb/rig/v2/loop"
@@ -15,9 +16,9 @@ import (
 	"github.com/mrsirg97-rgb/rig/v2/middleware/perm"
 )
 
-func reasonEv(s string) core.Event { return core.ReasoningDelta{Text: s} }
+func reasonEv(s string) evt.Signal { return core.ReasoningDelta{Text: s} }
 
-func turnEnds(events []core.Event) []core.TurnEnd {
+func turnEnds(events []evt.Signal) []core.TurnEnd {
 	var out []core.TurnEnd
 	for _, ev := range events {
 		if te, ok := ev.(core.TurnEnd); ok {
@@ -27,7 +28,7 @@ func turnEnds(events []core.Event) []core.TurnEnd {
 	return out
 }
 
-func hasFault(events []core.Event) bool {
+func hasFault(events []evt.Signal) bool {
 	for _, ev := range events {
 		if _, ok := ev.(core.Fault); ok {
 			return true
@@ -39,11 +40,11 @@ func hasFault(events []core.Event) bool {
 func TestToolEventBracketOrderAndContent(t *testing.T) {
 	bash := &scriptedTool{name: "bash", result: "42"}
 	p := &scriptedProvider{turns: []scriptedTurn{
-		{events: []core.Event{
+		{events: []evt.Signal{
 			callEv(core.ToolCall{ID: "c1", Name: "bash", Args: json.RawMessage(`{"command":"echo 42"}`)}),
 			doneEv(),
 		}},
-		{events: []core.Event{textEv("the answer is "), textEv("42"), doneEv()}},
+		{events: []evt.Signal{textEv("the answer is "), textEv("42"), doneEv()}},
 	}}
 	f := &recorderFrontend{inputs: make(chan string, 8)}
 	session := core.NewSession()
@@ -105,9 +106,9 @@ func TestToolEventBracketOrderAndContent(t *testing.T) {
 func TestToolResultCarriesTheGuardedRefusal(t *testing.T) {
 	bash := &countingTool{name: "bash", fail: 999}
 	p := &scriptedProvider{turns: []scriptedTurn{
-		{events: []core.Event{callEv(core.ToolCall{ID: "c1", Name: "bash"}), doneEv()}},
-		{events: []core.Event{callEv(core.ToolCall{ID: "c2", Name: "bash"}), doneEv()}},
-		{events: []core.Event{textEv("recovered"), doneEv()}},
+		{events: []evt.Signal{callEv(core.ToolCall{ID: "c1", Name: "bash"}), doneEv()}},
+		{events: []evt.Signal{callEv(core.ToolCall{ID: "c2", Name: "bash"}), doneEv()}},
+		{events: []evt.Signal{textEv("recovered"), doneEv()}},
 	}}
 	f := &recorderFrontend{inputs: make(chan string, 8)}
 	session := core.NewSession()
@@ -149,9 +150,9 @@ func TestToolResultCarriesTheGuardedRefusal(t *testing.T) {
 func TestTurnEndClosesEveryTurnWithTheRightReason(t *testing.T) {
 	boom := errors.New("mid-stream fault")
 	p := &scriptedProvider{turns: []scriptedTurn{
-		{events: []core.Event{textEv("one"), doneEv()}},
-		{events: []core.Event{textEv("partial "), faultEv(boom)}},
-		{events: []core.Event{textEv("three"), doneEv()}},
+		{events: []evt.Signal{textEv("one"), doneEv()}},
+		{events: []evt.Signal{textEv("partial "), faultEv(boom)}},
+		{events: []evt.Signal{textEv("three"), doneEv()}},
 	}}
 	f := &recorderFrontend{inputs: make(chan string, 8)}
 	session := core.NewSession()
@@ -197,7 +198,7 @@ func TestTurnEndClosesEveryTurnWithTheRightReason(t *testing.T) {
 
 func TestTurnEndAbsentOnRunContextEnd(t *testing.T) {
 	p := &scriptedProvider{turns: []scriptedTurn{{
-		events:  []core.Event{textEv("never delivered")},
+		events:  []evt.Signal{textEv("never delivered")},
 		holdCtx: true,
 	}}}
 	f := &recorderFrontend{inputs: make(chan string, 8)}
@@ -224,7 +225,7 @@ func TestTurnEndAbsentOnRunContextEnd(t *testing.T) {
 func TestReasoningAccumulatesInBothBranches(t *testing.T) {
 
 	p := &scriptedProvider{turns: []scriptedTurn{{
-		events: []core.Event{reasonEv("thinking... "), reasonEv("got it"), textEv("answer"), doneEv()},
+		events: []evt.Signal{reasonEv("thinking... "), reasonEv("got it"), textEv("answer"), doneEv()},
 	}}}
 	f := &recorderFrontend{inputs: make(chan string, 8)}
 	session := core.NewSession()
@@ -264,8 +265,8 @@ func TestReasoningAccumulatesInBothBranches(t *testing.T) {
 
 	bash := &scriptedTool{name: "bash", result: "42"}
 	p2 := &scriptedProvider{turns: []scriptedTurn{
-		{events: []core.Event{reasonEv("planning the call"), callEv(core.ToolCall{ID: "c1", Name: "bash"}), doneEv()}},
-		{events: []core.Event{textEv("done"), doneEv()}},
+		{events: []evt.Signal{reasonEv("planning the call"), callEv(core.ToolCall{ID: "c1", Name: "bash"}), doneEv()}},
+		{events: []evt.Signal{textEv("done"), doneEv()}},
 	}}
 	f2 := &recorderFrontend{inputs: make(chan string, 8)}
 	session2 := core.NewSession()
@@ -300,11 +301,11 @@ type steeringFrontend struct {
 	inputs      []string
 	n           int
 	served      int
-	events      []core.Event
+	events      []evt.Signal
 	handle      context.CancelFunc
 	mode        string
 	steeredOnce bool
-	steerAt     func(core.Event) bool
+	steerAt     func(evt.Signal) bool
 }
 
 func (f *steeringFrontend) Input(ctx context.Context) (string, error) {
@@ -324,7 +325,7 @@ func (f *steeringFrontend) Input(ctx context.Context) (string, error) {
 	return line, nil
 }
 
-func (f *steeringFrontend) Notify(ev core.Event) {
+func (f *steeringFrontend) Notify(ev evt.Signal) {
 	f.events = append(f.events, ev)
 	if f.mode == "delta" && !f.steeredOnce {
 		if _, ok := ev.(core.TextDelta); ok {
@@ -340,8 +341,8 @@ func (f *steeringFrontend) Notify(ev core.Event) {
 
 func TestSteeringCancelsTheLiveTurnAndDeliversOnReentry(t *testing.T) {
 	p := &scriptedProvider{turns: []scriptedTurn{
-		{events: []core.Event{textEv("partial ")}, holdAfter: true},
-		{events: []core.Event{textEv("delivered"), doneEv()}},
+		{events: []evt.Signal{textEv("partial ")}, holdAfter: true},
+		{events: []evt.Signal{textEv("delivered"), doneEv()}},
 	}}
 	f := &steeringFrontend{inputs: []string{"speak", "steer"}, mode: "delta"}
 	session := core.NewSession()
@@ -393,7 +394,7 @@ func TestSteeringCancelsTheLiveTurnAndDeliversOnReentry(t *testing.T) {
 
 func TestSteeringAtThePromptReentersWithoutFault(t *testing.T) {
 	p := &scriptedProvider{turns: []scriptedTurn{{
-		events: []core.Event{textEv("real"), doneEv()},
+		events: []evt.Signal{textEv("real"), doneEv()},
 	}}}
 	f := &steeringFrontend{inputs: []string{"real"}, mode: "prompt"}
 	session := core.NewSession()
@@ -448,7 +449,7 @@ func (p *ctxCheckingPolicy) Assemble(ctx context.Context, s *core.Session) ([]co
 
 type ctxCheckingProvider struct{ *scriptedProvider }
 
-func (p *ctxCheckingProvider) Stream(ctx context.Context, req core.Request) (<-chan core.Event, error) {
+func (p *ctxCheckingProvider) Stream(ctx context.Context, req core.Request) (<-chan evt.Signal, error) {
 	if ctx.Err() != nil {
 		return nil, ctx.Err()
 	}
@@ -456,7 +457,7 @@ func (p *ctxCheckingProvider) Stream(ctx context.Context, req core.Request) (<-c
 }
 
 func TestPreStreamAssembleFailureOnADeadTurnIsAnInterrupt(t *testing.T) {
-	p := &scriptedProvider{turns: []scriptedTurn{{events: []core.Event{textEv("second turn"), doneEv()}}}}
+	p := &scriptedProvider{turns: []scriptedTurn{{events: []evt.Signal{textEv("second turn"), doneEv()}}}}
 	f := &steerFrontend{recorderFrontend: &recorderFrontend{inputs: make(chan string, 8)}, steer: "first"}
 	k := rig.New(
 		rig.WithProvider(p),
@@ -486,7 +487,7 @@ func TestPreStreamAssembleFailureOnADeadTurnIsAnInterrupt(t *testing.T) {
 }
 
 func TestPreStreamCallFailureOnADeadTurnIsAnInterrupt(t *testing.T) {
-	inner := &scriptedProvider{turns: []scriptedTurn{{events: []core.Event{textEv("second turn"), doneEv()}}}}
+	inner := &scriptedProvider{turns: []scriptedTurn{{events: []evt.Signal{textEv("second turn"), doneEv()}}}}
 	f := &steerFrontend{recorderFrontend: &recorderFrontend{inputs: make(chan string, 8)}, steer: "first"}
 	k := rig.New(
 		rig.WithProvider(&ctxCheckingProvider{inner}),
@@ -525,9 +526,9 @@ func (o *countingObserver) TurnStart(ctx context.Context, s *core.Session) { o.t
 func TestTurnStartFansOutOncePerTurn(t *testing.T) {
 	bash := &scriptedTool{name: "bash", result: "ok"}
 	p := &scriptedProvider{turns: []scriptedTurn{
-		{events: []core.Event{callEv(core.ToolCall{ID: "c1", Name: "bash"}), doneEv()}},
-		{events: []core.Event{textEv("mid"), doneEv()}},
-		{events: []core.Event{textEv("second turn"), doneEv()}},
+		{events: []evt.Signal{callEv(core.ToolCall{ID: "c1", Name: "bash"}), doneEv()}},
+		{events: []evt.Signal{textEv("mid"), doneEv()}},
+		{events: []evt.Signal{textEv("second turn"), doneEv()}},
 	}}
 	f := &recorderFrontend{inputs: make(chan string, 8)}
 	session := core.NewSession()
@@ -554,7 +555,7 @@ func TestTurnStartFansOutOncePerTurn(t *testing.T) {
 
 func TestTestEventForwardsUntouched(t *testing.T) {
 	p := &scriptedProvider{turns: []scriptedTurn{{
-		events: []core.Event{core.TestEvent{Name: "x"}, textEv("hello"), doneEv()},
+		events: []evt.Signal{core.TestEvent{Name: "x"}, textEv("hello"), doneEv()},
 	}}}
 	f := &recorderFrontend{inputs: make(chan string, 8)}
 	session := core.NewSession()

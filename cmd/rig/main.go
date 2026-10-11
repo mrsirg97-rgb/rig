@@ -14,8 +14,9 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/mrsirg97-rgb/evt"
+	"github.com/mrsirg97-rgb/evt/broadcast"
 	"github.com/mrsirg97-rgb/rig/v2"
-	"github.com/mrsirg97-rgb/rig/v2/broadcast"
 	"github.com/mrsirg97-rgb/rig/v2/command"
 	"github.com/mrsirg97-rgb/rig/v2/config"
 	"github.com/mrsirg97-rgb/rig/v2/core"
@@ -49,7 +50,7 @@ import (
 	webtool "github.com/mrsirg97-rgb/rig/v2/tool/web"
 )
 
-const Version = "2.17.1"
+const Version = "2.18.0"
 
 func main() {
 	if i := execDoor(os.Args, os.Getenv(sched.LandlockEnv)); i >= 0 {
@@ -311,7 +312,7 @@ func main() {
 
 	rt := runtimeTable(cfg.Models, modelID, row)
 	piped := *prompt != ""
-	workerCap := sched.NewWorkerCap(cfg.Settings.MaxWorkers)
+	handoff := evt.NewCap(engine, cfg.Settings.MaxWorkers)
 	del := delegate.New(delegate.Opts{
 		Ctx:          ctx,
 		Await:        piped,
@@ -329,7 +330,7 @@ func main() {
 		Spawn:        sched.RealSpawn,
 		Models:       func() models.Table { return rt },
 		Room:         room,
-		Cap:          workerCap,
+		Cap:          handoff,
 	})
 
 	py := pythontool.New(del)
@@ -542,7 +543,7 @@ func main() {
 			Models:       func() models.Table { return r.runtime },
 			Engine:       r.engine,
 			Room:         r.room,
-			Cap:          workerCap,
+			Cap:          handoff,
 		})
 	}
 	r.swarmWhy = swarmWhy
@@ -807,7 +808,7 @@ func runJob(args []string) int {
 		defer engine.Stop()
 		room.Add(rig.MemberFrontend).Subscribe(context.Background(), func(err error, messages ...broadcast.Message) {
 			for _, m := range messages {
-				if n, ok := m.Event().(core.Notice); err == nil && ok {
+				if n, ok := m.Signal().(evt.Notice); err == nil && ok {
 					fmt.Fprintln(os.Stderr, "rig: "+n.Source+": "+n.Text)
 				}
 			}

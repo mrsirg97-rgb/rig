@@ -13,6 +13,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/mrsirg97-rgb/evt"
 	"github.com/mrsirg97-rgb/rig/v2/command"
 	"github.com/mrsirg97-rgb/rig/v2/core"
 	"github.com/mrsirg97-rgb/rig/v2/middleware/approve"
@@ -21,6 +22,7 @@ import (
 	"github.com/mrsirg97-rgb/rig/v2/store"
 	"github.com/mrsirg97-rgb/rig/v2/store/state"
 	"github.com/mrsirg97-rgb/rig/v2/store/state/domain"
+	"github.com/mrsirg97-rgb/rig/v2/tool"
 	"github.com/mrsirg97-rgb/rig/v2/tool/bash"
 	"github.com/mrsirg97-rgb/rig/v2/tool/file"
 	sessionstool "github.com/mrsirg97-rgb/rig/v2/tool/sessions"
@@ -28,8 +30,8 @@ import (
 
 func TestVersionIsTheFreeze(t *testing.T) {
 
-	if Version != "2.17.1" {
-		t.Fatalf("Version = %q, want 2.17.1", Version)
+	if Version != "2.18.0" {
+		t.Fatalf("Version = %q, want 2.18.0", Version)
 	}
 
 	if !regexp.MustCompile(`^\d+\.\d+\.\d+$`).MatchString(Version) {
@@ -131,7 +133,7 @@ func (fakeWeb) Exec(ctx context.Context, args json.RawMessage) (string, error) {
 }
 
 func (nullFrontend) Input(ctx context.Context) (string, error) { return "", io.EOF }
-func (nullFrontend) Notify(ev core.Event)                      {}
+func (nullFrontend) Notify(ev evt.Signal)                      {}
 
 type oneLineFrontend struct{ line string }
 
@@ -143,7 +145,7 @@ func (f *oneLineFrontend) Input(ctx context.Context) (string, error) {
 	f.line = ""
 	return l, nil
 }
-func (*oneLineFrontend) Notify(ev core.Event) {}
+func (*oneLineFrontend) Notify(ev evt.Signal) {}
 
 func testTools() map[string]core.Tool {
 	return map[string]core.Tool{
@@ -210,7 +212,7 @@ func TestSessionsIsANonMutatingNative(t *testing.T) {
 		}
 	}
 	if !inNatives {
-		t.Fatal("sessions must be a native (the eighteenth)")
+		t.Fatal("sessions must be a native (the thirteenth)")
 	}
 	r := &root{}
 	r.natives = make(map[string]bool, len(nativeToolNames))
@@ -652,9 +654,9 @@ func TestNewResetsApproveToTheSettingsDefault(t *testing.T) {
 	}
 }
 
-func TestDelegateIsAConcurrentNative(t *testing.T) {
-	if !concurrentNatives["delegate"] {
-		t.Fatal("delegate must be concurrent (fan-out: several calls in one turn run as a batch)")
+func TestDelegateIsAWrite(t *testing.T) {
+	if !tool.Mutates("delegate", "") {
+		t.Fatal("delegate is a write (mutates everything): it serializes inline in the drain")
 	}
 }
 
@@ -669,6 +671,8 @@ func TestIsMutatingPredicate(t *testing.T) {
 		{"write", `{}`, true},
 		{"edit", `{}`, true},
 		{"python", `{"action":"code"}`, true},
+		{"python", `{}`, true},
+		{"python", `{"action":"vars"}`, false},
 		{"scheduler", `{"action":"create"}`, true},
 		{"plugin", `{"action":"run"}`, true},
 		{"delegate", `{}`, true},

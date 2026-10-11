@@ -1,9 +1,12 @@
 package swarm
 
 import (
+	"context"
 	"errors"
 	"time"
 
+	"github.com/mrsirg97-rgb/evt"
+	"github.com/mrsirg97-rgb/rig/v2"
 	"github.com/mrsirg97-rgb/rig/v2/core"
 	sched "github.com/mrsirg97-rgb/rig/v2/store/scheduler"
 	todostore "github.com/mrsirg97-rgb/rig/v2/store/todo"
@@ -54,10 +57,25 @@ func (c *Controller) work(w *worker, id string) workResult {
 		c.loud(w, "w%d: task %s: %v", w.id, id, err)
 		return workResult{}
 	}
-	if err := c.opts.Cap.Hold(w.ctx); err != nil {
-		return workResult{holder: err}
+	var res workResult
+	work := evt.Func(func(gate context.Context) {
+		if gate.Err() != nil {
+			res = workResult{holder: gate.Err()}
+			return
+		}
+		res = c.delegateWork(w, id, task)
+	})
+	sub := c.opts.Cap.Submit(w.ctx, work, rig.PriorityFleet)
+	if !sub.Started() {
+		<-sub.Settled()
+	} else {
+		work.Resolve(w.ctx)
 	}
-	defer c.opts.Cap.Free()
+	sub.Release()
+	return res
+}
+
+func (c *Controller) delegateWork(w *worker, id string, task todostore.TaskInfo) workResult {
 	res, err := c.delegate(sched.DelegateInput{
 		DB:            c.opts.SchedDB,
 		Home:          c.opts.Home,
@@ -138,7 +156,7 @@ func (c *Controller) delegate(in sched.DelegateInput) (sched.DelegateResult, err
 
 func (c *Controller) settle(w *worker, id string, res workResult) {
 	if res.holder != nil {
-		c.say(core.LevelError, "w%d stopped — %v", w.id, res.holder)
+		c.say(evt.LevelError, "w%d stopped — %v", w.id, res.holder)
 		c.release(w, id)
 		return
 	}
@@ -149,12 +167,12 @@ func (c *Controller) settle(w *worker, id string, res workResult) {
 	}
 	c.retries[id]++
 	if c.retries[id] == 1 {
-		c.say(core.LevelError, "w%d died — %s restarted", w.id, id)
+		c.say(evt.LevelError, "w%d died — %s restarted", w.id, id)
 		c.release(w, id)
 		w.task = ""
 		return
 	}
-	c.say(core.LevelError, "w%d died — %s exited", w.id, id)
+	c.say(evt.LevelError, "w%d died — %s exited", w.id, id)
 	c.failTask(w, id, res.noVerdict)
 	w.failed++
 	w.task = ""
@@ -180,7 +198,7 @@ func (c *Controller) failTask(w *worker, id string, noVerdict bool) {
 		c.loud(w, "w%d: fail %s: %v", w.id, id, err)
 		return
 	}
-	c.say(core.LevelError, "%s failed — the worker died twice", id)
+	c.say(evt.LevelError, "%s failed — the worker died twice", id)
 }
 
 func (c *Controller) rejectTask(w *worker, id, reason string) error {
@@ -191,14 +209,14 @@ func (c *Controller) rejectTask(w *worker, id, reason string) error {
 			c.loud(w, "w%d: fail %s: %v", w.id, id, err)
 			return err
 		}
-		c.say(core.LevelError, "%s failed — the reviewer rejected this twice; the swarm failed it", id)
+		c.say(evt.LevelError, "%s failed — the reviewer rejected this twice; the swarm failed it", id)
 		return nil
 	}
 	if _, err := todostore.Reject(w.ctx, c.opts.TodoDB, w.proj, id, reason, w.identity); err != nil {
 		c.loud(w, "w%d: reject %s: %v", w.id, id, err)
 		return err
 	}
-	c.say(core.LevelError, "%s rejected — %s", id, reason)
+	c.say(evt.LevelError, "%s rejected — %s", id, reason)
 	return nil
 }
 

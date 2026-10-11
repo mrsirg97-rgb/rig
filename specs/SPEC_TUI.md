@@ -619,7 +619,7 @@ reviewer 1 · ⧗0 ✓0 ✕0 · w2 — —
   the exit; the turn's own row is then one line naming the batch
   (`❯ delegate #9 returned`, `❯ delegate #9, #11, #12 returned` for a
   batch), never the block painted as the prompt with newlines shown.
-- `core.Notice` with source `swarm` (`SwarmNotice` until 2.11.0) is the
+- `evt.Notice` with source `swarm` (`SwarmNotice` until 2.11.0) is the
   decision-point notice SPEC_SWARM 7 names. Through 2.11.6 a notice
   committed one dim line in the transcript. Since 2.11.7 no notice
   commits: notices queue (identical ones collapse, no size) and, when

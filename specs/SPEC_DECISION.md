@@ -251,7 +251,7 @@ time and streams the thinking under it.
 
 Nothing the queue or the reviewer has to say reaches stderr while a
 frontend owns the screen: a dropped proposal, a decide error, a store
-error, a fire that was refused all travel as a `core.Notice` (source
+error, a fire that was refused all travel as a `evt.Notice` (source
 `decision`) through the frontend's `Notify`, rendered as one dim line by
 the TUI, a `notice` frame by the dashboard, a `rig:` line on stderr by a
 headless run. Before 2.8.3 these were `Fprintln(os.Stderr)` over the
@@ -348,7 +348,7 @@ incumbent's on every question the held-out rows carry; a question
 missing from any report is not a beat. The p(true) means ride the
 report and the table as the signal's evidence; they never gate.
 
-One `core.Notice` (source `decision`) carries the held-out table — the
+One `evt.Notice` (source `decision`) carries the held-out table — the
 three reports per question and the promoted word — and the run is
 recorded in the decision store's `trainings` table: started, trainer,
 rows, skipped, split, run dir, candidate checkpoint, the three held-out

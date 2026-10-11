@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/mrsirg97-rgb/evt"
 	"github.com/mrsirg97-rgb/rig/v2/core"
 	"github.com/mrsirg97-rgb/rig/v2/testenv"
 )
@@ -216,6 +217,54 @@ func TestTheChatUnescapesThePromptOnBothDoors(t *testing.T) {
 	}
 }
 
+type steeredThrough struct {
+	c *chat
+}
+
+func (s steeredThrough) Name() string { return "steer" }
+func (s steeredThrough) Description() string {
+	return "a line for the model at the next turn boundary, latest wins"
+}
+func (s steeredThrough) Run(ctx context.Context, args string, env any) (string, error) {
+	s.c.Steer(args)
+	return "", nil
+}
+
+func TestTheSteeredCommandDispatchesAtReEntry(t *testing.T) {
+	srv, tok := newChatServer(t)
+	h := srv.Handler()
+	srv.chat.commands["steer"] = steeredThrough{c: srv.chat}
+	srv.chat.known = append(srv.chat.known, "steer")
+	doReq(t, h, "POST", "/api/chat", strings.NewReader(`{"text":"/steer /nope"}`), originHdr(tok))
+	ctx, cancel := context.WithTimeout(context.Background(), 1500*time.Millisecond)
+	defer cancel()
+	done := make(chan string, 1)
+	go func() {
+		line, _ := srv.Input(ctx)
+		done <- line
+	}()
+	<-ctx.Done()
+	if line := <-done; line != "" {
+		t.Fatalf("a dispatched command must never become a prompt, got %q", line)
+	}
+	_, replay, _ := srv.chat.subscribe(0)
+	dispatched, prompted := false, false
+	for _, raw := range replay {
+		if strings.Contains(string(raw), `"kind":"command"`) && strings.Contains(string(raw), "unknown command: nope") {
+			dispatched = true
+		}
+		if strings.Contains(string(raw), `"kind":"prompt"`) && strings.Contains(string(raw), "/nope") {
+			prompted = true
+		}
+	}
+	if !dispatched {
+		t.Fatalf("the steered /-command dispatches at re-entry: %v", replay)
+	}
+	if prompted {
+		t.Fatalf("the steered /-command reaches the model raw: %v", replay)
+	}
+}
+
 func TestChatAskRoundTrip(t *testing.T) {
 	srv, tok := newChatServer(t)
 	h := srv.Handler()
@@ -310,7 +359,7 @@ func TestSwarmAndDelegateStatusesSitSideBySide(t *testing.T) {
 func TestANoticePublishesOneFrameWithItsSource(t *testing.T) {
 	srv, tok := newChatServer(t)
 	ts := testenv.Server(t, srv.Handler())
-	srv.Notify(core.Notice{Source: "decision", Text: "queue full, dropping the bash proposal"})
+	srv.Notify(evt.Notice{Source: "decision", Text: "queue full, dropping the bash proposal"})
 	got := frames(t, ts.URL, tok, "0", 2, 3*time.Second)
 	if k := kinds(got); k != "hello,notice" {
 		t.Fatalf("kinds %s", k)

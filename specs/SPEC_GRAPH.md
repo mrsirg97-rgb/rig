@@ -174,7 +174,7 @@ middleware/index/      the hook: a link in the canonical chain, innermost
                        that returned without error
 tool/rem/              index and pack actions; the words in tool/registry.json
 cmd/rig/main.go        the queue created and Run, its notices through the
-                       frontend (core.Notice, source graph), the link added
+                       frontend (evt.Notice, source graph), the link added
                        to canonicalMiddleware
 ```
 

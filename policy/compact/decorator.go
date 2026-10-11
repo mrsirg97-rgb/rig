@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 
+	"github.com/mrsirg97-rgb/evt"
 	"github.com/mrsirg97-rgb/rig/v2/core"
 )
 
@@ -41,7 +42,7 @@ func classifiesContextLength(err error) bool {
 	return false
 }
 
-func (d *decorator) Stream(ctx context.Context, req core.Request) (<-chan core.Event, error) {
+func (d *decorator) Stream(ctx context.Context, req core.Request) (<-chan evt.Signal, error) {
 	mt, err := d.p.clampMaxTokens(d.p.sizeOf(req.Messages))
 	if err != nil {
 		return nil, err
@@ -51,7 +52,7 @@ func (d *decorator) Stream(ctx context.Context, req core.Request) (<-chan core.E
 	if err != nil {
 		return nil, err
 	}
-	out := make(chan core.Event, 4)
+	out := make(chan evt.Signal, 4)
 	go func() {
 		defer close(out)
 		d.relay(ctx, out, ch, req)
@@ -59,8 +60,8 @@ func (d *decorator) Stream(ctx context.Context, req core.Request) (<-chan core.E
 	return out, nil
 }
 
-func (d *decorator) relay(ctx context.Context, out chan<- core.Event, ch <-chan core.Event, req core.Request) {
-	emit := func(ev core.Event) bool {
+func (d *decorator) relay(ctx context.Context, out chan<- evt.Signal, ch <-chan evt.Signal, req core.Request) {
+	emit := func(ev evt.Signal) bool {
 		select {
 		case out <- ev:
 			return true

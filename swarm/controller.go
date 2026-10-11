@@ -9,10 +9,10 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/mrsirg97-rgb/evt"
+	"github.com/mrsirg97-rgb/evt/broadcast"
 	"github.com/mrsirg97-rgb/rig/v2"
-	"github.com/mrsirg97-rgb/rig/v2/broadcast"
 	"github.com/mrsirg97-rgb/rig/v2/core"
-	"github.com/mrsirg97-rgb/rig/v2/evt"
 	"github.com/mrsirg97-rgb/rig/v2/models"
 	"github.com/mrsirg97-rgb/rig/v2/store"
 	sched "github.com/mrsirg97-rgb/rig/v2/store/scheduler"
@@ -81,7 +81,7 @@ type Opts struct {
 	Delegate     func(sched.DelegateInput) (sched.DelegateResult, error)
 	Engine       evt.Engine
 	Room         broadcast.Room
-	Cap          sched.WorkerCap
+	Cap          evt.Cap
 }
 
 type Controller struct {
@@ -127,6 +127,9 @@ type worker struct {
 }
 
 func New(o Opts) *Controller {
+	if o.Cap == nil {
+		o.Cap = evt.NewCap(nil, 0)
+	}
 	if o.Engine == nil || o.Room == nil {
 		panic("swarm: the controller posts on the loop and speaks in a room; both are constructor arguments")
 	}
@@ -160,7 +163,7 @@ func (c *Controller) receive(err error, messages ...broadcast.Message) {
 			if int64(w.id) != m.Origin() {
 				continue
 			}
-			switch ev := m.Event().(type) {
+			switch ev := m.Signal().(type) {
 			case nil:
 				w.heartbeat = time.Now()
 				changed = true
@@ -303,7 +306,7 @@ func (c *Controller) Stop() (string, error) {
 	}
 	c.call(func() {
 		c.emit()
-		c.say(core.LevelSuccess, "/swarm exited — %d %s stopped", count, plural(count, "worker"))
+		c.say(evt.LevelSuccess, "/swarm exited — %d %s stopped", count, plural(count, "worker"))
 	})
 	return fmt.Sprintf("swarm: stopped %d %s", count, plural(count, "agent")), nil
 }
@@ -329,7 +332,7 @@ func (c *Controller) status() core.SwarmStatus {
 	return core.SwarmStatus{Workers: workers, Pending: counts.Pending, Review: counts.Review}
 }
 
-func (c *Controller) say(level core.Level, format string, args ...any) {
+func (c *Controller) say(level evt.Level, format string, args ...any) {
 	broadcast.Say(c.self, "swarm", strings.TrimRight(fmt.Sprintf(format, args...), "\n"), level)
 }
 
@@ -337,7 +340,7 @@ func (c *Controller) loud(w *worker, format string, args ...any) {
 	if w.ctx.Err() != nil {
 		return
 	}
-	c.say(core.LevelError, format, args...)
+	c.say(evt.LevelError, format, args...)
 }
 
 func (c *Controller) brief(w *worker, task todostore.TaskInfo) string {

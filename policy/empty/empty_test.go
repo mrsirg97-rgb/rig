@@ -9,6 +9,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/mrsirg97-rgb/evt"
 	"github.com/mrsirg97-rgb/rig/v2"
 	"github.com/mrsirg97-rgb/rig/v2/core"
 	"github.com/mrsirg97-rgb/rig/v2/loop"
@@ -17,7 +18,7 @@ import (
 )
 
 type scriptedTurn struct {
-	events  []core.Event
+	events  []evt.Signal
 	err     error
 	signal  func()
 	blockOn chan struct{}
@@ -30,7 +31,7 @@ type scriptedProvider struct {
 	captured []core.Request
 }
 
-func (p *scriptedProvider) Stream(ctx context.Context, req core.Request) (<-chan core.Event, error) {
+func (p *scriptedProvider) Stream(ctx context.Context, req core.Request) (<-chan evt.Signal, error) {
 	p.mu.Lock()
 	if p.n >= len(p.turns) {
 		p.mu.Unlock()
@@ -53,7 +54,7 @@ func (p *scriptedProvider) Stream(ctx context.Context, req core.Request) (<-chan
 	if turn.err != nil {
 		return nil, turn.err
 	}
-	out := make(chan core.Event, len(turn.events)+1)
+	out := make(chan evt.Signal, len(turn.events)+1)
 	go func() {
 		defer close(out)
 		for _, ev := range turn.events {
@@ -83,7 +84,7 @@ type testFrontend struct {
 	mu     sync.Mutex
 	inputs []string
 	cancel context.CancelFunc
-	events []core.Event
+	events []evt.Signal
 }
 
 func (f *testFrontend) Input(ctx context.Context) (string, error) {
@@ -103,16 +104,16 @@ func (f *testFrontend) Input(ctx context.Context) (string, error) {
 	return s, nil
 }
 
-func (f *testFrontend) Notify(ev core.Event) {
+func (f *testFrontend) Notify(ev evt.Signal) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.events = append(f.events, ev)
 }
 
-func (f *testFrontend) snapshot() []core.Event {
+func (f *testFrontend) snapshot() []evt.Signal {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	return append([]core.Event(nil), f.events...)
+	return append([]evt.Signal(nil), f.events...)
 }
 
 func (f *testFrontend) steal() context.CancelFunc {
@@ -136,8 +137,8 @@ func run(t *testing.T, prov *scriptedProvider, fe *testFrontend) *rig.Kernel {
 func TestEmptyTurnResamplesSameRequest(t *testing.T) {
 	discarded := core.ReasoningDelta{Text: "thinking about an edit\n<invoke name=\"edit\" path=\"x\">"}
 	prov := &scriptedProvider{turns: []scriptedTurn{
-		{events: []core.Event{discarded, core.Done{StopReason: "stop", Usage: core.Usage{Prompt: 100, Completion: 268, CacheRead: 99}}}},
-		{events: []core.Event{core.ReasoningDelta{Text: "ok"}, core.TextDelta{Text: "answer"}, core.Done{StopReason: "stop", Usage: core.Usage{Prompt: 100, Completion: 10, CacheRead: 99}}}},
+		{events: []evt.Signal{discarded, core.Done{StopReason: "stop", Usage: core.Usage{Prompt: 100, Completion: 268, CacheRead: 99}}}},
+		{events: []evt.Signal{core.ReasoningDelta{Text: "ok"}, core.TextDelta{Text: "answer"}, core.Done{StopReason: "stop", Usage: core.Usage{Prompt: 100, Completion: 10, CacheRead: 99}}}},
 	}}
 	fe := &testFrontend{inputs: []string{"go"}}
 	k := run(t, prov, fe)
@@ -183,9 +184,9 @@ func TestEmptyTurnResamplesSameRequest(t *testing.T) {
 
 func TestThreeEmptyTurnsSurfaceTheFault(t *testing.T) {
 	prov := &scriptedProvider{turns: []scriptedTurn{
-		{events: []core.Event{core.ReasoningDelta{Text: "first"}, core.Done{StopReason: "stop", Usage: core.Usage{Prompt: 5, Completion: 1}}}},
-		{events: []core.Event{core.ReasoningDelta{Text: "second"}, core.Done{StopReason: "stop", Usage: core.Usage{Prompt: 5, Completion: 2}}}},
-		{events: []core.Event{core.ReasoningDelta{Text: "third"}, core.Done{StopReason: "stop", Usage: core.Usage{Prompt: 5, Completion: 3}}}},
+		{events: []evt.Signal{core.ReasoningDelta{Text: "first"}, core.Done{StopReason: "stop", Usage: core.Usage{Prompt: 5, Completion: 1}}}},
+		{events: []evt.Signal{core.ReasoningDelta{Text: "second"}, core.Done{StopReason: "stop", Usage: core.Usage{Prompt: 5, Completion: 2}}}},
+		{events: []evt.Signal{core.ReasoningDelta{Text: "third"}, core.Done{StopReason: "stop", Usage: core.Usage{Prompt: 5, Completion: 3}}}},
 	}}
 	fe := &testFrontend{inputs: []string{"go"}}
 	k := run(t, prov, fe)
@@ -220,7 +221,7 @@ func TestThreeEmptyTurnsSurfaceTheFault(t *testing.T) {
 
 func TestFaultNamesToolCallInsideThinking(t *testing.T) {
 	emptyTurn := func(reason string) scriptedTurn {
-		return scriptedTurn{events: []core.Event{core.ReasoningDelta{Text: reason}, core.Done{StopReason: "stop"}}}
+		return scriptedTurn{events: []evt.Signal{core.ReasoningDelta{Text: reason}, core.Done{StopReason: "stop"}}}
 	}
 	prov := &scriptedProvider{turns: []scriptedTurn{
 		emptyTurn("plain"),
@@ -242,7 +243,7 @@ func TestFaultNamesToolCallInsideThinking(t *testing.T) {
 
 func TestFaultOmitsMarkerClauseWithoutMarker(t *testing.T) {
 	emptyTurn := func(reason string) scriptedTurn {
-		return scriptedTurn{events: []core.Event{core.ReasoningDelta{Text: reason}, core.Done{StopReason: "stop"}}}
+		return scriptedTurn{events: []evt.Signal{core.ReasoningDelta{Text: reason}, core.Done{StopReason: "stop"}}}
 	}
 	prov := &scriptedProvider{turns: []scriptedTurn{
 		emptyTurn("no marker here"),
@@ -264,7 +265,7 @@ func TestFaultOmitsMarkerClauseWithoutMarker(t *testing.T) {
 
 func TestLengthFinishIsNotResampled(t *testing.T) {
 	prov := &scriptedProvider{turns: []scriptedTurn{
-		{events: []core.Event{core.ReasoningDelta{Text: "partial thinking"}, core.Done{StopReason: "length", Usage: core.Usage{Prompt: 5, Completion: 4}}}},
+		{events: []evt.Signal{core.ReasoningDelta{Text: "partial thinking"}, core.Done{StopReason: "length", Usage: core.Usage{Prompt: 5, Completion: 4}}}},
 	}}
 	fe := &testFrontend{inputs: []string{"go"}}
 	k := run(t, prov, fe)
@@ -284,7 +285,7 @@ func TestLengthFinishIsNotResampled(t *testing.T) {
 
 func TestContentTurnIsNotResampled(t *testing.T) {
 	prov := &scriptedProvider{turns: []scriptedTurn{
-		{events: []core.Event{core.ReasoningDelta{Text: "think"}, core.TextDelta{Text: "final answer"}, core.Done{StopReason: "stop"}}},
+		{events: []evt.Signal{core.ReasoningDelta{Text: "think"}, core.TextDelta{Text: "final answer"}, core.Done{StopReason: "stop"}}},
 	}}
 	fe := &testFrontend{inputs: []string{"go"}}
 	run(t, prov, fe)
@@ -302,7 +303,7 @@ func TestCancelDuringResampleStopsClean(t *testing.T) {
 	started := make(chan struct{})
 	block := make(chan struct{})
 	prov := &scriptedProvider{turns: []scriptedTurn{
-		{events: []core.Event{core.ReasoningDelta{Text: "first"}, core.Done{StopReason: "stop"}}},
+		{events: []evt.Signal{core.ReasoningDelta{Text: "first"}, core.Done{StopReason: "stop"}}},
 		{signal: func() { close(started) }, blockOn: block},
 	}}
 	fe := &testFrontend{inputs: []string{"go"}}
@@ -336,7 +337,7 @@ func TestCancelDuringResampleStopsClean(t *testing.T) {
 
 func TestResampleStreamErrorSurfaces(t *testing.T) {
 	prov := &scriptedProvider{turns: []scriptedTurn{
-		{events: []core.Event{core.ReasoningDelta{Text: "x"}, core.Done{StopReason: "stop"}}},
+		{events: []evt.Signal{core.ReasoningDelta{Text: "x"}, core.Done{StopReason: "stop"}}},
 		{err: errors.New("resample: transport down")},
 	}}
 	fe := &testFrontend{inputs: []string{"go"}}
@@ -354,8 +355,8 @@ func TestResampleStreamErrorSurfaces(t *testing.T) {
 
 func TestEmptyTurnCarriesTheSwallowedModel(t *testing.T) {
 	prov := &scriptedProvider{turns: []scriptedTurn{
-		{events: []core.Event{core.Done{StopReason: "stop", Model: "ox-alpha", Usage: core.Usage{Prompt: 10, Completion: 1}}}},
-		{events: []core.Event{core.TextDelta{Text: "answer"}, core.Done{StopReason: "stop", Model: "ox-alpha", Usage: core.Usage{Prompt: 10, Completion: 2}}}},
+		{events: []evt.Signal{core.Done{StopReason: "stop", Model: "ox-alpha", Usage: core.Usage{Prompt: 10, Completion: 1}}}},
+		{events: []evt.Signal{core.TextDelta{Text: "answer"}, core.Done{StopReason: "stop", Model: "ox-alpha", Usage: core.Usage{Prompt: 10, Completion: 2}}}},
 	}}
 	fe := &testFrontend{inputs: []string{"go"}}
 	run(t, prov, fe)

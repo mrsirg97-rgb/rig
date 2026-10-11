@@ -172,7 +172,7 @@ own. The sidecar model is rig's own, trained on rig's own traffic.
 **words are the budget.** Everything the model is told about its tools
 crosses the wire every turn, so the system prompt and the tool schemas
 are lean, byte-stable, and carefully chosen. The whole menu aims under
-15,000 characters and the wire job fails the build past 15,500 —
+15,000 characters and the wire job fails the build past 16,500 —
 trimming is a decision, not a leak. Nothing is goldened: the wire job
 renders the request bodies at the merge-base and at the head and posts
 their diff, so a byte that moves is reviewed, not trusted. The
@@ -206,7 +206,7 @@ the core is frozen.
 <!-- measured:begin (scripts/readme-measured; do not hand-edit) -->
 Numbers, not adjectives — and each one names its mechanism. The block is computed: `scripts/readme-measured` reads the stores and the tree, CI refuses drift, so it cannot go stale on you. One SQL read of the state store: the store is the receipt.
 
-**98.3% of 5.6 billion prompt tokens served from cache**, across 2,489 sessions and 50,868 recorded turns — the earliest on v0.2.0. The ratio is `cache_read / prompt`, the arithmetic `sessions summary` runs; the byte-stable prefix is why the provider can reuse so much of it. Cost per turn, era by era:
+**98.3% of 5.7 billion prompt tokens served from cache**, across 2,531 sessions and 51,650 recorded turns — the earliest on v0.2.0. The ratio is `cache_read / prompt`, the arithmetic `sessions summary` runs; the byte-stable prefix is why the provider can reuse so much of it. Cost per turn, era by era:
 
 | era | turns | new tokens / turn | completion / turn | cache |
 |---------|--------|------|------|--------|
@@ -214,13 +214,13 @@ Numbers, not adjectives — and each one names its mechanism. The block is compu
 | 1.0–1.3 | 7,440 | 933 | 676 | 99.13% |
 | 1.4–1.9 | 10,045 | 962 | 525 | 99.26% |
 | 2.0–2.9 | 7,360 | 906 | 503 | 99.09% |
-| 2.10.x | 12,017 | 4,335 | 630 | 95.64% |
+| 2.10.x | 12,799 | 4,202 | 640 | 95.76% |
 
 The 2.1.x consolidation rethought the system prompt and the toolset and kept the machinery — the kink is visible. The 2.10.x row is the fleet's own traffic: swarm workers and delegates are short-lived sessions whose first turns cannot hit a cache that does not exist yet, and the models rotate; the interactive sessions of that era hold the ~98% line.
 
 **A few thousand bytes of preamble.** The system prompt and the tool schemas are lean, byte-stable, and carefully chosen, and the tests say so: `TestSystemPromptIsByteStableAcrossBuilds`, `TestWireMarshalingIsDeterministic`, `TestWireMessagesAreAppendOnly`. A stray timestamp cannot quietly kill the cache.
 
-**431 lines is the loop** — `loop.go` plus `batch.go`, stdlib only. **662 lines is the whole swarm** — claim, spawn, complete, verdict, reap, and the status throttle. **47,518 lines of Go, 76,150 of tests.** The one store dependency is pure-Go SQLite.
+**431 lines is the loop** — `loop.go` plus `batch.go`, stdlib only. **683 lines is the whole swarm** — claim, spawn, complete, verdict, reap, and the status throttle. **46,675 lines of Go, 75,288 of tests.** The one store dependency is pure-Go SQLite.
 
 <!-- measured:end -->
 
@@ -228,7 +228,7 @@ The 2.1.x consolidation rethought the system prompt and the toolset and kept the
 
 | OS concept | rig | where |
 |---|---|---|
-| kernel | `loop.Run(ctx, kernel)` over the typed seams; `loop.go` + `batch.go` are 409 lines, stdlib-only | `loop/`, `core/`, `kernel.go` |
+| kernel | `loop.Run(ctx, kernel)` over the typed seams; `loop.go` + `batch.go` are 432 lines, stdlib-only | `loop/`, `core/`, `kernel.go` |
 | scheduler | the turn's batch: concurrent reads beside each other, bounded by the kernel's Parallel (8), effects in call order; background jobs on the operator's crontab, model fires jailed | `loop/batch.go`, `tool/scheduler`, `store/scheduler` |
 | processes | sessions (TUI, piped, one-shot), delegates, drain workers; each worker owns a transcript, sandboxed and resumable | `frontend/`, `tool/delegate`, `swarm/` |
 | IPC | the event stream (`TextDelta`, `ToolCallEvent`, `ToolResult`, `TurnEnd`) and tool calls through the middleware chain; the stores are the shared state across processes | `core/provider.go`, `evt/`, `store/` |

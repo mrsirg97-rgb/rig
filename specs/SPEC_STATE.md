@@ -189,7 +189,8 @@ sources its rows from the loop's events; the transcript, `ToolStart`/
 `ToolResult` (the guarded result, as the loop appends it), reasoning, usage
 with the cache fields. It appends a row per event inside its own short
 transaction, so a kill leaves every completed row readable. A `TurnEnd`
-discards the unlanded partial of a turned turn; each turn boundary upserts
+discards the unlanded partial of a turned turn, except the interrupt's,
+which lands (2.17.1); each turn boundary upserts
 the file provenance. No loop change, and, with the middleware tap retired
 (deliverable 7), the schema did not change either.
 
@@ -695,8 +696,8 @@ pack-by-task), `scheduler {create|update|list|show|pause|resume|remove|
 runs|repair}` (2.12.10's `show` reads one job by id), and
 `sessions {list|summary}` (rig's own,
 not pane's: an introspection of the session store that migrates an older
-store on open, absent from the root's `mutatingNatives` and from the
-concurrent read set; it opens a store, like `todo`/`rem`/`scheduler`, so
+store on open; the registry answers it a read — `mutates: []` — and the
+gate passes it silently; it opens a store, like `todo`/`rem`/`scheduler`, so
 it is not a pure observation).
 Descriptions and schema property text are pane's promptGuidelines, lowercase, terse.
 

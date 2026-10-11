@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/mrsirg97-rgb/evt"
 	"github.com/mrsirg97-rgb/rig/v2/command"
 	"github.com/mrsirg97-rgb/rig/v2/core"
 )
@@ -193,7 +194,10 @@ func (c *chat) Input(ctx context.Context) (string, error) {
 			if strings.TrimSpace(line) == "" {
 				continue
 			}
-			return c.take(ctx, line), nil
+			if out, ok := c.take(ctx, line); ok {
+				return out, nil
+			}
+			continue
 		default:
 		}
 		select {
@@ -204,12 +208,19 @@ func (c *chat) Input(ctx context.Context) (string, error) {
 			if strings.TrimSpace(line) == "" {
 				continue
 			}
-			return c.take(ctx, line), nil
+			if out, ok := c.take(ctx, line); ok {
+				return out, nil
+			}
+			continue
 		}
 	}
 }
 
-func (c *chat) take(ctx context.Context, line string) string {
+func (c *chat) take(ctx context.Context, line string) (string, bool) {
+	if c.commands != nil && command.IsCommandLine(line) {
+		c.dispatch(ctx, line)
+		return "", false
+	}
 	if strings.HasPrefix(line, "//") {
 		line = command.Unescape(line)
 	}
@@ -218,7 +229,7 @@ func (c *chat) take(ctx context.Context, line string) string {
 	c.steeredLive = false
 	c.mu.Unlock()
 	c.publish(map[string]any{"kind": "prompt", "text": line})
-	return line
+	return line, true
 }
 
 func (c *chat) dispatch(ctx context.Context, line string) map[string]any {
@@ -325,7 +336,7 @@ func usageOf(u core.Usage) map[string]any {
 	return map[string]any{"prompt": u.Prompt, "completion": u.Completion, "cache_read": u.CacheRead, "cache_write": u.CacheWrite, "cost": u.Cost}
 }
 
-func (c *chat) Notify(ev core.Event) {
+func (c *chat) Notify(ev evt.Signal) {
 	switch e := ev.(type) {
 	case core.TextDelta:
 		c.publish(map[string]any{"kind": "text", "text": e.Text})
@@ -361,7 +372,7 @@ func (c *chat) Notify(ev core.Event) {
 		}
 		c.hub.Unlock()
 		c.publish(frame)
-	case core.Notice:
+	case evt.Notice:
 		c.publish(map[string]any{"kind": "notice", "source": e.Source, "text": e.Text, "level": e.Level.String()})
 	case core.WorkerDone:
 		c.mu.Lock()
@@ -420,7 +431,7 @@ func capResult(s string) string {
 }
 
 func (s *Server) Input(ctx context.Context) (string, error) { return s.chat.Input(ctx) }
-func (s *Server) Notify(ev core.Event)                      { s.chat.Notify(ev) }
+func (s *Server) Notify(ev evt.Signal)                      { s.chat.Notify(ev) }
 func (s *Server) Ask(ctx context.Context, prompt string) bool {
 	return s.chat.Ask(ctx, prompt)
 }

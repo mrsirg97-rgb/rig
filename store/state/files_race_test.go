@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/mrsirg97-rgb/evt"
 	"github.com/mrsirg97-rgb/rig/v2/core"
 	"github.com/mrsirg97-rgb/rig/v2/store/state"
 	"github.com/mrsirg97-rgb/rig/v2/tool/file"
@@ -15,7 +16,7 @@ import (
 type probeFe struct{}
 
 func (probeFe) Input(context.Context) (string, error) { return "hi", nil }
-func (probeFe) Notify(core.Event)                     {}
+func (probeFe) Notify(evt.Signal)                     {}
 
 func TestRecorderUpsertDoesNotRaceTheFileTool(t *testing.T) {
 	db := openStore(t)

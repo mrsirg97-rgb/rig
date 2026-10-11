@@ -5,6 +5,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/mrsirg97-rgb/evt"
 	"github.com/mrsirg97-rgb/rig/v2/core"
 	"github.com/mrsirg97-rgb/rig/v2/policy/effort"
 )
@@ -14,11 +15,11 @@ type recProvider struct {
 	reqs []core.Request
 }
 
-func (p *recProvider) Stream(ctx context.Context, req core.Request) (<-chan core.Event, error) {
+func (p *recProvider) Stream(ctx context.Context, req core.Request) (<-chan evt.Signal, error) {
 	p.mu.Lock()
 	p.reqs = append(p.reqs, req)
 	p.mu.Unlock()
-	ch := make(chan core.Event, 1)
+	ch := make(chan evt.Signal, 1)
 	ch <- core.Done{Usage: core.Usage{Prompt: 1}}
 	close(ch)
 	return ch, nil
@@ -30,7 +31,7 @@ func (p *recProvider) got() []core.Request {
 	return append([]core.Request(nil), p.reqs...)
 }
 
-func drain(ch <-chan core.Event) {
+func drain(ch <-chan evt.Signal) {
 	for range ch {
 	}
 }

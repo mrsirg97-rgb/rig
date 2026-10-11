@@ -213,14 +213,15 @@ The pieces, each holding a frozen surface untouched:
   n declines, Esc declines and interrupts the turn, ^C declines and
   quits; every other key is swallowed while the question stands. The
   one-shot and the plain CLI offer no door.
-- **The mutating set**: the natives that change the world outside
-  rig's own stores; bash, write, edit, python, scheduler, delegate,
-  the `plugin` door, and every non-native tool — `isMutating` is the
-  named set plus everything the natives are not, and arbitrary python
-  is mutating by nature. The read set (read, view, the one `web`
-  tool), the store tools (todo, rem, sessions) and the decide
-  hand-off pass silently: manual is a gate, not
-  a turnstile.
+- **The mutating set**: the registry answers per call — `Mutates(name,
+  action)` behind the widened seam, the gate reads it. The writes ask:
+  bash, write, edit, python's `code` and `reset` (and the omitted
+  action, which is `code`), scheduler's six verbs, delegate, verdict,
+  the `plugin` door's run/create/delete/reload, and every non-native
+  tool. The reads pass silently: read, view, the one `web` tool, the
+  decide hand-off, sessions, python's `vars`, scheduler's
+  `list`/`show`/`runs`, the plugin's `list`/`schema`, and todo's and
+  rem's read verbs: manual is a gate, not a turnstile.
 - **A denial teaches, never kills**: the declined call returns a
   model-visible refusal ("the operator declined bash; do not retry
   the same call; adjust, or ask what they want"), the turn continues.

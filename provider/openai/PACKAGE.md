@@ -4,7 +4,7 @@
 
 The OpenAI-compatible streaming adapter over net/http: the wire format is
 plain JSON and SSE, stdlib only. Per-model tool-call formats are the
-adapter's problem; the loop sees `core.Event` only.
+adapter's problem; the loop sees `evt.Signal` only.
 
 ## What it includes
 
@@ -28,7 +28,7 @@ adapter's problem; the loop sees `core.Event` only.
   is the only deadline. The root builds every non-remote row with the
   off value and leaves remote rows on the default.
 - `Stream(ctx, req)`: encodes the request, posts, streams SSE, and emits
-  `core.Event`s.
+  `evt.Signal`s.
 - The wire shapes (`wireRequest`, `wireMessage`, `wireTool`,
   `streamChunk`, `wireUsage`, etc.); named types so a field typo fails
   at compile time.

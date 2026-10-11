@@ -3,6 +3,7 @@ package effort
 import (
 	"context"
 
+	"github.com/mrsirg97-rgb/evt"
 	"github.com/mrsirg97-rgb/rig/v2/core"
 )
 
@@ -15,7 +16,7 @@ func Decorator(inner core.Provider, effort func() string) core.Provider {
 	return &decorator{inner: inner, effort: effort}
 }
 
-func (d *decorator) Stream(ctx context.Context, req core.Request) (<-chan core.Event, error) {
+func (d *decorator) Stream(ctx context.Context, req core.Request) (<-chan evt.Signal, error) {
 	if req.ReasoningEffort == "" {
 		req.ReasoningEffort = d.effort()
 	}

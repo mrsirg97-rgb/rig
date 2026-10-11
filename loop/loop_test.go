@@ -8,15 +8,15 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/mrsirg97-rgb/evt"
 	"github.com/mrsirg97-rgb/rig/v2"
 	"github.com/mrsirg97-rgb/rig/v2/core"
-	"github.com/mrsirg97-rgb/rig/v2/evt"
 	"github.com/mrsirg97-rgb/rig/v2/loop"
 	"github.com/mrsirg97-rgb/rig/v2/middleware/cutoff"
 )
 
 type scriptedTurn struct {
-	events    []core.Event
+	events    []evt.Signal
 	err       error
 	holdCtx   bool
 	bare      bool
@@ -29,7 +29,7 @@ type scriptedProvider struct {
 	toolReqs int
 }
 
-func (p *scriptedProvider) Stream(ctx context.Context, req core.Request) (<-chan core.Event, error) {
+func (p *scriptedProvider) Stream(ctx context.Context, req core.Request) (<-chan evt.Signal, error) {
 	if p.calls >= len(p.turns) {
 		panic("scriptedProvider: more model calls than scripts")
 	}
@@ -43,11 +43,11 @@ func (p *scriptedProvider) Stream(ctx context.Context, req core.Request) (<-chan
 	}
 	if turn.holdCtx {
 		<-ctx.Done()
-		ch := make(chan core.Event)
+		ch := make(chan evt.Signal)
 		close(ch)
 		return ch, nil
 	}
-	out := make(chan core.Event)
+	out := make(chan evt.Signal)
 	switch {
 	case turn.holdAfter:
 		go func() {
@@ -72,7 +72,7 @@ func (p *scriptedProvider) Stream(ctx context.Context, req core.Request) (<-chan
 
 type recorderFrontend struct {
 	inputs chan string
-	events []core.Event
+	events []evt.Signal
 }
 
 func (f *recorderFrontend) Input(ctx context.Context) (string, error) {
@@ -87,7 +87,7 @@ func (f *recorderFrontend) Input(ctx context.Context) (string, error) {
 	}
 }
 
-func (f *recorderFrontend) Notify(ev core.Event) {
+func (f *recorderFrontend) Notify(ev evt.Signal) {
 	f.events = append(f.events, ev)
 }
 
@@ -144,10 +144,10 @@ func (t *scriptedTool) Exec(ctx context.Context, args json.RawMessage) (string, 
 	return t.result, nil
 }
 
-func textEv(s string) core.Event        { return core.TextDelta{Text: s} }
-func callEv(c core.ToolCall) core.Event { return core.ToolCallEvent{Call: c} }
-func faultEv(err error) core.Event      { return core.Fault{Err: err} }
-func doneEv() core.Event                { return core.Done{StopReason: "stop"} }
+func textEv(s string) evt.Signal        { return core.TextDelta{Text: s} }
+func callEv(c core.ToolCall) evt.Signal { return core.ToolCallEvent{Call: c} }
+func faultEv(err error) evt.Signal      { return core.Fault{Err: err} }
+func doneEv() evt.Signal                { return core.Done{StopReason: "stop"} }
 
 func wantTranscript(t *testing.T, s *core.Session, want ...core.Message) {
 	t.Helper()
@@ -201,7 +201,7 @@ func dumpList(ms []core.Message) string {
 
 func TestTextOnlyTurnOrdering(t *testing.T) {
 	p := &scriptedProvider{turns: []scriptedTurn{{
-		events: []core.Event{textEv("hello"), textEv(" world"), doneEv()},
+		events: []evt.Signal{textEv("hello"), textEv(" world"), doneEv()},
 	}}}
 	f := &recorderFrontend{inputs: make(chan string, 8)}
 	session := core.NewSession()
@@ -241,11 +241,11 @@ func TestTextOnlyTurnOrdering(t *testing.T) {
 func TestToolRoundTripOrdering(t *testing.T) {
 	bash := &scriptedTool{name: "bash", result: "42"}
 	p := &scriptedProvider{turns: []scriptedTurn{
-		{events: []core.Event{
+		{events: []evt.Signal{
 			callEv(core.ToolCall{ID: "c1", Name: "bash", Args: json.RawMessage(`{"command":"echo 42"}`)}),
 			doneEv(),
 		}},
-		{events: []core.Event{textEv("the answer is "), textEv("42"), doneEv()}},
+		{events: []evt.Signal{textEv("the answer is "), textEv("42"), doneEv()}},
 	}}
 	f := &recorderFrontend{inputs: make(chan string, 8)}
 	session := core.NewSession()
@@ -282,7 +282,7 @@ func TestToolRoundTripOrdering(t *testing.T) {
 func TestLoopStampsContextTokens(t *testing.T) {
 	t.Run("plain answer stamps prompt+completion", func(t *testing.T) {
 		p := &scriptedProvider{turns: []scriptedTurn{{
-			events: []core.Event{textEv("answer"), core.Done{Usage: core.Usage{Prompt: 900, Completion: 100}}},
+			events: []evt.Signal{textEv("answer"), core.Done{Usage: core.Usage{Prompt: 900, Completion: 100}}},
 		}}}
 		f := &recorderFrontend{inputs: make(chan string, 8)}
 		session := core.NewSession()
@@ -302,8 +302,8 @@ func TestLoopStampsContextTokens(t *testing.T) {
 	t.Run("tool-call branch stamps prompt+completion", func(t *testing.T) {
 		bash := &scriptedTool{name: "bash", result: "42"}
 		p := &scriptedProvider{turns: []scriptedTurn{
-			{events: []core.Event{callEv(core.ToolCall{ID: "c1", Name: "bash", Args: json.RawMessage(`{}`)}), core.Done{Usage: core.Usage{Prompt: 200, Completion: 10}}}},
-			{events: []core.Event{textEv("ok"), core.Done{Usage: core.Usage{Prompt: 300, Completion: 5}}}},
+			{events: []evt.Signal{callEv(core.ToolCall{ID: "c1", Name: "bash", Args: json.RawMessage(`{}`)}), core.Done{Usage: core.Usage{Prompt: 200, Completion: 10}}}},
+			{events: []evt.Signal{textEv("ok"), core.Done{Usage: core.Usage{Prompt: 300, Completion: 5}}}},
 		}}
 		f := &recorderFrontend{inputs: make(chan string, 8)}
 		session := core.NewSession()
@@ -325,7 +325,7 @@ func TestLoopStampsContextTokens(t *testing.T) {
 	})
 
 	t.Run("a Done reporting zero usage leaves it 0", func(t *testing.T) {
-		p := &scriptedProvider{turns: []scriptedTurn{{events: []core.Event{textEv("x"), doneEv()}}}}
+		p := &scriptedProvider{turns: []scriptedTurn{{events: []evt.Signal{textEv("x"), doneEv()}}}}
 		f := &recorderFrontend{inputs: make(chan string, 8)}
 		session := core.NewSession()
 		k := rig.New(rig.WithProvider(p), rig.WithFrontend(f), rig.WithPolicy(&transcriptPolicy{}))
@@ -344,7 +344,7 @@ func TestLoopStampsContextTokens(t *testing.T) {
 
 func TestLoopForwardsCompactedUntouched(t *testing.T) {
 	p := &scriptedProvider{turns: []scriptedTurn{{
-		events: []core.Event{textEv("a"), core.Compacted{Summary: "s", Dropped: 1, Kept: 2}, textEv("b"), doneEv()},
+		events: []evt.Signal{textEv("a"), core.Compacted{Summary: "s", Dropped: 1, Kept: 2}, textEv("b"), doneEv()},
 	}}}
 	f := &recorderFrontend{inputs: make(chan string, 8)}
 	k := rig.New(rig.WithProvider(p), rig.WithFrontend(f), rig.WithPolicy(&transcriptPolicy{}))
@@ -372,9 +372,9 @@ func TestLoopForwardsCompactedUntouched(t *testing.T) {
 func TestFaultMidStreamPreservesSession(t *testing.T) {
 	boom := errors.New("mid-stream fault")
 	p := &scriptedProvider{turns: []scriptedTurn{{
-		events: []core.Event{textEv("partial "), faultEv(boom)},
+		events: []evt.Signal{textEv("partial "), faultEv(boom)},
 	}, {
-		events: []core.Event{textEv("recovered"), doneEv()},
+		events: []evt.Signal{textEv("recovered"), doneEv()},
 	}}}
 	f := &recorderFrontend{inputs: make(chan string, 8)}
 	session := core.NewSession()
@@ -414,7 +414,7 @@ func TestTransportErrorSurfacesAndContinues(t *testing.T) {
 	boom := errors.New("transport down")
 	p := &scriptedProvider{turns: []scriptedTurn{
 		{err: boom},
-		{events: []core.Event{textEv("up again"), doneEv()}},
+		{events: []evt.Signal{textEv("up again"), doneEv()}},
 	}}
 	f := &recorderFrontend{inputs: make(chan string, 8)}
 	session := core.NewSession()
@@ -450,7 +450,7 @@ func TestTransportErrorSurfacesAndContinues(t *testing.T) {
 
 func TestClosedStreamWithoutDoneFailsLoud(t *testing.T) {
 	p := &scriptedProvider{turns: []scriptedTurn{{
-		events: []core.Event{textEv("half a thought")},
+		events: []evt.Signal{textEv("half a thought")},
 		bare:   true,
 	}}}
 	f := &recorderFrontend{inputs: make(chan string, 8)}
@@ -473,7 +473,7 @@ func TestClosedStreamWithoutDoneFailsLoud(t *testing.T) {
 
 func TestCancellationMidStream(t *testing.T) {
 	p := &scriptedProvider{turns: []scriptedTurn{{
-		events:  []core.Event{textEv("never delivered")},
+		events:  []evt.Signal{textEv("never delivered")},
 		holdCtx: true,
 	}}}
 	f := &recorderFrontend{inputs: make(chan string, 8)}
@@ -499,7 +499,7 @@ func TestCancellationBetweenToolCalls(t *testing.T) {
 
 	bash := &scriptedTool{name: "bash", cancel: cancel}
 	p := &scriptedProvider{turns: []scriptedTurn{
-		{events: []core.Event{
+		{events: []evt.Signal{
 			callEv(core.ToolCall{ID: "c1", Name: "bash"}),
 			doneEv(),
 		}},
@@ -529,11 +529,11 @@ func TestCancellationBetweenToolCalls(t *testing.T) {
 func TestMalformedCallFedBackOnce(t *testing.T) {
 	bash := &scriptedTool{name: "bash", fail: 1, result: "recovered"}
 	p := &scriptedProvider{turns: []scriptedTurn{
-		{events: []core.Event{
+		{events: []evt.Signal{
 			callEv(core.ToolCall{ID: "c1", Name: "bash"}),
 			doneEv(),
 		}},
-		{events: []core.Event{textEv("recovered"), doneEv()}},
+		{events: []evt.Signal{textEv("recovered"), doneEv()}},
 	}}
 	f := &recorderFrontend{inputs: make(chan string, 8)}
 	session := core.NewSession()
@@ -567,11 +567,11 @@ func TestToolErrorIsAppendedOnItsOwnLine(t *testing.T) {
 	boom := errors.New("bash: exit status 3")
 	bash := &scriptedTool{name: "bash", fail: 1, failContent: "visible\n", failErr: boom, result: "recovered"}
 	p := &scriptedProvider{turns: []scriptedTurn{
-		{events: []core.Event{
+		{events: []evt.Signal{
 			callEv(core.ToolCall{ID: "c1", Name: "bash"}),
 			doneEv(),
 		}},
-		{events: []core.Event{textEv("recovered"), doneEv()}},
+		{events: []evt.Signal{textEv("recovered"), doneEv()}},
 	}}
 	f := &recorderFrontend{inputs: make(chan string, 8)}
 	session := core.NewSession()
@@ -602,11 +602,11 @@ func TestRefusedCwdCarriesTheReasonExactlyOnce(t *testing.T) {
 	boom := errors.New("bash: workspace /missing: no such file or directory")
 	bash := &scriptedTool{name: "bash", fail: 1, failErr: boom, result: "recovered"}
 	p := &scriptedProvider{turns: []scriptedTurn{
-		{events: []core.Event{
+		{events: []evt.Signal{
 			callEv(core.ToolCall{ID: "c1", Name: "bash"}),
 			doneEv(),
 		}},
-		{events: []core.Event{textEv("recovered"), doneEv()}},
+		{events: []evt.Signal{textEv("recovered"), doneEv()}},
 	}}
 	f := &recorderFrontend{inputs: make(chan string, 8)}
 	session := core.NewSession()
@@ -637,11 +637,11 @@ func TestRefusalAlreadyInContentIsNotAppended(t *testing.T) {
 	msg := "round cap: 3 tool calls is this turn's limit; stop calling tools and report, or ask the operator to raise it"
 	bash := &scriptedTool{name: "bash", fail: 1, failContent: msg, failErr: errors.New(msg), result: "recovered"}
 	p := &scriptedProvider{turns: []scriptedTurn{
-		{events: []core.Event{
+		{events: []evt.Signal{
 			callEv(core.ToolCall{ID: "c1", Name: "bash"}),
 			doneEv(),
 		}},
-		{events: []core.Event{textEv("recovered"), doneEv()}},
+		{events: []evt.Signal{textEv("recovered"), doneEv()}},
 	}}
 	f := &recorderFrontend{inputs: make(chan string, 8)}
 	session := core.NewSession()
@@ -672,11 +672,11 @@ func TestOversizedToolResultStaysIntact(t *testing.T) {
 	huge := strings.Repeat("x", 2<<20)
 	bash := &scriptedTool{name: "bash", result: huge}
 	p := &scriptedProvider{turns: []scriptedTurn{
-		{events: []core.Event{
+		{events: []evt.Signal{
 			callEv(core.ToolCall{ID: "c1", Name: "bash"}),
 			doneEv(),
 		}},
-		{events: []core.Event{textEv("done"), doneEv()}},
+		{events: []evt.Signal{textEv("done"), doneEv()}},
 	}}
 	f := &recorderFrontend{inputs: make(chan string, 8)}
 	session := core.NewSession()
@@ -709,7 +709,7 @@ func TestAssembleErrorAbortsTurnAndRecovers(t *testing.T) {
 	boom := errors.New("policy blew up")
 	p := &transcriptPolicy{errOnce: boom}
 	sp := &scriptedProvider{turns: []scriptedTurn{
-		{events: []core.Event{textEv("recovered"), doneEv()}},
+		{events: []evt.Signal{textEv("recovered"), doneEv()}},
 	}}
 	f := &recorderFrontend{inputs: make(chan string, 8)}
 	session := core.NewSession()
@@ -745,11 +745,11 @@ func TestAssembleErrorAbortsTurnAndRecovers(t *testing.T) {
 
 func TestUnknownToolNameFedBackOnce(t *testing.T) {
 	p := &scriptedProvider{turns: []scriptedTurn{
-		{events: []core.Event{
+		{events: []evt.Signal{
 			callEv(core.ToolCall{ID: "c1", Name: "nope"}),
 			doneEv(),
 		}},
-		{events: []core.Event{textEv("understood"), doneEv()}},
+		{events: []evt.Signal{textEv("understood"), doneEv()}},
 	}}
 	f := &recorderFrontend{inputs: make(chan string, 8)}
 	session := core.NewSession()
@@ -797,8 +797,8 @@ func TestDuplicateToolNamesPanic(t *testing.T) {
 
 func TestAnEmptyCompletionStaysOutOfTheTranscript(t *testing.T) {
 	p := &scriptedProvider{turns: []scriptedTurn{
-		{events: []core.Event{doneEv()}},
-		{events: []core.Event{textEv("delivered"), doneEv()}},
+		{events: []evt.Signal{doneEv()}},
+		{events: []evt.Signal{textEv("delivered"), doneEv()}},
 	}}
 	f := &recorderFrontend{inputs: make(chan string, 8)}
 	session := core.NewSession()
@@ -827,11 +827,11 @@ func TestAnEmptyCompletionStaysOutOfTheTranscript(t *testing.T) {
 func TestTruncatedCallRecoversInBand(t *testing.T) {
 	bash := &scriptedTool{name: "bash", result: "42"}
 	p := &scriptedProvider{turns: []scriptedTurn{
-		{events: []core.Event{
+		{events: []evt.Signal{
 			callEv(core.ToolCall{ID: "c1", Name: "bash", Args: json.RawMessage(`{"command": "cat /tmp/longfile`), Cut: "length"}),
 			core.Done{StopReason: "length"},
 		}},
-		{events: []core.Event{textEv("retried and done"), doneEv()}},
+		{events: []evt.Signal{textEv("retried and done"), doneEv()}},
 	}}
 	f := &recorderFrontend{inputs: make(chan string, 8)}
 	session := core.NewSession()
@@ -870,7 +870,7 @@ func TestTruncatedCallRecoversInBand(t *testing.T) {
 
 func TestLoopAccumulatesReasoningDetailsIntoTheMessage(t *testing.T) {
 	p := &scriptedProvider{turns: []scriptedTurn{{
-		events: []core.Event{
+		events: []evt.Signal{
 			core.ReasoningDelta{Text: "think", Details: json.RawMessage(`[{"id":"r1"}]`)},
 			core.ReasoningDelta{Text: "ing", Details: json.RawMessage(`[{"id":"r2"}]`)},
 			textEv("answer"),
@@ -897,7 +897,7 @@ func TestLoopAccumulatesReasoningDetailsIntoTheMessage(t *testing.T) {
 
 func TestTheKernelsEngineIsTheLoopsAndTheFleetRunsBelowTheTurn(t *testing.T) {
 	p := &scriptedProvider{turns: []scriptedTurn{{
-		events: []core.Event{textEv("hello"), doneEv()},
+		events: []evt.Signal{textEv("hello"), doneEv()},
 	}}}
 	f := &recorderFrontend{inputs: make(chan string, 8)}
 	engine := evt.NewEngine()

@@ -172,16 +172,21 @@ that is harder than writing a lot, and it is the bar.
 
 - `core`: the kernel's contract surface: the seams (Provider,
   ContextPolicy, Tool, ToolMiddleware, Frontend, Command), the wire
-  types, the streaming-event vocabulary, and the session type. Types
-  only, no behavior.
+  types, the agent vocabulary, and the session type. Types only, no
+  behavior. The signal interface, the snapshot, the voice and its level
+  moved with the engine to the module's root package (`evt.Signal`);
+  core's types declare themselves signals by carrying `evt.Mark`.
 - `loop`: the turn runtime: the one place turn ordering is written
-  down; fault- and cancel-aware.
-- `evt`: the event loop (SPEC_EVT): libevt's shape, Go-centric; one
-  consumer, many producers, closures ordered by priority then arrival.
-  The turn loop is its consumer (phase 2, 0.12.0): every step of a turn
-  is a closure on the loop goroutine.
+  down; a write is 60 and serializes inline in the drain, a read is 50
+  and overlaps (SPEC_WRITES); fault- and cancel-aware.
+- `evt` (the engine): the module `github.com/mrsirg97-rgb/evt` — the
+  engine, the signal types and the room left the tree in 2.18.0 (its
+  spec moved with it); one consumer, many producers, closures ordered
+  by priority then arrival. The turn loop is its consumer: every step
+  of a turn is a closure on the loop goroutine.
 - `kernel.go` (root package `rig`): the composition kernel: the
-  dependency bag the loop drives, assembled from options.
+  dependency bag the loop drives, assembled from options — the priority
+  table (a write is 60, a read is 50) and `WithPriority` live here.
 - `cmd/rig`: the binary and composition root: flag/env/file config
   resolution, the store wiring (the rem migration), plugin discovery.
   The only package that imports the whole tree.
@@ -304,20 +309,22 @@ that is harder than writing a lot, and it is the bar.
 - `store/{rem,scheduler,state,todo}/metadata`: hand-written container
   metadata: the source for the generated `ddl`/`domain` accessors. Edit
   and regenerate; never hand-edit the generated projections.
-- `broadcast`: the fleet's message seams (2.11.0), lifted from the
-  operator's module onto the event loop: a `Room` of `Member`s over a
-  `Transport`, a `Message` with origin, health and a `core.Event`, none
-  being a heartbeat; a send is a post at the receiving member's
-  priority and the
-  queue is the durability; `Say` is the one voice a background
-  subsystem notices with, and the member ids are named in the kernel.
+- `broadcast` (the module's): the fleet's message seams: a `Room` of
+  `Member`s over a `Transport`, a `Message` with origin, health and an
+  `evt.Signal` — a message with no signal is a heartbeat; a send is a
+  post at the receiving member's priority and the queue is the
+  durability; `Say` is the one voice a background subsystem notices
+  with, and the member ids are named in the kernel. The wire registry —
+  the kinds the fleet pipe speaks — is rig's, declared in one place
+  (`store/scheduler/fleet.go`).
 - `tool`: the registry of the model's words: `registry.json`, embedded,
   one entry per native tool (`name`, `enabled`, `what`, `guidelines`,
-  `reply`, `schema`); `Definition` is the interface a tool embeds for
-  `Name()`, `Description()` and `Schema()`, the registry's entry its one
-  concrete; `Fill` wraps the one tool whose schema names the default
-  model (`scheduler`); `Names()` is the root's native list, in file
-  order, enabled only.
+  `reply`, `schema`, `mutates`); `Definition` is the interface a tool
+  embeds for `Name()`, `Description()` and `Schema()`, the registry's
+  entry its one concrete; `Mutates` answers is-this-a-write for the
+  ordering, the overlap and the gate (SPEC_WRITES); `Fill` wraps the
+  one tool whose schema names the default model (`scheduler`);
+  `Names()` is the root's native list, in file order, enabled only.
 - `tool/bash`: bash(1) execution: real subprocesses, output surfaced
   and bounded.
 - `tool/execwrap`: the landlock subprocess seam: prepends the
@@ -368,10 +375,13 @@ that is harder than writing a lot, and it is the bar.
   published as the worker's member; the swarm reviewer and the decision
   bite read it from the room, and nothing scrapes stdout for it.
 - `tool/delegate`: the one-shot worker tool (SPEC_DELEGATE): spawn a
-  headless worker on a task now, wait, and feed back its last message;
-  a recorded run in the cwd-scope scheduler store, a resumable
-  transcript; the optional `Notify` seam (SPEC_SWARM 7) emits the
-  status snapshot for an interactive delegate.
+  headless worker on a task — or one deterministic bash line as a
+  command worker (SPEC_ASYNC; `timeoutMs` is the kill bound, model
+  workers have no clock) — answer at once, wait, and feed back its last
+  message; a recorded run in the cwd-scope scheduler store, a resumable
+  transcript; the returns ride `WorkerDone{Kind, RunID}`; the optional
+  `Notify` seam (SPEC_SWARM 7) emits the status snapshot for an
+  interactive delegate.
 - `swarm`: the drain-worker controller (SPEC_SWARM): the router and the
   settle as closures on the loop at the fleet's priority, the worker
   goroutines waiting on the world, the reviewer's verdict as a message; the
