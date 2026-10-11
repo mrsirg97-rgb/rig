@@ -7,6 +7,7 @@ import (
 
 	"github.com/mrsirg97-rgb/evt"
 	"github.com/mrsirg97-rgb/evt/event"
+	"github.com/mrsirg97-rgb/rig/v2"
 	"github.com/mrsirg97-rgb/rig/v2/core"
 	sched "github.com/mrsirg97-rgb/rig/v2/store/scheduler"
 	todostore "github.com/mrsirg97-rgb/rig/v2/store/todo"
@@ -58,17 +59,20 @@ func (c *Controller) work(w *worker, id string) workResult {
 		return workResult{}
 	}
 	var res workResult
-	sub := c.opts.Cap.Submit(w.ctx, evt.Func(func(gate context.Context) {
+	work := evt.Func(func(gate context.Context) {
 		if gate.Err() != nil {
 			res = workResult{holder: gate.Err()}
 			return
 		}
-		defer c.opts.Cap.Release()
 		res = c.delegateWork(w, id, task)
-	}))
+	})
+	sub := c.opts.Cap.Submit(w.ctx, work, rig.PriorityFleet)
 	if !sub.Started() {
 		<-sub.Settled()
+	} else {
+		work.Resolve(w.ctx)
 	}
+	sub.Release()
 	return res
 }
 

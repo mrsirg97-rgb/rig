@@ -313,7 +313,7 @@ func main() {
 
 	rt := runtimeTable(cfg.Models, modelID, row)
 	piped := *prompt != ""
-	handoff := evt.NewCap(cfg.Settings.MaxWorkers)
+	handoff := evt.NewCap(engine, cfg.Settings.MaxWorkers)
 	del := delegate.New(delegate.Opts{
 		Ctx:          ctx,
 		Await:        piped,

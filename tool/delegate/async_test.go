@@ -300,7 +300,7 @@ func TestWaitingADelegationThatNeverWasRefuses(t *testing.T) {
 
 func TestTheCapQueuesTheRestAndStartsEachAsOneReturns(t *testing.T) {
 	h := newHarness(t, "/ws/sess")
-	h.cap = evt.NewCap(2)
+	h.cap = evt.NewCap(h.engine, 2)
 	release := make(chan struct{})
 	spawn := &fakeSpawn{result: sched.SpawnResult{Exit: 0, Stdout: "done"}, block: release}
 	tool, fe := h.asyncTool(t, fakeFetch(""), spawn.spawn)
@@ -340,7 +340,7 @@ func TestTheCapQueuesTheRestAndStartsEachAsOneReturns(t *testing.T) {
 
 func TestAQueuedWorkerStoppedBeforeItStartsReturnsAndNeverSpawns(t *testing.T) {
 	h := newHarness(t, "/ws/sess")
-	h.cap = evt.NewCap(1)
+	h.cap = evt.NewCap(h.engine, 1)
 	release := make(chan struct{})
 	spawn := &fakeSpawn{result: sched.SpawnResult{Exit: 0}, block: release}
 	tool, fe := h.asyncTool(t, fakeFetch(""), spawn.spawn)

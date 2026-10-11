@@ -48,6 +48,10 @@ type Opts struct {
 	Cap          *evt.Cap
 }
 
+type holding struct {
+	stop func()
+}
+
 type workerState struct {
 	n         int
 	task      string
@@ -71,7 +75,7 @@ type Delegate interface {
 }
 
 func New(o Opts) Delegate {
-	a := &adapter{Definition: tool.Def("delegate"), Opts: o, workers: map[int64]workerState{}, stops: map[int]func(){}}
+	a := &adapter{Definition: tool.Def("delegate"), Opts: o, workers: map[int64]workerState{}, stops: map[int]holding{}, subs: map[int]*evt.Submission{}}
 	if o.Room != nil {
 		a.member = o.Room.Add(rig.MemberDelegate)
 		a.member.Subscribe(context.Background(), a.receive)
@@ -85,7 +89,8 @@ type adapter struct {
 	mu      sync.Mutex
 	seq     int64
 	workers map[int64]workerState
-	stops   map[int]func()
+	stops   map[int]holding
+	subs    map[int]*evt.Submission
 	member  broadcast.Member
 }
 
@@ -223,7 +228,7 @@ func (a *adapter) run(ctx context.Context, c delegateCall) (string, error) {
 	if c.command != "" {
 		name = c.command
 	}
-	member, n := a.begin(name, stop)
+	member, n := a.mint(stop)
 	in := sched.DelegateInput{
 		DB:            a.DB,
 		Home:          a.Home,
@@ -254,28 +259,33 @@ func (a *adapter) run(ctx context.Context, c delegateCall) (string, error) {
 
 	var line string
 	var runErr error
-	sub := a.Cap.Submit(ctx, evt.Func(func(gate context.Context) {
+	var del sched.Delegation
+	work := evt.Func(func(gate context.Context) {
 		if gate.Err() != nil {
 			a.fail(member, n, workerName(in), fmt.Errorf("delegate: worker #%d stopped while queued", n))
 			runErr = fmt.Errorf("delegate: %w", gate.Err())
 			return
 		}
-		a.running(member)
-		del, err := sched.DelegateStart(in)
+		a.running(member, n, name)
+		var err error
+		del, err = sched.DelegateStart(in)
 		if err != nil {
-			a.Cap.Release()
+			if !a.Await {
+				a.release(n)
+			}
 			a.end(member, n)
 			runErr = err
 			return
 		}
 		if a.Await {
+			watch := a.claim(n)
 			res, serr := a.settle(member, n, in, del)
 			line = res.Content
 			runErr = serr
 			if serr == nil && res.Exit != 0 {
 				runErr = fmt.Errorf("delegate: the worker failed (exit %d)", res.Exit)
 			}
-			a.Cap.Release()
+			watch.Release()
 			return
 		}
 		line = fmt.Sprintf("delegate: worker #%d started · session %s · log %s", n, del.Session, del.Log)
@@ -285,17 +295,32 @@ func (a *adapter) run(ctx context.Context, c delegateCall) (string, error) {
 		if del.Note != "" {
 			line += " · " + del.Note
 		}
+		watch := a.claim(n)
 		go func() {
-			defer a.Cap.Release()
+			defer watch.Release()
 			_, _ = a.settle(member, n, in, del)
 		}()
-	}))
+	})
+	sub := a.Cap.Submit(ctx, work, rig.PriorityFleet)
+	state := "running"
 	if !sub.Started() {
-		a.mu.Lock()
-		a.stops[n] = func() { stop(); sub.Stop() }
-		a.mu.Unlock()
+		state = "queued"
+	}
+	a.track(member, n, name, state)
+	a.mu.Lock()
+	a.subs[n] = sub
+	if !sub.Started() {
+		a.stops[n] = holding{stop: func() { stop(); sub.Stop() }}
+	}
+	a.mu.Unlock()
+	if !sub.Started() {
+		if a.Await {
+			<-sub.Settled()
+			return line, runErr
+		}
 		return fmt.Sprintf("delegate: worker #%d queued · %d workers run at once (settings maxWorkers); it starts when one returns", n, a.Cap.Size()), nil
 	}
+	work.Resolve(ctx)
 	return line, runErr
 }
 
@@ -314,20 +339,19 @@ func (a *adapter) fail(member broadcast.Member, n int, task string, err error) {
 	}
 }
 
-func (a *adapter) running(member broadcast.Member) {
+func (a *adapter) running(member broadcast.Member, n int, task string) {
 	if member == nil {
 		return
 	}
 	a.mu.Lock()
 	w, ok := a.workers[member.Id()]
-	if ok {
-		w.state, w.heartbeat = "running", time.Now()
-		a.workers[member.Id()] = w
+	if !ok {
+		w = workerState{n: n, task: tool.FirstLine(task)}
 	}
+	w.state, w.heartbeat = "running", time.Now()
+	a.workers[member.Id()] = w
 	a.mu.Unlock()
-	if ok {
-		a.emit()
-	}
+	a.emit()
 }
 
 func (a *adapter) session() context.Context {
@@ -410,30 +434,40 @@ func strictDecode(data json.RawMessage, out any) error {
 	return dec.Decode(out)
 }
 
-func (a *adapter) begin(task string, stop context.CancelFunc) (broadcast.Member, int) {
+func (a *adapter) mint(stop context.CancelFunc) (broadcast.Member, int) {
 	a.mu.Lock()
 	a.seq++
 	n := int(a.seq)
-	a.stops[n] = stop
+	a.stops[n] = holding{stop: stop}
 	a.mu.Unlock()
 	if a.member == nil {
 		return nil, n
 	}
-	member := a.Room.Mint()
+	return a.Room.Mint(), n
+}
+
+func (a *adapter) track(member broadcast.Member, n int, task, state string) {
+	if member == nil {
+		return
+	}
 	a.mu.Lock()
-	a.workers[member.Id()] = workerState{n: n, task: tool.FirstLine(task), heartbeat: time.Now(), state: "queued"}
+	if _, ok := a.workers[member.Id()]; ok {
+		a.mu.Unlock()
+		return
+	}
+	a.workers[member.Id()] = workerState{n: n, task: tool.FirstLine(task), heartbeat: time.Now(), state: state}
 	a.mu.Unlock()
 	a.emit()
-	return member, n
 }
 
 func (a *adapter) end(member broadcast.Member, n int) {
 	a.mu.Lock()
-	stop := a.stops[n]
+	h := a.stops[n]
 	delete(a.stops, n)
+	delete(a.subs, n)
 	a.mu.Unlock()
-	if stop != nil {
-		stop()
+	if h.stop != nil {
+		h.stop()
 	}
 	if member == nil {
 		return
@@ -445,11 +479,26 @@ func (a *adapter) end(member broadcast.Member, n int) {
 	a.emit()
 }
 
+func (a *adapter) claim(n int) *evt.Submission {
+	a.mu.Lock()
+	sub := a.subs[n]
+	delete(a.subs, n)
+	a.mu.Unlock()
+	return sub
+}
+
+func (a *adapter) release(n int) {
+	sub := a.claim(n)
+	if sub != nil {
+		sub.Release()
+	}
+}
+
 func (a *adapter) StopAll() {
 	a.mu.Lock()
 	stops := make([]func(), 0, len(a.stops))
-	for _, stop := range a.stops {
-		stops = append(stops, stop)
+	for _, h := range a.stops {
+		stops = append(stops, h.stop)
 	}
 	a.mu.Unlock()
 	for _, stop := range stops {

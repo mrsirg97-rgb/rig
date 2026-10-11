@@ -252,15 +252,16 @@ type harness struct {
 
 func newHarness(t *testing.T) *harness {
 	t.Helper()
-	return newCappedHarness(t, nil)
+	return newCappedHarness(t, 0)
 }
 
-func newCappedHarness(t *testing.T, workerCap *evt.Cap) *harness {
+func newCappedHarness(t *testing.T, workers int) *harness {
 	t.Helper()
 	h := &harness{}
 	h.engine = evt.NewEngine()
 	go h.engine.Start(context.Background())
 	t.Cleanup(h.engine.Stop)
+	cap := evt.NewCap(h.engine, workers)
 	h.room = broadcast.NewRoom("fleet", func(origin int64) broadcast.Transport {
 		return broadcast.NewLoopTransport(origin, h.engine, rig.PriorityFleet)
 	})
@@ -299,7 +300,7 @@ func newCappedHarness(t *testing.T, workerCap *evt.Cap) *harness {
 		Models:       func() models.Table { return modelRows(t) },
 		Engine:       h.engine,
 		Room:         h.room,
-		Cap:          workerCap,
+		Cap:          cap,
 	})
 	t.Cleanup(func() { h.ctl.Stop() })
 	return h
@@ -999,7 +1000,7 @@ func TestStoppedWorkerIsOutBeforeTheRouterWakes(t *testing.T) {
 }
 
 func TestSwarmWorkersPastTheCapWaitForAReturn(t *testing.T) {
-	h := newCappedHarness(t, evt.NewCap(2))
+	h := newCappedHarness(t, 2)
 	h.create(t, "one", "two", "three", "four")
 	h.spawn.block = make(chan struct{})
 	h.start(t, swarm.StartOpts{Count: 4, Role: "worker"})
