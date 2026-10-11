@@ -304,6 +304,7 @@ type steeringFrontend struct {
 	handle      context.CancelFunc
 	mode        string
 	steeredOnce bool
+	steerAt     func(core.Event) bool
 }
 
 func (f *steeringFrontend) Input(ctx context.Context) (string, error) {
@@ -331,6 +332,10 @@ func (f *steeringFrontend) Notify(ev core.Event) {
 			f.handle()
 		}
 	}
+	if f.steerAt != nil && !f.steeredOnce && f.steerAt(ev) {
+		f.steeredOnce = true
+		f.handle()
+	}
 }
 
 func TestSteeringCancelsTheLiveTurnAndDeliversOnReentry(t *testing.T) {
@@ -353,6 +358,7 @@ func TestSteeringCancelsTheLiveTurnAndDeliversOnReentry(t *testing.T) {
 
 	want := []core.Message{
 		{Role: core.RoleUser, Content: "speak"},
+		{Role: core.RoleAssistant, Content: "partial "},
 		{Role: core.RoleUser, Content: "steer"},
 		{Role: core.RoleAssistant, Content: "delivered"},
 	}

@@ -126,8 +126,9 @@ The state machine is unchanged. The changes:
   or transport error crossed it), `interrupt` (the turn context died).
   It is forwarded to `Frontend.Notify` after the turn's last other event.
   A run-context cancel ends the run, not a turn, and does not emit it.
-  The recorder's rule follows (decision 4): an unlanded partial at any
-  `TurnEnd` is a partial and is discarded.
+  The recorder's rule follows (decision 4, revised in 2.17.1): the reply an
+  `interrupt` cut lands as the assistant's message; an unlanded partial at
+  any other `TurnEnd` is discarded.
 
 `directExec`, the fault paths, the boundary checks, and the duplicate-name
 panic are unchanged.
@@ -334,11 +335,23 @@ Fault-time discard; the fault row still lands on `Fault`). `TurnEnd` is
 what makes the interrupt observable to every streaming consumer, not just
 the recorder.
 
+Revised in 2.17.1: what the model has already said is part of the
+conversation. On `TurnEnd{interrupt}` the recorder lands the cut reply
+(text and reasoning) as its own assistant row, before the operator's
+message; the calls that streamed before the cut are dropped, since none
+ran. A partial at a `fault` is still discarded. The first rule fixed
+"PARTIAL fresh" by throwing the partial away; this one fixes it by giving
+the partial its own row, so the two never concatenate.
+
 **The transcript shape after an interrupt, both cases named.**
 
-- Mid-stream (during a model call): the partial text never lands (the
-  assistant row is written on `Done`, which did not come). The transcript
-  ends at the last complete message, as on a fault.
+- Mid-stream (during a model call): the cut reply is appended as the
+  assistant's message (text, reasoning and reasoning details; never its
+  tool calls, which have no results) and the operator's message follows
+  it (2.17.1). The transcript only grows at its end, so the request after
+  a steer extends the request before it and a server's kept conversation
+  still matches. A cut before the first token appends nothing. A fault
+  still ends the transcript at the last complete message.
 - Mid-tool (during execution): the loop runs the batch's remaining calls
   (each sees the dead turn ctx and returns its ctx error as the fed-back
   content), appends one tool message per call, and the turn dies at the
@@ -722,9 +735,9 @@ and `TestDriftingArgsEachGetAFreshStreak` plus
   death) and after the turn's last other event; it is absent on a
   run-context end; the existing event-order assertions (which count only
   the kinds they name) still hold with it appended.
-- The recorder rule: an interrupted mid-stream turn does not persist its
-  partial text (the unlanded partial is discarded at `TurnEnd`, the
-  "PARTIAL fresh" bug reversed); a mid-tool interrupt keeps the batch's
+- The recorder rule: an interrupted mid-stream turn persists its cut
+  reply as its own assistant row (2.17.1), a faulted one does not; a
+  mid-tool interrupt keeps the batch's
   results (each cancelled call's row carries the exec's error string) with
   the assistant message and its calls intact.
 - Resume: the projection rebuilds a full transcript (user, assistant +

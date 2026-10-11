@@ -270,8 +270,9 @@ guard emits it instead of a discarded empty turn's `Done`, and the
 recorder counts its usage. `TurnEnd` fires at every turn exit
 (`over` / `fault` / `interrupt`), after the turn's last other event; a
 run-context cancel ends the run, not a turn, and does not emit it. The
-recorder's rule (SPEC_HARDENING 4): an unlanded partial at any `TurnEnd`
-is a partial and is discarded.
+recorder's rule (SPEC_HARDENING 4): the reply an `interrupt` cut lands as
+the assistant's message (2.17.1); an unlanded partial at any other
+`TurnEnd` is discarded.
 
 `Fault` terminates the stream. A provider closes the channel after `Done` or
 `Fault`; the loop treats a closed channel without either as a provider bug and
