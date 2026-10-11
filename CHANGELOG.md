@@ -1,4 +1,46 @@
 # Changelog
+## [2.18.0]: the engine, the event and the room leave rig as one module
+
+`evt` was already behaving like a frozen public API: 426 lines of source
+with no rig imports, five commits of source and then eight releases of
+callers built on it that never touched it. `broadcast` beside it carried
+one thing the module could not: the pipe encoder listed rig's own types
+to put them on the wire. The module `github.com/mrsirg97-rgb/evt` is the
+engine — the same files, the same tests, the same exported names, the
+only diff the import path — the event types in `event` (`Event` closed
+with the marker as its one door, `Snapshot`, `Notice`, `Level`), and
+`broadcast` with a generic payload: the room, the transports, `Say`, and
+a wire that takes a registry. An application declares each event type it
+sends, once, by name, with how to encode and decode it; the registry is
+built whole and handed to the codec when it is constructed; an
+unregistered type is the sender's error, an unknown kind the receiver's,
+reported once. Rig imports the module; `evt/` and `broadcast/` leave the
+tree; `core` keeps the agent vocabulary and declares its types events by
+carrying `event.Marker` — the marker moves no bytes, so the fleet pipe
+on fd 3 carries the same frames, and the kinds rig registers are the
+ones the wire always spoke. `swarm` and `tool/delegate` change only
+their imports. The design note is the module's `specs/DESIGN_EVT.md`,
+and rig 2.18.0's branch carries audit-2.17.1's follow-ups on top:
+- **tool**: python's omitted action is the row's declared default
+  (`defaultAction: code`), so the predicate and the manual gate see the
+  write the door runs; the delegate wire schema takes no required field,
+  matching the command path; the registry and gate tables carry the
+  omitted-action rows. The bounded bash door refuses its own empty
+  command with bash's own words before the delegate seam can name a
+  field bash does not have. The dead `concurrentNatives` map is deleted
+  and its tests answer the predicate by name.
+- **frontend/web**: the steered slot dispatches a command-shaped line at
+  re-entry, the same gate the CLI and the TUI carry, named by a test.
+- **specs and packages**: SPEC_ASYNC names the flat envelope and the
+  system-prompt sentence, the jail refused by name, and the file
+  family's two decode conventions; SPEC_MODES names the gate's per-call
+  predicate; SPEC_PYTHON names the shipped constructors; SPEC_CORE and
+  SPEC_STATE carry the recorder's 2.17.1 rule; SPEC_DELEGATE dates
+  `WaitBusy`; loop's and store/scheduler's package notes describe one
+  design apiece; EMBED, DESIGN and USAGE name the eight priorities, the
+  one predicate and the delegate's serialization; the README's wall is
+  16,500; AGENTS' map carries 2.16–2.18; site's measured snapshot
+  follows docs/measured.json. The tool menu reads 15,495.
 ## [2.17.1]: an interrupted reply stays in the transcript
 
 When the operator steered mid-reply, the loop dropped what the model had
