@@ -62,6 +62,8 @@ type Delegate interface {
 
 	Run(ctx context.Context, task, workspace, model string) (string, error)
 
+	Command(ctx context.Context, command, workspace string, bound time.Duration) (string, error)
+
 	StopAll()
 }
 
@@ -141,6 +143,10 @@ func boundMs(raw *int64) (time.Duration, error) {
 
 func (a *adapter) Run(ctx context.Context, task, workspace, model string) (string, error) {
 	return a.run(ctx, delegateCall{task: task, workspace: workspace, model: model})
+}
+
+func (a *adapter) Command(ctx context.Context, command, workspace string, bound time.Duration) (string, error) {
+	return a.runCommand(ctx, command, workspace, bound)
 }
 
 func (a *adapter) runCommand(ctx context.Context, command, workspace string, bound time.Duration) (string, error) {

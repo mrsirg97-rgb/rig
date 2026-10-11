@@ -472,7 +472,7 @@ func main() {
 		themeDoc:       cfg.Theme,
 		themeTrueColor: tuiTrueColor(),
 		tools: map[string]core.Tool{
-			"bash": bash.New(), "read": file.NewRead(), "write": file.NewWrite(), "edit": file.NewEdit(),
+			"read": file.NewRead(), "write": file.NewWrite(), "edit": file.NewEdit(),
 			"python": py, "web": webTool,
 			"sessions": sessionstool.New(cfgDir, cwd),
 		},
@@ -491,31 +491,30 @@ func main() {
 	r.listen()
 	delegateOn, swarmWhy := fleetWiring(sched.RealFetch(0), swapURL, modelID, cfg.Models, cfg.Settings.Workers == nil || *cfg.Settings.Workers)
 	piped := *prompt != ""
-	var del delegate.Delegate
-	var stopWorkers func()
 	workerCap := sched.NewWorkerCap(cfg.Settings.MaxWorkers)
+	del := delegate.New(delegate.Opts{
+		Ctx:          ctx,
+		Await:        piped,
+		DB:           scdb,
+		Home:         schedHome,
+		RigHome:      cfgDir,
+		StateDir:     filepath.Join(cfgDir, "sessions"),
+		SwapURL:      swapURL,
+		WorkerCmd:    []string{self},
+		DefaultModel: modelID,
+		Sandbox:      cfg.Settings.Sandbox,
+		SandboxBinds: cfg.Settings.SandboxBinds,
+		Allow:        allowList,
+		Fetch:        sched.RealFetch(0),
+		Spawn:        sched.RealSpawn,
+		Models:       func() models.Table { return r.runtime },
+		Room:         r.room,
+		Cap:          workerCap,
+	})
+	r.tools["bash"] = bash.New(del)
+	stopWorkers := del.StopAll
 	if delegateOn {
-		del = delegate.New(delegate.Opts{
-			Ctx:          ctx,
-			Await:        piped,
-			DB:           scdb,
-			Home:         schedHome,
-			RigHome:      cfgDir,
-			StateDir:     filepath.Join(cfgDir, "sessions"),
-			SwapURL:      swapURL,
-			WorkerCmd:    []string{self},
-			DefaultModel: modelID,
-			Sandbox:      cfg.Settings.Sandbox,
-			SandboxBinds: cfg.Settings.SandboxBinds,
-			Allow:        allowList,
-			Fetch:        sched.RealFetch(0),
-			Spawn:        sched.RealSpawn,
-			Models:       func() models.Table { return r.runtime },
-			Room:         r.room,
-			Cap:          workerCap,
-		})
 		r.tools["delegate"] = del
-		stopWorkers = del.StopAll
 	}
 	if delegateOn {
 		r.swarm = swarm.New(swarm.Opts{

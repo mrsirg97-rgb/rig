@@ -26,13 +26,21 @@ type Bash interface {
 	Run(ctx context.Context, command, workspace string) (string, error)
 }
 
-type bashTool struct{ tool.Definition }
+type Worker interface {
+	Command(ctx context.Context, command, workspace string, bound time.Duration) (string, error)
+}
 
-func New() Bash { return &bashTool{tool.Def("bash")} }
+type bashTool struct {
+	tool.Definition
+	worker Worker
+}
+
+func New(worker Worker) Bash { return &bashTool{tool.Def("bash"), worker} }
 
 type args struct {
-	Command   string `json:"command"`
-	Workspace string `json:"workspace,omitempty"`
+	Command   string  `json:"command"`
+	Workspace string  `json:"workspace,omitempty"`
+	TimeoutMs *int64  `json:"timeoutMs"`
 }
 
 func (t bashTool) Exec(ctx context.Context, data json.RawMessage) (string, error) {
@@ -40,7 +48,29 @@ func (t bashTool) Exec(ctx context.Context, data json.RawMessage) (string, error
 	if err := strictDecode(data, &a); err != nil {
 		return "", fmt.Errorf("bash: args: %w", err)
 	}
+	if a.TimeoutMs != nil {
+		bound, err := boundMs(*a.TimeoutMs)
+		if err != nil {
+			return "", err
+		}
+		if t.worker == nil {
+			return "", errors.New("bash: no worker is wired for bounded commands")
+		}
+		return t.worker.Command(ctx, a.Command, a.Workspace, bound)
+	}
 	return t.Run(ctx, a.Command, a.Workspace)
+}
+
+const maxCommandBoundMs = 86_400_000
+
+func boundMs(raw int64) (time.Duration, error) {
+	if raw < 1000 {
+		return 0, fmt.Errorf("bash: timeoutMs must be at least 1000 ms (omit the field for no bound), got %d", raw)
+	}
+	if raw > maxCommandBoundMs {
+		return 0, fmt.Errorf("bash: timeoutMs ceiling is %d ms (24h), got %d", maxCommandBoundMs, raw)
+	}
+	return time.Duration(raw) * time.Millisecond, nil
 }
 
 func (bashTool) Run(ctx context.Context, command, workspace string) (string, error) {
