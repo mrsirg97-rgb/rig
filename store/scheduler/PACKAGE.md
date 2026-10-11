@@ -87,9 +87,9 @@ written before the store commit; drift is surfaced in list.
   writes touches the row's `stall` window (a silent fire past it is
   killed as hung, the log naming the reason) and streams to a live
   `.stream` tail beside the canonical log, which is written whole at the
-  end. A delegate passes no observer unless its `Stall` is set — the
-  watch rides the same observer, so an interactive session keeps the
-  plain timeout and a caller that states a window gets the kill.
+  end. A delegate always passes no observer: the ad-hoc worker's spawn
+  has no `.stream` tail and no stall watch of its own — the window
+  belongs to the job that states one.
   The runner's `RunOpts.Decisions` (SPEC_DECISION) records one final row
 per skip past the job-row read (the pre-row skips have no scope and
 record nothing); a store error never changes the skip.
@@ -116,27 +116,22 @@ A command job's fire skips the busy probe and
   the delegate tool, which answers its turn immediately, is just the
   caller that does not call it until the worker is done.
 
-- `delegate.go`: the one-shot worker spawn (SPEC_DELEGATE, the model
-  resolution and gate of SPEC_WORKERS): the model resolves at claim
-  time (named, else the resident model resolved to its models-table
-  row, else `DefaultModel` — the session's default; an unreachable
-  swap falls to the default as it always did, a resident with no row
-  refuses naming it and the known rows), the gate is one read of the
-  resident set (skipped for a remote row via the `Models` seam — the
-  swap is never consulted; another resident refuses at once), the
-  ad-hoc record (a minted once-job row with no
-  crontab line, `done` once its fire lands), the
-  state-store bind and explicit identity for the resumable transcript,
-  the no-recursion marker, and the
-  `Stall` watch: a set window kills a worker silent past it (the
-  result marked `Stalled`, the stderr and the log naming the reason)
-  while `Timeout` stays the spend ceiling (the seam's cap is 24h, the
-  tool's own cap is 30 minutes). Every abnormal end is also recorded as
-  the run's reason — `killed after timeout`, `killed after stall`,
-  `canceled` (the spawn's base context ended), or `killed by signal N`
-  (a signal the runner did not send) — and `RealSpawn` captures the
-  signal from the wait status and carries `Pdeathsig`, so a signal
-  death is never a bare exit -1.
+  Inside `DelegateStart` the worker's model resolves (named, else the
+  resident model resolved to its models-table row, else `DefaultModel`
+  — the session's default; an unreachable swap falls to the default as
+  it always did, a resident with no row refuses naming it and the known
+  rows), the gate is one read of the resident set (skipped for a remote
+  row via the `Models` seam — the swap is never consulted; another
+  resident refuses at once), the ad-hoc record is a minted once-job row
+  with no crontab line, `done` once its fire lands, and the state-store
+  bind and explicit identity for the resumable transcript ride the same
+  refusal block. The model worker takes no clock (2.12.7); a command
+  worker's `timeoutMs` is the kill bound, capped at the seam's 24h.
+  Every abnormal end is also recorded as the run's reason —
+  `killed after timeout`, `canceled` (the spawn's base context ended),
+  or `killed by signal N` (a signal the runner did not send) — and
+  `RealSpawn` captures the signal from the wait status and carries
+  `Pdeathsig`, so a signal death is never a bare exit -1.
 - `jail.go`: the bwrap jail argv composition: `--clearenv` and the named
   `--setenv` list (PATH, HOME, RIG_HOME; `RIG_DELEGATE=1` for a delegate
   worker), each entry split into explicit VAR VALUE pairs (bwrap's
