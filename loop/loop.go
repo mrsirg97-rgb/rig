@@ -250,9 +250,9 @@ func (r *run) streamEnd(t *turn) {
 			ToolCalls:        t.calls,
 			ContextTokens:    t.usage.Prompt + t.usage.Completion,
 		})
-		t.batch = newBatch(core.WithSession(t.ctx, session), r.exec, t.calls, r.k.Concurrent, r.k.Parallel, func(x int, out outcome) {
+		t.batch = newBatch(core.WithSession(t.ctx, session), r.exec, t.calls, r.k.Priority, r.k.Parallel, func(x int, out outcome) {
 			r.post(rig.PriorityTool, func() { r.toolDone(t, x, out) })
-		})
+		}, r.post)
 		t.results = make([]*outcome, len(t.calls))
 		t.cursor, t.started = 0, 0
 		r.advance(t)

@@ -19,20 +19,26 @@ type batch struct {
 	ctx        context.Context
 	exec       core.ToolExec
 	calls      []core.ToolCall
-	concurrent func(core.ToolCall) bool
+	priorities []int
 	sem        chan struct{}
+	submit     func(priority int, f func())
 	post       func(x int, out outcome)
 	dispatched int
 }
 
-func newBatch(ctx context.Context, exec core.ToolExec, calls []core.ToolCall, concurrent func(core.ToolCall) bool, parallel int, post func(x int, out outcome)) *batch {
-	b := &batch{ctx: ctx, exec: exec, calls: calls, concurrent: concurrent, post: post}
-	if concurrent != nil {
-		if parallel <= 0 {
-			parallel = rig.DefaultParallel
+func newBatch(ctx context.Context, exec core.ToolExec, calls []core.ToolCall, priority func(core.ToolCall) int, parallel int, post func(x int, out outcome), submit func(priority int, f func())) *batch {
+	b := &batch{ctx: ctx, exec: exec, calls: calls, priorities: make([]int, len(calls)), submit: submit, post: post}
+	for i := range calls {
+		p := rig.PriorityWrite
+		if priority != nil {
+			p = priority(calls[i])
 		}
-		b.sem = make(chan struct{}, parallel)
+		b.priorities[i] = p
 	}
+	if parallel <= 0 {
+		parallel = rig.DefaultParallel
+	}
+	b.sem = make(chan struct{}, parallel)
 	return b
 }
 
@@ -40,27 +46,23 @@ func (b *batch) dispatch(i int) int {
 	if i < b.dispatched {
 		return b.dispatched
 	}
-	if b.concurrent != nil && b.concurrent(b.calls[i]) {
-		j := i
-		for j < len(b.calls) && b.concurrent(b.calls[j]) {
-			j++
+	for x := 0; x < len(b.calls); x++ {
+		if b.priorities[x] >= rig.PriorityWrite {
+			b.submit(b.priorities[x], func() {
+				out := b.call(x)
+				b.submit(b.priorities[x], func() { b.post(x, out) })
+			})
+			continue
 		}
-		for x := i; x < j; x++ {
+		b.submit(b.priorities[x], func() {
 			go b.run(x)
-		}
-		b.dispatched = j
-		return j
+		})
 	}
-	go b.run(i)
-	b.dispatched = i + 1
-	return i + 1
+	b.dispatched = len(b.calls)
+	return len(b.calls)
 }
 
-func (b *batch) run(x int) {
-	if b.sem != nil {
-		b.sem <- struct{}{}
-		defer func() { <-b.sem }()
-	}
+func (b *batch) call(x int) outcome {
 	start := time.Now()
 	var content string
 	var err error
@@ -72,5 +74,14 @@ func (b *batch) run(x int) {
 		}()
 		content, err = b.exec(b.ctx, b.calls[x])
 	}()
-	b.post(x, outcome{content: content, err: err, dur: time.Since(start)})
+	return outcome{content: content, err: err, dur: time.Since(start)}
+}
+
+func (b *batch) run(x int) {
+	if b.sem != nil {
+		b.sem <- struct{}{}
+		defer func() { <-b.sem }()
+	}
+	out := b.call(x)
+	b.submit(b.priorities[x], func() { b.post(x, out) })
 }

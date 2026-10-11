@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -28,6 +29,7 @@ type timedTool struct {
 	starts map[string]time.Time
 	ends   map[string]time.Time
 	cancel context.CancelFunc
+	fails  map[string]bool
 }
 
 func newTimed(name string) *timedTool {
@@ -44,6 +46,9 @@ func (t *timedTool) Exec(ctx context.Context, args json.RawMessage) (string, err
 		Ms int    `json:"ms"`
 	}
 	_ = json.Unmarshal(args, &a)
+	if t.fails[a.ID] {
+		return "", fmt.Errorf("%s: %s failed", t.name, a.ID)
+	}
 	t.mu.Lock()
 	t.starts[a.ID] = time.Now()
 	t.mu.Unlock()
@@ -140,12 +145,10 @@ func same(a, b []string) bool {
 	return true
 }
 
-var onlyRead = func(c core.ToolCall) bool { return c.Name == "read" }
-
 func TestBatchRunsReadsConcurrentlyAndEmitsInCallOrder(t *testing.T) {
 	read := newTimed("read")
 	calls := []core.ToolCall{timedCall("c1", "read", 90), timedCall("c2", "read", 40), timedCall("c3", "read", 10)}
-	k, f, s := batchKernel(t, []core.Tool{read}, calls, rig.WithConcurrent(onlyRead))
+	k, f, s := batchKernel(t, []core.Tool{read}, calls, rig.WithPriority(writesFirst))
 	if err := loop.Run(context.Background(), k); err != nil {
 		t.Fatalf("run: %v", err)
 	}
@@ -178,7 +181,7 @@ func TestBatchRunsReadsConcurrentlyAndEmitsInCallOrder(t *testing.T) {
 func TestBatchMutatingCallIsABarrier(t *testing.T) {
 	read, write := newTimed("read"), newTimed("write")
 	calls := []core.ToolCall{timedCall("c1", "read", 60), timedCall("c2", "read", 20), timedCall("c3", "write", 10), timedCall("c4", "read", 10)}
-	k, f, s := batchKernel(t, []core.Tool{read, write}, calls, rig.WithConcurrent(onlyRead))
+	k, f, s := batchKernel(t, []core.Tool{read, write}, calls, rig.WithPriority(writesFirst))
 	if err := loop.Run(context.Background(), k); err != nil {
 		t.Fatalf("run: %v", err)
 	}
@@ -192,14 +195,13 @@ func TestBatchMutatingCallIsABarrier(t *testing.T) {
 	if read.peak.Load() < 2 {
 		t.Fatalf("c1 and c2 must overlap, peak %d", read.peak.Load())
 	}
-	if write.starts["c3"].Before(read.ends["c1"]) || write.starts["c3"].Before(read.ends["c2"]) {
-		t.Fatal("the write started before the reads ahead of it finished")
+	if read.starts["c1"].Before(write.starts["c3"]) {
+		t.Fatal("the write must outrank the reads: it must start first")
 	}
-	if read.starts["c4"].Before(write.ends["c3"]) {
-		t.Fatal("the read after the write started before the write finished")
+	if read.starts["c1"].Before(write.ends["c3"]) || read.starts["c2"].Before(write.ends["c3"]) || read.starts["c4"].Before(write.ends["c3"]) {
+		t.Fatal("the reads must start after the write finished")
 	}
 }
-
 func TestBatchWithoutAPredicateIsSequential(t *testing.T) {
 	read := newTimed("read")
 	calls := []core.ToolCall{timedCall("c1", "read", 30), timedCall("c2", "read", 30), timedCall("c3", "read", 30)}
@@ -218,7 +220,7 @@ func TestBatchWithoutAPredicateIsSequential(t *testing.T) {
 func TestBatchParallelBoundsTheRun(t *testing.T) {
 	read := newTimed("read")
 	calls := []core.ToolCall{timedCall("c1", "read", 40), timedCall("c2", "read", 40), timedCall("c3", "read", 40), timedCall("c4", "read", 40)}
-	k, f, _ := batchKernel(t, []core.Tool{read}, calls, rig.WithConcurrent(onlyRead), rig.WithParallel(2))
+	k, f, _ := batchKernel(t, []core.Tool{read}, calls, rig.WithPriority(writesFirst), rig.WithParallel(2))
 	if err := loop.Run(context.Background(), k); err != nil {
 		t.Fatalf("run: %v", err)
 	}
@@ -239,7 +241,7 @@ func TestBatchCancellationMidRunDrainsTheBatch(t *testing.T) {
 	p := &scriptedProvider{turns: []scriptedTurn{{events: evs}, {holdCtx: true}}}
 	f := &recorderFrontend{inputs: make(chan string, 1)}
 	s := core.NewSession()
-	k := rig.New(rig.WithProvider(p), rig.WithFrontend(f), rig.WithPolicy(&transcriptPolicy{}), rig.WithTools(read), rig.WithConcurrent(onlyRead))
+	k := rig.New(rig.WithProvider(p), rig.WithFrontend(f), rig.WithPolicy(&transcriptPolicy{}), rig.WithTools(read), rig.WithPriority(writesFirst))
 	k.Session = s
 	f.inputs <- "go"
 	close(f.inputs)
@@ -261,7 +263,7 @@ func TestBatchGuardCountsConcurrentFailures(t *testing.T) {
 	}
 	failing := &failTool{name: "read"}
 	counted := &countingGuard{}
-	k, f, _ := batchKernel(t, []core.Tool{failing}, calls, rig.WithConcurrent(onlyRead), rig.WithMiddleware(counted))
+	k, f, _ := batchKernel(t, []core.Tool{failing}, calls, rig.WithPriority(writesFirst), rig.WithMiddleware(counted))
 	if err := loop.Run(context.Background(), k); err != nil {
 		t.Fatalf("run: %v", err)
 	}
@@ -343,7 +345,7 @@ func TestBatchEditsToOneFileRunInCallOrderAgainstThePreviousLanding(t *testing.T
 		fileCall(t, "c2", "edit", map[string]any{"path": path, "old": "alpha", "new": "beta"}),
 		fileCall(t, "c3", "edit", map[string]any{"path": path, "old": "beta", "new": "gamma"}),
 	}
-	k, f, s := batchKernel(t, []core.Tool{file.NewRead(), file.NewEdit()}, calls, rig.WithConcurrent(onlyRead))
+	k, f, s := batchKernel(t, []core.Tool{file.NewRead(), file.NewEdit()}, calls, rig.WithPriority(writesFirst))
 	if err := loop.Run(context.Background(), k); err != nil {
 		t.Fatalf("run: %v", err)
 	}
@@ -372,5 +374,182 @@ func TestBatchEditsToOneFileRunInCallOrderAgainstThePreviousLanding(t *testing.T
 	sum := sha256.Sum256(data)
 	if got := s.Files[path].Hash; got != hex.EncodeToString(sum[:]) {
 		t.Fatalf("the recorded observation is %q, want the last landing's hash", got)
+	}
+}
+
+type stateStore struct {
+	mu   sync.Mutex
+	vals map[string]string
+}
+
+func newStateStore() *stateStore {
+	return &stateStore{vals: map[string]string{}}
+}
+
+type stateTool struct {
+	name  string
+	store *stateStore
+}
+
+func newStateTool(name string, store *stateStore) *stateTool {
+	return &stateTool{name: name, store: store}
+}
+
+func (t *stateTool) Name() string            { return t.name }
+func (t *stateTool) Description() string     { return "stateful test tool" }
+func (t *stateTool) Schema() json.RawMessage { return json.RawMessage(`{"type":"object"}`) }
+
+func (t *stateTool) Exec(ctx context.Context, args json.RawMessage) (string, error) {
+	var a struct {
+		ID   string `json:"id"`
+		Mode string `json:"mode"`
+	}
+	_ = json.Unmarshal(args, &a)
+	t.store.mu.Lock()
+	defer t.store.mu.Unlock()
+	if a.Mode == "write" {
+		t.store.vals[a.ID] = "after-" + a.ID
+		return "wrote " + a.ID, nil
+	}
+	if v, ok := t.store.vals[a.ID]; ok {
+		return v, nil
+	}
+	return "before-" + a.ID, nil
+}
+
+func stateCall(callID, key, name, mode string) core.ToolCall {
+	return core.ToolCall{ID: callID, Name: name, Args: json.RawMessage(`{"id":"` + key + `","mode":"` + mode + `"}`)}
+}
+
+func writesFirst(c core.ToolCall) int {
+	if c.Name == "edit" || c.Name == "write" || strings.Contains(string(c.Args), `"write"`) || strings.Contains(string(c.Args), `"create"`) {
+		return rig.PriorityWrite
+	}
+	return rig.PriorityRead
+}
+
+func resultContent(f *recorderFrontend, id string) string {
+	for _, ev := range f.events {
+		if r, ok := ev.(core.ToolResult); ok && r.ID == id {
+			return r.Content
+		}
+	}
+	return ""
+}
+
+func TestReadSeesTheTreeAfterTheWritesOfItsMessage(t *testing.T) {
+	store := newStateStore()
+	read, edit := newStateTool("read", store), newStateTool("edit", store)
+	calls := []core.ToolCall{stateCall("c1", "a", "read", "read"), stateCall("c2", "a", "edit", "write")}
+	k, f, s := batchKernel(t, []core.Tool{read, edit}, calls, rig.WithPriority(writesFirst))
+	if err := loop.Run(context.Background(), k); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	if got := resultContent(f, "c1"); got != "after-a" {
+		t.Fatalf("the read must observe the edit's outcome: %q", got)
+	}
+	if got := resultOrder(f); !same(got, []string{"c1", "c2"}) {
+		t.Fatalf("ToolResult order %v, want call order", got)
+	}
+	if got := toolOrder(s); !same(got, []string{"c1", "c2"}) {
+		t.Fatalf("transcript order %v, want call order", got)
+	}
+}
+
+func TestTheRuleHoldsWhenTheReadIsWrittenAfterTheEdit(t *testing.T) {
+	store := newStateStore()
+	read, edit := newStateTool("read", store), newStateTool("edit", store)
+	calls := []core.ToolCall{stateCall("c1", "a", "edit", "write"), stateCall("c2", "b", "read", "read")}
+	k, f, _ := batchKernel(t, []core.Tool{read, edit}, calls, rig.WithPriority(writesFirst))
+	if err := loop.Run(context.Background(), k); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	if got := resultContent(f, "c2"); got != "before-b" {
+		t.Fatalf("the read after the edit reads its own key: %q", got)
+	}
+	if got := resultOrder(f); !same(got, []string{"c1", "c2"}) {
+		t.Fatalf("ToolResult order %v, want call order", got)
+	}
+}
+
+func TestTheDelegateStartsAfterTheEdit(t *testing.T) {
+	edit, delegate := newTimed("edit"), newTimed("delegate")
+	calls := []core.ToolCall{timedCall("c1", "edit", 60), timedCall("c2", "delegate", 10)}
+	k, _, _ := batchKernel(t, []core.Tool{edit, delegate}, calls, rig.WithPriority(writesFirst))
+	if err := loop.Run(context.Background(), k); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	if delegate.starts["c2"].Before(edit.ends["c1"]) {
+		t.Fatal("the worker started before the edit finished")
+	}
+}
+
+func TestTodoReadShowsTheTaskTheCreateMade(t *testing.T) {
+	todo := newStateTool("todo", newStateStore())
+	calls := []core.ToolCall{stateCall("c1", "t1", "todo", "write"), stateCall("c2", "t1", "todo", "read")}
+	k, f, _ := batchKernel(t, []core.Tool{todo}, calls, rig.WithPriority(writesFirst))
+	if err := loop.Run(context.Background(), k); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	if got := resultContent(f, "c2"); got != "after-t1" {
+		t.Fatalf("the read must show the task the create made: %q", got)
+	}
+}
+
+func TestWritesRunInIndexOrderAndAlone(t *testing.T) {
+	edit := newTimed("edit")
+	calls := []core.ToolCall{timedCall("cb", "edit", 60), timedCall("ca", "edit", 10)}
+	k, f, _ := batchKernel(t, []core.Tool{edit}, calls, rig.WithPriority(writesFirst))
+	if err := loop.Run(context.Background(), k); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	if edit.starts["ca"].Before(edit.ends["cb"]) {
+		t.Fatal("the writes must run in index order: ca started before cb finished")
+	}
+	if edit.peak.Load() != 1 {
+		t.Fatalf("peak %d: the writes must not overlap", edit.peak.Load())
+	}
+	if got := resultOrder(f); !same(got, []string{"cb", "ca"}) {
+		t.Fatalf("ToolResult order %v, want call order", got)
+	}
+}
+
+func TestAFailedWriteDoesNotStopTheOnesAfterIt(t *testing.T) {
+	edit := newTimed("edit")
+	edit.fails = map[string]bool{"c1": true}
+	calls := []core.ToolCall{timedCall("c1", "edit", 10), timedCall("c2", "edit", 10)}
+	k, _, _ := batchKernel(t, []core.Tool{edit}, calls, rig.WithPriority(writesFirst))
+	if err := loop.Run(context.Background(), k); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	if edit.starts["c2"].IsZero() {
+		t.Fatal("the write after the failed one must still run")
+	}
+}
+
+func TestInterruptMidDrainCancelsTheRest(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	edit, read := newTimed("edit"), newTimed("read")
+	edit.cancel = cancel
+	calls := []core.ToolCall{timedCall("c1", "edit", 30), timedCall("c2", "edit", 30), timedCall("c3", "read", 30)}
+	evs := []core.Event{callEv(calls[0]), callEv(calls[1]), callEv(calls[2]), doneEv()}
+	p := &scriptedProvider{turns: []scriptedTurn{{events: evs}, {holdCtx: true}}}
+	f := &recorderFrontend{inputs: make(chan string, 1)}
+	s := core.NewSession()
+	k := rig.New(rig.WithProvider(p), rig.WithFrontend(f), rig.WithPolicy(&transcriptPolicy{}), rig.WithTools(edit, read), rig.WithPriority(writesFirst))
+	k.Session = s
+	f.inputs <- "go"
+	close(f.inputs)
+	if err := loop.Run(ctx, k); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	if d := edit.ends["c2"].Sub(edit.starts["c2"]); d >= 30*time.Millisecond {
+		t.Fatalf("the write not yet started must not do its work: %v", d)
+	}
+	if d := read.ends["c3"].Sub(read.starts["c3"]); d >= 30*time.Millisecond {
+		t.Fatalf("the reads must never do their work: %v", d)
+	}
+	if got := toolOrder(s); !same(got, []string{"c1", "c2", "c3"}) {
+		t.Fatalf("the batch must drain into the transcript in order, got %v", got)
 	}
 }
