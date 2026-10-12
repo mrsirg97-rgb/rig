@@ -186,9 +186,18 @@ the Apple meta tags, safe-area insets).
 ## How it is consumed
 
 - The root wires it with `web.New(web.Options{Home, CWD, Models,
-  Crontab, RunnerCmd})` and `srv.ListenAndServe(ctx, addr)`, behind the
-  `serve` subcommand (`cmd/rig/serve.go`, one file plus a registration
-  line in `main.go`).
+  Crontab, RunnerCmd, Machine, Version})` and `srv.ListenAndServe(ctx,
+  addr)`, behind the `serve` subcommand (`cmd/rig/serve.go`, one file
+  plus a registration line in `main.go`). `Machine` is the room member
+  the three pages read; `Version` is the build the update page shows.
+- The room page shows the members and each model's residency: who holds
+  it, who waits, whether the row's port answers, the log's tail. The
+  models page carries the residency beside the row. The update page
+  shows the build's version and runs `rig -update`, which drains the
+  room first.
+- The wire front (`wire.go`) answers `/v1/chat/completions`,
+  `/v1/models` (the rows' aliases), `/running` and `/unload` on
+  loopback, and claims at the floor for anything that is not rig.
 - The models table is `cfg.Models` (the config's table, every row): the
   crontab is `sched.RealCrontab("")` (injected in tests); the runner
   command is `<self> run-job` (the store's `rig run-job` when empty).

@@ -44,6 +44,23 @@ sees core and models and nothing else.
   state the command's closures read and rewrite at call time, so a swap
   (new, a resume, a model switch) is visible to every closure with no
   re-wiring.
+- **children** (`children.go`): the child operations' effects, the act's
+  owner's on its own engine: a start waits the row's port, lands the log
+  at `~/.rig/logs/<model id>.log` and the pid file where the note names
+  them, so two starts converge on one child; a stop signals the child's
+  session, not the shell that forked it, and waits the row's grace
+  before the kill; a swap stops the outgoing child first. The room's
+  engine stays free while a child starts or stops, and the others learn
+  the outcome from the world — the row's port and the pid file.
+- **claim** (`claim.go`): the claiming provider every model call rides:
+  it claims the model's key at its class's priority (the operator's turn
+  90, a delegate's return 70, a fleet worker 30, a scheduled job 20, an
+  outside client 0), the turn waits the admission, and the stream's
+  completion is the release. Within one priority the claim that
+  continues the session already served goes first; a request that finds
+  the child dead re-publishes the start so the next claim reconciles
+  against the world; `rig -update` publishes the update on the table's
+  key and drains to its turn boundaries before the binary swaps.
 - **The decision wiring** (`decision.go`, the `decisionUrl` block in
   main, `root.frontend`): the decision store opens with the others; the
   gates' recorder holds it and records finals that never fail a call.
