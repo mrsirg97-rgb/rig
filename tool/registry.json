@@ -23,7 +23,11 @@
           "type": "integer",
           "minimum": 1000,
           "maximum": 86400000,
-          "description": "pass it to run the command in the background, killed after this many ms: the call returns a started line and the output arrives as a message once it ends. omit it to run in-turn and get the output now."
+          "description": "kill the command after this many ms. omit it for no bound."
+        },
+        "defer": {
+          "type": "boolean",
+          "description": "true with timeoutMs runs the command in the background: the call returns a started line and the output arrives as a message once it ends. omit it to get the output in this call."
         }
       },
       "required": [
@@ -512,9 +516,13 @@
         },
         "timeoutMs": {
           "type": "integer",
-          "description": "pass it to run the cell in the background, killed after this many ms: the output arrives as a message once it ends. omit it to run in-turn, capped at 120000.",
+          "description": "kill the cell after this many ms (default 120000).",
           "minimum": 1000,
           "maximum": 600000
+        },
+        "defer": {
+          "type": "boolean",
+          "description": "true with timeoutMs runs the cell in the background: the output arrives as a message once it ends. omit it to get the output in this call."
         }
       }
     }
@@ -554,9 +562,13 @@
         },
         "timeoutMs": {
           "type": "integer",
-          "description": "fetch only: pass it to fetch in the background, killed after this many ms: the page arrives as a message once it is fetched. omit it to fetch in-turn, capped at 30000.",
+          "description": "fetch only: give up after this many ms (default 30000).",
           "minimum": 1000,
           "maximum": 300000
+        },
+        "defer": {
+          "type": "boolean",
+          "description": "fetch only: true with timeoutMs fetches in the background: the page arrives as a message once it is fetched. omit it to get the page in this call."
         }
       },
       "required": [

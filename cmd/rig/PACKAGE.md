@@ -246,5 +246,5 @@ into a `Phase`. A notice with no recorder yet goes to stderr.
   function (`WithPriority`), the two named priorities sit in `kernel.go`
   beside the table (a write is 60, a read is 50), and `isMutating` reads
   the one predicate by call (2.17.0, SPEC_WRITES). The system prompt
-  carries the standing rules once: the timeoutMs mechanism and the ids
+  carries the standing rules once: the timeoutMs and defer mechanism and the ids
   rule, each said where it cannot drift.

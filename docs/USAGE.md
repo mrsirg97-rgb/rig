@@ -169,7 +169,8 @@ worker, 2.14.9) and the most recent call of any of them. A model worker
 has no clock: it lives until it exits or the session ends (waiting
 behind nine others in a slot is work, not a hang); a command worker and
 a `bash` or `python` or `web` call with `timeoutMs` names its own kill
-bound. Esc on an empty prompt with no turn live stops
+bound and still answers in-turn; add `defer: true` and the call runs in
+the background and its output comes back as a return (2.18.4). Esc on an empty prompt with no turn live stops
 every worker you have running, and in the dashboard the send button does
 the same while a batch is out. A model that is not resident refuses by
 name, naming the holder — never an eviction from inside a turn. The run

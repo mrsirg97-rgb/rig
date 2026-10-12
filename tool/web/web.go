@@ -59,6 +59,7 @@ func (w *web) Exec(ctx context.Context, args json.RawMessage) (string, error) {
 		MaxResults *int   `json:"maxResults"`
 		MaxChars   *int   `json:"maxChars"`
 		TimeoutMs  *int   `json:"timeoutMs"`
+		Defer      bool   `json:"defer"`
 	}
 	if err := json.Unmarshal(args, &p); err != nil {
 		return "", fmt.Errorf("web: bad args: %v", err)
@@ -75,7 +76,10 @@ func (w *web) Exec(ctx context.Context, args json.RawMessage) (string, error) {
 		if p.MaxChars != nil {
 			maxC = *p.MaxChars
 		}
-		if p.TimeoutMs != nil {
+		if p.Defer {
+			if p.TimeoutMs == nil {
+				return "", errors.New(tool.DeferNeedsBound("web"))
+			}
 			return w.submitFetch(ctx, p.Target, maxC, *p.TimeoutMs)
 		}
 		timeoutMs := defaultTimeoutMs
@@ -122,7 +126,7 @@ func (w *web) submitFetch(ctx context.Context, url string, maxChars, timeoutMs i
 		return "", fmt.Errorf("web: timeoutMs must be between %d and %d, got %d", minTimeoutMs, maxTimeoutMs, timeoutMs)
 	}
 	if w.bg == nil {
-		return "", errors.New("web: no worker is wired for bounded fetches")
+		return "", errors.New("web: no worker is wired for deferred fetches")
 	}
 	return w.bg.Submit(ctx, core.KindFetch, tool.FirstLine(url), time.Duration(timeoutMs)*time.Millisecond, func(wctx context.Context) (string, int) {
 		body, err := w.fetch.exec(wctx, url, maxChars, timeoutMs)

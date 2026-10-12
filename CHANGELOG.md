@@ -1,4 +1,27 @@
 # Changelog
+## [2.18.4]: a timeout is a timeout; defer is the hand-off
+
+Since 2.16.0 passing `timeoutMs` to bash, python or a web fetch sent the
+call to the background. A model means *kill this if it hangs* by a
+timeout: one session passed it on 51 calls in a turn, every one a build
+or a test, and every one left the turn. Rewording the field (2.18.1) and
+delivering returns mid-turn (2.18.2) did not change what the word means
+to the caller.
+
+- **bash, python, web**: a new boolean, `defer`. The call runs in the
+  background only with `defer: true` and `timeoutMs` together.
+  `timeoutMs` alone runs in-turn and is the kill bound; `defer` without
+  `timeoutMs` refuses, naming what it needs; `defer` absent is false.
+- **bash**: an in-turn command past its bound has its process group
+  killed and answers `bash: killed at timeoutMs=N` with the output so
+  far. Before 2.16.0 bash had no bound at all.
+- **python, web**: `timeoutMs` alone replaces the default in-turn
+  ceiling (120000 and 30000), inside the same limits as before.
+- **words**: the three schemas and the system prompt's sentence say
+  `timeoutMs` is a kill bound and `defer` is the background run.
+- **delegate**: unchanged. Its `timeoutMs` is still the command
+  worker's kill bound.
+
 ## [2.18.3]: the TUI prints a tool's words, never its terminal controls
 
 A `git rebase --continue` inside a bash call opened an editor. The editor
