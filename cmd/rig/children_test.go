@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/mrsirg97-rgb/evt/broadcast"
 	"github.com/mrsirg97-rgb/rig/v3/models"
 	machineroom "github.com/mrsirg97-rgb/rig/v3/room"
 )
@@ -181,6 +182,9 @@ func TestAJoinerReadsTheWorld(t *testing.T) {
 	}
 	t.Cleanup(func() { b.Close(); kb.close() })
 	waitLive(t, a, b)
+	if ka.places(machineroom.KeyOf("fake")) != 1 {
+		t.Fatalf("the row's places must be the key's places: %d", ka.places(machineroom.KeyOf("fake")))
+	}
 	mine, _ := ka.rows.Get("other")
 	theirs, _ := kb.rows.Get("other")
 	if mine.Places != theirs.Places || mine.Port != theirs.Port || mine.Command != theirs.Command || mine.StopGrace != theirs.StopGrace {
@@ -200,6 +204,75 @@ func TestAJoinerReadsTheWorld(t *testing.T) {
 		t.Fatalf("the pid file must be the world a later stop reads: %v", err)
 	}
 	ka.stop("fake", 2)
+}
+
+func TestTwoInstancesRaceToStartAModelAndOneChildRuns(t *testing.T) {
+	home := t.TempDir()
+	port := freePort(t)
+	ka := newChildren(home, models.Table{}, nil, nil)
+	kb := newChildren(home, models.Table{}, nil, nil)
+	var a, b machineroom.Member
+	a, err := machineroom.New(home, ka.places, ka.effects, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err = machineroom.New(home, kb.places, kb.effects, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { a.Close(); b.Close(); ka.close(); kb.close() })
+	waitLive(t, a, b)
+	act := machineroom.StartChild{Model: "fake", Port: port, Command: "python3 -m http.server ${PORT}"}
+	a.Act(act, machineroom.KeyOf("fake"), machineroom.PriorityChild, func(bool) {})
+	b.Act(act, machineroom.KeyOf("fake"), machineroom.PriorityChild, func(bool) {})
+	await(t, "the child's port to answer", 15*time.Second, func() bool { return machineroom.Answers(port) })
+	await(t, "the pid file to name the child that holds the port", 10*time.Second, func() bool {
+		held := ka.heldPID("fake")
+		return held != 0 && alive(held)
+	})
+	ka.stop("fake", 2)
+	await(t, "the child to be stopped", 10*time.Second, func() bool { return !machineroom.Answers(port) })
+}
+
+func TestASwapWaitsForTheHoldsAndThenSwaps(t *testing.T) {
+	home := t.TempDir()
+	oldPort, newPort := freePort(t), freePort(t)
+	ka := newChildren(home, models.Table{}, nil, nil)
+	kb := newChildren(home, models.Table{}, nil, nil)
+	var a, b machineroom.Member
+	a, err := machineroom.New(home, ka.places, ka.effects, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err = machineroom.New(home, kb.places, kb.effects, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { a.Close(); b.Close(); ka.close(); kb.close() })
+	waitLive(t, a, b)
+	if !ka.start("old", oldPort, "python3 -m http.server ${PORT}", nil, "") {
+		t.Fatal("the outgoing child's port never answered")
+	}
+	key := machineroom.KeyOf("fake")
+	held := make(chan broadcast.Mint, 1)
+	a.Claim(key, machineroom.PriorityFleet, machineroom.KeyOf("session"), func(mint broadcast.Mint, ok bool) { held <- mint })
+	var claim broadcast.Mint
+	select {
+	case claim = <-held:
+	case <-time.After(10 * time.Second):
+		t.Fatal("the claim must hold the model's key")
+	}
+	a.Act(machineroom.SwapChild{
+		Model: "new", Out: "old", Port: newPort,
+		Command: "python3 -m http.server ${PORT}", Grace: 1,
+	}, key, machineroom.PriorityChild, func(bool) {})
+	await(t, "the swap to wait behind the hold", 2*time.Second, func() bool {
+		return len(b.Waiting(key)) == 1 && machineroom.Answers(oldPort)
+	})
+	a.Release(claim, machineroom.PriorityFleet)
+	await(t, "the new child to answer", 15*time.Second, func() bool { return machineroom.Answers(newPort) })
+	await(t, "the outgoing child to be stopped", 10*time.Second, func() bool { return !machineroom.Answers(oldPort) })
+	ka.stop("new", 2)
 }
 
 func TestStartChildWaitsForThePortThenStops(t *testing.T) {

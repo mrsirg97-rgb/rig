@@ -172,15 +172,25 @@ func (c *children) start(model string, port int, command string, env []string, l
 		fmt.Fprintf(f, "rig: %s: start: %v\n", model, err)
 		return false
 	}
-	go cmd.Wait()
 	pid := cmd.Process.Pid
-	c.owned[model] = pid
+	go func() {
+		cmd.Wait()
+		c.engine.Add(evt.Func(func(context.Context) { c.childGone(model, pid) }), room.PriorityChild)
+	}()
 	for i := 0; i < childProbeTries; i++ {
 		if room.Answers(port) {
 			if alive(pid) {
-				if err := os.WriteFile(pidPath, []byte(strconv.Itoa(pid)), 0o644); err != nil {
-					return false
+				time.Sleep(childProbePause)
+				if !alive(pid) {
+					c.owned[model] = 0
+					return true
 				}
+				if held := c.heldPID(model); held == 0 || held == pid || !alive(held) {
+					if err := os.WriteFile(pidPath, []byte(strconv.Itoa(pid)), 0o644); err != nil {
+						return false
+					}
+				}
+				c.owned[model] = pid
 			} else {
 				c.owned[model] = 0
 			}
@@ -189,6 +199,27 @@ func (c *children) start(model string, port int, command string, env []string, l
 		time.Sleep(childProbePause)
 	}
 	return false
+}
+
+func (c *children) childGone(model string, pid int) {
+	if c.owned[model] == pid {
+		c.owned[model] = 0
+	}
+	if c.heldPID(model) == pid {
+		os.Remove(filepath.Join(c.home, "logs", model+".pid"))
+	}
+}
+
+func (c *children) heldPID(model string) int {
+	b, err := os.ReadFile(filepath.Join(c.home, "logs", model+".pid"))
+	if err != nil {
+		return 0
+	}
+	held, err := strconv.Atoi(strings.TrimSpace(string(b)))
+	if err != nil || held <= 0 {
+		return 0
+	}
+	return held
 }
 
 func (c *children) note(model, text string) {
@@ -229,15 +260,7 @@ func (c *children) pidOf(model string) int {
 	if pid := c.owned[model]; pid > 0 {
 		return pid
 	}
-	b, err := os.ReadFile(filepath.Join(c.home, "logs", model+".pid"))
-	if err != nil {
-		return 0
-	}
-	pid, err := strconv.Atoi(strings.TrimSpace(string(b)))
-	if err != nil || pid <= 0 {
-		return 0
-	}
-	return pid
+	return c.heldPID(model)
 }
 
 func (c *children) waitGone(pid int, within time.Duration) bool {

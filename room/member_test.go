@@ -165,6 +165,96 @@ func TestAMemberThatDiesReleasesForIt(t *testing.T) {
 	waitFor(t, "the release from the dead holder", func() bool { return len(watcher.Holders(key)) == 0 })
 }
 
+func TestAKeyServesAsManyPlacesAsItsRowSays(t *testing.T) {
+	home := t.TempDir()
+	first := newRoom(t, home, 2)
+	second := newRoom(t, home, 2)
+	waitFor(t, "the members to see each other", func() bool {
+		return len(first.Live()) == 1 && len(second.Live()) == 1
+	})
+	key := KeyOf("local")
+	firstMint := make(chan broadcast.Mint, 1)
+	secondMint := make(chan broadcast.Mint, 1)
+	go func() {
+		first.Claim(key, PriorityFleet, KeyOf("session-a"), func(mint broadcast.Mint, ok bool) { firstMint <- mint })
+	}()
+	go func() {
+		second.Claim(key, PriorityFleet, KeyOf("session-a"), func(mint broadcast.Mint, ok bool) { secondMint <- mint })
+	}()
+	var held broadcast.Mint
+	deadline := time.After(10 * time.Second)
+	select {
+	case held = <-firstMint:
+	case <-deadline:
+		t.Fatal("the first member's claim must take a place")
+	}
+	select {
+	case <-secondMint:
+	case <-deadline:
+		t.Fatal("the second member's claim must take the other place")
+	}
+	waitFor(t, "both members to agree on the two holders", func() bool {
+		return len(first.Holders(key)) == 2 && len(second.Holders(key)) == 2
+	})
+	waiting := make(chan bool, 1)
+	first.Claim(key, PriorityFleet, KeyOf("session-b"), func(broadcast.Mint, bool) { waiting <- true })
+	select {
+	case <-waiting:
+		t.Fatal("a claim beyond the places must wait for one")
+	case <-time.After(500 * time.Millisecond):
+	}
+	if len(second.Waiting(key)) != 1 {
+		t.Fatalf("the waiting claim must sit in the order every member agrees on: %d", len(second.Waiting(key)))
+	}
+	first.Release(held, PriorityFleet)
+	select {
+	case <-waiting:
+	case <-time.After(10 * time.Second):
+		t.Fatal("the waiting claim must enter when a place frees")
+	}
+}
+
+func TestAHigherClaimEntersPastOneInFlight(t *testing.T) {
+	home := t.TempDir()
+	first := newRoom(t, home, 1)
+	second := newRoom(t, home, 1)
+	waitFor(t, "the members to see each other", func() bool {
+		return len(first.Live()) == 1 && len(second.Live()) == 1
+	})
+	key := KeyOf("local")
+	low := make(chan broadcast.Mint, 1)
+	first.Claim(key, PriorityFleet, KeyOf("session-a"), func(mint broadcast.Mint, ok bool) { low <- mint })
+	var held broadcast.Mint
+	select {
+	case held = <-low:
+	case <-time.After(10 * time.Second):
+		t.Fatal("the low claim must take the place")
+	}
+	entry := make(chan bool, 1)
+	second.Claim(key, PriorityTurn, KeyOf("session-b"), func(mint broadcast.Mint, ok bool) { entry <- ok })
+	select {
+	case <-entry:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the strictly higher claim must enter past the one in flight")
+	}
+	waitFor(t, "the entry to be a holder beyond the place on both members", func() bool {
+		return len(first.Holders(key)) == 2 && len(second.Holders(key)) == 2
+	})
+	lower := make(chan bool, 1)
+	first.Claim(key, PriorityOutside, KeyOf("session-c"), func(mint broadcast.Mint, ok bool) { lower <- ok })
+	select {
+	case <-lower:
+		t.Fatal("a second claim at or below the holders must wait")
+	case <-time.After(500 * time.Millisecond):
+	}
+	first.Release(held, PriorityFleet)
+	select {
+	case <-lower:
+	case <-time.After(10 * time.Second):
+		t.Fatal("the waiting claim must enter when the place frees")
+	}
+}
+
 func TestTheSocketNameRoundTrips(t *testing.T) {
 	id := broadcast.MemberOf([]byte("the boot id 1234 99"))
 	if id <= 0 {

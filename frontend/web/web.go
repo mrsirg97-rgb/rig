@@ -125,7 +125,13 @@ func (s *Server) Handler() http.Handler {
 			writeErr(w, http.StatusInternalServerError, "serve token: "+err.Error())
 		})
 	}
-	return gate(tok, s.router())
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if wirePath(r.URL.Path) {
+			s.handleWire(w, r, r.URL.Path)
+			return
+		}
+		gate(tok, s.router()).ServeHTTP(w, r)
+	})
 }
 
 func (s *Server) ListenAndServe(ctx context.Context, addr string) error {

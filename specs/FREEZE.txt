@@ -75,6 +75,7 @@ policy/
 pathguard/
 imagemarker/
 decision/
+room/
 
 # the frozen surface itself: open to pure addition only (SPEC_CORE)
 core/

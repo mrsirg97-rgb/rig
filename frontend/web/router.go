@@ -79,6 +79,10 @@ func (s *Server) allowed(path string) (map[string]bool, bool) {
 		return setOf("POST"), true
 	case path == "/api/status" || path == "/api/swarm":
 		return setOf("GET"), true
+	case path == "/api/room":
+		return setOf("GET"), true
+	case path == "/api/update":
+		return setOf("GET", "POST"), true
 	}
 	return nil, false
 }

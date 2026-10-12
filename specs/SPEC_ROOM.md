@@ -261,8 +261,9 @@ floor, so nothing here is a magic number.
 - **Start, stop and swap are guarded operations** on the model's key. The
   act's owner starts or stops the child, **detached** (a new session: it
   outlives that instance). Two instances racing to start a model both mint
-  the start operation; one admission pins, and the owner's start finds the
-  row's port already answering and starts nothing.
+  the start operation; one admission pins first and its start's child takes
+  the row's port, the other start finds the port answering or loses the bind
+  and its child dies — one child runs, and the pid file names it.
 - **An act's effect is done once and by one member — the act's owner.** The
   fold offers the effect to every member in the key's version order; the
   children answer for the act's owner and leave the act to the others. The
