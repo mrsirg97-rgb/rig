@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -101,7 +100,7 @@ func (c *children) Next(op broadcast.Operation) error {
 func (c *children) Previous(op broadcast.Operation) error { return nil }
 
 func (c *children) start(model string, port int, command string, env []string, log string) bool {
-	if port > 0 && probe(port) {
+	if port > 0 && room.Answers(port) {
 		return true
 	}
 	dir := filepath.Join(c.home, "logs")
@@ -137,7 +136,7 @@ func (c *children) start(model string, port int, command string, env []string, l
 		return false
 	}
 	for i := 0; i < childProbeTries; i++ {
-		if probe(port) {
+		if room.Answers(port) {
 			return true
 		}
 		time.Sleep(childProbePause)
@@ -198,13 +197,4 @@ func alive(pid int) bool {
 		return false
 	}
 	return proc.Signal(syscall.Signal(0)) == nil
-}
-
-func probe(port int) bool {
-	conn, err := net.DialTimeout("tcp", net.JoinHostPort("127.0.0.1", strconv.Itoa(port)), time.Second)
-	if err != nil {
-		return false
-	}
-	conn.Close()
-	return true
 }

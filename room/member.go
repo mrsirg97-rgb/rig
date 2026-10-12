@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/mrsirg97-rgb/evt"
 	"github.com/mrsirg97-rgb/evt/broadcast"
@@ -194,4 +195,13 @@ func startTime() (int64, error) {
 		return 0, fmt.Errorf("room: /proc/self/stat starttime: %w", err)
 	}
 	return start, nil
+}
+
+func Answers(port int) bool {
+	conn, err := net.DialTimeout("tcp", net.JoinHostPort("127.0.0.1", strconv.Itoa(port)), time.Second)
+	if err != nil {
+		return false
+	}
+	conn.Close()
+	return true
 }

@@ -601,6 +601,7 @@ func main() {
 	if serveAddr != "" {
 		srv, werr := web.New(web.Options{
 			Home: cfgDir, CWD: cwd, Models: cfg.Models,
+			Machine: machine, Version: Version,
 			Crontab: sched.RealCrontab(""), RunnerCmd: self + " run-job", Natives: nativeToolNames,
 			Commands: command.All(), Env: env, Status: webStatus(r, sdb),
 			StopWorkers: stopWorkers,

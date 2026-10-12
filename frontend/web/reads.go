@@ -9,6 +9,8 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+
+	"github.com/mrsirg97-rgb/rig/v3/room"
 	"sort"
 	"strings"
 	"time"
@@ -220,11 +222,20 @@ func (s *Server) handleModels(w http.ResponseWriter, r *http.Request) {
 		if efforts == nil {
 			efforts = []string{}
 		}
-		rows = append(rows, modelJSON{
+		row := modelJSON{
 			ID: m.ID, Window: m.Window, MaxTokens: m.MaxTokens,
 			Reserve: m.Reserve, KeepRecent: m.KeepRecent,
 			Role: m.Role, Effort: m.Effort, Efforts: efforts,
-		})
+			Places: m.Places, Port: m.Port,
+			Live: m.Port == 0 || room.Answers(m.Port),
+			Tail: tail(filepath.Join(s.home, "logs", id+".log"), 8),
+		}
+		if s.machine != nil {
+			key := room.KeyOf(id)
+			row.Holders = len(s.machine.Holders(key))
+			row.Waiting = len(s.machine.Waiting(key))
+		}
+		rows = append(rows, row)
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"models": rows})
 }

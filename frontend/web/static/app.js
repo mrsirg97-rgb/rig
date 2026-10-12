@@ -1369,6 +1369,57 @@ async function renderModels() {
   tb.body.appendChild(el('div', 'hint', 'switch and effort take effect on the next turn (/models, /effort in the chat)'));
 }
 
+async function renderRoom() {
+  const data = await api('/api/room');
+  clear();
+  const tb = toolBlock('room', 'members');
+  main.appendChild(tb.el);
+  const members = data.members || [];
+  if (!members.length) tb.body.appendChild(line('dim')).textContent = 'no other members live; this rig is a room of one';
+  for (const m of members) {
+    const head = line();
+    head.appendChild(span(G.done + ' ', 'ember'));
+    head.appendChild(span('member ' + m, 'text bold'));
+    tb.body.appendChild(head);
+  }
+  tb.body.appendChild(line()).textContent = ' ';
+  const models = data.models || {};
+  for (const id of Object.keys(models)) {
+    const m = models[id];
+    const head = line();
+    head.appendChild(span((m.live ? G.done : G.pending) + ' ', m.live ? 'ember' : 'dim'));
+    head.appendChild(span(id, 'text bold'));
+    head.appendChild(span('  ' + m.holders + ' holder(s), ' + m.waiting + ' waiting', 'ember'));
+    tb.body.appendChild(head);
+    for (const l of m.tail || []) {
+      tb.body.appendChild(line('dim')).textContent = '  ' + l;
+    }
+    tb.body.appendChild(line()).textContent = ' ';
+  }
+}
+
+async function renderUpdate() {
+  const data = await api('/api/update');
+  clear();
+  const tb = toolBlock('update', 'version');
+  main.appendChild(tb.el);
+  const head = line();
+  head.appendChild(span('this build ', 'dim'));
+  head.appendChild(span(data.version || '?', 'text bold'));
+  tb.body.appendChild(head);
+  const row = line();
+  row.appendChild(button('run rig -update', 'rowact', async () => {
+    row.textContent = 'updating…';
+    try {
+      const res = await api('/api/update', { method: 'POST' });
+      tb.body.appendChild(line()).textContent = res.out || 'done';
+    } catch (e) {
+      tb.body.appendChild(line('dim')).textContent = e.message;
+    }
+  }));
+  tb.body.appendChild(row);
+}
+
 const PY_KW = new Set(('False None True and as assert async await break class continue def del elif ' +
   'else except finally for from global if import in is lambda nonlocal not or pass raise return try ' +
   'while with yield').split(' '));
@@ -1809,6 +1860,8 @@ function render() {
     scheduler: () => renderScheduler(q),
     swarm: () => renderSwarm(),
     models: () => renderModels(),
+    room: () => renderRoom(),
+    update: () => renderUpdate(),
     plugins: () => renderPlugins(),
   }[state.view];
   p().catch((e) => renderError(e.message));

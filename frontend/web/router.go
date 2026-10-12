@@ -123,6 +123,10 @@ func (s *Server) dispatch(w http.ResponseWriter, r *http.Request, path string) {
 		s.handleSchedulerRuns(w, r)
 	case path == "/api/models":
 		s.handleModels(w, r)
+	case path == "/api/room":
+		s.handleRoom(w, r)
+	case path == "/api/update":
+		s.handleUpdate(w, r)
 	case path == "/api/plugins" && r.Method == "GET":
 		s.handlePlugins(w, r)
 	case path == "/api/plugins" && r.Method == "POST":

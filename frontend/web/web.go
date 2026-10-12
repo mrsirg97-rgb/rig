@@ -12,6 +12,7 @@ import (
 
 	"github.com/mrsirg97-rgb/rig/v3/core"
 	"github.com/mrsirg97-rgb/rig/v3/models"
+	"github.com/mrsirg97-rgb/rig/v3/room"
 	sched "github.com/mrsirg97-rgb/rig/v3/store/scheduler"
 )
 
@@ -37,6 +38,9 @@ type Options struct {
 	Env      any
 	Status   func(context.Context) Status
 
+	Machine room.Member
+	Version string
+
 	StopWorkers func()
 }
 
@@ -56,6 +60,8 @@ type Server struct {
 	static  fs.FS
 	chat    *chat
 	status  func(context.Context) Status
+	machine room.Member
+	version string
 }
 
 func New(opts Options) (*Server, error) {
@@ -95,6 +101,8 @@ func New(opts Options) (*Server, error) {
 		static:    sub,
 		chat:      newChat(opts.Commands, opts.Env, opts.StopWorkers),
 		status:    opts.Status,
+		machine:   opts.Machine,
+		version:   opts.Version,
 	}, nil
 }
 
