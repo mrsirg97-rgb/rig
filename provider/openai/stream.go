@@ -204,6 +204,10 @@ func (p *provider) Stream(ctx context.Context, req core.Request) (<-chan evt.Sig
 				return
 			}
 			if finishing == "" {
+				if ctx.Err() != nil {
+					emit(core.Done{Usage: usage, Model: model})
+					return
+				}
 				fault(fmt.Errorf("openai: stream truncated: no finish marker"))
 				return
 			}

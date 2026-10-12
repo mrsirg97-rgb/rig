@@ -235,6 +235,10 @@ func (p *provider) pump(ctx context.Context, resp *http.Response, emit func(evt.
 		return
 	}
 	if !done || stop == "" {
+		if ctx.Err() != nil {
+			emit(core.Done{Usage: usage, Model: model})
+			return
+		}
 		fault(fmt.Errorf("anthropic: stream truncated: no finish marker"))
 		return
 	}
