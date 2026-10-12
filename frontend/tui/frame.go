@@ -121,6 +121,7 @@ func (t *tui) breatheNoticeLocked() {
 }
 
 func (t *tui) enqueueNoticeLocked(n evt.Notice) {
+	n.Text = printable(n.Text)
 	for _, q := range t.notices {
 		if q == n {
 			return

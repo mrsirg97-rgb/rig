@@ -413,6 +413,12 @@ func (t *tui) bandsRunningLocked() bool {
 }
 
 func (t *tui) trackStatusLocked(st core.SwarmStatus) {
+	ws := make([]core.SwarmWorker, len(st.Workers))
+	for i, w := range st.Workers {
+		w.Task, w.Tool = printable(w.Task), printable(w.Tool)
+		ws[i] = w
+	}
+	st.Workers = ws
 	if len(st.Workers) == 0 {
 		t.swarm = st
 		t.delegate = st

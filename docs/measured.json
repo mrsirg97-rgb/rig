@@ -1,10 +1,10 @@
 {
   "measured_at": "2026-10-12",
-  "sessions": 2615,
-  "turns": 53105,
-  "prompt": 5943201287,
-  "completion": 33683169,
-  "cache_read": 5841425617,
+  "sessions": 2622,
+  "turns": 53173,
+  "prompt": 5946313832,
+  "completion": 33714426,
+  "cache_read": 5844419724,
   "earliest_version": "0.2.0",
   "eras": [
     {
@@ -37,9 +37,9 @@
     },
     {
       "era": "2.10.x",
-      "turns": 14254,
-      "new_per_turn": 4035,
-      "completion_per_turn": 672,
+      "turns": 14322,
+      "new_per_turn": 4024,
+      "completion_per_turn": 671,
       "cache_pct": 96.27
     }
   ]
