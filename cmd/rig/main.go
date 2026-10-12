@@ -51,7 +51,7 @@ import (
 	webtool "github.com/mrsirg97-rgb/rig/v3/tool/web"
 )
 
-const Version = "2.18.4"
+const Version = "3.0.0"
 
 func claimPriority(prompt string, served bool) int {
 	if v := os.Getenv("RIG_PRIORITY"); v != "" {
@@ -290,7 +290,7 @@ func main() {
 	defer machine.Close()
 	defer kids.close()
 	if len(machine.Live()) == 0 {
-		for _, id := range kids.resident() {
+		for _, id := range kids.resident(machine) {
 			broadcast.Say(voice, "models", id+" is resident (its row's port answers); starting nothing")
 		}
 	}
