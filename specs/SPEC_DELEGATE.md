@@ -419,6 +419,25 @@ return arriving mid-turn waits for `Input` to be asked again. Nothing
 polls, nothing waits, no clock: the wake is a signal, and `Input` was
 already the place a turn is made.
 
+**Amended in 2.18.2 (the step boundary carries a return)**: "waits for
+`Input` to be asked again" assumed a turn ends soon. A model that keeps
+calling tools does not end its turn: one session ran a single turn for
+95 minutes, started 44 background calls in it, and read none of their
+output until the turn ended and all of it arrived as one 16 KB message;
+in between it reran builds, redirected output to files and read them
+back. So the frontend's inbox is a seam the loop can ask —
+`core.Inbox`, one method, `Returns() (string, bool)` — and the loop asks
+it once per step, after the step's last tool result is appended and
+before the next request is assembled. A block it hands over is appended
+as a user message, the same text `Input` would have returned, and the
+frontend shows it the way it shows a return at the boundary. Nothing is
+interrupted: a stream in flight finishes, and the tools of the step
+finish, before the loop asks. A cancelled turn does not ask, so its
+returns are still the next `Input`'s. The frontend wrappers (the
+session recorder, the review wake) forward the seam, and the recorder
+lands the block as a user row so a resumed session has it in its place.
+`Input` is unchanged: with no live turn, a return is still an input.
+
 The worker is a child of the *session's* context (the root passes it as
 `Opts.Ctx`), not the turn's, which is the other half of letting go: a
 worker outlives the turn that started it, and dies with the session.

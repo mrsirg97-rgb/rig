@@ -239,6 +239,14 @@ func (w turnEndWake) Input(ctx context.Context) (string, error) {
 	return line, err
 }
 
+func (w turnEndWake) Returns() (string, bool) {
+	in, ok := w.inner.(core.Inbox)
+	if !ok {
+		return "", false
+	}
+	return in.Returns()
+}
+
 func (w turnEndWake) Notify(ev evt.Signal) {
 	w.inner.Notify(ev)
 	if _, ok := ev.(core.TurnEnd); ok {

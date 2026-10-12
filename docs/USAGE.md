@@ -158,8 +158,8 @@ serialize inline in the drain (2.17.0) — each answers with
 `delegate: worker #2 started · session <id> · log <path>` — or, past
 `maxWorkers` (2.14.9), `delegate: worker #2 queued · 3 workers run at
 once (settings maxWorkers); it starts when one returns` — and keeps
-working. When a worker finishes, its return arrives as the head of the
-next turn — `delegate #2 returned · exit 0 · 4m12s · session <id>` over
+working. When a worker finishes, its return arrives at the turn's next
+step if one is live (2.18.2), else as the head of the next turn — `delegate #2 returned · exit 0 · 4m12s · session <id>` over
 its output — and if nothing was running, the return starts that turn by
 itself. Two returns that land during one turn come as one block, in the
 order they finished, before whatever you had typed. While a batch runs

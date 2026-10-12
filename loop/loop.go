@@ -311,6 +311,11 @@ func (r *run) advance(t *turn) {
 		})
 		t.cursor++
 	}
+	if in, ok := r.k.Frontend.(core.Inbox); ok && t.ctx.Err() == nil {
+		if block, ok := in.Returns(); ok {
+			session.Append(core.Message{Role: core.RoleUser, Content: block})
+		}
+	}
 	r.model(t)
 }
 

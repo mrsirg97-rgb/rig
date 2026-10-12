@@ -25,8 +25,10 @@ The mechanism is the delegate pattern generalized: the delegate stops
 being "the tool that spawns model workers" and becomes the primitive
 every bounded call rides — a worker, model or deterministic, started
 now; a report fed back later. The promise is about the bound, not the
-delivery latency: even a fetch that finishes in 200 ms delivers on a
-later turn, because a live turn is never interrupted (SPEC_DELEGATE 8).
+delivery latency: even a fetch that finishes in 200 ms delivers as a
+message of its own, after the step that started it, because a live
+stream is never interrupted (SPEC_DELEGATE 8; since 2.18.2 the message
+lands at the turn's next step boundary, not at its end).
 
 ## what it is not (named)
 

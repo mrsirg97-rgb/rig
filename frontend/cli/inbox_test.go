@@ -61,3 +61,22 @@ func TestTheCliWakesForAReturnWhileItWaits(t *testing.T) {
 		t.Fatal("Input never woke for the return")
 	}
 }
+
+func TestTheCliHandsReturnsOverInsideATurn(t *testing.T) {
+	r := build(t)
+	in, ok := r.fe.(core.Inbox)
+	if !ok {
+		t.Fatal("the cli is an inbox")
+	}
+	if _, ok := in.Returns(); ok {
+		t.Fatal("an empty inbox hands nothing over")
+	}
+	r.fe.Notify(core.WorkerDone{N: 4, Content: "four", Exit: 0, Duration: time.Second, Kind: core.KindCommand, RunID: "j4"})
+	block, ok := in.Returns()
+	if !ok || !strings.HasPrefix(block, "delegate #4 returned · exit 0 · 1s · run j4\nfour") {
+		t.Fatalf("the block is the one Input would have returned: %q", block)
+	}
+	if _, ok := in.Returns(); ok {
+		t.Fatal("a return is handed over once")
+	}
+}

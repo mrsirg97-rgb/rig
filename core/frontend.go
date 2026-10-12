@@ -10,3 +10,7 @@ type Frontend interface {
 	Input(ctx context.Context) (string, error)
 	Notify(ev evt.Signal)
 }
+
+type Inbox interface {
+	Returns() (string, bool)
+}

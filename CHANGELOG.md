@@ -1,4 +1,32 @@
 # Changelog
+## [2.18.2]: a return reaches the turn that is still running
+
+A background call's output was handed to the model only when `Input` was
+asked again, at the end of the turn. One session on GLM ran a single turn
+for 95 minutes: it started 44 background calls in that turn and read none
+of their output until the turn ended, when 42 returns arrived as one
+16 KB message. In between it reran the same build three times, ran
+`echo hello` to check bash still worked, and redirected output to files
+it then read back.
+
+- **loop**: after a step's last tool result and before the next request,
+  the loop asks the frontend for the returns that came back and appends
+  the block as a user message. A cancelled turn does not ask. Pure
+  addition: a frontend that is not an inbox runs as before.
+- **core**: `Inbox`, one method, `Returns() (string, bool)`.
+- **tui, cli, web**: each implements it over the inbox it already kept;
+  the TUI commits the return blocks and the `delegate #N returned` line
+  into the transcript mid-turn, the dashboard publishes the block.
+- **store/state, decision**: the recorder and the review wake forward
+  the seam; the recorder lands the block as a user row, so `-resume`
+  has it in its place.
+- **words**: `timeoutMs` on bash, python and web, the delegate's `what`
+  and the system prompt's sentence say the output "arrives as a message
+  once it ends", not "on a later turn".
+
+With no live turn nothing changes: a return is still an input and starts
+a turn. The piped session still waits (SPEC_DELEGATE 9).
+
 ## [2.18.1]: timeoutMs says what it does
 
 A session on GLM passed `timeoutMs` on 7 of its 18 bash calls, every one a

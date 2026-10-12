@@ -44,6 +44,32 @@ func (t *tui) drainInbox(ctx context.Context) (string, bool) {
 	return core.WorkerBlock(inbox), true
 }
 
+func (t *tui) Returns() (string, bool) {
+	t.mu.Lock()
+	if len(t.inbox) == 0 {
+		t.mu.Unlock()
+		return "", false
+	}
+	inbox := t.inbox
+	t.inbox = nil
+	gap := t.lastSlot == slotAfterTool
+	t.lastSlot = slotAfterTool
+	chunk := ""
+	for _, done := range inbox {
+		chunk += RenderReturnBlock(t.theme, t.width, done) + "\n"
+	}
+	chunk += strings.Join(wrapSegs(t.theme, t.width, []seg{
+		{slot: SlotEmber, text: t.theme.Glyph(GlyphPrompt)},
+		{slot: SlotText, text: " " + returnLine(inbox)},
+	}), "\n")
+	t.mu.Unlock()
+	if gap {
+		t.flow("", "\n")
+	}
+	t.commit(chunk)
+	return core.WorkerBlock(inbox), true
+}
+
 func returnLine(inbox []core.WorkerDone) string {
 	ids := make([]string, 0, len(inbox))
 	for _, done := range inbox {

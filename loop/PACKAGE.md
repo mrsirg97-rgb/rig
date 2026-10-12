@@ -10,6 +10,13 @@ each tool's execution are producer goroutines that post. Per turn:
     awaiting_input -> awaiting_model -> executing_tools
     -> awaiting_model -> ... -> done
 
+Between `executing_tools` and the next `awaiting_model` the loop asks the
+frontend's `core.Inbox`, when it is one, for the returns that came back
+while the step ran, and appends the block as a user message (2.18.2,
+SPEC_DELEGATE 8): a turn that keeps calling tools reads its background
+results at the next step, not when it finally ends. A cancelled turn
+does not ask; the returns wait for `Input`.
+
 Faults abort the turn and return to awaiting_input; the loop never retries
 silently. Cancellation is ctx at every await: a run-context cancel ends
 the session at the boundary, clean.
