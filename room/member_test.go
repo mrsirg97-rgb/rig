@@ -74,11 +74,9 @@ func TestTwoMembersAgreeOnWhoHolds(t *testing.T) {
 	if !admitted[0] || !admitted[1] {
 		t.Fatalf("both claims must be admitted: %v", admitted)
 	}
-	for _, m := range []Member{first, second} {
-		if len(m.Holders(key)) != 2 {
-			t.Fatalf("holders = %d, want 2", len(m.Holders(key)))
-		}
-	}
+	waitFor(t, "both members to agree on the two holders", func() bool {
+		return len(first.Holders(key)) == 2 && len(second.Holders(key)) == 2
+	})
 }
 
 func TestTwoMembersStartedTogetherEndInOneRoom(t *testing.T) {
