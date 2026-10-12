@@ -1,4 +1,21 @@
 # Changelog
+## [2.18.1]: timeoutMs says what it does
+
+A session on GLM passed `timeoutMs` on 7 of its 18 bash calls, every one a
+build or a test, meaning an ordinary timeout. Each ran in the background
+as built since 2.16.0 and answered with its started line; the model read
+that line as noise from another process ("not my command"), ran the
+command again, and settled on redirecting output to files. The schema's
+words for the field were "the command delegates to a worker" on bash and
+"timeout in ms (default 120000)" on python and web, where passing it also
+sends the call to the background. The one sentence that says the result
+arrives on a later turn is in the system prompt, far from the argument.
+
+- **bash, python, web**: `timeoutMs`'s description says that passing it
+  runs the call in the background and the output arrives on a later
+  turn, and that omitting it runs in-turn. Words only: no behavior
+  changes.
+
 ## [2.18.0]: the engine, the event and the room leave rig as one module
 
 `evt` was already behaving like a frozen public API: 426 lines of source
