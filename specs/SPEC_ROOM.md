@@ -1,8 +1,9 @@
 # rig: the room (3.0.0: no center)
 
 Every rig instance on the machine is a member of one room over unix sockets,
-and no process is the center. Each instance keeps its own engine and its own
-loop; the room is the thing they agree on. The model is a guarded key in that
+and no process is the center. Each instance keeps its own loop and two
+engines — the turn loop's, as today, and the room's; the room is the thing
+the room engines agree on. The model is a guarded key in that
 room: an instance sends its own request to the model, itself, when its claim
 is first in the order every member agrees on and every live member has
 acknowledged it. What is loaded, a swap and an update are operations in that
@@ -70,22 +71,36 @@ other choices behind them.
 ## membership: the directory is the registry
 
 - The room's home is `~/.rig/room/`. It holds one unix socket per member,
-  named by the member's id. **The listing is the membership.** There is no
-  registry process; a directory is not a process.
+  named by the member's id and the process id. **The listing is the
+  membership.** There is no registry process; a directory is not a process.
 - A member's id is `MemberOf` over the hash of the machine's boot id, the
-  process id and the process start time — lift's derivation, 12 bits. A
-  collision with a live member at join is refused loudly: the instance exits
-  with the error named (a fresh process re-mints). The room id is the rig
-  home's: one machine, one home, one room.
-- **Joining**: an instance reads the directory once, dials every socket on
+  process id and the process start time, at **62 bits** (the top bit clear
+  keeps it positive in a signed int64). Lift's 12 bits do not survive the
+  arithmetic: with eight members live, one join in about 512 collides
+  (8/4096), and rig spawns hundreds of short-lived workers a day, so exiting
+  on a collision would be an operational event. At 62 bits a joining member
+  collides with one of eight live members with odds of 8/2⁶³ ≈ 10⁻¹⁸, and a
+  thousand joins across a boot still leave it near 10⁻¹⁵. A collision with a
+  live member re-derives in process — the hash takes a counter — until the
+  id is free among the directory's members; the instance does not exit. The
+  room id is the rig home's: one machine, one home, one room.
+- **Joining**: an instance creates and listens on its own socket **before it
+  reads the directory**, so of two instances starting together at least one
+  sees the other. It then reads the directory once, dials every socket on
   it, and announces itself; the accepted ends dial back, so every pair holds
-  one connection. The dial is the join. A peer's socket file that refuses a
-  dial belongs to a dead process; the joiner removes the stale file (one
-  machine: the process is gone) and moves on.
+  one connection. A joiner does not mint until it has connected to every
+  listed member and received each one's snapshot, and a member counts toward
+  finality from the moment its join is complete.
+- **A stale file is judged by the process, never by a refused dial alone.**
+  The file's name carries the process id, so a joiner checks whether that
+  process is gone: a process that has bound its socket and not yet begun
+  listening refuses a dial too, and removing a live member's file hides it
+  from later joiners — two halves of the room could then each grant the same
+  place. The joiner removes a file only when its process is gone.
 - **Liveness is the connection.** A member is gone when its connection
-  closes; the close is an event on each member's engine. A graceful exit
-  removes its own socket file; a killed process's file lingers until a
-  joiner's dial refuses it.
+  closes; the close is an event on each member's room engine. A graceful
+  exit removes its own socket file; a killed process's file lingers until a
+  joiner judges its process gone.
 
 ## the order
 
@@ -96,8 +111,19 @@ The order is **priority first, then tick, then member**:
 ```
 
 - Priority is the room's table (below). Tick is the machine's monotonic clock
-  at mint. Member is the 12-bit member id; nonce separates a member's mints
-  within a tick.
+  at mint, read through the standard library's `time.Now()` monotonic
+  reading, anchored to a per-process epoch so the nanoseconds are comparable
+  across processes (the clock underneath is system-wide): the runtime reads
+  `clock_gettime(CLOCK_MONOTONIC)` through the vDSO on Linux and
+  `mach_absolute_time` scaled by `mach_timebase_info` on macOS — named
+  because evt imports only the standard library and its CI holds that on
+  ubuntu and macos. The tick travels in the operation, so the order is
+  agreed whatever the clocks say: every member sorts by the tick the
+  operation carries. Only fairness within a priority depends on the clocks
+  agreeing — a lagging member's mint sorts later than its arrival — and a
+  tie at one nanosecond is broken by member and nonce, so the order is total
+  regardless. Member is the 62-bit member id; nonce separates a member's
+  mints within a tick.
 - Lift orders `(tick asc, id asc)` where lift's `Priority` *is* the tick; the
   meaning — earliest verified time wins within an axis — is unchanged: the
   mint's id sorts by tick, then member, then nonce, and priority leads. One
@@ -109,37 +135,61 @@ The order is **priority first, then tick, then member**:
   publishes mints the tick. An operation exists in the room exactly when it
   exists at all — there is no minted-but-unpublished window, which is what
   makes the acknowledgements honest.
-- Duplicates are refused by the full mint identity (tick, member, nonce). The
-  fold's checkpoint line is derived, not a constant: operations strictly
-  older than the oldest still-provisional operation can never be preceded by
-  a future mint (the clock is monotone and shared; a future mint can only tie
-  the newest tick), so the fold checkpoints them.
+- Duplicates are refused by the full mint identity (tick, member, nonce).
+- The fold's checkpoint is finality's line, not a tick window. Priority leads
+  the order, so a future mint can precede older operations and no tick-age
+  rule can bound the provisional tail; only finality pins (below). The fold
+  checkpoints the pinned prefix and refolds the operations still awaiting
+  acknowledgement.
 
-## state: the engine is the lock
+## two engines: the room's and the loop's
 
-All state — the ordered log, the guarded heads, the holder sets, the resident
-set, the live members — is touched on the instance's own engine, with no
-mutex. The engine is the one consumer (SPEC_EVT's contract): arrivals are
-events on it at the operation class's priority, and the instance's own
-operations are events beside them, so one goroutine touches the fold at a
-time. A mutex around state that only the consumer touches is machinery for
+Each instance runs two engines. The turn loop's is today's engine,
+unchanged. The room's is a second engine whose consumer does nothing but the
+room's work and never waits on a tool, a model or the disk. The second engine
+is not a luxury: the loop's engine blocks — a write runs inline (2.17.0),
+`Assemble` and a compaction hold the consumer — and a member in a ten-minute
+bash call could acknowledge nothing, so no claim in the room would become
+final, the operator's turn in another session included. Arrivals land on the
+room engine at the operation class's priority, and the instance's own room
+operations are events beside them. The room posts to the loop what the loop
+needs — a claim is final, a release is due, a member left — at the kernel's
+priorities; the loop's turn waits on that post and never on the room's
+internals.
+
+All room state — the ordered log, the guarded heads, the holder sets, the
+resident set, the live members — is touched with no mutex. The room engine is
+the one consumer (SPEC_EVT's contract), so one goroutine touches the fold at
+a time. A mutex around state that only the consumer touches is machinery for
 its own sake, and lift's mutexes do not come across. The consequence is
-stated plainly: a structure the room holds is touched only by the consumer,
-and the structures that cross goroutines are the ones that already do (the
-engine's queue, the transport's wire).
+stated plainly: a structure the room holds is touched only by the room
+engine's consumer, and the structures that cross goroutines are the ones
+that already do (each engine's queue, the transport's wire).
 
 ## the acknowledged claim
 
-- A member's engine processes each arriving operation and answers, on the
-  same connection, an **acknowledgement**: the operation is first in the
+- A member's room engine processes each arriving operation and answers, on
+  the same connection, an **acknowledgement**: the operation is first in the
   receiver's order for the operation's key among the operations the receiver
-  holds. Withheld acknowledgements re-evaluate on arrivals — a
-  re-evaluation is caused by an operation landing, never by a timer or a
-  poll.
+  holds — with two withholds. A member whose own claim on that key is final
+  or in flight does not acknowledge a **conflicting** claim — one racing the
+  same version slot — until its release; a member whose own claim precedes
+  the arrival does not acknowledge it either. That is what makes two
+  conflicting claims unable to both collect every acknowledgement. A holder
+  acknowledges a claim for the key's next slot freely, which is what lets a
+  strictly higher claim enter while one is in flight. Withheld
+  acknowledgements re-evaluate on arrivals — a re-evaluation is caused by an
+  operation landing, never by a timer or a poll.
 - **A claim is final when every live member has acknowledged it.** The
   acknowledgement set follows liveness: a member that leaves mid-claim
   shrinks the set; a member that joins mid-claim is in it (it receives the
-  operation in its join snapshot and acknowledges from its engine).
+  operation in its join snapshot and acknowledges from its room engine).
+- **What the members fold is the admission, not the claim.** A claim alone
+  does not put its member in the holder set. When a claim is final and its
+  compare-and-swap took the version slot, the claimant publishes its
+  **admission** — an operation like any other — and every member folds
+  admissions in the same order, so every member's holder set is the same.
+  The request follows the admission.
 - **A final operation's admission is pinned.** The fold never moves a final
   operation's admission. This is the one deliberate change from lift's fold:
   lift's retroactive eviction (a late earlier-tick write evicts the winner
@@ -151,7 +201,8 @@ engine's queue, the transport's wire).
   evicted by an arrival.
 - So the acknowledgement is the safety gate and the pin is the guarantee:
   acting on a claim that is not final is unsafe (a later arrival could still
-  take its slot in the fold); acting on a final claim is permanent.
+  take its slot in the fold); acting on a final claim is permanent, because
+  the admission is published, folded everywhere, and pinned.
 
 ## the model as a guarded key
 
@@ -161,17 +212,23 @@ engine's queue, the transport's wire).
   server does not have: the child serves N interchangeable sequences, and the
   dashboard's question — who holds each place — is answered by the holder
   set, not by a key per place.
-- **Before a request the instance claims**; when the claim is final and
-  admitted (the holder set has room, and the compare-and-swap took the
-  version slot), it sends its own request to the child's port; **its
-  completion is the release** (the terminal event of the stream — see step
-  6 — mints the release, the next version on the chain).
+- **Before a request the instance claims**; when the claim is final, the
+  compare-and-swap took the version slot and the admission folded, it sends
+  its own request to the child's port; **its completion is the release**
+  (the terminal event of the stream — see step 6 — mints the release, the
+  next version on the chain).
 - A claim whose compare-and-swap is stale — it lost the version slot to an
   operation that arrived earlier in the order — is refused and re-mints from
   the advanced head.
-- **A strictly higher-priority claim may enter while a lower one is in
-  flight**, so the engine's fair slice can serve it. Entry, never eviction:
-  nothing kills a request mid-flight.
+- **A strictly higher-priority claim may enter while the places are full.**
+  The entry is a holder beyond the places: at most one, and only a claim
+  strictly higher in priority than every holder. The reason: the entry
+  exists so the request waits at the engine and the fair slice can serve it;
+  a second beyond-places holder would stack decodes with no priority reason
+  (a same-priority claim queues for places; a lower one waits). Entry, never
+  eviction: nothing kills a request mid-flight. The invariant, named
+  exactly: never more holders than the places and its one entry, and the
+  entry is strictly higher than every holder.
 - **Within one priority, the claim that continues the conversation already in
   the model goes first**, then the order. The holder set records the
   conversation each place serves; a claim naming the same conversation is the
@@ -183,7 +240,7 @@ engine's queue, the transport's wire).
 
 ## the priority table across instances
 
-What arrives over a socket lands on the receiving member's own engine at the
+What arrives over a socket lands on the receiving member's room engine at the
 priority the operation's class carries. The kernel's numbers are reused where
 the meaning is the same; two classes are new and one takes the engine's own
 floor, so nothing here is a magic number.
@@ -207,9 +264,10 @@ floor, so nothing here is a magic number.
   end.
 - The in-process fleet (the frontend, delegate, graph and decision members,
   the negative ids) does not cross a socket. The instance speaks to the
-  machine room through its socket member and to its own fleet through loop
-  transports; the two scopes share the `Room` type and never share ids (the
-  mint is 12-bit positive; the in-process ids are negative).
+  machine room through its socket member on the room engine and to its own
+  fleet through loop transports on the loop engine; the two scopes share the
+  `Room` type and never share ids (the mint is 62-bit positive; the
+  in-process ids are negative).
 
 ## a holder that dies
 
@@ -248,6 +306,14 @@ floor, so nothing here is a magic number.
   instance whose claim wins starts the child, **detached** (a new session:
   it outlives that instance), and **what is resident is state every member
   holds**, so any of them can stop it later.
+- **Residency is recoverable from the world, and by one path.** When the
+  last rig exits, the detached child keeps running and the next instance
+  joins a room of one with nobody to ask — so the row's fixed port answering
+  is the proof. A joiner that finds no members probes each row's port once,
+  before it may start anything: a port that answers is a resident model, and
+  the joiner starts nothing. The probe happens once, at join, and reads the
+  same thing every member's holder set reads — the child's port. No state
+  file beside it: one path, or the two disagree.
 - Two instances racing to start a model: both mint the start operation; the
   compare-and-swap admits one child. The loser's claim re-mints from the
   advanced head and finds the model resident.
@@ -280,13 +346,13 @@ floor, so nothing here is a magic number.
 
 ## serve
 
-- `rig serve` is **a member like any other** — its engine, its loop, its
-  socket — with two extra jobs: the dashboard (loopback 7777, tailscale serve
-  is the way out, nothing binds 0.0.0.0) and an **OpenAI-wire HTTP front on
-  loopback that claims on behalf of anything that is not rig**:
-  `/v1/chat/completions`, `/v1/models` with the rows' aliases, and what
-  replaces llama-swap's `/running` and `/unload` — the resident set, and a
-  guarded stop.
+- `rig serve` is **a member like any other** — its room engine, its loop
+  engine, its socket — with two extra jobs: the dashboard (loopback 7777,
+  tailscale serve is the way out, nothing binds 0.0.0.0) and an
+  **OpenAI-wire HTTP front on loopback that claims on behalf of anything
+  that is not rig**: `/v1/chat/completions`, `/v1/models` with the rows'
+  aliases, and what replaces llama-swap's `/running` and `/unload` — the
+  resident set, and a guarded stop.
 - **Sessions do not depend on it**: a rig alone is a room of one, and
   starting a rig does not start serve. Serve is its own instance (the
   dashboard binds a port only one process can hold, and the room's work must
@@ -349,10 +415,12 @@ evt/broadcast (v0.3.0, the ordering primitive joins broadcast)
   sequencer.go   Sequencer: the total order, duplicates refused, reorg
   guard.go       Guard: per-key compare-and-swap over the version chain
   guarded.go     the guarded fold, with the version seam
-  room.go        the acknowledged claim: finality, pinning, liveness
+  claim.go       the acknowledged claim: finality, pinning, liveness
+  signal.go      the protocol's messages: claim, release, acknowledgement, admission
+  room.go        the registry it is; the claim moves out of it
   socket.go      the unix socket transport, beside the pipe
 rig (3.0.0, on feat/3.0.0-no-center)
-  room/          the instance's member: join, the room signals, the table
+  room/          the instance's member: join, rig's own signals, the table
   models rows    command, environment, port, aliases, stop grace, places
   child.go       start/stop/swap as guarded operations, detached children
   provider       the row's port is the endpoint; the terminal event on cancel
@@ -364,11 +432,13 @@ rig (3.0.0, on feat/3.0.0-no-center)
 Every exported type is an interface over a private struct and a constructor
 returns the interface, as `Engine`, `Queue`, `Room`, `Cap` and `Registry`
 are; only what an application must build or embed stays concrete, as `Mark`
-and `Notice` do. The payload is `evt.Signal`, never a new word for it: the
-room's operation carries rig's own signal types (the claim, the release, the
-acknowledgement, the resident snapshot, the child ops, the table change, the
-update, the join), declared in the wire's registry, each embedding `Mark`.
-No comments in Go code; no new dependencies; no cgo.
+and `Notice` do. The payload is `evt.Signal`, never a new word for it, and
+**evt owns the protocol's messages**: the claim, the release, the
+acknowledgement and the admission are evt's signal types, because evt's own
+tests need them and a second application must not have to invent them; rig
+declares only its own — the resident snapshot, the child operations, the
+table change, the update, the join — declared in the wire's registry, each
+embedding `Mark`. No comments in Go code; no new dependencies; no cgo.
 
 ## tests
 
@@ -381,33 +451,47 @@ divergence in order, state and guard outcome — run against this release's
 finality, over real unix sockets, with the peers' delivery shuffled the way
 the wire shuffles it.
 
-Three are new to evt: a claim is never acted on before it is final; a member
-that leaves mid-claim does not hold the others; priority outranks arrival.
+New to evt: a claim is never acted on before it is final; a member that
+leaves mid-claim does not hold the others; priority outranks arrival; a 90
+minted after a 30 became final on a full key is not admitted until the 30
+releases; under shuffled delivery of two conflicting claims, every member
+ends with the same single holder.
 
 Rig's own, against a fake model server and several members over real sockets:
 three members claim at once and enter in priority order; never more holders
-than places; a higher claim passes one in flight and lower ones wait; a
-holder killed outright does not stop the next; a member that joins late
-agrees with the rest; two instances race to start a model and one child
-runs; an instance that started a model exits and another stops it; an update
-drains to turn boundaries before ending anything. The provider's terminal
-event on cancel keeps 2.17.1's tests passing with the branch gone.
+than the places and its one entry, and the entry is strictly higher than
+every holder; a strictly higher claim passes the places' worth of holders as
+that entry and lower ones wait for places; a member whose loop is blocked in
+an inline write still acknowledges, and another member's claim becomes final
+while it is blocked; a holder killed outright does not stop the next; a
+member that joins late agrees with the rest; two instances starting at the
+same instant end in one room; a member slow to listen is not removed; a
+claim racing a join never yields two holders; two instances race to start a
+model and one child runs; an instance that started a model exits and another
+stops it; start a model, end every instance, start one instance: it finds
+the model resident and starts nothing; an update drains to turn boundaries
+before ending anything. The provider's terminal event on cancel keeps
+2.17.1's tests passing with the branch gone.
 
 ## for the operator (the judgment calls this note makes)
 
 1. **A counted key, not one key per place** — the holder set is the guarded
    state; per-place keys would invent identity the server does not have.
-2. **The outside client at the engine's clamp floor (0)** — below scheduled
+2. **The entry is a holder beyond the places, at most one, strictly higher
+   than every holder** — the alternative was making it wait for a place,
+   which leaves the operator's turn behind two in-flight decodes, the
+   measured problem unsolved.
+3. **The outside client at the engine's clamp floor (0)** — below scheduled
    jobs. If the operator's own scripts deserve better, this is the row to
    move.
-3. **A scheduled job at 20, below the fleet (30)** — a cron job must never
+4. **A scheduled job at 20, below the fleet (30)** — a cron job must never
    delay a worker an active turn needs.
-4. **The pin at finality replaces lift's retroactive eviction** — a stale
+5. **The pin at finality replaces lift's retroactive eviction** — a stale
    claim re-mints instead of evicting an in-flight holder. This is the one
    place the primitive's fold and this release's finality touch, and it is
    the sentence that makes "nothing is ever acted on and then reordered"
    true.
-5. **The model logs land in `~/.rig/logs/<model id>.log`** — a detached
+6. **The model logs land in `~/.rig/logs/<model id>.log`** — a detached
    child needs somewhere durable to speak; the dashboard streams the file.
-6. **`settings.json`'s `swapUrl` retires** with llama-swap; the provider's
+7. **`settings.json`'s `swapUrl` retires** with llama-swap; the provider's
    endpoint comes from the row's port.
