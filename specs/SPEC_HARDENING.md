@@ -127,8 +127,10 @@ The state machine is unchanged. The changes:
   It is forwarded to `Frontend.Notify` after the turn's last other event.
   A run-context cancel ends the run, not a turn, and does not emit it.
   The recorder's rule follows (decision 4, revised in 2.17.1): the reply an
-  `interrupt` cut lands as the assistant's message; an unlanded partial at
-  any other `TurnEnd` is discarded.
+  `interrupt` cut lands as the assistant's message, through the stream's
+  `Done` — every stream ends in a terminal event, a cancel yields `Done`
+  with what was produced and no call that had not finished streaming; an
+  unlanded partial at any other `TurnEnd` is discarded.
 
 `directExec`, the fault paths, the boundary checks, and the duplicate-name
 panic are unchanged.
@@ -336,7 +338,10 @@ what makes the interrupt observable to every streaming consumer, not just
 the recorder.
 
 Revised in 2.17.1: what the model has already said is part of the
-conversation. On `TurnEnd{interrupt}` the recorder lands the cut reply
+conversation. The session's provider ends every stream in a terminal
+event: a cancel yields `Done` with what was produced, without any call
+that had not finished streaming, and the turn still ends as an interrupt
+— the loop appends on `Done` only. The recorder lands the cut reply
 (text and reasoning) as its own assistant row, before the operator's
 message; the calls that streamed before the cut are dropped, since none
 ran. A partial at a `fault` is still discarded. The first rule fixed

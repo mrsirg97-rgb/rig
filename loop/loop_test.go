@@ -55,6 +55,7 @@ func (p *scriptedProvider) Stream(ctx context.Context, req core.Request) (<-chan
 				out <- ev
 			}
 			<-ctx.Done()
+			out <- core.Done{}
 			close(out)
 		}()
 	case turn.bare:

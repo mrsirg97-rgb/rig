@@ -27,19 +27,19 @@ func (p *provider) Stream(ctx context.Context, req core.Request) (<-chan evt.Sig
 	}
 
 	ch := make(chan evt.Signal, 4)
-	emit := func(ev evt.Signal) bool {
-		select {
-		case ch <- ev:
-			return true
-		case <-ctx.Done():
-			return false
-		}
+	emit := func(ev evt.Signal) {
+		ch <- ev
 	}
 
 	go func() {
 		defer close(ch)
 		attempts := 0
+		var (
+			usage core.Usage
+			model string
+		)
 		for {
+			usage, model = core.Usage{}, ""
 			httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, p.endpoint(), bytes.NewReader(body))
 			if err != nil {
 				emit(core.Fault{Err: fmt.Errorf("anthropic: encode request: %w", err)})
@@ -54,6 +54,7 @@ func (p *provider) Stream(ctx context.Context, req core.Request) (<-chan evt.Sig
 			resp, err := p.client.Do(httpReq)
 			if err != nil {
 				if ctx.Err() != nil {
+					emit(core.Done{Usage: usage, Model: model})
 					return
 				}
 				emit(core.Fault{Err: fmt.Errorf("anthropic: transport: %w", err)})
@@ -86,7 +87,7 @@ func (p *provider) Stream(ctx context.Context, req core.Request) (<-chan evt.Sig
 	return ch, nil
 }
 
-func (p *provider) pump(ctx context.Context, resp *http.Response, emit func(evt.Signal) bool) {
+func (p *provider) pump(ctx context.Context, resp *http.Response, emit func(evt.Signal)) {
 	scanner := bufio.NewScanner(resp.Body)
 	scanner.Buffer(make([]byte, 0, 64*1024), 4*1024*1024)
 
@@ -166,20 +167,18 @@ func (p *provider) pump(ctx context.Context, resp *http.Response, emit func(evt.
 			}
 			switch ev.Delta.Type {
 			case "text_delta":
-				if ev.Delta.Text != "" && !emit(core.TextDelta{Text: ev.Delta.Text}) {
-					return
+				if ev.Delta.Text != "" {
+					emit(core.TextDelta{Text: ev.Delta.Text})
 				}
 			case "thinking_delta":
 				b.thinking.WriteString(ev.Delta.Thinking)
-				if ev.Delta.Thinking != "" && !emit(core.ReasoningDelta{Text: ev.Delta.Thinking}) {
-					return
+				if ev.Delta.Thinking != "" {
+					emit(core.ReasoningDelta{Text: ev.Delta.Thinking})
 				}
 			case "signature_delta":
 				b.signature = ev.Delta.Signature
 				b.signaled = true
-				if !emitRecord(emit, b) {
-					return
-				}
+				emitRecord(emit, b)
 			case "input_json_delta":
 				b.args.WriteString(ev.Delta.PartialJSON)
 			}
@@ -190,22 +189,18 @@ func (p *provider) pump(ctx context.Context, resp *http.Response, emit func(evt.
 			}
 			switch b.kind {
 			case "thinking":
-				if !b.signaled && !emitRecord(emit, b) {
-					return
+				if !b.signaled {
+					emitRecord(emit, b)
 				}
 			case "redacted_thinking":
-				if !emitRecord(emit, b) {
-					return
-				}
+				emitRecord(emit, b)
 			case "tool_use":
 				args := json.RawMessage(b.args.String())
 				if len(args) > 0 && !json.Valid(args) {
 					break
 				}
 				b.emitted = true
-				if !emit(core.ToolCallEvent{Call: core.ToolCall{ID: b.id, Name: b.name, Args: inputOf(args)}}) {
-					return
-				}
+				emit(core.ToolCallEvent{Call: core.ToolCall{ID: b.id, Name: b.name, Args: inputOf(args)}})
 			}
 		case "message_delta":
 			if ev.Delta != nil && ev.Delta.StopReason != "" {
@@ -229,6 +224,7 @@ func (p *provider) pump(ctx context.Context, resp *http.Response, emit func(evt.
 
 	if err := scanner.Err(); err != nil {
 		if ctx.Err() != nil {
+			emit(core.Done{Usage: usage, Model: model})
 			return
 		}
 		if idleClosed.Load() {
@@ -256,9 +252,7 @@ func (p *provider) pump(ctx context.Context, resp *http.Response, emit func(evt.
 		if len(args) > 0 && !json.Valid(args) {
 			call.Cut = stopReason(stop)
 		}
-		if !emit(core.ToolCallEvent{Call: call}) {
-			return
-		}
+		emit(core.ToolCallEvent{Call: call})
 	}
 	usage.Prompt = input + usage.CacheRead + usage.CacheWrite
 	usage.Cost = p.cost(usage)
@@ -277,9 +271,9 @@ type blockState struct {
 	args      strings.Builder
 }
 
-func emitRecord(emit func(evt.Signal) bool, b *blockState) bool {
+func emitRecord(emit func(evt.Signal), b *blockState) {
 	raw, _ := json.Marshal([]thinkingRecord{{Type: b.kind, Thinking: b.thinking.String(), Signature: b.signature, Data: b.data}})
-	return emit(core.ReasoningDelta{Details: raw})
+	emit(core.ReasoningDelta{Details: raw})
 }
 
 func (p *provider) cost(u core.Usage) float64 {

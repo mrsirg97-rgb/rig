@@ -75,7 +75,7 @@ func TestRecorderLandsTheReplyAnInterruptCut(t *testing.T) {
 	rec := state.NewRecorder(&scripted{}, db, "/tmp/wt", "model-x", "0.1.0", "rec-turnend", core.NewSession())
 	rec.Notify(core.TextDelta{Text: "PARTIAL "})
 	rec.Notify(core.ReasoningDelta{Text: "PARTIAL thinking "})
-	rec.Notify(core.ToolCallEvent{Call: core.ToolCall{ID: "c1", Name: "bash"}})
+	rec.Notify(core.Done{StopReason: "interrupt"})
 	rec.Notify(core.TurnEnd{Reason: core.TurnInterrupt})
 	rec.Notify(core.TextDelta{Text: "fresh"})
 	rec.Notify(core.Done{StopReason: "end_turn"})

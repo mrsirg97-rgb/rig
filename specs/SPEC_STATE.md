@@ -189,8 +189,9 @@ sources its rows from the loop's events; the transcript, `ToolStart`/
 `ToolResult` (the guarded result, as the loop appends it), reasoning, usage
 with the cache fields. It appends a row per event inside its own short
 transaction, so a kill leaves every completed row readable. A `TurnEnd`
-discards the unlanded partial of a turned turn, except the interrupt's,
-which lands (2.17.1); each turn boundary upserts
+discards the unlanded partial of a turned turn; the interrupt's reply
+lands through the stream's `Done`, which the provider yields on a cancel
+(2.17.1); each turn boundary upserts
 the file provenance. No loop change, and, with the middleware tap retired
 (deliverable 7), the schema did not change either.
 
