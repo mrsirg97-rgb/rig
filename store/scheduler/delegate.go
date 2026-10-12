@@ -12,8 +12,8 @@ import (
 	"time"
 
 	"github.com/mrsirg97-rgb/evt/broadcast"
-	"github.com/mrsirg97-rgb/rig/v2/models"
-	"github.com/mrsirg97-rgb/rig/v2/tool/execwrap"
+	"github.com/mrsirg97-rgb/rig/v3/models"
+	"github.com/mrsirg97-rgb/rig/v3/tool/execwrap"
 )
 
 const DelegateEnv = "RIG_DELEGATE"

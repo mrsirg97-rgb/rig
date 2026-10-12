@@ -16,41 +16,58 @@ import (
 
 	"github.com/mrsirg97-rgb/evt"
 	"github.com/mrsirg97-rgb/evt/broadcast"
-	"github.com/mrsirg97-rgb/rig/v2"
-	"github.com/mrsirg97-rgb/rig/v2/command"
-	"github.com/mrsirg97-rgb/rig/v2/config"
-	"github.com/mrsirg97-rgb/rig/v2/core"
-	"github.com/mrsirg97-rgb/rig/v2/decision"
-	"github.com/mrsirg97-rgb/rig/v2/frontend/cli"
-	"github.com/mrsirg97-rgb/rig/v2/frontend/oneshot"
-	"github.com/mrsirg97-rgb/rig/v2/frontend/tui"
-	"github.com/mrsirg97-rgb/rig/v2/frontend/web"
-	"github.com/mrsirg97-rgb/rig/v2/loop"
-	"github.com/mrsirg97-rgb/rig/v2/middleware/approve"
-	"github.com/mrsirg97-rgb/rig/v2/models"
-	"github.com/mrsirg97-rgb/rig/v2/plugins"
-	"github.com/mrsirg97-rgb/rig/v2/store"
-	decisionstore "github.com/mrsirg97-rgb/rig/v2/store/decision"
-	"github.com/mrsirg97-rgb/rig/v2/store/graph"
-	remstore "github.com/mrsirg97-rgb/rig/v2/store/rem"
-	sched "github.com/mrsirg97-rgb/rig/v2/store/scheduler"
-	"github.com/mrsirg97-rgb/rig/v2/store/scope"
-	"github.com/mrsirg97-rgb/rig/v2/store/state"
-	todostore "github.com/mrsirg97-rgb/rig/v2/store/todo"
-	"github.com/mrsirg97-rgb/rig/v2/swarm"
-	"github.com/mrsirg97-rgb/rig/v2/tool/bash"
-	"github.com/mrsirg97-rgb/rig/v2/tool/delegate"
-	"github.com/mrsirg97-rgb/rig/v2/tool/file"
-	pythontool "github.com/mrsirg97-rgb/rig/v2/tool/python"
-	remapi "github.com/mrsirg97-rgb/rig/v2/tool/rem"
-	schedapi "github.com/mrsirg97-rgb/rig/v2/tool/scheduler"
-	sessionstool "github.com/mrsirg97-rgb/rig/v2/tool/sessions"
-	todoapi "github.com/mrsirg97-rgb/rig/v2/tool/todo"
-	verdicttool "github.com/mrsirg97-rgb/rig/v2/tool/verdict"
-	webtool "github.com/mrsirg97-rgb/rig/v2/tool/web"
+	"github.com/mrsirg97-rgb/rig/v3"
+	"github.com/mrsirg97-rgb/rig/v3/command"
+	"github.com/mrsirg97-rgb/rig/v3/config"
+	"github.com/mrsirg97-rgb/rig/v3/core"
+	"github.com/mrsirg97-rgb/rig/v3/decision"
+	"github.com/mrsirg97-rgb/rig/v3/frontend/cli"
+	"github.com/mrsirg97-rgb/rig/v3/frontend/oneshot"
+	"github.com/mrsirg97-rgb/rig/v3/frontend/tui"
+	"github.com/mrsirg97-rgb/rig/v3/frontend/web"
+	"github.com/mrsirg97-rgb/rig/v3/loop"
+	"github.com/mrsirg97-rgb/rig/v3/middleware/approve"
+	"github.com/mrsirg97-rgb/rig/v3/models"
+	"github.com/mrsirg97-rgb/rig/v3/plugins"
+	machineroom "github.com/mrsirg97-rgb/rig/v3/room"
+	"github.com/mrsirg97-rgb/rig/v3/store"
+	decisionstore "github.com/mrsirg97-rgb/rig/v3/store/decision"
+	"github.com/mrsirg97-rgb/rig/v3/store/graph"
+	remstore "github.com/mrsirg97-rgb/rig/v3/store/rem"
+	sched "github.com/mrsirg97-rgb/rig/v3/store/scheduler"
+	"github.com/mrsirg97-rgb/rig/v3/store/scope"
+	"github.com/mrsirg97-rgb/rig/v3/store/state"
+	todostore "github.com/mrsirg97-rgb/rig/v3/store/todo"
+	"github.com/mrsirg97-rgb/rig/v3/swarm"
+	"github.com/mrsirg97-rgb/rig/v3/tool/bash"
+	"github.com/mrsirg97-rgb/rig/v3/tool/delegate"
+	"github.com/mrsirg97-rgb/rig/v3/tool/file"
+	pythontool "github.com/mrsirg97-rgb/rig/v3/tool/python"
+	remapi "github.com/mrsirg97-rgb/rig/v3/tool/rem"
+	schedapi "github.com/mrsirg97-rgb/rig/v3/tool/scheduler"
+	sessionstool "github.com/mrsirg97-rgb/rig/v3/tool/sessions"
+	todoapi "github.com/mrsirg97-rgb/rig/v3/tool/todo"
+	verdicttool "github.com/mrsirg97-rgb/rig/v3/tool/verdict"
+	webtool "github.com/mrsirg97-rgb/rig/v3/tool/web"
 )
 
-const Version = "2.18.4"
+const Version = "3.0.0"
+
+func claimPriority(prompt string, served bool) int {
+	if v := os.Getenv("RIG_PRIORITY"); v != "" {
+		n, err := strconv.Atoi(v)
+		if err == nil && n >= 0 {
+			return n
+		}
+	}
+	if served {
+		return machineroom.PriorityOutside
+	}
+	if prompt != "" {
+		return machineroom.PriorityFleet
+	}
+	return machineroom.PriorityTurn
+}
 
 func main() {
 	if i := execDoor(os.Args, os.Getenv(sched.LandlockEnv)); i >= 0 {
@@ -98,6 +115,7 @@ func main() {
 		cfg, err := defaultUpdateCfg()
 		if err == nil {
 			if home, herr := rigHome(); herr == nil {
+				cfg.home = home
 				if loaded, lerr := config.Load(home, "."); lerr == nil {
 					cfg.key = loaded.Settings.UpdateKey
 				}
@@ -258,8 +276,27 @@ func main() {
 		}
 	}
 
-	engine, room := newFleet()
-	voice := room.Add(rig.MemberDecision)
+	engine, fleetroom := newFleet()
+	voice := fleetroom.Add(rig.MemberDecision)
+	var machine machineroom.Member
+	kids := newChildren(cfgDir, cfg.Models, engine, func() {
+		broadcast.Say(voice, "room", "rig was updated: this instance left the room, restart it", evt.LevelError)
+		machine.Close()
+	})
+	machine, err = machineroom.New(cfgDir, kids.places, kids.effects, func(n evt.Notice) {
+		broadcast.Say(voice, n.Source, n.Text, n.Level)
+	})
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "rig:", err)
+		os.Exit(1)
+	}
+	defer machine.Close()
+	defer kids.close()
+	if len(machine.Live()) == 0 {
+		for _, id := range kids.resident(machine) {
+			broadcast.Say(voice, "models", id+" is resident (its row's port answers); starting nothing")
+		}
+	}
 
 	remPath := remstore.FilePath(cfgDir)
 	if err := os.MkdirAll(filepath.Dir(remPath), 0o755); err != nil {
@@ -329,7 +366,7 @@ func main() {
 		Fetch:        sched.RealFetch(0),
 		Spawn:        sched.RealSpawn,
 		Models:       func() models.Table { return rt },
-		Room:         room,
+		Room:         fleetroom,
 		Cap:          handoff,
 	})
 
@@ -504,7 +541,10 @@ func main() {
 		pluginsHome: cfgDir,
 		pluginInfos: pluginInfos,
 		engine:      engine,
-		room:        room,
+		room:        fleetroom,
+		machine:     machine,
+		kids:        kids,
+		priority:    claimPriority(*prompt, serveAddr != ""),
 	}
 
 	r.tools["scheduler"] = schedapi.New(scdb, sched.RealCrontab(""), self+" run-job", modelID, cfgDir)
@@ -571,6 +611,8 @@ func main() {
 	if serveAddr != "" {
 		srv, werr := web.New(web.Options{
 			Home: cfgDir, CWD: cwd, Models: cfg.Models,
+			Machine: machine, Version: Version,
+			Ready:   func(ctx context.Context, m models.Model) error { return kids.ready(ctx, machine, m) },
 			Crontab: sched.RealCrontab(""), RunnerCmd: self + " run-job", Natives: nativeToolNames,
 			Commands: command.All(), Env: env, Status: webStatus(r, sdb),
 			StopWorkers: stopWorkers,
@@ -646,7 +688,7 @@ func main() {
 		} else {
 			rev := decision.NewReviewer(ctx, r.engine, reviews,
 				r.reviewFire(schedHome, scdb, swapURL, self, cfgDir, cfg.Settings.Sandbox, cfg.Settings.SandboxBinds),
-				cfg.Settings.ReviewBatchOrDefault(), row, room, scope.Key(cwd))
+				cfg.Settings.ReviewBatchOrDefault(), row, fleetroom, scope.Key(cwd))
 			r.decRev = rev
 			r.decQ = decision.NewQueue(dec, sink, reviews, drec, rev.Land, voice)
 			land = rev.Land
@@ -664,7 +706,7 @@ func main() {
 	if packScorer != nil {
 		opts = append(opts, graph.WithScorer(packScorer))
 	}
-	gq := graph.NewQueue(cfgDir, room.Add(rig.MemberGraph), opts...)
+	gq := graph.NewQueue(cfgDir, fleetroom.Add(rig.MemberGraph), opts...)
 	r.graph = gq
 	r.tools["rem"] = remapi.New(rdb, gq)
 
@@ -803,17 +845,24 @@ func runJob(args []string) int {
 		fmt.Fprintln(os.Stderr, "rig: decision store:", jerr)
 	} else {
 		defer jdb.DB.Close()
-		engine, room := newFleet()
+		engine, fleetroom := newFleet()
 		go engine.Start(context.Background())
 		defer engine.Stop()
-		room.Add(rig.MemberFrontend).Subscribe(context.Background(), func(err error, messages ...broadcast.Message) {
+		kids := newChildren(cfgDir, cfg.Models, engine, nil)
+		machine, merr := machineroom.New(cfgDir, kids.places, kids.effects, nil)
+		if merr != nil {
+			fmt.Fprintln(os.Stderr, "rig:", merr)
+		} else {
+			defer machine.Close()
+		}
+		fleetroom.Add(rig.MemberFrontend).Subscribe(context.Background(), func(err error, messages ...broadcast.Message) {
 			for _, m := range messages {
 				if n, ok := m.Signal().(evt.Notice); err == nil && ok {
 					fmt.Fprintln(os.Stderr, "rig: "+n.Source+": "+n.Text)
 				}
 			}
 		})
-		jobDecisions = decisionstore.Recorder{DB: jdb, Voice: room.Add(rig.MemberDecision)}
+		jobDecisions = decisionstore.Recorder{DB: jdb, Voice: fleetroom.Add(rig.MemberDecision)}
 	}
 	if err := sched.RunJob(args[0], sched.RunOpts{
 		Home:      home,

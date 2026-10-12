@@ -11,8 +11,8 @@ import (
 
 	"github.com/mrsirg97-rgb/evt"
 	"github.com/mrsirg97-rgb/evt/broadcast"
-	"github.com/mrsirg97-rgb/rig/v2/store/graph"
-	"github.com/mrsirg97-rgb/rig/v2/store/scope"
+	"github.com/mrsirg97-rgb/rig/v3/store/graph"
+	"github.com/mrsirg97-rgb/rig/v3/store/scope"
 )
 
 const fakeTestName = "TestFakeLSPServer"

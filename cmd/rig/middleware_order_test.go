@@ -7,9 +7,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/mrsirg97-rgb/rig/v2/core"
-	"github.com/mrsirg97-rgb/rig/v2/middleware/approve"
-	"github.com/mrsirg97-rgb/rig/v2/middleware/toolset"
+	"github.com/mrsirg97-rgb/rig/v3/core"
+	"github.com/mrsirg97-rgb/rig/v3/middleware/approve"
+	"github.com/mrsirg97-rgb/rig/v3/middleware/toolset"
 )
 
 func chainFor(t *testing.T, r *root, inner core.ToolExec) core.ToolExec {
@@ -22,7 +22,7 @@ func chainFor(t *testing.T, r *root, inner core.ToolExec) core.ToolExec {
 }
 
 func TestCanonicalMiddlewareExpandsPathsBeforeTheGate(t *testing.T) {
-	home := t.TempDir()
+	home := shortTemp(t)
 	t.Setenv("HOME", home)
 	r := testRoot(nullFrontend{})
 	r.live = toolset.New()

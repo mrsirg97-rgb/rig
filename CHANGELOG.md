@@ -1,4 +1,67 @@
 # Changelog
+## [3.0.0]: the room, no center
+
+Every rig instance on the machine is a member of one room over unix
+sockets, and no process is the center. The ordering primitive came first
+in evt 0.3.0 (see that release); rig joins the room at start: the socket
+binds before the directory is read, the member id is the hash of the
+machine's boot id, the process id and the start time at 62 bits and
+re-derives on a collision, and arrivals land on the room engine at the
+class's priority. The model is a guarded key in that room: before a
+request the instance claims at its class's priority (the operator's turn
+90, a delegate's return 70, a fleet worker 30, a scheduled job 20, an
+outside client 0), the turn waits on the room engine's confirmation that
+every live member applied the admission, and the request goes to the
+row's port directly — llama-swap retires as a router and
+settings.json's swapUrl retires with it. The stream's completion is the
+release. Within one priority the claim that continues the session
+already in the model goes first.
+
+The instances own the models: the row gains the child half (command with
+${PORT} substituted, environment, port, aliases, stop grace, places) and
+start, stop and swap are guarded operations on the model's key. The
+child runs detached with the log at ~/.rig/logs/<model id>.log, the port
+answers before the operation settles, a stop sends SIGTERM to the
+child's session and waits the row's grace before the kill. A claim that
+finds its row's port silent holds its place, publishes the start and
+sends the request once the port answers and the child's /health no
+longer says 503; when another row's child is resident it publishes the
+swap on that row's key instead, so the resident one stops at its
+holders' end and before the incoming one starts — one child at a time,
+the rule the router had. A start waits for the port as long as the child
+lives: the pid file is written at the spawn with the process's start
+time, a second start finds the loading child and waits on it, and a pid
+whose start time differs names nobody, so a stale file never reaches
+another process. The table change merges into every member's view; the
+places function reads it.
+
+Every stream ends in a terminal event: a cancel yields Done with what
+was produced and no call that had not finished streaming, the loop
+appends on Done only, and the 2.17.1 branch leaves loop/loop.go, its
+line leaves specs/FREEZE.txt, the recorder's special case goes. The empty
+and compact decorators forward every event to the stream's close, so the
+provider's Done on a cancel reaches the loop and the interrupted reply
+lands.
+
+The dashboard's three pages: the room page shows the members and each
+model's residency (who holds it, who waits, whether the port answers,
+the log's tail); the models page carries the residency beside the row;
+the update page shows the build's version and runs rig -update, which
+drains the room first: the update's guarded operation rides the table's
+key at the operator's priority, every member stops claiming at its turn
+boundary and leaves, the coordinator waits the live set empty, and only
+then does the binary swap. A member that left says so and refuses its
+next request by name instead of waiting on a room it is no longer in.
+The wire front starts a cold child the way a session does, takes a body
+up to 256 MiB (over it is a 413, never a truncated read) and flushes
+each chunk as it arrives.
+
+Migration: rig's module is `github.com/mrsirg97-rgb/rig/v3`. The models
+file gains the child half for the models the machine serves — carry the
+port range and the names in from the router they ran behind, one port
+per model, and the rows are local again. settings.json's swapUrl stays
+parsed and is no longer consulted.
+
 ## [2.18.4]: a timeout is a timeout; defer is the hand-off
 
 Since 2.16.0 passing `timeoutMs` to bash, python or a web fetch sent the

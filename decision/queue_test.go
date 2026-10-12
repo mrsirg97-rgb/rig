@@ -9,10 +9,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mrsirg97-rgb/rig/v2/decision"
-	"github.com/mrsirg97-rgb/rig/v2/store"
-	decisionstore "github.com/mrsirg97-rgb/rig/v2/store/decision"
-	"github.com/mrsirg97-rgb/rig/v2/testenv"
+	"github.com/mrsirg97-rgb/rig/v3/decision"
+	"github.com/mrsirg97-rgb/rig/v3/store"
+	decisionstore "github.com/mrsirg97-rgb/rig/v3/store/decision"
+	"github.com/mrsirg97-rgb/rig/v3/testenv"
 )
 
 type fakeDecider struct {

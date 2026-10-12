@@ -11,9 +11,9 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/mrsirg97-rgb/rig/v2/store"
-	sched "github.com/mrsirg97-rgb/rig/v2/store/scheduler"
-	adapter "github.com/mrsirg97-rgb/rig/v2/tool/scheduler"
+	"github.com/mrsirg97-rgb/rig/v3/store"
+	sched "github.com/mrsirg97-rgb/rig/v3/store/scheduler"
+	adapter "github.com/mrsirg97-rgb/rig/v3/tool/scheduler"
 )
 
 type fakeCrontab struct {

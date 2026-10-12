@@ -3,7 +3,7 @@ package todo
 import (
 	"path/filepath"
 
-	"github.com/mrsirg97-rgb/rig/v2/store/scope"
+	"github.com/mrsirg97-rgb/rig/v3/store/scope"
 )
 
 func ProjectOf(dir string) Project {

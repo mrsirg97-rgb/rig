@@ -3,11 +3,16 @@ package anthropic_test
 import (
 	"context"
 	"encoding/json"
+	"io"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
-	"github.com/mrsirg97-rgb/rig/v2/core"
-	"github.com/mrsirg97-rgb/rig/v2/provider/anthropic"
+	"github.com/mrsirg97-rgb/evt"
+	"github.com/mrsirg97-rgb/rig/v3/core"
+	"github.com/mrsirg97-rgb/rig/v3/provider/anthropic"
 )
 
 const textTurn = `data: {"type":"message_start","message":{"id":"msg_1","model":"claude-fake","usage":{"input_tokens":10,"output_tokens":1}}}
@@ -482,5 +487,40 @@ data: {"type":"message_stop"}
 				t.Fatalf("prompt = %d, want input plus the cache read", u.Prompt)
 			}
 		})
+	}
+}
+
+func TestACancelledStreamEndsInATerminalEvent(t *testing.T) {
+	block := make(chan struct{})
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		io.Copy(io.Discard, r.Body)
+		w.Header().Set("Content-Type", "text/event-stream")
+		io.WriteString(w, `data: {"type":"message_start","message":{"id":"msg_1","model":"claude-fake","usage":{"input_tokens":9,"cache_read_input_tokens":7}}}`+"\n\n")
+		w.(http.Flusher).Flush()
+		<-block
+	}))
+	defer srv.Close()
+	ctx, cancel := context.WithCancel(context.Background())
+	p := anthropic.New(anthropic.Config{BaseURL: srv.URL, Model: "claude-fake", MaxTokens: 1024})
+	ch, err := p.Stream(ctx, userReq())
+	if err != nil {
+		t.Fatalf("stream: %v", err)
+	}
+	time.Sleep(200 * time.Millisecond)
+	cancel()
+	close(block)
+	var events []evt.Signal
+	var done bool
+	for ev := range ch {
+		events = append(events, ev)
+		if _, ok := ev.(core.Done); ok {
+			done = true
+		}
+	}
+	if !done {
+		t.Fatalf("a cancelled stream must end in a terminal event: %s", kinds(events))
+	}
+	if lastDone(t, events).Usage.CacheRead != 7 {
+		t.Fatalf("the terminal event must carry the usage known so far: %+v", lastDone(t, events).Usage)
 	}
 }

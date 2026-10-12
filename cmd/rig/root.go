@@ -6,39 +6,43 @@ import (
 	"fmt"
 	"github.com/mrsirg97-rgb/evt"
 	"github.com/mrsirg97-rgb/evt/broadcast"
-	"github.com/mrsirg97-rgb/rig/v2/store/graph"
+	"github.com/mrsirg97-rgb/rig/v3/store/graph"
 	"io"
 	"os"
 	"strings"
 
-	"github.com/mrsirg97-rgb/rig/v2"
-	"github.com/mrsirg97-rgb/rig/v2/command"
-	"github.com/mrsirg97-rgb/rig/v2/config"
-	"github.com/mrsirg97-rgb/rig/v2/core"
-	"github.com/mrsirg97-rgb/rig/v2/decision"
-	"github.com/mrsirg97-rgb/rig/v2/imagemarker"
-	"github.com/mrsirg97-rgb/rig/v2/middleware/approve"
-	"github.com/mrsirg97-rgb/rig/v2/middleware/toolset"
-	"github.com/mrsirg97-rgb/rig/v2/models"
-	"github.com/mrsirg97-rgb/rig/v2/plugins"
-	"github.com/mrsirg97-rgb/rig/v2/policy/compact"
-	effort "github.com/mrsirg97-rgb/rig/v2/policy/effort"
-	"github.com/mrsirg97-rgb/rig/v2/policy/empty"
-	"github.com/mrsirg97-rgb/rig/v2/policy/operator"
-	"github.com/mrsirg97-rgb/rig/v2/provider/anthropic"
-	"github.com/mrsirg97-rgb/rig/v2/provider/openai"
-	"github.com/mrsirg97-rgb/rig/v2/store"
-	remdom "github.com/mrsirg97-rgb/rig/v2/store/rem/domain"
-	sched "github.com/mrsirg97-rgb/rig/v2/store/scheduler"
-	"github.com/mrsirg97-rgb/rig/v2/store/state"
-	"github.com/mrsirg97-rgb/rig/v2/swarm"
-	viewtool "github.com/mrsirg97-rgb/rig/v2/tool/view"
+	"github.com/mrsirg97-rgb/rig/v3"
+	"github.com/mrsirg97-rgb/rig/v3/command"
+	"github.com/mrsirg97-rgb/rig/v3/config"
+	"github.com/mrsirg97-rgb/rig/v3/core"
+	"github.com/mrsirg97-rgb/rig/v3/decision"
+	"github.com/mrsirg97-rgb/rig/v3/imagemarker"
+	"github.com/mrsirg97-rgb/rig/v3/middleware/approve"
+	"github.com/mrsirg97-rgb/rig/v3/middleware/toolset"
+	"github.com/mrsirg97-rgb/rig/v3/models"
+	"github.com/mrsirg97-rgb/rig/v3/plugins"
+	"github.com/mrsirg97-rgb/rig/v3/policy/compact"
+	effort "github.com/mrsirg97-rgb/rig/v3/policy/effort"
+	"github.com/mrsirg97-rgb/rig/v3/policy/empty"
+	"github.com/mrsirg97-rgb/rig/v3/policy/operator"
+	"github.com/mrsirg97-rgb/rig/v3/provider/anthropic"
+	"github.com/mrsirg97-rgb/rig/v3/provider/openai"
+	machineroom "github.com/mrsirg97-rgb/rig/v3/room"
+	"github.com/mrsirg97-rgb/rig/v3/store"
+	remdom "github.com/mrsirg97-rgb/rig/v3/store/rem/domain"
+	sched "github.com/mrsirg97-rgb/rig/v3/store/scheduler"
+	"github.com/mrsirg97-rgb/rig/v3/store/state"
+	"github.com/mrsirg97-rgb/rig/v3/swarm"
+	viewtool "github.com/mrsirg97-rgb/rig/v3/tool/view"
 )
 
 type root struct {
 	pluginMax int
 	baseURL   string
 	system    string
+	machine   machineroom.Member
+	kids      *children
+	priority  int
 	agents    string
 	project   string
 	allow     []string
@@ -265,7 +269,15 @@ func (r *root) delegated() bool {
 }
 
 func (r *root) buildPair() (core.Provider, core.ContextPolicy) {
-	inner := r.buildProvider()
+	inner := claiming{
+		inner:    r.buildProvider(),
+		machine:  r.machine,
+		kids:     r.kids,
+		key:      machineroom.KeyOf(r.row.ID),
+		priority: r.priority,
+		talk:     machineroom.KeyOf(r.session.ID),
+		row:      r.row,
+	}
 	pol, err := compact.New(inner, r.rec, r.session, r.fullSystem, r.row)
 	if err != nil {
 		panic("rig: wire: " + err.Error())
@@ -321,7 +333,9 @@ func (r *root) buildProvider() core.Provider {
 		return openai.NewWithConfig(cfg)
 	}
 	baseURL := r.baseURL
-	if r.row.Remote {
+	if r.row.Port > 0 {
+		baseURL = fmt.Sprintf("http://127.0.0.1:%d/v1", r.row.Port)
+	} else if r.row.Remote {
 		baseURL = r.row.BaseURL
 	}
 	return openai.NewWithConfig(openai.Config{

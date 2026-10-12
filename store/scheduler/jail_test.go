@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	sched "github.com/mrsirg97-rgb/rig/v2/store/scheduler"
+	sched "github.com/mrsirg97-rgb/rig/v3/store/scheduler"
 )
 
 func TestJailArgvIsTheSpecProfileVerbatim(t *testing.T) {

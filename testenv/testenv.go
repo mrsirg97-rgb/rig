@@ -11,7 +11,7 @@ import (
 	"sync"
 	"testing"
 
-	sched "github.com/mrsirg97-rgb/rig/v2/store/scheduler"
+	sched "github.com/mrsirg97-rgb/rig/v3/store/scheduler"
 )
 
 var OperatorHome = os.Getenv("HOME")

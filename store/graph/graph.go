@@ -8,9 +8,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/mrsirg97-rgb/rig/v2/store"
-	"github.com/mrsirg97-rgb/rig/v2/store/graph/ddl"
-	"github.com/mrsirg97-rgb/rig/v2/store/graph/metadata"
+	"github.com/mrsirg97-rgb/rig/v3/store"
+	"github.com/mrsirg97-rgb/rig/v3/store/graph/ddl"
+	"github.com/mrsirg97-rgb/rig/v3/store/graph/metadata"
 )
 
 const SchemaVersion = 2

@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	sched "github.com/mrsirg97-rgb/rig/v2/store/scheduler"
-	"github.com/mrsirg97-rgb/rig/v2/tool/delegate"
+	sched "github.com/mrsirg97-rgb/rig/v3/store/scheduler"
+	"github.com/mrsirg97-rgb/rig/v3/tool/delegate"
 )
 
 func doingTool(t *testing.T, h *harness, spawn *fakeSpawn, allow []string) delegate.Delegate {

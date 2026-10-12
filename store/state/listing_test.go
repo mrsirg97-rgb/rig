@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mrsirg97-rgb/rig/v2/store/state"
+	"github.com/mrsirg97-rgb/rig/v3/store/state"
 )
 
 func TestListSessionsSeeksNotScans(t *testing.T) {

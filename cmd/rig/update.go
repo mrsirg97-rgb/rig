@@ -16,6 +16,10 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"time"
+
+	"github.com/mrsirg97-rgb/rig/v3/models"
+	machineroom "github.com/mrsirg97-rgb/rig/v3/room"
 
 	"golang.org/x/crypto/blake2b"
 )
@@ -35,6 +39,7 @@ type updateCfg struct {
 	key     string
 	out     io.Writer
 	client  *http.Client
+	home    string
 }
 
 func defaultUpdateCfg() (updateCfg, error) {
@@ -126,12 +131,35 @@ func update(ctx context.Context, cfg updateCfg) error {
 	if err := os.Chmod(tmpPath, 0o755); err != nil {
 		return fmt.Errorf("chmod %s: %v", tmpPath, err)
 	}
+	if cfg.home != "" {
+		if err := drainRoom(ctx, cfg.home, latest); err != nil {
+			fmt.Fprintf(cfg.out, "rig: the room did not drain: %v\n", err)
+		}
+	}
 	if err := os.Rename(tmpPath, cfg.bin); err != nil {
 		return fmt.Errorf("replace %s: %v", cfg.bin, err)
 	}
 	fmt.Fprintf(cfg.out, "rig: %s -> %s (%s)\n", cfg.version, latest, cfg.bin)
 	fmt.Fprintf(cfg.out, "running sessions keep the old binary until restarted; the scheduler's next fire gets the new one\n")
 	return nil
+}
+
+func drainRoom(ctx context.Context, home, version string) error {
+	kids := newChildren(home, models.Table{}, nil, nil)
+	machine, err := machineroom.New(home, kids.places, kids.effects, nil)
+	if err != nil {
+		return err
+	}
+	defer machine.Close()
+	machine.Act(machineroom.Update{Version: version}, machineroom.TableKey(), machineroom.PriorityTurn, func(bool) {})
+	deadline := time.Now().Add(30 * time.Second)
+	for time.Now().Before(deadline) {
+		if len(machine.Live()) == 0 {
+			return nil
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	return fmt.Errorf("%d member(s) still live", len(machine.Live()))
 }
 
 func decodeMinisignLine(text []byte) ([]byte, error) {

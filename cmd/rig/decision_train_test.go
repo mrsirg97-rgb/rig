@@ -12,12 +12,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mrsirg97-rgb/rig/v2/core"
-	"github.com/mrsirg97-rgb/rig/v2/decision"
-	"github.com/mrsirg97-rgb/rig/v2/store"
-	decisionstore "github.com/mrsirg97-rgb/rig/v2/store/decision"
-	sched "github.com/mrsirg97-rgb/rig/v2/store/scheduler"
-	"github.com/mrsirg97-rgb/rig/v2/testenv"
+	"github.com/mrsirg97-rgb/rig/v3/core"
+	"github.com/mrsirg97-rgb/rig/v3/decision"
+	"github.com/mrsirg97-rgb/rig/v3/store"
+	decisionstore "github.com/mrsirg97-rgb/rig/v3/store/decision"
+	sched "github.com/mrsirg97-rgb/rig/v3/store/scheduler"
+	"github.com/mrsirg97-rgb/rig/v3/testenv"
 )
 
 type crontabRecord struct{ lines string }
@@ -26,7 +26,7 @@ func (c *crontabRecord) List() (string, error)     { return c.lines, nil }
 func (c *crontabRecord) Install(text string) error { c.lines = text; return nil }
 
 func TestDecisionTrainEnqueueLandsTwoMinutesOut(t *testing.T) {
-	home := t.TempDir()
+	home := shortTemp(t)
 	db, _, _, err := store.Open(filepath.Join(home, "global.sqlite"), sched.Statements(), sched.SchemaVersion)
 	if err != nil {
 		t.Fatal(err)
@@ -147,7 +147,7 @@ def evaluate(checkpoint, rows_path):
 
 func trainSetup(t *testing.T, trainerSource string, settings func(home string) string) string {
 	t.Helper()
-	home := t.TempDir()
+	home := shortTemp(t)
 	t.Setenv("RIG_HOME", home)
 	if err := os.MkdirAll(filepath.Join(home, "train"), 0o755); err != nil {
 		t.Fatal(err)

@@ -13,8 +13,8 @@ import (
 	"syscall"
 	"testing"
 
-	sched "github.com/mrsirg97-rgb/rig/v2/store/scheduler"
-	"github.com/mrsirg97-rgb/rig/v2/tool/delegate"
+	sched "github.com/mrsirg97-rgb/rig/v3/store/scheduler"
+	"github.com/mrsirg97-rgb/rig/v3/tool/delegate"
 )
 
 func TestTheIdleInterruptKillsTheWorkersProcessTree(t *testing.T) {

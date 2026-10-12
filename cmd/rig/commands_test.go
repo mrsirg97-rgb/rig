@@ -17,18 +17,18 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mrsirg97-rgb/rig/v2/command"
-	"github.com/mrsirg97-rgb/rig/v2/core"
-	"github.com/mrsirg97-rgb/rig/v2/frontend/cli"
-	"github.com/mrsirg97-rgb/rig/v2/frontend/oneshot"
-	"github.com/mrsirg97-rgb/rig/v2/loop"
-	"github.com/mrsirg97-rgb/rig/v2/models"
-	"github.com/mrsirg97-rgb/rig/v2/store"
-	remstore "github.com/mrsirg97-rgb/rig/v2/store/rem"
-	"github.com/mrsirg97-rgb/rig/v2/store/state"
-	"github.com/mrsirg97-rgb/rig/v2/tool/bash"
-	"github.com/mrsirg97-rgb/rig/v2/tool/file"
-	sessionstool "github.com/mrsirg97-rgb/rig/v2/tool/sessions"
+	"github.com/mrsirg97-rgb/rig/v3/command"
+	"github.com/mrsirg97-rgb/rig/v3/core"
+	"github.com/mrsirg97-rgb/rig/v3/frontend/cli"
+	"github.com/mrsirg97-rgb/rig/v3/frontend/oneshot"
+	"github.com/mrsirg97-rgb/rig/v3/loop"
+	"github.com/mrsirg97-rgb/rig/v3/models"
+	"github.com/mrsirg97-rgb/rig/v3/store"
+	remstore "github.com/mrsirg97-rgb/rig/v3/store/rem"
+	"github.com/mrsirg97-rgb/rig/v3/store/state"
+	"github.com/mrsirg97-rgb/rig/v3/tool/bash"
+	"github.com/mrsirg97-rgb/rig/v3/tool/file"
+	sessionstool "github.com/mrsirg97-rgb/rig/v3/tool/sessions"
 )
 
 type scriptSrv struct {
@@ -684,7 +684,7 @@ func TestREPLCommands(t *testing.T) {
 	if out, err := exec.Command("go", "build", "-o", bin, filepath.Join(root, "cmd", "rig")).CombinedOutput(); err != nil {
 		t.Fatalf("build: %v\n%s", err, out)
 	}
-	scratch := t.TempDir()
+	scratch := shortTemp(t)
 	workDir := t.TempDir()
 	writeModelRows(t, cfgDir(t, scratch), localModelRow)
 

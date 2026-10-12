@@ -8,8 +8,8 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/mrsirg97-rgb/rig/v2/store/lazy"
-	"github.com/mrsirg97-rgb/rig/v2/store/sqlx"
+	"github.com/mrsirg97-rgb/rig/v3/store/lazy"
+	"github.com/mrsirg97-rgb/rig/v3/store/sqlx"
 )
 
 type Message struct {

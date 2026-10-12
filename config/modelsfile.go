@@ -8,7 +8,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/mrsirg97-rgb/rig/v2/models"
+	"github.com/mrsirg97-rgb/rig/v3/models"
 )
 
 type rowDoc struct {
@@ -36,9 +36,15 @@ type rowDoc struct {
 	outputPrice     *float64
 	cacheReadPrice  *float64
 	cacheWritePrice *float64
+	command         *string
+	environment     *[]string
+	port            *int
+	aliases         *[]string
+	stopGrace       *int
+	places          *int
 }
 
-var knownRowKeys = []string{"apiKey", "baseUrl", "cacheControl", "cacheReadPrice", "cacheWritePrice", "concurrency", "effort", "efforts", "id", "inputPrice", "keepRecent", "maxTokens", "outputPrice", "provider", "providerPin", "reasoning", "remote", "reserve", "retries", "role", "thinkingBudget", "vision", "window"}
+var knownRowKeys = []string{"aliases", "apiKey", "baseUrl", "cacheControl", "cacheReadPrice", "cacheWritePrice", "command", "concurrency", "effort", "efforts", "environment", "id", "inputPrice", "keepRecent", "maxTokens", "outputPrice", "places", "port", "provider", "providerPin", "reasoning", "remote", "reserve", "retries", "role", "stopGrace", "thinkingBudget", "vision", "window"}
 
 var knownRowKeysSet = func() map[string]bool {
 	m := make(map[string]bool, len(knownRowKeys))
@@ -259,6 +265,48 @@ func parseRows(data []byte, path string) ([]rowDoc, error) {
 				d.cacheWritePrice = &v
 			}
 		}
+		if rawCommand, ok := keys["command"]; ok {
+			v, err := jsonString(rawCommand)
+			if err != nil {
+				return nil, rowErr(n, "command: %v", err)
+			}
+			d.command = &v
+		}
+		if rawEnv, ok := keys["environment"]; ok {
+			var list []string
+			if err := json.Unmarshal(rawEnv, &list); err != nil {
+				return nil, rowErr(n, "environment: expected a JSON array of KEY=value strings")
+			}
+			d.environment = &list
+		}
+		if rawPort, ok := keys["port"]; ok {
+			v, err := jsonInt(rawPort)
+			if err != nil {
+				return nil, rowErr(n, "port: %v", err)
+			}
+			d.port = &v
+		}
+		if rawAliases, ok := keys["aliases"]; ok {
+			var list []string
+			if err := json.Unmarshal(rawAliases, &list); err != nil {
+				return nil, rowErr(n, "aliases: expected a JSON array of names")
+			}
+			d.aliases = &list
+		}
+		if rawGrace, ok := keys["stopGrace"]; ok {
+			v, err := jsonInt(rawGrace)
+			if err != nil {
+				return nil, rowErr(n, "stopGrace: %v", err)
+			}
+			d.stopGrace = &v
+		}
+		if rawPlaces, ok := keys["places"]; ok {
+			v, err := jsonInt(rawPlaces)
+			if err != nil {
+				return nil, rowErr(n, "places: %v", err)
+			}
+			d.places = &v
+		}
 		out = append(out, d)
 	}
 	seen := map[string]bool{}
@@ -391,5 +439,23 @@ func applyHosted(m *models.Model, d *rowDoc) {
 	}
 	if d.cacheWritePrice != nil {
 		m.CacheWritePrice = *d.cacheWritePrice
+	}
+	if d.command != nil {
+		m.Command = *d.command
+	}
+	if d.environment != nil {
+		m.Env = append([]string(nil), *d.environment...)
+	}
+	if d.port != nil {
+		m.Port = *d.port
+	}
+	if d.aliases != nil {
+		m.Aliases = append([]string(nil), *d.aliases...)
+	}
+	if d.stopGrace != nil {
+		m.StopGrace = *d.stopGrace
+	}
+	if d.places != nil {
+		m.Places = *d.places
 	}
 }

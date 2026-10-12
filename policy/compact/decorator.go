@@ -5,7 +5,7 @@ import (
 	"strings"
 
 	"github.com/mrsirg97-rgb/evt"
-	"github.com/mrsirg97-rgb/rig/v2/core"
+	"github.com/mrsirg97-rgb/rig/v3/core"
 )
 
 type decorator struct {
@@ -61,81 +61,51 @@ func (d *decorator) Stream(ctx context.Context, req core.Request) (<-chan evt.Si
 }
 
 func (d *decorator) relay(ctx context.Context, out chan<- evt.Signal, ch <-chan evt.Signal, req core.Request) {
-	emit := func(ev evt.Signal) bool {
-		select {
-		case out <- ev:
-			return true
-		case <-ctx.Done():
-			return false
-		}
-	}
 	for ev := range ch {
 		switch e := ev.(type) {
 		case core.Fault:
-			if ctx.Err() == nil && classifiesContextLength(e.Err) && d.p.recoveryOwed() {
-				ev2, compacted, cerr := d.p.compact(ctx)
-				d.p.spendBudget()
-				if cerr != nil {
-					if ctx.Err() != nil {
-						return
-					}
-					if !emit(core.Fault{Err: cerr}) {
-						return
-					}
-					return
-				}
-				if !compacted {
-					if !emit(e) {
-						return
-					}
-					return
-				}
-				if !emit(ev2) {
-					return
-				}
-				req2 := core.Request{Messages: d.p.assemble(d.p.s), Tools: req.Tools}
-				mt, merr := d.p.clampMaxTokens(d.p.sizeOf(req2.Messages))
-				if merr != nil {
-					if !emit(core.Fault{Err: merr}) {
-						return
-					}
-					return
-				}
-				req2.MaxTokens = mt
-				ch2, err2 := d.inner.Stream(ctx, req2)
-				if err2 != nil {
-					if ctx.Err() != nil {
-						return
-					}
-					if !emit(core.Fault{Err: err2}) {
-						return
-					}
-					return
-				}
-				for ev3 := range ch2 {
-					if done, ok := ev3.(core.Done); ok {
-						d.p.calibrate(req2, done.Usage)
-					}
-					if !emit(ev3) {
-						return
-					}
-				}
-				return
+			if ctx.Err() != nil || !classifiesContextLength(e.Err) || !d.p.recoveryOwed() {
+				out <- e
+				continue
 			}
-			if !emit(e) {
-				return
+			ev2, compacted, cerr := d.p.compact(ctx)
+			d.p.spendBudget()
+			if cerr != nil {
+				if ctx.Err() == nil {
+					out <- core.Fault{Err: cerr}
+				}
+				continue
 			}
-			return
+			if !compacted {
+				out <- e
+				continue
+			}
+			out <- ev2
+			req2 := core.Request{Messages: d.p.assemble(d.p.s), Tools: req.Tools}
+			mt, merr := d.p.clampMaxTokens(d.p.sizeOf(req2.Messages))
+			if merr != nil {
+				out <- core.Fault{Err: merr}
+				continue
+			}
+			req2.MaxTokens = mt
+			ch2, err2 := d.inner.Stream(ctx, req2)
+			if err2 != nil {
+				if ctx.Err() == nil {
+					out <- core.Fault{Err: err2}
+				}
+				continue
+			}
+			for ev3 := range ch2 {
+				if done, ok := ev3.(core.Done); ok {
+					d.p.calibrate(req2, done.Usage)
+				}
+				out <- ev3
+			}
 		case core.Done:
 			d.p.calibrate(req, e.Usage)
-			if !emit(e) {
-				return
-			}
-			return
+			out <- e
 		default:
-			if !emit(ev) {
-				return
-			}
+			out <- ev
 		}
 	}
 }

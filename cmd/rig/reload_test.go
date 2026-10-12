@@ -16,18 +16,18 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mrsirg97-rgb/rig/v2/command"
-	"github.com/mrsirg97-rgb/rig/v2/core"
-	"github.com/mrsirg97-rgb/rig/v2/frontend/cli"
-	"github.com/mrsirg97-rgb/rig/v2/loop"
-	"github.com/mrsirg97-rgb/rig/v2/plugins"
-	"github.com/mrsirg97-rgb/rig/v2/store"
-	remstore "github.com/mrsirg97-rgb/rig/v2/store/rem"
-	"github.com/mrsirg97-rgb/rig/v2/store/state"
-	"github.com/mrsirg97-rgb/rig/v2/tool/bash"
-	"github.com/mrsirg97-rgb/rig/v2/tool/file"
-	pythontool "github.com/mrsirg97-rgb/rig/v2/tool/python"
-	sessionstool "github.com/mrsirg97-rgb/rig/v2/tool/sessions"
+	"github.com/mrsirg97-rgb/rig/v3/command"
+	"github.com/mrsirg97-rgb/rig/v3/core"
+	"github.com/mrsirg97-rgb/rig/v3/frontend/cli"
+	"github.com/mrsirg97-rgb/rig/v3/loop"
+	"github.com/mrsirg97-rgb/rig/v3/plugins"
+	"github.com/mrsirg97-rgb/rig/v3/store"
+	remstore "github.com/mrsirg97-rgb/rig/v3/store/rem"
+	"github.com/mrsirg97-rgb/rig/v3/store/state"
+	"github.com/mrsirg97-rgb/rig/v3/tool/bash"
+	"github.com/mrsirg97-rgb/rig/v3/tool/file"
+	pythontool "github.com/mrsirg97-rgb/rig/v3/tool/python"
+	sessionstool "github.com/mrsirg97-rgb/rig/v3/tool/sessions"
 )
 
 func okReply(s string) pythontool.Reply {
@@ -286,7 +286,7 @@ func bodiesAll(s *pluginSrv) [][]byte {
 }
 
 func TestReloadTakesEffectNextTurnZeroLoopLines(t *testing.T) {
-	home := t.TempDir()
+	home := shortTemp(t)
 	writePlugin(t, home, "forged.py", `DESCRIPTION = "the fixture forged plugin"
 SCHEMA = {"type": "object", "properties": {"text": {"type": "string"}}, "required": ["text"]}
 
@@ -356,7 +356,7 @@ def run(args: dict) -> str:
 }
 
 func TestPluginsReloadToolRebuildsTheList(t *testing.T) {
-	home := t.TempDir()
+	home := shortTemp(t)
 	writePlugin(t, home, "alpha.py", `DESCRIPTION = "the fixture alpha plugin"
 SCHEMA = {"type": "object"}
 
@@ -418,7 +418,7 @@ def run(args):
 }
 
 func TestPluginsReloadCollisionRefusesAndKeepsTheList(t *testing.T) {
-	home := t.TempDir()
+	home := shortTemp(t)
 	writePlugin(t, home, "bash.py", `DESCRIPTION = "shadowing bash"
 SCHEMA = {"type": "object"}
 
@@ -457,7 +457,7 @@ def run(args):
 func TestApproveReloadsPost8(t *testing.T) {
 	py := pluginKernelPy(t)
 	bin := buildBin(t, t.TempDir())
-	scratch := t.TempDir()
+	scratch := shortTemp(t)
 	home := cfgDir(t, scratch)
 	zone := filepath.Join(home, "plugins", "pending")
 	if err := os.MkdirAll(zone, 0o755); err != nil {
@@ -511,7 +511,7 @@ def run(args: dict) -> str:
 
 func TestReloadE2ERegistersAForgedPluginNextTurn(t *testing.T) {
 	py := pluginKernelPy(t)
-	home := t.TempDir()
+	home := shortTemp(t)
 	forgedFile := filepath.Join(home, "plugins", "forged.py")
 	forge := `DESCRIPTION = "the fixture forged plugin (the real kernel)"
 SCHEMA = {"type": "object", "properties": {"x": {"type": "integer"}}, "required": ["x"]}
@@ -603,7 +603,7 @@ def run(args: dict) -> str:
 }
 
 func TestDoorSelfHealsAnOutOfBandInstall(t *testing.T) {
-	home := t.TempDir()
+	home := shortTemp(t)
 	kernel := &kernelStub{replies: []pythontool.Reply{
 		okReply(`[{"name":"dropped","file":"` + filepath.Join(home, "plugins", "dropped.py") + `","ok":true,"description":"the fixture dropped plugin","schema":{"type":"object","properties":{"text":{"type":"string"}},"required":["text"]}}]`),
 		okReply("dropped: hi\n"),

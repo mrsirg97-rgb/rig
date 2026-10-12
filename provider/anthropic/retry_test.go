@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mrsirg97-rgb/rig/v2/core"
-	"github.com/mrsirg97-rgb/rig/v2/provider/anthropic"
+	"github.com/mrsirg97-rgb/rig/v3/core"
+	"github.com/mrsirg97-rgb/rig/v3/provider/anthropic"
 )
 
 func scriptedStreamServer(t *testing.T, handle func(w http.ResponseWriter, r *http.Request, attempt int) bool) (*httptest.Server, *int32) {

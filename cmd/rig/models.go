@@ -3,7 +3,7 @@ package main
 import (
 	"reflect"
 
-	"github.com/mrsirg97-rgb/rig/v2/models"
+	"github.com/mrsirg97-rgb/rig/v3/models"
 )
 
 func runtimeTable(t models.Table, active string, resolved models.Model) models.Table {

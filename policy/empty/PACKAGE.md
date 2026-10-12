@@ -31,8 +31,9 @@ identical request, at most twice, then a fault surfaces. Stdlib only.
 - The recorder and frontends see `core.EmptyTurn` through the loop's
   existing default: the recorder discards its partial and adds the usage;
   the CLI/TUI render the one-line notice and count the usage.
-- A cancel at any point (an attempt or a resample) closes the relay clean;
-  the loop reads the normal interrupt path.
+- A cancel never drops an event: the relay forwards to the stream's close,
+  so the provider's Done on a cancel reaches the loop and the interrupted
+  reply lands (3.0.0). A cancel starts no resample.
 
 ## Gotchas
 

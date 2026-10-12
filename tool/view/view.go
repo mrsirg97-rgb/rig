@@ -18,8 +18,8 @@ import (
 	"path/filepath"
 	"strconv"
 
-	"github.com/mrsirg97-rgb/rig/v2/imagemarker"
-	"github.com/mrsirg97-rgb/rig/v2/tool"
+	"github.com/mrsirg97-rgb/rig/v3/imagemarker"
+	"github.com/mrsirg97-rgb/rig/v3/tool"
 	_ "golang.org/x/image/webp"
 )
 

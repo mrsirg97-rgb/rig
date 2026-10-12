@@ -2,7 +2,7 @@ package swarm
 
 import (
 	"github.com/mrsirg97-rgb/evt"
-	todostore "github.com/mrsirg97-rgb/rig/v2/store/todo"
+	todostore "github.com/mrsirg97-rgb/rig/v3/store/todo"
 )
 
 func (c *Controller) Wake() {

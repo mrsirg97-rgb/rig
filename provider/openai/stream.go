@@ -14,7 +14,7 @@ import (
 	"time"
 
 	"github.com/mrsirg97-rgb/evt"
-	"github.com/mrsirg97-rgb/rig/v2/core"
+	"github.com/mrsirg97-rgb/rig/v3/core"
 )
 
 type wireStyle struct {
@@ -62,19 +62,19 @@ func (p *provider) Stream(ctx context.Context, req core.Request) (<-chan evt.Sig
 	}
 
 	ch := make(chan evt.Signal, 4)
-	emit := func(ev evt.Signal) bool {
-		select {
-		case ch <- ev:
-			return true
-		case <-ctx.Done():
-			return false
-		}
+	emit := func(ev evt.Signal) {
+		ch <- ev
 	}
 
 	go func() {
 		defer close(ch)
 		attempts := 0
+		var (
+			usage core.Usage
+			model string
+		)
 		for {
+			usage, model = core.Usage{}, ""
 			httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, p.endpoint("/chat/completions"), bytes.NewReader(body))
 			if err != nil {
 				emit(core.Fault{Err: fmt.Errorf("openai: encode request: %w", err)})
@@ -88,6 +88,7 @@ func (p *provider) Stream(ctx context.Context, req core.Request) (<-chan evt.Sig
 			resp, err := p.client.Do(httpReq)
 			if err != nil {
 				if ctx.Err() != nil {
+					emit(core.Done{Usage: usage, Model: model})
 					return
 				}
 				emit(core.Fault{Err: fmt.Errorf("openai: transport: %w", err)})
@@ -107,6 +108,7 @@ func (p *provider) Stream(ctx context.Context, req core.Request) (<-chan evt.Sig
 				resp.Body.Close()
 				select {
 				case <-ctx.Done():
+					emit(core.Done{Usage: usage, Model: model})
 					return
 				case <-time.After(wait):
 				}
@@ -134,8 +136,6 @@ func (p *provider) Stream(ctx context.Context, req core.Request) (<-chan evt.Sig
 			var (
 				pending   map[int]*core.ToolCall
 				finishing string
-				usage     core.Usage
-				model     string
 			)
 			fault := func(err error) { emit(core.Fault{Err: err}) }
 
@@ -177,12 +177,10 @@ func (p *provider) Stream(ctx context.Context, req core.Request) (<-chan evt.Sig
 				}
 				for _, choice := range chunk.Choices {
 					if text, d := p.reasoningDelta(choice.Delta); text != "" || len(d) > 0 {
-						if !emit(core.ReasoningDelta{Text: text, Details: d}) {
-							return
-						}
+						emit(core.ReasoningDelta{Text: text, Details: d})
 					}
-					if choice.Delta.Content != "" && !emit(core.TextDelta{Text: choice.Delta.Content}) {
-						return
+					if choice.Delta.Content != "" {
+						emit(core.TextDelta{Text: choice.Delta.Content})
 					}
 					for _, dc := range choice.Delta.ToolCalls {
 						accumulate(&pending, dc)
@@ -195,6 +193,7 @@ func (p *provider) Stream(ctx context.Context, req core.Request) (<-chan evt.Sig
 
 			if err := scanner.Err(); err != nil {
 				if ctx.Err() != nil {
+					emit(core.Done{Usage: usage, Model: model})
 					return
 				}
 				if idleClosed.Load() {
@@ -205,6 +204,10 @@ func (p *provider) Stream(ctx context.Context, req core.Request) (<-chan evt.Sig
 				return
 			}
 			if finishing == "" {
+				if ctx.Err() != nil {
+					emit(core.Done{Usage: usage, Model: model})
+					return
+				}
 				fault(fmt.Errorf("openai: stream truncated: no finish marker"))
 				return
 			}
@@ -213,9 +216,7 @@ func (p *provider) Stream(ctx context.Context, req core.Request) (<-chan evt.Sig
 				if !json.Valid(call.Args) && (len(call.Args) > 0 || finishing == "length") {
 					call.Cut = finishing
 				}
-				if !emit(core.ToolCallEvent{Call: *call}) {
-					return
-				}
+				emit(core.ToolCallEvent{Call: *call})
 			}
 			emit(core.Done{StopReason: finishing, Usage: usage, Model: model})
 			return

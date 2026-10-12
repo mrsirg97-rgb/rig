@@ -14,24 +14,24 @@ import (
 	"testing"
 
 	"github.com/mrsirg97-rgb/evt"
-	"github.com/mrsirg97-rgb/rig/v2/command"
-	"github.com/mrsirg97-rgb/rig/v2/core"
-	"github.com/mrsirg97-rgb/rig/v2/middleware/approve"
-	"github.com/mrsirg97-rgb/rig/v2/middleware/perm"
-	"github.com/mrsirg97-rgb/rig/v2/models"
-	"github.com/mrsirg97-rgb/rig/v2/store"
-	"github.com/mrsirg97-rgb/rig/v2/store/state"
-	"github.com/mrsirg97-rgb/rig/v2/store/state/domain"
-	"github.com/mrsirg97-rgb/rig/v2/tool"
-	"github.com/mrsirg97-rgb/rig/v2/tool/bash"
-	"github.com/mrsirg97-rgb/rig/v2/tool/file"
-	sessionstool "github.com/mrsirg97-rgb/rig/v2/tool/sessions"
+	"github.com/mrsirg97-rgb/rig/v3/command"
+	"github.com/mrsirg97-rgb/rig/v3/core"
+	"github.com/mrsirg97-rgb/rig/v3/middleware/approve"
+	"github.com/mrsirg97-rgb/rig/v3/middleware/perm"
+	"github.com/mrsirg97-rgb/rig/v3/models"
+	"github.com/mrsirg97-rgb/rig/v3/store"
+	"github.com/mrsirg97-rgb/rig/v3/store/state"
+	"github.com/mrsirg97-rgb/rig/v3/store/state/domain"
+	"github.com/mrsirg97-rgb/rig/v3/tool"
+	"github.com/mrsirg97-rgb/rig/v3/tool/bash"
+	"github.com/mrsirg97-rgb/rig/v3/tool/file"
+	sessionstool "github.com/mrsirg97-rgb/rig/v3/tool/sessions"
 )
 
 func TestVersionIsTheFreeze(t *testing.T) {
 
-	if Version != "2.18.4" {
-		t.Fatalf("Version = %q, want 2.18.4", Version)
+	if Version != "3.0.0" {
+		t.Fatalf("Version = %q, want 3.0.0", Version)
 	}
 
 	if !regexp.MustCompile(`^\d+\.\d+\.\d+$`).MatchString(Version) {

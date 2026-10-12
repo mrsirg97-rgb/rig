@@ -70,7 +70,7 @@ alignment in the drift commit; the exception is named, not hidden).
 - The documented install paths, five (decision 5):
   the installer (`curl -fsSL https://tryrig.ai/install.sh | sh`), the
   release binary (the same asset the installer fetches, downloaded
-  directly), `go install github.com/mrsirg97-rgb/rig/v2/cmd/rig@latest`,
+  directly), `go install github.com/mrsirg97-rgb/rig/v3/cmd/rig@latest`,
   `make install` from a checkout, and `rig -update` on an installed
   binary (README quickstart, `docs/SETUP.md` build section).
 
@@ -267,7 +267,7 @@ const, `{{RIG_COMMITS}}`, `{{RIG_LOOP_LINES}}`) into the artifact. The
 page carries the name, one line on what rig is
 (AGENTS.md's overview), the install line `curl -fsSL
 https://tryrig.ai/install.sh | sh`, the `go install
-github.com/mrsirg97-rgb/rig/v2/cmd/rig@latest` alternative, and links to
+github.com/mrsirg97-rgb/rig/v3/cmd/rig@latest` alternative, and links to
 github, the latest release, `docs/SETUP.md`, `specs/`, and
 `docs/EMBED.md` — the README is not among them. The pages job copies
 `install.sh` into the artifact so the site URL serves the same bytes as

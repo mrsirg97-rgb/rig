@@ -10,9 +10,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/mrsirg97-rgb/rig/v2/core"
-	"github.com/mrsirg97-rgb/rig/v2/imagemarker"
-	"github.com/mrsirg97-rgb/rig/v2/provider/anthropic"
+	"github.com/mrsirg97-rgb/rig/v3/core"
+	"github.com/mrsirg97-rgb/rig/v3/imagemarker"
+	"github.com/mrsirg97-rgb/rig/v3/provider/anthropic"
 )
 
 const blobPayload = "\x89PNG\r\n\x1a\nfake png bytes for the wire test"

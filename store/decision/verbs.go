@@ -7,9 +7,9 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/mrsirg97-rgb/rig/v2/decision"
-	"github.com/mrsirg97-rgb/rig/v2/store"
-	decisiondomain "github.com/mrsirg97-rgb/rig/v2/store/decision/domain"
+	"github.com/mrsirg97-rgb/rig/v3/decision"
+	"github.com/mrsirg97-rgb/rig/v3/store"
+	decisiondomain "github.com/mrsirg97-rgb/rig/v3/store/decision/domain"
 )
 
 const stateCap = 4096

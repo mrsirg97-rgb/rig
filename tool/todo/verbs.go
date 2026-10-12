@@ -5,8 +5,8 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/mrsirg97-rgb/rig/v2/core"
-	todostore "github.com/mrsirg97-rgb/rig/v2/store/todo"
+	"github.com/mrsirg97-rgb/rig/v3/core"
+	todostore "github.com/mrsirg97-rgb/rig/v3/store/todo"
 )
 
 const workerBoardRefusal = "todo: the supervisor owns the board; a worker does not claim, complete, fail, accept, or reject its entries (findings go in note and rem)"

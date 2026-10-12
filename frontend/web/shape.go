@@ -1,8 +1,8 @@
 package web
 
 import (
-	"github.com/mrsirg97-rgb/rig/v2/core"
-	todostore "github.com/mrsirg97-rgb/rig/v2/store/todo"
+	"github.com/mrsirg97-rgb/rig/v3/core"
+	todostore "github.com/mrsirg97-rgb/rig/v3/store/todo"
 )
 
 type sessionJSON struct {
@@ -57,6 +57,12 @@ type modelJSON struct {
 	Role       string   `json:"role"`
 	Effort     string   `json:"effort"`
 	Efforts    []string `json:"efforts"`
+	Places     int      `json:"places"`
+	Port       int      `json:"port"`
+	Live       bool     `json:"live"`
+	Holders    int      `json:"holders"`
+	Waiting    int      `json:"waiting"`
+	Tail       []string `json:"tail"`
 }
 
 type pluginJSON struct {

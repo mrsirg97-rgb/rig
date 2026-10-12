@@ -9,14 +9,14 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/mrsirg97-rgb/rig/v2/core"
-	"github.com/mrsirg97-rgb/rig/v2/middleware/paths"
-	"github.com/mrsirg97-rgb/rig/v2/store"
-	"github.com/mrsirg97-rgb/rig/v2/store/graph"
-	remdd "github.com/mrsirg97-rgb/rig/v2/store/rem/ddl"
-	remmeta "github.com/mrsirg97-rgb/rig/v2/store/rem/metadata"
-	"github.com/mrsirg97-rgb/rig/v2/store/scope"
-	remapi "github.com/mrsirg97-rgb/rig/v2/tool/rem"
+	"github.com/mrsirg97-rgb/rig/v3/core"
+	"github.com/mrsirg97-rgb/rig/v3/middleware/paths"
+	"github.com/mrsirg97-rgb/rig/v3/store"
+	"github.com/mrsirg97-rgb/rig/v3/store/graph"
+	remdd "github.com/mrsirg97-rgb/rig/v3/store/rem/ddl"
+	remmeta "github.com/mrsirg97-rgb/rig/v3/store/rem/metadata"
+	"github.com/mrsirg97-rgb/rig/v3/store/scope"
+	remapi "github.com/mrsirg97-rgb/rig/v3/tool/rem"
 )
 
 func remTool(t *testing.T, db store.DB) remapi.Rem {

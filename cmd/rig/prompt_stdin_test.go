@@ -10,7 +10,7 @@ func TestPromptDashReadsStdinWhole(t *testing.T) {
 	s := &bodySrv{}
 	srv := newBodySrv(t, s)
 	bin := buildBin(t, t.TempDir())
-	scratch := t.TempDir()
+	scratch := shortTemp(t)
 	prompt := strings.Repeat("review the pending rows\n", 6000)
 	cmd := exec.Command(bin, "-p", "-", "-base-url", srv.URL+"/v1")
 	cmd.Dir = t.TempDir()
@@ -35,7 +35,7 @@ func TestPromptDashWithNothingOnStdinRefuses(t *testing.T) {
 	bin := buildBin(t, t.TempDir())
 	cmd := exec.Command(bin, "-p", "-")
 	cmd.Dir = t.TempDir()
-	cmd.Env = rigEnv(t, t.TempDir(), "")
+	cmd.Env = rigEnv(t, shortTemp(t), "")
 	cmd.Stdin = strings.NewReader("  \n")
 	out, err := cmd.CombinedOutput()
 	if err == nil {

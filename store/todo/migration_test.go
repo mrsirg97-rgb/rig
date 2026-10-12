@@ -10,9 +10,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mrsirg97-rgb/rig/v2/store"
-	"github.com/mrsirg97-rgb/rig/v2/store/scope"
-	todostore "github.com/mrsirg97-rgb/rig/v2/store/todo"
+	"github.com/mrsirg97-rgb/rig/v3/store"
+	"github.com/mrsirg97-rgb/rig/v3/store/scope"
+	todostore "github.com/mrsirg97-rgb/rig/v3/store/todo"
 )
 
 func gitInit(t *testing.T, dir string) {

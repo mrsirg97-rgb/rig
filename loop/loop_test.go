@@ -9,10 +9,10 @@ import (
 	"testing"
 
 	"github.com/mrsirg97-rgb/evt"
-	"github.com/mrsirg97-rgb/rig/v2"
-	"github.com/mrsirg97-rgb/rig/v2/core"
-	"github.com/mrsirg97-rgb/rig/v2/loop"
-	"github.com/mrsirg97-rgb/rig/v2/middleware/cutoff"
+	"github.com/mrsirg97-rgb/rig/v3"
+	"github.com/mrsirg97-rgb/rig/v3/core"
+	"github.com/mrsirg97-rgb/rig/v3/loop"
+	"github.com/mrsirg97-rgb/rig/v3/middleware/cutoff"
 )
 
 type scriptedTurn struct {
@@ -55,6 +55,7 @@ func (p *scriptedProvider) Stream(ctx context.Context, req core.Request) (<-chan
 				out <- ev
 			}
 			<-ctx.Done()
+			out <- core.Done{}
 			close(out)
 		}()
 	case turn.bare:

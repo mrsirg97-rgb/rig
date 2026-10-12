@@ -8,11 +8,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/mrsirg97-rgb/rig/v2/core"
-	"github.com/mrsirg97-rgb/rig/v2/middleware/index"
-	"github.com/mrsirg97-rgb/rig/v2/store/graph"
-	"github.com/mrsirg97-rgb/rig/v2/tool/file"
-	remapi "github.com/mrsirg97-rgb/rig/v2/tool/rem"
+	"github.com/mrsirg97-rgb/rig/v3/core"
+	"github.com/mrsirg97-rgb/rig/v3/middleware/index"
+	"github.com/mrsirg97-rgb/rig/v3/store/graph"
+	"github.com/mrsirg97-rgb/rig/v3/tool/file"
+	remapi "github.com/mrsirg97-rgb/rig/v3/tool/rem"
 )
 
 const packAlpha = `package alpha

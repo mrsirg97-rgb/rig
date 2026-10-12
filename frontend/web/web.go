@@ -10,9 +10,10 @@ import (
 	"os"
 	"time"
 
-	"github.com/mrsirg97-rgb/rig/v2/core"
-	"github.com/mrsirg97-rgb/rig/v2/models"
-	sched "github.com/mrsirg97-rgb/rig/v2/store/scheduler"
+	"github.com/mrsirg97-rgb/rig/v3/core"
+	"github.com/mrsirg97-rgb/rig/v3/models"
+	"github.com/mrsirg97-rgb/rig/v3/room"
+	sched "github.com/mrsirg97-rgb/rig/v3/store/scheduler"
 )
 
 const sessionName = "dashboard"
@@ -37,6 +38,10 @@ type Options struct {
 	Env      any
 	Status   func(context.Context) Status
 
+	Machine room.Member
+	Version string
+	Ready   func(ctx context.Context, m models.Model) error
+
 	StopWorkers func()
 }
 
@@ -56,6 +61,9 @@ type Server struct {
 	static  fs.FS
 	chat    *chat
 	status  func(context.Context) Status
+	machine room.Member
+	version string
+	ready   func(ctx context.Context, m models.Model) error
 }
 
 func New(opts Options) (*Server, error) {
@@ -95,6 +103,9 @@ func New(opts Options) (*Server, error) {
 		static:    sub,
 		chat:      newChat(opts.Commands, opts.Env, opts.StopWorkers),
 		status:    opts.Status,
+		machine:   opts.Machine,
+		ready:     opts.Ready,
+		version:   opts.Version,
 	}, nil
 }
 
@@ -117,7 +128,13 @@ func (s *Server) Handler() http.Handler {
 			writeErr(w, http.StatusInternalServerError, "serve token: "+err.Error())
 		})
 	}
-	return gate(tok, s.router())
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if wirePath(r.URL.Path) {
+			s.handleWire(w, r, r.URL.Path)
+			return
+		}
+		gate(tok, s.router()).ServeHTTP(w, r)
+	})
 }
 
 func (s *Server) ListenAndServe(ctx context.Context, addr string) error {

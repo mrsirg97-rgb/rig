@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/mrsirg97-rgb/rig/v2/config"
+	"github.com/mrsirg97-rgb/rig/v3/config"
 )
 
 func TestAgentsIsTheOperatorsFileAlone(t *testing.T) {

@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/mrsirg97-rgb/rig/v2/config"
+	"github.com/mrsirg97-rgb/rig/v3/config"
 )
 
 var fleetAllow = []string{"bash", "read", "write", "edit", "view", "todo", "rem", "python", "web", "decide", "plugin", "sessions", "scheduler", "delegate"}

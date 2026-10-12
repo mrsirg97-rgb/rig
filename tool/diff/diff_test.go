@@ -12,7 +12,7 @@ import (
 	"strings"
 	"testing"
 
-	difftool "github.com/mrsirg97-rgb/rig/v2/tool/diff"
+	difftool "github.com/mrsirg97-rgb/rig/v3/tool/diff"
 )
 
 func chdir(t *testing.T, dir string) {

@@ -7,9 +7,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/mrsirg97-rgb/rig/v2/core"
-	"github.com/mrsirg97-rgb/rig/v2/decision"
-	decisionstore "github.com/mrsirg97-rgb/rig/v2/store/decision"
+	"github.com/mrsirg97-rgb/rig/v3/core"
+	"github.com/mrsirg97-rgb/rig/v3/decision"
+	decisionstore "github.com/mrsirg97-rgb/rig/v3/store/decision"
 )
 
 func TestABashCallProposesPendingAndTheReplyIsUnchanged(t *testing.T) {

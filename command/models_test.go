@@ -5,8 +5,8 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/mrsirg97-rgb/rig/v2/command"
-	"github.com/mrsirg97-rgb/rig/v2/models"
+	"github.com/mrsirg97-rgb/rig/v3/command"
+	"github.com/mrsirg97-rgb/rig/v3/models"
 )
 
 func table() models.Table {

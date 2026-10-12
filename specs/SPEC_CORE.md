@@ -271,8 +271,9 @@ recorder counts its usage. `TurnEnd` fires at every turn exit
 (`over` / `fault` / `interrupt`), after the turn's last other event; a
 run-context cancel ends the run, not a turn, and does not emit it. The
 recorder's rule (SPEC_HARDENING 4): the reply an `interrupt` cut lands as
-the assistant's message (2.17.1); an unlanded partial at any other
-`TurnEnd` is discarded.
+the assistant's message, carried by the stream's `Done` — every stream
+ends in a terminal event, and a cancel yields `Done` with what was
+produced; an unlanded partial at any other `TurnEnd` is discarded.
 
 `Fault` terminates the stream. A provider closes the channel after `Done` or
 `Fault`; the loop treats a closed channel without either as a provider bug and
@@ -725,8 +726,9 @@ the loop consumes. No third-party line; the stdlib-only rule holds.
   guarded refusal riding `ToolResult`; `TurnEnd` at every turn exit with
   its reason; reasoning accumulation in both assistant branches; steering
   (the `InterruptFrom` handle cancels the turn and the run continues; the
-  slot delivers on the next `Input`; latest wins; the recorder lands an
-  interrupt's unlanded partial (2.17.1) and discards it at any other
+  slot delivers on the next `Input`; latest wins; the loop appends only on
+  `Done`, and the provider's terminal event carries an interrupt's reply
+  (2.17.1) while the recorder discards an unlanded partial at any other
   `TurnEnd`; a mid-tool interrupt keeps the
   batch's results with the exec's error string); the guard's name keying,
   per-turn clear, and bound-th note; the compat rule (`TestEvent`

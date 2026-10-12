@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/mrsirg97-rgb/rig/v2/tool"
+	"github.com/mrsirg97-rgb/rig/v3/tool"
 )
 
 func TestEveryEntryHasTheShapeAndAParsingSchema(t *testing.T) {

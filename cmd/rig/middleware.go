@@ -3,17 +3,17 @@ package main
 import (
 	"strings"
 
-	"github.com/mrsirg97-rgb/rig/v2/core"
-	"github.com/mrsirg97-rgb/rig/v2/decision"
-	"github.com/mrsirg97-rgb/rig/v2/middleware/approve"
-	"github.com/mrsirg97-rgb/rig/v2/middleware/cutoff"
-	"github.com/mrsirg97-rgb/rig/v2/middleware/guard"
-	"github.com/mrsirg97-rgb/rig/v2/middleware/index"
-	"github.com/mrsirg97-rgb/rig/v2/middleware/paths"
-	"github.com/mrsirg97-rgb/rig/v2/middleware/perm"
-	"github.com/mrsirg97-rgb/rig/v2/middleware/toolset"
-	"github.com/mrsirg97-rgb/rig/v2/policy/operator"
-	remapi "github.com/mrsirg97-rgb/rig/v2/tool/rem"
+	"github.com/mrsirg97-rgb/rig/v3/core"
+	"github.com/mrsirg97-rgb/rig/v3/decision"
+	"github.com/mrsirg97-rgb/rig/v3/middleware/approve"
+	"github.com/mrsirg97-rgb/rig/v3/middleware/cutoff"
+	"github.com/mrsirg97-rgb/rig/v3/middleware/guard"
+	"github.com/mrsirg97-rgb/rig/v3/middleware/index"
+	"github.com/mrsirg97-rgb/rig/v3/middleware/paths"
+	"github.com/mrsirg97-rgb/rig/v3/middleware/perm"
+	"github.com/mrsirg97-rgb/rig/v3/middleware/toolset"
+	"github.com/mrsirg97-rgb/rig/v3/policy/operator"
+	remapi "github.com/mrsirg97-rgb/rig/v3/tool/rem"
 )
 
 func (r *root) canonicalMiddleware() []core.ToolMiddleware {

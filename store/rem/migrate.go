@@ -3,7 +3,7 @@ package rem
 import (
 	"database/sql"
 	"fmt"
-	"github.com/mrsirg97-rgb/rig/v2/store/scope"
+	"github.com/mrsirg97-rgb/rig/v3/store/scope"
 	"path/filepath"
 )
 

@@ -12,9 +12,9 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/mrsirg97-rgb/rig/v2/config"
-	"github.com/mrsirg97-rgb/rig/v2/plugins"
-	"github.com/mrsirg97-rgb/rig/v2/testenv"
+	"github.com/mrsirg97-rgb/rig/v3/config"
+	"github.com/mrsirg97-rgb/rig/v3/plugins"
+	"github.com/mrsirg97-rgb/rig/v3/testenv"
 )
 
 func pluginKernelPy(t *testing.T) string {
@@ -181,7 +181,7 @@ func pluginEnv(t *testing.T, scratch, py string) []string {
 }
 
 func TestRigHomeResolvesEnvOverDefault(t *testing.T) {
-	scratch := t.TempDir()
+	scratch := shortTemp(t)
 	xdg := t.TempDir()
 	t.Setenv("HOME", scratch)
 	t.Setenv("XDG_CONFIG_HOME", xdg)
@@ -234,7 +234,7 @@ func captureStderr(t *testing.T, f func() (string, error)) (string, string, erro
 }
 
 func TestMigrationRenamesTheOldHomeOnce(t *testing.T) {
-	scratch := t.TempDir()
+	scratch := shortTemp(t)
 	oldHome := filepath.Join(scratch, ".config", "rig")
 	if err := os.MkdirAll(oldHome, 0o755); err != nil {
 		t.Fatal(err)
@@ -282,7 +282,7 @@ func TestMigrationRenamesTheOldHomeOnce(t *testing.T) {
 
 func TestMigrationNoOps(t *testing.T) {
 	t.Run("the old home absent", func(t *testing.T) {
-		scratch := t.TempDir()
+		scratch := shortTemp(t)
 		t.Setenv("HOME", scratch)
 		t.Setenv("RIG_HOME", "")
 		home, stderr, err := captureStderr(t, rigHome)
@@ -294,7 +294,7 @@ func TestMigrationNoOps(t *testing.T) {
 		}
 	})
 	t.Run("the home already present", func(t *testing.T) {
-		scratch := t.TempDir()
+		scratch := shortTemp(t)
 		newHome := filepath.Join(scratch, ".rig")
 		oldHome := filepath.Join(scratch, ".config", "rig")
 		for _, d := range []string{newHome, oldHome} {
@@ -319,7 +319,7 @@ func TestMigrationNoOps(t *testing.T) {
 		}
 	})
 	t.Run("a failed rename refuses loud", func(t *testing.T) {
-		scratch := t.TempDir()
+		scratch := shortTemp(t)
 		oldHome := filepath.Join(scratch, ".config", "rig")
 		if err := os.MkdirAll(oldHome, 0o755); err != nil {
 			t.Fatal(err)
@@ -342,7 +342,7 @@ func TestMigrationNoOps(t *testing.T) {
 }
 
 func TestMigrationNeverRunsUnderAnOverride(t *testing.T) {
-	scratch := t.TempDir()
+	scratch := shortTemp(t)
 	oldHome := filepath.Join(scratch, ".config", "rig")
 	if err := os.MkdirAll(oldHome, 0o755); err != nil {
 		t.Fatal(err)
@@ -377,7 +377,7 @@ func TestRigHomeOverrideBeatsTheOldHome(t *testing.T) {
 	s := &bodySrv{}
 	srv := newBodySrv(t, s)
 	bin := buildBin(t, t.TempDir())
-	scratch := t.TempDir()
+	scratch := shortTemp(t)
 	override := filepath.Join(t.TempDir(), "the-home")
 	if err := os.MkdirAll(override, 0o755); err != nil {
 		t.Fatal(err)
@@ -416,7 +416,7 @@ func TestPluginsDiscoveryRegistersAndSkips(t *testing.T) {
 	s := &pluginSrv{replies: []string{pongReply}}
 	srv := newPluginSrv(t, s)
 	bin := buildBin(t, t.TempDir())
-	scratch := t.TempDir()
+	scratch := shortTemp(t)
 	writePlugin(t, cfgDir(t, scratch), "echo.py", `DESCRIPTION = "the fixture echo plugin"
 SCHEMA = {"type": "object", "properties": {"text": {"type": "string"}}, "required": ["text"]}
 
@@ -480,7 +480,7 @@ def run(args):
 func TestPluginCollisionRefusesLoud(t *testing.T) {
 	py := pluginKernelPy(t)
 	bin := buildBin(t, t.TempDir())
-	scratch := t.TempDir()
+	scratch := shortTemp(t)
 	writePlugin(t, cfgDir(t, scratch), "bash.py", `DESCRIPTION = "shadowing bash"
 SCHEMA = {"type": "object"}
 
@@ -510,7 +510,7 @@ func TestPluginCallRoundTripsArgsResult(t *testing.T) {
 	}}
 	srv := newPluginSrv(t, s)
 	bin := buildBin(t, t.TempDir())
-	scratch := t.TempDir()
+	scratch := shortTemp(t)
 	writePlugin(t, cfgDir(t, scratch), "echo.py", `DESCRIPTION = "the fixture echo plugin"
 SCHEMA = {"type": "object", "properties": {"text": {"type": "string"}}, "required": ["text"]}
 
@@ -545,7 +545,7 @@ func TestPluginExceptionIsAToolErrorKernelAlive(t *testing.T) {
 	}}
 	srv := newPluginSrv(t, s)
 	bin := buildBin(t, t.TempDir())
-	scratch := t.TempDir()
+	scratch := shortTemp(t)
 	writePlugin(t, cfgDir(t, scratch), "boom.py", `DESCRIPTION = "the fixture boom plugin"
 SCHEMA = {"type": "object", "properties": {"when": {"type": "string"}}}
 
@@ -585,7 +585,7 @@ func TestRigHomeOverrideWins(t *testing.T) {
 	s := &pluginSrv{replies: []string{pongReply}}
 	srv := newPluginSrv(t, s)
 	bin := buildBin(t, t.TempDir())
-	scratch := t.TempDir()
+	scratch := shortTemp(t)
 	override := filepath.Join(t.TempDir(), "the-home")
 	if err := os.MkdirAll(override, 0o755); err != nil {
 		t.Fatal(err)
@@ -637,7 +637,7 @@ func TestNoPluginsDirectoryIsTheV020Wire(t *testing.T) {
 	s := &bodySrv{}
 	srv := newBodySrv(t, s)
 	bin := buildBin(t, t.TempDir())
-	scratch := t.TempDir()
+	scratch := shortTemp(t)
 	cmd := exec.Command(bin, "-p", "hello", "-base-url", srv.URL+"/v1")
 	cmd.Dir = t.TempDir()
 	cmd.Env = rigEnv(t, scratch, "", "RIG_SWAP_URL="+srv.URL)
@@ -657,7 +657,7 @@ func TestNoPluginsDirectoryIsTheV020Wire(t *testing.T) {
 }
 
 func TestBothHomesPresentIsNamed(t *testing.T) {
-	scratch := t.TempDir()
+	scratch := shortTemp(t)
 	old := filepath.Join(scratch, ".config", "rig")
 	newH := filepath.Join(scratch, ".rig")
 	if err := os.MkdirAll(old, 0o755); err != nil {

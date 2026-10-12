@@ -4,7 +4,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/mrsirg97-rgb/rig/v2/testenv"
+	"github.com/mrsirg97-rgb/rig/v3/testenv"
 )
 
 func TestTestsNeverSeeTheOperatorHome(t *testing.T) {

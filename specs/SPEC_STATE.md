@@ -81,8 +81,8 @@ go run main.go -config=$RIG/store/todo/gen.json -source=$RIG/store/todo/source.j
 ```
 
 `gen.json` `"name"` is the absolute output root (`$RIG/store/todo`),
-`"module"` is `github.com/mrsirg97-rgb/rig/v2/store/todo`, `"runtime"` is
-`github.com/mrsirg97-rgb/rig/v2/store` (see decisions); `source.json`
+`"module"` is `github.com/mrsirg97-rgb/rig/v3/store/todo`, `"runtime"` is
+`github.com/mrsirg97-rgb/rig/v3/store` (see decisions); `source.json`
 `"sourceDirectory"` is `$RIG/store/todo`, `"name"` is `metadata`. Both
 external paths are verified to work with the current engine (2026-08-15):
 generated files land under the store, generated imports resolve to rig's
@@ -189,8 +189,9 @@ sources its rows from the loop's events; the transcript, `ToolStart`/
 `ToolResult` (the guarded result, as the loop appends it), reasoning, usage
 with the cache fields. It appends a row per event inside its own short
 transaction, so a kill leaves every completed row readable. A `TurnEnd`
-discards the unlanded partial of a turned turn, except the interrupt's,
-which lands (2.17.1); each turn boundary upserts
+discards the unlanded partial of a turned turn; the interrupt's reply
+lands through the stream's `Done`, which the provider yields on a cancel
+(2.17.1); each turn boundary upserts
 the file provenance. No loop change, and, with the middleware tap retired
 (deliverable 7), the schema did not change either.
 
@@ -714,7 +715,7 @@ Descriptions and schema property text are pane's promptGuidelines, lowercase, te
   and the camera writes `{{ .Runtime }}/lazy` and `{{ .Runtime }}/sqlx`.
   rig copies `lift/lazy` (two files) and `lift/sqlx/sqlx.go` into
   `store/lazy` and `store/sqlx` once, unchanged, and every store's
-  `gen.json` sets `"runtime": "github.com/mrsirg97-rgb/rig/v2/store"`.
+  `gen.json` sets `"runtime": "github.com/mrsirg97-rgb/rig/v3/store"`.
   rig stays self-contained: no lift require, and lift has no git remote
   to require it from anyway. The copied runtime is ~400 lines owned in two
   places; a change to it in lift is a named re-copy here, not a drift.

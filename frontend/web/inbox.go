@@ -1,7 +1,7 @@
 package web
 
 import (
-	"github.com/mrsirg97-rgb/rig/v2/core"
+	"github.com/mrsirg97-rgb/rig/v3/core"
 )
 
 func (c *chat) Returns() (string, bool) {

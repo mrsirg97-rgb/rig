@@ -3,7 +3,7 @@ package policy
 import (
 	"context"
 
-	"github.com/mrsirg97-rgb/rig/v2/core"
+	"github.com/mrsirg97-rgb/rig/v3/core"
 )
 
 type passthrough struct{ system string }

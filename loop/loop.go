@@ -9,8 +9,8 @@ import (
 	"strings"
 
 	"github.com/mrsirg97-rgb/evt"
-	"github.com/mrsirg97-rgb/rig/v2"
-	"github.com/mrsirg97-rgb/rig/v2/core"
+	"github.com/mrsirg97-rgb/rig/v3"
+	"github.com/mrsirg97-rgb/rig/v3/core"
 )
 
 type turn struct {
@@ -243,9 +243,6 @@ func (r *run) streamEnd(t *turn) {
 		}
 		if t.ctx.Err() != nil {
 			t.reason = core.TurnInterrupt
-			if t.spoke() {
-				session.Append(t.reply(nil))
-			}
 			r.end(t)
 			return
 		}
@@ -254,6 +251,12 @@ func (r *run) streamEnd(t *turn) {
 		t.cancel()
 		r.k.Frontend.Notify(core.TurnEnd{Reason: core.TurnFault})
 		r.stop(err)
+	case t.ctx.Err() != nil:
+		t.reason = core.TurnInterrupt
+		if t.spoke() {
+			session.Append(t.reply(nil))
+		}
+		r.end(t)
 	case len(t.calls) == 0:
 		if t.spoke() {
 			session.Append(t.reply(nil))

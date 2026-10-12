@@ -2,8 +2,8 @@ package todo
 
 import (
 	"fmt"
-	tododdl "github.com/mrsirg97-rgb/rig/v2/store/todo/ddl"
-	todometa "github.com/mrsirg97-rgb/rig/v2/store/todo/metadata"
+	tododdl "github.com/mrsirg97-rgb/rig/v3/store/todo/ddl"
+	todometa "github.com/mrsirg97-rgb/rig/v3/store/todo/metadata"
 	"time"
 )
 

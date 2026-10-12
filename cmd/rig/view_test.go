@@ -16,9 +16,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/mrsirg97-rgb/rig/v2/core"
-	"github.com/mrsirg97-rgb/rig/v2/models"
-	"github.com/mrsirg97-rgb/rig/v2/tool"
+	"github.com/mrsirg97-rgb/rig/v3/core"
+	"github.com/mrsirg97-rgb/rig/v3/models"
+	"github.com/mrsirg97-rgb/rig/v3/tool"
 )
 
 func visionRow() models.Model {
@@ -143,7 +143,7 @@ func TestNativeNamesCarryViewAfterTheReadOnlyGroup(t *testing.T) {
 }
 
 func TestViewThroughTheBinarySendsAPNGDataURL(t *testing.T) {
-	home := t.TempDir()
+	home := shortTemp(t)
 	writeModelRows(t, cfgDir(t, home), `{"id": "local", "window": 65536, "maxTokens": 8192, "reserve": 8192, "keepRecent": 16384, "role": "interactive", "efforts": ["low", "medium", "xhigh"], "vision": true}`)
 
 	work := t.TempDir()

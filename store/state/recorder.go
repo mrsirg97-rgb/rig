@@ -10,9 +10,9 @@ import (
 	"sync"
 
 	"github.com/mrsirg97-rgb/evt"
-	"github.com/mrsirg97-rgb/rig/v2/core"
-	"github.com/mrsirg97-rgb/rig/v2/store"
-	"github.com/mrsirg97-rgb/rig/v2/store/state/domain"
+	"github.com/mrsirg97-rgb/rig/v3/core"
+	"github.com/mrsirg97-rgb/rig/v3/store"
+	"github.com/mrsirg97-rgb/rig/v3/store/state/domain"
 )
 
 type Recorder struct {
@@ -181,20 +181,8 @@ func (r *Recorder) observe(ev evt.Signal) {
 		}
 		r.discardPartial()
 	case core.TurnEnd:
-
-		if e.Reason == core.TurnInterrupt {
-			r.landInterrupted()
-			return
-		}
 		r.discardPartial()
 	}
-}
-
-func (r *Recorder) landInterrupted() {
-	r.mu.Lock()
-	r.pending = nil
-	r.mu.Unlock()
-	r.land("")
 }
 
 func (r *Recorder) discardPartial() {

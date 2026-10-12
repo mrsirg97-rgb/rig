@@ -3,8 +3,8 @@ package decision
 import (
 	"path/filepath"
 
-	decisionddl "github.com/mrsirg97-rgb/rig/v2/store/decision/ddl"
-	decisionmeta "github.com/mrsirg97-rgb/rig/v2/store/decision/metadata"
+	decisionddl "github.com/mrsirg97-rgb/rig/v3/store/decision/ddl"
+	decisionmeta "github.com/mrsirg97-rgb/rig/v3/store/decision/metadata"
 )
 
 const SchemaVersion = 2

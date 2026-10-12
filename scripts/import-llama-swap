@@ -1,0 +1,115 @@
+"""Carry the child half from a llama-swap config into a rig home's models.json.
+
+usage: import-llama-swap <config.yaml> <rig-home> [--running <url>]
+
+Reads the router's config (startPort, per-model cmd/env/aliases), matches it
+against <rig-home>/models.json rows by id or alias, and rewrites that file
+with the child half added: command, environment, port, aliases, stopGrace,
+places. The numeric and hosted fields of every row are kept as they are; a
+row the config does not name is left untouched, and a config entry no row
+names is reported and dropped (the row is the table's unit).
+
+Ports are assigned from startPort in config order. With --running, the port
+llama-swap currently serves a model on overrides the assignment, so a child
+that is already up keeps answering where the row now says it lives. The
+migration runs this against a copy of the rig home while llama-swap still
+routes, then retires it: rig's own children start on the rows' ports.
+"""
+import json
+import re
+import sys
+import urllib.request
+
+import yaml
+
+DEFAULT_STOP_GRACE = 10
+
+
+def llama_swap_models(path):
+    doc = yaml.safe_load(open(path))
+    start = doc.get("startPort", 5800)
+    models = doc.get("models", {})
+    rows = {}
+    for i, (mid, m) in enumerate(models.items()):
+        cmd = m.get("cmd", "").strip()
+        if not cmd:
+            continue
+        rows[mid] = {
+            "ids": [mid] + list(m.get("aliases", [])),
+            "command": cmd,
+            "environment": list(m.get("env", [])),
+            "port": start + i,
+            "places": places_of(cmd),
+        }
+    return rows
+
+
+def places_of(cmd):
+    m = re.search(r"(?:^|\s)-np\s+(\d+)(?:\s|$)", cmd)
+    return int(m.group(1)) if m else 1
+
+
+def running_ports(url):
+    if not url:
+        return {}
+    req = urllib.request.Request(url, headers={"Accept": "application/json"})
+    with urllib.request.urlopen(req, timeout=5) as r:
+        body = r.read()
+    try:
+        doc = json.loads(body)
+    except ValueError:
+        sys.exit(f"import-llama-swap: {url}: expected the running table as JSON, got {body[:120]!r}")
+    ports = {}
+    for one in doc.get("running", []):
+        host = one.get("proxy", "")
+        m = re.search(r":(\d+)", host)
+        if m:
+            ports[one["model"]] = int(m.group(1))
+    return ports
+
+
+def main(argv):
+    cfg_path, home = argv[1], argv[2]
+    running_url = ""
+    if len(argv) > 3 and argv[3] == "--running":
+        running_url = argv[4].rstrip("/")
+        if not running_url.endswith("/running"):
+            running_url += "/running"
+    swap = llama_swap_models(cfg_path)
+    live = running_ports(running_url)
+
+    path = home + "/models.json"
+    rows = json.load(open(path))
+    print(f"read {path}: {len(rows)} rows; router config names {len(swap)} models")
+
+    unmatched = []
+    for mid, m in swap.items():
+        row = next((r for r in rows if r["id"] in m["ids"] or r["id"] == mid), None)
+        if row is None:
+            unmatched.append(mid)
+            continue
+        port = live.get(mid, m["port"])
+        added = {
+            "command": m["command"],
+            "environment": m["environment"],
+            "port": port,
+            "aliases": [a for a in m["ids"] if a != row["id"]],
+            "stopGrace": DEFAULT_STOP_GRACE,
+            "places": m["places"],
+        }
+        had = {k: row.get(k) for k in added if k in row}
+        row.update(added)
+        note = "kept" if had and had["port"] == port else "added"
+        print(f"  {row['id']:<18} {note} {sorted(set(added) - set(had))} port {port}"
+              + (f" (router serves it there now)" if mid in live else "")
+              + (f", places {added['places']}" if added["places"] > 1 else ""))
+    if unmatched:
+        print("  router models with no rig row:", ", ".join(unmatched))
+    json.dump(rows, open(path, "w"), indent=2)
+    print(f"wrote {path}")
+
+
+if __name__ == "__main__":
+    if len(sys.argv) < 3:
+        sys.exit(__doc__)
+    main(sys.argv)

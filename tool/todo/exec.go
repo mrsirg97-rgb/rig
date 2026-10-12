@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	todostore "github.com/mrsirg97-rgb/rig/v2/store/todo"
+	todostore "github.com/mrsirg97-rgb/rig/v3/store/todo"
 )
 
 type given struct {

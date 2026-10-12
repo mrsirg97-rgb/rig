@@ -4,8 +4,8 @@ import (
 	"slices"
 
 	"github.com/mrsirg97-rgb/evt/broadcast"
-	"github.com/mrsirg97-rgb/rig/v2/models"
-	sched "github.com/mrsirg97-rgb/rig/v2/store/scheduler"
+	"github.com/mrsirg97-rgb/rig/v3/models"
+	sched "github.com/mrsirg97-rgb/rig/v3/store/scheduler"
 )
 
 func fleetEnds(pipe broadcast.Transport, allow []string) (broadcast.Transport, bool) {

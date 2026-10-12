@@ -63,6 +63,13 @@ no core, no store types (decision 1). JSON only, stdlib encoding/json.
 
 ## Gotchas
 
+- settings.json's `swapUrl` stays parsed and no longer routes the
+  instances (3.0.0): a child row's provider sends to the row's port
+  directly. The router's rows carry in by hand: the models file's child
+  half replaces what the router ran behind. The scheduler still reads
+  the swap for its own worker site: the resident model it resolves and
+  the `-base-url` its workers carry come from the swap the setting
+  names.
 - Absent files are silent (3): present-but-malformed or unreadable files
   refuse loud, naming the file and, for JSON, the field (3).
 - The read order is fixed: the first malformed file wins,

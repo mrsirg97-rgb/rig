@@ -12,7 +12,7 @@ import (
 	"strings"
 	"testing"
 
-	sched "github.com/mrsirg97-rgb/rig/v2/store/scheduler"
+	sched "github.com/mrsirg97-rgb/rig/v3/store/scheduler"
 )
 
 var wireDumpFlag = flag.String("wire-dump", "", "render the wire's request bodies into this directory")
@@ -112,7 +112,7 @@ func dumpWire(t *testing.T, out, root string) {
 
 	s := &bodySrv{}
 	srv := newBodySrv(t, s)
-	scratch := t.TempDir()
+	scratch := shortTemp(t)
 	cmdDir := t.TempDir()
 	cmd := exec.Command(bin, "-p", "hello", "-base-url", srv.URL+"/v1")
 	cmd.Dir = cmdDir

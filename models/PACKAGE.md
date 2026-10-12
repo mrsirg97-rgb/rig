@@ -17,7 +17,11 @@ command reads this same table.
   (`reasoning_content` default, `reasoning` for OpenRouter), `ProviderPin`
   and `CacheControl` (openrouter or anthropic), `Retries` (default 3 for remote
   rows), `ThinkingBudget` and the four per-million prices `InputPrice`,
-  `OutputPrice`, `CacheReadPrice`, `CacheWritePrice` (anthropic).
+  `OutputPrice`, `CacheReadPrice`, `CacheWritePrice` (anthropic), and the
+  child half (3.0.0, the instances own the models): `Port`, `Command`
+  (the child's command line, `${PORT}` substituted), `Environment`,
+  `Aliases`, `StopGrace` and `Places` — how many the child serves at
+  once, the guarded key's places.
 - `Table`: id -> row, built by `New` with every row checked.
 - `Check`: the row's invariants, loud, naming the id and fields.
 - `Capped`: the row's budget scaled to a worker's window (`WorkerWindow`,
@@ -61,6 +65,14 @@ command reads this same table.
   at `New` (0 = the default; there is no "no retry" for a remote row).
 - The synthesized row carries `Role: RoleInteractive`: there is no file to
   borrow a role from.
+- The child half's invariants: a child row (any of command, environment,
+  stopGrace or places present) needs a port; a port needs a command and
+  places above zero; stopGrace is never negative. A row without the
+  child half reads zero places and serves one claim at a time by the
+  fold's beyond rule.
+- settings.json's `swapUrl` stays parsed and is no longer consulted
+  (3.0.0): the provider sends to the model row's port directly, and the
+  child half rides the models file instead.
 - `overlay` setter map uses closures over the `m` value: parse failure
   returns the raw error and a zero `Model`.
 - `Efforts` is the model's available effort levels in its own vocabulary

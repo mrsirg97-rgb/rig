@@ -4,11 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/mrsirg97-rgb/rig/v2/core"
-	"github.com/mrsirg97-rgb/rig/v2/store"
-	"github.com/mrsirg97-rgb/rig/v2/store/graph"
-	remstore "github.com/mrsirg97-rgb/rig/v2/store/rem"
-	"github.com/mrsirg97-rgb/rig/v2/tool"
+	"github.com/mrsirg97-rgb/rig/v3/core"
+	"github.com/mrsirg97-rgb/rig/v3/store"
+	"github.com/mrsirg97-rgb/rig/v3/store/graph"
+	remstore "github.com/mrsirg97-rgb/rig/v3/store/rem"
+	"github.com/mrsirg97-rgb/rig/v3/tool"
 )
 
 type Rem interface {
