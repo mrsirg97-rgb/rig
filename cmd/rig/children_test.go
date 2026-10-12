@@ -119,6 +119,89 @@ func await(t *testing.T, what string, within time.Duration, f func() bool) {
 	t.Fatalf("%s never happened within %s", what, within)
 }
 
+func loadRows(t *testing.T, path string) models.Table {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var rows []models.Model
+	if err := json.Unmarshal(data, &rows); err != nil {
+		t.Fatal(err)
+	}
+	table, err := models.New(rows...)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return table
+}
+
+func TestAJoinerReadsTheWorld(t *testing.T) {
+	home := t.TempDir()
+	port := freePort(t)
+	marker := filepath.Join(home, "starts")
+	rowOf := func(id string, p int, places int) string {
+		return `{"id":"` + id + `","window":8192,"maxTokens":2048,"reserve":1024,"keepRecent":2048,"role":"worker","command":"python3 -m http.server ${PORT}","port":` + strconv.Itoa(p) + `,"places":` + strconv.Itoa(places) + `,"stopGrace":2}`
+	}
+	table := func(rows ...string) []byte { return []byte("[" + strings.Join(rows, ",") + "]") }
+	if err := os.WriteFile(filepath.Join(home, "models.json"), table(rowOf("fake", port, 1), rowOf("other", port+7, 1)), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	ka := newChildren(home, loadRows(t, filepath.Join(home, "models.json")), nil, nil)
+	var a, b machineroom.Member
+	a, err := machineroom.New(home, ka.places, ka.effects, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { a.Close(); ka.close() })
+	// the winner's flow: the change is in the file before the act is published
+	if err := os.WriteFile(filepath.Join(home, "models.json"), table(rowOf("fake", port, 1), rowOf("other", port+7, 2)), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	a.Act(machineroom.TableChange{Row: json.RawMessage(rowOf("other", port+7, 2))}, machineroom.TableKey(), machineroom.PriorityChild, func(bool) {})
+	await(t, "the first member's table to take the change", 5*time.Second, func() bool {
+		m, _ := ka.rows.Get("other")
+		return m.Places == 2
+	})
+	a.Act(machineroom.StartChild{
+		Model:   "fake",
+		Port:    port,
+		Command: "echo start >> " + marker + "; python3 -m http.server ${PORT}",
+	}, machineroom.KeyOf("fake"), machineroom.PriorityChild, func(bool) {})
+	await(t, "the child's port to answer", 10*time.Second, func() bool { return machineroom.Answers(port) })
+	await(t, "the pid file to be the world a later stop reads", 5*time.Second, func() bool {
+		_, err := os.Stat(filepath.Join(home, "logs", "fake.pid"))
+		return err == nil
+	})
+	// the joiner: its table comes from the models file, its residency from the port
+	kb := newChildren(home, loadRows(t, filepath.Join(home, "models.json")), nil, nil)
+	b, err = machineroom.New(home, kb.places, kb.effects, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { b.Close(); kb.close() })
+	waitLive(t, a, b)
+	mine, _ := ka.rows.Get("other")
+	theirs, _ := kb.rows.Get("other")
+	if mine.Places != theirs.Places || mine.Port != theirs.Port || mine.Command != theirs.Command || mine.StopGrace != theirs.StopGrace {
+		t.Fatalf("the joiner's view must agree with the first member's: %v against %v", mine, theirs)
+	}
+	if !kb.start("fake", port, "echo start >> "+marker+"; python3 -m http.server ${PORT}", nil, "") {
+		t.Fatal("the joiner's start must find the model resident")
+	}
+	starts, err := os.ReadFile(marker)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n := strings.Count(string(starts), "start"); n != 1 {
+		t.Fatalf("a joiner must start nothing for a resident model: %d starts", n)
+	}
+	if _, err := os.Stat(filepath.Join(home, "logs", "fake.pid")); err != nil {
+		t.Fatalf("the pid file must be the world a later stop reads: %v", err)
+	}
+	ka.stop("fake", 2)
+}
+
 func TestStartChildWaitsForThePortThenStops(t *testing.T) {
 	home := t.TempDir()
 	port := freePort(t)

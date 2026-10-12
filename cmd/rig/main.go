@@ -289,6 +289,11 @@ func main() {
 	}
 	defer machine.Close()
 	defer kids.close()
+	if len(machine.Live()) == 0 {
+		for _, id := range kids.resident() {
+			broadcast.Say(voice, "models", id+" is resident (its row's port answers); starting nothing")
+		}
+	}
 
 	remPath := remstore.FilePath(cfgDir)
 	if err := os.MkdirAll(filepath.Dir(remPath), 0o755); err != nil {

@@ -129,6 +129,17 @@ func (c *children) Next(op broadcast.Operation) error {
 
 func (c *children) Previous(op broadcast.Operation) error { return nil }
 
+func (c *children) resident() []string {
+	out := []string{}
+	for _, id := range c.rows.Known() {
+		m, _ := c.rows.Get(id)
+		if m.Port > 0 && room.Answers(m.Port) {
+			out = append(out, id)
+		}
+	}
+	return out
+}
+
 func (c *children) start(model string, port int, command string, env []string, log string) bool {
 	if port > 0 && room.Answers(port) {
 		return true
