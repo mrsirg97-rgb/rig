@@ -12,13 +12,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mrsirg97-rgb/rig/v2/core"
-	"github.com/mrsirg97-rgb/rig/v2/decision"
-	"github.com/mrsirg97-rgb/rig/v2/store"
-	decisionstore "github.com/mrsirg97-rgb/rig/v2/store/decision"
-	"github.com/mrsirg97-rgb/rig/v2/testenv"
-	"github.com/mrsirg97-rgb/rig/v2/tool"
-	filetool "github.com/mrsirg97-rgb/rig/v2/tool/file"
+	"github.com/mrsirg97-rgb/rig/v3/core"
+	"github.com/mrsirg97-rgb/rig/v3/decision"
+	"github.com/mrsirg97-rgb/rig/v3/store"
+	decisionstore "github.com/mrsirg97-rgb/rig/v3/store/decision"
+	"github.com/mrsirg97-rgb/rig/v3/testenv"
+	"github.com/mrsirg97-rgb/rig/v3/tool"
+	filetool "github.com/mrsirg97-rgb/rig/v3/tool/file"
 )
 
 type probe struct {

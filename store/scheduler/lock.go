@@ -11,8 +11,8 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/mrsirg97-rgb/rig/v2/decision"
-	"github.com/mrsirg97-rgb/rig/v2/store/scope"
+	"github.com/mrsirg97-rgb/rig/v3/decision"
+	"github.com/mrsirg97-rgb/rig/v3/store/scope"
 )
 
 func recordSkip(db DB, opts RunOpts, id, reason, cwd string) error {

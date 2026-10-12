@@ -8,9 +8,9 @@ import (
 	"time"
 
 	"github.com/mrsirg97-rgb/evt"
-	"github.com/mrsirg97-rgb/rig/v2/core"
-	sched "github.com/mrsirg97-rgb/rig/v2/store/scheduler"
-	"github.com/mrsirg97-rgb/rig/v2/swarm"
+	"github.com/mrsirg97-rgb/rig/v3/core"
+	sched "github.com/mrsirg97-rgb/rig/v3/store/scheduler"
+	"github.com/mrsirg97-rgb/rig/v3/swarm"
 )
 
 type recordFrontend struct {

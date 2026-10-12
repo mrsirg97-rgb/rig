@@ -10,13 +10,13 @@ import (
 	"time"
 
 	"github.com/mrsirg97-rgb/evt/broadcast"
-	"github.com/mrsirg97-rgb/rig/v2/core"
-	"github.com/mrsirg97-rgb/rig/v2/decision"
-	"github.com/mrsirg97-rgb/rig/v2/models"
-	"github.com/mrsirg97-rgb/rig/v2/store"
-	decisionstore "github.com/mrsirg97-rgb/rig/v2/store/decision"
-	sched "github.com/mrsirg97-rgb/rig/v2/store/scheduler"
-	"github.com/mrsirg97-rgb/rig/v2/store/state"
+	"github.com/mrsirg97-rgb/rig/v3/core"
+	"github.com/mrsirg97-rgb/rig/v3/decision"
+	"github.com/mrsirg97-rgb/rig/v3/models"
+	"github.com/mrsirg97-rgb/rig/v3/store"
+	decisionstore "github.com/mrsirg97-rgb/rig/v3/store/decision"
+	sched "github.com/mrsirg97-rgb/rig/v3/store/scheduler"
+	"github.com/mrsirg97-rgb/rig/v3/store/state"
 )
 
 type countingDecider struct{ answers []decision.Answer }
@@ -131,7 +131,7 @@ func TestATurnEndFiresOneBiteAndTheNextTakesTheRest(t *testing.T) {
 }
 
 func TestTheReviewFireNamesTheDeathAndTheRunLog(t *testing.T) {
-	home := t.TempDir()
+	home := shortTemp(t)
 	r := &root{activeID: "ox-alpha", cwd: t.TempDir()}
 	r.delegate = func(in sched.DelegateInput) (sched.DelegateResult, error) {
 		return sched.DelegateResult{

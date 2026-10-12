@@ -4,10 +4,10 @@ import (
 	"context"
 	"testing"
 
-	"github.com/mrsirg97-rgb/rig/v2/core"
-	"github.com/mrsirg97-rgb/rig/v2/models"
-	todostore "github.com/mrsirg97-rgb/rig/v2/store/todo"
-	"github.com/mrsirg97-rgb/rig/v2/swarm"
+	"github.com/mrsirg97-rgb/rig/v3/core"
+	"github.com/mrsirg97-rgb/rig/v3/models"
+	todostore "github.com/mrsirg97-rgb/rig/v3/store/todo"
+	"github.com/mrsirg97-rgb/rig/v3/swarm"
 )
 
 func allowArgv(argv []string) string {

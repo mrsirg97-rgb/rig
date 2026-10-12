@@ -10,11 +10,11 @@ import (
 	"testing"
 
 	"github.com/mrsirg97-rgb/evt"
-	"github.com/mrsirg97-rgb/rig/v2"
-	"github.com/mrsirg97-rgb/rig/v2/core"
-	"github.com/mrsirg97-rgb/rig/v2/loop"
-	"github.com/mrsirg97-rgb/rig/v2/policy"
-	empty "github.com/mrsirg97-rgb/rig/v2/policy/empty"
+	"github.com/mrsirg97-rgb/rig/v3"
+	"github.com/mrsirg97-rgb/rig/v3/core"
+	"github.com/mrsirg97-rgb/rig/v3/loop"
+	"github.com/mrsirg97-rgb/rig/v3/policy"
+	empty "github.com/mrsirg97-rgb/rig/v3/policy/empty"
 )
 
 type scriptedTurn struct {

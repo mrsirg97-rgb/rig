@@ -11,8 +11,8 @@ import (
 	"testing"
 
 	"github.com/mrsirg97-rgb/evt"
-	"github.com/mrsirg97-rgb/rig/v2/core"
-	"github.com/mrsirg97-rgb/rig/v2/provider/anthropic"
+	"github.com/mrsirg97-rgb/rig/v3/core"
+	"github.com/mrsirg97-rgb/rig/v3/provider/anthropic"
 )
 
 const doneStream = `data: {"type":"message_start","message":{"id":"msg_1","model":"claude-fake","usage":{"input_tokens":1,"output_tokens":1}}}

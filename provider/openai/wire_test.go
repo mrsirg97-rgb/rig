@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/mrsirg97-rgb/rig/v2/core"
+	"github.com/mrsirg97-rgb/rig/v3/core"
 )
 
 func TestWireMarshalingIsDeterministic(t *testing.T) {

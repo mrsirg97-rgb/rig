@@ -3,7 +3,7 @@ package web
 import (
 	"context"
 	"encoding/json"
-	"github.com/mrsirg97-rgb/rig/v2/store/state"
+	"github.com/mrsirg97-rgb/rig/v3/store/state"
 	"net/http"
 	"os"
 	"sort"

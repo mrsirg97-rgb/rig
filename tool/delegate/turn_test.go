@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	sched "github.com/mrsirg97-rgb/rig/v2/store/scheduler"
+	sched "github.com/mrsirg97-rgb/rig/v3/store/scheduler"
 )
 
 func waitUntil(t *testing.T, what string, cond func() bool) {

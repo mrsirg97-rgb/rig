@@ -9,9 +9,9 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/mrsirg97-rgb/rig/v2/config"
-	"github.com/mrsirg97-rgb/rig/v2/core"
-	"github.com/mrsirg97-rgb/rig/v2/frontend/tui"
+	"github.com/mrsirg97-rgb/rig/v3/config"
+	"github.com/mrsirg97-rgb/rig/v3/core"
+	"github.com/mrsirg97-rgb/rig/v3/frontend/tui"
 )
 
 type themeRepaintFrontend struct {

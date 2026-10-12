@@ -10,13 +10,13 @@ import (
 	"time"
 
 	"github.com/mrsirg97-rgb/evt"
-	rigpkg "github.com/mrsirg97-rgb/rig/v2"
-	"github.com/mrsirg97-rgb/rig/v2/command"
-	"github.com/mrsirg97-rgb/rig/v2/core"
-	"github.com/mrsirg97-rgb/rig/v2/frontend/cli"
-	"github.com/mrsirg97-rgb/rig/v2/loop"
-	"github.com/mrsirg97-rgb/rig/v2/models"
-	"github.com/mrsirg97-rgb/rig/v2/policy"
+	rigpkg "github.com/mrsirg97-rgb/rig/v3"
+	"github.com/mrsirg97-rgb/rig/v3/command"
+	"github.com/mrsirg97-rgb/rig/v3/core"
+	"github.com/mrsirg97-rgb/rig/v3/frontend/cli"
+	"github.com/mrsirg97-rgb/rig/v3/loop"
+	"github.com/mrsirg97-rgb/rig/v3/models"
+	"github.com/mrsirg97-rgb/rig/v3/policy"
 )
 
 type cmdRig struct {

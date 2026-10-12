@@ -14,12 +14,12 @@ import (
 
 	"github.com/mrsirg97-rgb/evt"
 	"github.com/mrsirg97-rgb/evt/broadcast"
-	"github.com/mrsirg97-rgb/rig/v2"
-	"github.com/mrsirg97-rgb/rig/v2/core"
-	"github.com/mrsirg97-rgb/rig/v2/models"
-	"github.com/mrsirg97-rgb/rig/v2/pathguard"
-	sched "github.com/mrsirg97-rgb/rig/v2/store/scheduler"
-	"github.com/mrsirg97-rgb/rig/v2/tool"
+	"github.com/mrsirg97-rgb/rig/v3"
+	"github.com/mrsirg97-rgb/rig/v3/core"
+	"github.com/mrsirg97-rgb/rig/v3/models"
+	"github.com/mrsirg97-rgb/rig/v3/pathguard"
+	sched "github.com/mrsirg97-rgb/rig/v3/store/scheduler"
+	"github.com/mrsirg97-rgb/rig/v3/tool"
 )
 
 const (

@@ -6,9 +6,9 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/mrsirg97-rgb/rig/v2/core"
-	"github.com/mrsirg97-rgb/rig/v2/middleware/paths"
-	"github.com/mrsirg97-rgb/rig/v2/store/scope"
+	"github.com/mrsirg97-rgb/rig/v3/core"
+	"github.com/mrsirg97-rgb/rig/v3/middleware/paths"
+	"github.com/mrsirg97-rgb/rig/v3/store/scope"
 )
 
 func attributedSource(explicit string, ctx context.Context) string {

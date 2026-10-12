@@ -9,9 +9,9 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/mrsirg97-rgb/rig/v2/decision"
-	"github.com/mrsirg97-rgb/rig/v2/store"
-	"github.com/mrsirg97-rgb/rig/v2/store/fts"
+	"github.com/mrsirg97-rgb/rig/v3/decision"
+	"github.com/mrsirg97-rgb/rig/v3/store"
+	"github.com/mrsirg97-rgb/rig/v3/store/fts"
 )
 
 const (

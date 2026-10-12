@@ -11,12 +11,12 @@ import (
 
 	"github.com/mrsirg97-rgb/evt"
 	"github.com/mrsirg97-rgb/evt/broadcast"
-	"github.com/mrsirg97-rgb/rig/v2"
-	"github.com/mrsirg97-rgb/rig/v2/core"
-	"github.com/mrsirg97-rgb/rig/v2/models"
-	"github.com/mrsirg97-rgb/rig/v2/store"
-	sched "github.com/mrsirg97-rgb/rig/v2/store/scheduler"
-	todostore "github.com/mrsirg97-rgb/rig/v2/store/todo"
+	"github.com/mrsirg97-rgb/rig/v3"
+	"github.com/mrsirg97-rgb/rig/v3/core"
+	"github.com/mrsirg97-rgb/rig/v3/models"
+	"github.com/mrsirg97-rgb/rig/v3/store"
+	sched "github.com/mrsirg97-rgb/rig/v3/store/scheduler"
+	todostore "github.com/mrsirg97-rgb/rig/v3/store/todo"
 )
 
 const (

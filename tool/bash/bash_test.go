@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mrsirg97-rgb/rig/v2/tool/bash"
+	"github.com/mrsirg97-rgb/rig/v3/tool/bash"
 )
 
 func argsJSON(t *testing.T, args map[string]any) json.RawMessage {

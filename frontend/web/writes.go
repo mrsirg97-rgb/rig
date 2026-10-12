@@ -3,8 +3,8 @@ package web
 import (
 	"encoding/json"
 	"fmt"
-	sched "github.com/mrsirg97-rgb/rig/v2/store/scheduler"
-	todostore "github.com/mrsirg97-rgb/rig/v2/store/todo"
+	sched "github.com/mrsirg97-rgb/rig/v3/store/scheduler"
+	todostore "github.com/mrsirg97-rgb/rig/v3/store/todo"
 	"io"
 	"net/http"
 	"os"

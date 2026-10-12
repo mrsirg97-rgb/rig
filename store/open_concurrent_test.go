@@ -8,8 +8,8 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/mrsirg97-rgb/rig/v2/store"
-	todostore "github.com/mrsirg97-rgb/rig/v2/store/todo"
+	"github.com/mrsirg97-rgb/rig/v3/store"
+	todostore "github.com/mrsirg97-rgb/rig/v3/store/todo"
 )
 
 var p = todostore.Project{Key: "ws", Label: "ws"}

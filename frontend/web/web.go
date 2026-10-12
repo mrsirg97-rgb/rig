@@ -10,9 +10,9 @@ import (
 	"os"
 	"time"
 
-	"github.com/mrsirg97-rgb/rig/v2/core"
-	"github.com/mrsirg97-rgb/rig/v2/models"
-	sched "github.com/mrsirg97-rgb/rig/v2/store/scheduler"
+	"github.com/mrsirg97-rgb/rig/v3/core"
+	"github.com/mrsirg97-rgb/rig/v3/models"
+	sched "github.com/mrsirg97-rgb/rig/v3/store/scheduler"
 )
 
 const sessionName = "dashboard"

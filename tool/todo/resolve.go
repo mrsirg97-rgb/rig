@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/mrsirg97-rgb/rig/v2/middleware/paths"
-	"github.com/mrsirg97-rgb/rig/v2/store/scope"
-	todostore "github.com/mrsirg97-rgb/rig/v2/store/todo"
+	"github.com/mrsirg97-rgb/rig/v3/middleware/paths"
+	"github.com/mrsirg97-rgb/rig/v3/store/scope"
+	todostore "github.com/mrsirg97-rgb/rig/v3/store/todo"
 )
 
 func resolve(raw string) (todostore.Project, error) {

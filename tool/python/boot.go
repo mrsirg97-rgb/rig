@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"github.com/mrsirg97-rgb/rig/v2/tool/execwrap"
+	"github.com/mrsirg97-rgb/rig/v3/tool/execwrap"
 	"os"
 	"os/exec"
 	"path/filepath"

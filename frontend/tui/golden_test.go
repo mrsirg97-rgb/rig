@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mrsirg97-rgb/rig/v2/core"
+	"github.com/mrsirg97-rgb/rig/v3/core"
 )
 
 var updateGoldens = flag.Bool("update", false, "rewrite the golden stream files")

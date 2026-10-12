@@ -13,9 +13,9 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/mrsirg97-rgb/rig/v2/core"
-	"github.com/mrsirg97-rgb/rig/v2/tool"
-	difftool "github.com/mrsirg97-rgb/rig/v2/tool/diff"
+	"github.com/mrsirg97-rgb/rig/v3/core"
+	"github.com/mrsirg97-rgb/rig/v3/tool"
+	difftool "github.com/mrsirg97-rgb/rig/v3/tool/diff"
 )
 
 const ReadCap = 1 << 20

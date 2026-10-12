@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"github.com/mrsirg97-rgb/evt/broadcast"
-	"github.com/mrsirg97-rgb/rig/v2/tool/verdict"
+	"github.com/mrsirg97-rgb/rig/v3/tool/verdict"
 )
 
 type quietWire struct{}

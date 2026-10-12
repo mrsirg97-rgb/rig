@@ -5,7 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	scheddomain "github.com/mrsirg97-rgb/rig/v2/store/scheduler/domain"
+	scheddomain "github.com/mrsirg97-rgb/rig/v3/store/scheduler/domain"
 	"sort"
 	"strings"
 	"time"

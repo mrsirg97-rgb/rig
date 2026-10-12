@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/mrsirg97-rgb/rig/v2/core"
-	"github.com/mrsirg97-rgb/rig/v2/middleware/perm"
+	"github.com/mrsirg97-rgb/rig/v3/core"
+	"github.com/mrsirg97-rgb/rig/v3/middleware/perm"
 )
 
 const provenanceWant = "plugins install by the operator's /plugins approve; write to plugins/pending/"

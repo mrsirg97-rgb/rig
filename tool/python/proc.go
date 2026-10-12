@@ -3,7 +3,7 @@ package python
 import (
 	"bufio"
 	"encoding/json"
-	"github.com/mrsirg97-rgb/rig/v2/tool/execwrap"
+	"github.com/mrsirg97-rgb/rig/v3/tool/execwrap"
 	"io"
 	"os/exec"
 	"strings"

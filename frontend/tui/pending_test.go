@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mrsirg97-rgb/rig/v2/core"
+	"github.com/mrsirg97-rgb/rig/v3/core"
 )
 
 func TestPendingWrapCacheStaysByteIdenticalToFullWrap(t *testing.T) {

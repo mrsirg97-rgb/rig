@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	sched "github.com/mrsirg97-rgb/rig/v2/store/scheduler"
+	sched "github.com/mrsirg97-rgb/rig/v3/store/scheduler"
 )
 
 func sandboxOff(t *testing.T, scratch string) {
@@ -33,7 +33,7 @@ func bwrapShim(t *testing.T, dir string) string {
 }
 
 func TestInteractiveREPLNeverConsultsTheJail(t *testing.T) {
-	scratch := t.TempDir()
+	scratch := shortTemp(t)
 	binDir := t.TempDir()
 	bin := buildBin(t, binDir)
 	marker := bwrapShim(t, binDir)
@@ -61,7 +61,7 @@ func TestInteractiveREPLNeverConsultsTheJail(t *testing.T) {
 }
 
 func TestRunJobDoorFailClosedWithoutBwrap(t *testing.T) {
-	scratch := t.TempDir()
+	scratch := shortTemp(t)
 
 	binDir := t.TempDir()
 	bin := buildBin(t, binDir)
@@ -112,7 +112,7 @@ func TestRunJobDoorFailClosedWithoutBwrap(t *testing.T) {
 }
 
 func TestRunJobDoorSandboxOffRunsUnjailed(t *testing.T) {
-	scratch := t.TempDir()
+	scratch := shortTemp(t)
 	binDir := t.TempDir()
 	bin := buildBin(t, binDir)
 	marker := bwrapShim(t, binDir)

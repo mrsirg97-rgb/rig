@@ -2,7 +2,7 @@ package tui
 
 import (
 	"context"
-	"github.com/mrsirg97-rgb/rig/v2/core"
+	"github.com/mrsirg97-rgb/rig/v3/core"
 	"strconv"
 	"strings"
 	"time"

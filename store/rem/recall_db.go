@@ -10,10 +10,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/mrsirg97-rgb/rig/v2/store"
-	"github.com/mrsirg97-rgb/rig/v2/store/fts"
-	remdom "github.com/mrsirg97-rgb/rig/v2/store/rem/domain"
-	"github.com/mrsirg97-rgb/rig/v2/store/sqlx"
+	"github.com/mrsirg97-rgb/rig/v3/store"
+	"github.com/mrsirg97-rgb/rig/v3/store/fts"
+	remdom "github.com/mrsirg97-rgb/rig/v3/store/rem/domain"
+	"github.com/mrsirg97-rgb/rig/v3/store/sqlx"
 )
 
 type Hit struct {

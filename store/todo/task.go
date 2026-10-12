@@ -3,7 +3,7 @@ package todo
 import (
 	"context"
 
-	"github.com/mrsirg97-rgb/rig/v2/store"
+	"github.com/mrsirg97-rgb/rig/v3/store"
 )
 
 type TaskInfo struct {

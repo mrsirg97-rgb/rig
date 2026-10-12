@@ -1,8 +1,8 @@
 package scheduler
 
 import (
-	"github.com/mrsirg97-rgb/rig/v2/store"
-	schedddl "github.com/mrsirg97-rgb/rig/v2/store/scheduler/ddl"
+	"github.com/mrsirg97-rgb/rig/v3/store"
+	schedddl "github.com/mrsirg97-rgb/rig/v3/store/scheduler/ddl"
 )
 
 const SchemaVersion = 7

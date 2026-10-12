@@ -3,7 +3,7 @@ package file
 import (
 	"sync"
 
-	"github.com/mrsirg97-rgb/rig/v2/core"
+	"github.com/mrsirg97-rgb/rig/v3/core"
 )
 
 var rememberedBytesCap = 16 << 20

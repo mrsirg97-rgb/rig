@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/mrsirg97-rgb/rig/v2/decision"
-	"github.com/mrsirg97-rgb/rig/v2/testenv"
+	"github.com/mrsirg97-rgb/rig/v3/decision"
+	"github.com/mrsirg97-rgb/rig/v3/testenv"
 )
 
 func testClient() *http.Client {

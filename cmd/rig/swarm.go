@@ -4,8 +4,8 @@ import (
 	"context"
 	"errors"
 
-	"github.com/mrsirg97-rgb/rig/v2/command"
-	"github.com/mrsirg97-rgb/rig/v2/swarm"
+	"github.com/mrsirg97-rgb/rig/v3/command"
+	"github.com/mrsirg97-rgb/rig/v3/swarm"
 )
 
 type swarmAdapter struct {

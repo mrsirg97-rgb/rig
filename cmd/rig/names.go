@@ -7,9 +7,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/mrsirg97-rgb/rig/v2/models"
+	"github.com/mrsirg97-rgb/rig/v3/models"
 
-	"github.com/mrsirg97-rgb/rig/v2/tool"
+	"github.com/mrsirg97-rgb/rig/v3/tool"
 )
 
 var ErrResumeWithPrompt = errors.New("rig: -resume is not available with -p (one-shot stays one-shot)")

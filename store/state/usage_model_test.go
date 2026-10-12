@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/mrsirg97-rgb/rig/v2/store/state"
+	"github.com/mrsirg97-rgb/rig/v3/store/state"
 )
 
 func TestSessionUsageNamesTheServingModel(t *testing.T) {

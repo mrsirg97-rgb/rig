@@ -11,8 +11,8 @@ import (
 
 	"github.com/mrsirg97-rgb/evt"
 	"github.com/mrsirg97-rgb/evt/broadcast"
-	"github.com/mrsirg97-rgb/rig/v2/core"
-	sched "github.com/mrsirg97-rgb/rig/v2/store/scheduler"
+	"github.com/mrsirg97-rgb/rig/v3/core"
+	sched "github.com/mrsirg97-rgb/rig/v3/store/scheduler"
 )
 
 func waitForReturn(t *testing.T, fe *recordFrontend, n int) []core.WorkerDone {

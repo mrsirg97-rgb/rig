@@ -17,13 +17,13 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/mrsirg97-rgb/rig/v2/config"
-	"github.com/mrsirg97-rgb/rig/v2/core"
-	"github.com/mrsirg97-rgb/rig/v2/middleware/perm"
-	"github.com/mrsirg97-rgb/rig/v2/models"
-	sched "github.com/mrsirg97-rgb/rig/v2/store/scheduler"
-	"github.com/mrsirg97-rgb/rig/v2/testenv"
-	schedapi "github.com/mrsirg97-rgb/rig/v2/tool/scheduler"
+	"github.com/mrsirg97-rgb/rig/v3/config"
+	"github.com/mrsirg97-rgb/rig/v3/core"
+	"github.com/mrsirg97-rgb/rig/v3/middleware/perm"
+	"github.com/mrsirg97-rgb/rig/v3/models"
+	sched "github.com/mrsirg97-rgb/rig/v3/store/scheduler"
+	"github.com/mrsirg97-rgb/rig/v3/testenv"
+	schedapi "github.com/mrsirg97-rgb/rig/v3/tool/scheduler"
 )
 
 type bodySrv struct {
@@ -33,6 +33,16 @@ type bodySrv struct {
 	reply string
 	slots int
 	model string
+}
+
+func shortTemp(t *testing.T) string {
+	t.Helper()
+	d, err := os.MkdirTemp("", "rig")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.RemoveAll(d) })
+	return d
 }
 
 func newBodySrv(t *testing.T, s *bodySrv) *httptest.Server {
@@ -199,7 +209,7 @@ func TestPrecedenceFlagOverEnvOverFileOverEmbedded(t *testing.T) {
 			s := &bodySrv{}
 			srv := newBodySrv(t, s)
 			bin := buildBin(t, t.TempDir())
-			scratch := t.TempDir()
+			scratch := shortTemp(t)
 			if c.file != "" {
 				dir := cfgDir(t, scratch)
 				if err := os.MkdirAll(dir, 0o755); err != nil {
@@ -262,7 +272,7 @@ func TestEffortPrecedenceFlagOverEnvOverRow(t *testing.T) {
 			s := &bodySrv{}
 			srv := newBodySrv(t, s)
 			bin := buildBin(t, t.TempDir())
-			scratch := t.TempDir()
+			scratch := shortTemp(t)
 			if c.row != "" {
 				writeModelRows(t, cfgDir(t, scratch), c.row)
 			}
@@ -290,7 +300,7 @@ func TestEffortPrecedenceFlagOverEnvOverRow(t *testing.T) {
 func TestEffortFlagRefusesAnUnknownLevelByName(t *testing.T) {
 	bin := buildBin(t, t.TempDir())
 	t.Run("a level outside the row's efforts", func(t *testing.T) {
-		home := t.TempDir()
+		home := shortTemp(t)
 		cmd := exec.Command(bin, "-p", "hello", "-effort", "bogus")
 		cmd.Dir = t.TempDir()
 		cmd.Env = rigEnv(t, home, "")
@@ -305,7 +315,7 @@ func TestEffortFlagRefusesAnUnknownLevelByName(t *testing.T) {
 		}
 	})
 	t.Run("a row without efforts", func(t *testing.T) {
-		home := t.TempDir()
+		home := shortTemp(t)
 		writeModelRows(t, cfgDir(t, home), `{"id": "local", "window": 65536, "maxTokens": 8192, "reserve": 8192, "keepRecent": 16384, "role": "interactive"}`)
 		cmd := exec.Command(bin, "-p", "hello", "-effort", "low")
 		cmd.Dir = t.TempDir()
@@ -327,7 +337,7 @@ func TestFlagPresenceWins(t *testing.T) {
 		bin := buildBin(t, t.TempDir())
 		cmd := exec.Command(bin, "-p", "hello", "-base-url", srv.URL+"/v1", "-system", "")
 		cmdDir := t.TempDir()
-		home := t.TempDir()
+		home := shortTemp(t)
 		cmd.Dir = cmdDir
 		cmd.Env = rigEnv(t, home, "")
 		out, err := cmd.CombinedOutput()
@@ -375,7 +385,7 @@ func TestFlagPresenceWins(t *testing.T) {
 		bin := buildBin(t, t.TempDir())
 		cmd := exec.Command(bin, "-p", "run the probe", "-base-url", srv.URL+"/v1", "-retries", "0")
 		cmd.Dir = t.TempDir()
-		cmd.Env = rigEnv(t, t.TempDir(), "")
+		cmd.Env = rigEnv(t, shortTemp(t), "")
 		out, err := cmd.CombinedOutput()
 		if err != nil {
 			t.Fatalf("the run must succeed: %v\n%s", err, out)
@@ -445,7 +455,7 @@ func TestPrecedencePresenceKeyEnvEmptyBeatsFile(t *testing.T) {
 	t.Cleanup(srv.Close)
 
 	bin := buildBin(t, t.TempDir())
-	scratch := t.TempDir()
+	scratch := shortTemp(t)
 	dir := cfgDir(t, scratch)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
@@ -538,7 +548,7 @@ func TestRunJobSwapUrlChain(t *testing.T) {
 		t.Cleanup(fileURL.Close)
 		binDir := t.TempDir()
 		bin := buildBin(t, binDir)
-		scratch := t.TempDir()
+		scratch := shortTemp(t)
 		writeFakeCrontab(t, binDir, filepath.Join(scratch, "spool"))
 		dir := cfgDir(t, scratch)
 		if err := os.MkdirAll(dir, 0o755); err != nil {
@@ -582,7 +592,7 @@ func TestRunJobSwapUrlChain(t *testing.T) {
 
 		binDir := t.TempDir()
 		bin := buildBin(t, binDir)
-		scratch := t.TempDir()
+		scratch := shortTemp(t)
 		writeFakeCrontab(t, binDir, filepath.Join(scratch, "spool"))
 		dir := cfgDir(t, scratch)
 		if err := os.MkdirAll(dir, 0o755); err != nil {
@@ -607,7 +617,7 @@ func TestRunJobSwapUrlChain(t *testing.T) {
 	})
 	t.Run("neither takes the embedded", func(t *testing.T) {
 		bin := filepath.Join(t.TempDir(), "rig")
-		scratch := t.TempDir()
+		scratch := shortTemp(t)
 		key, _ := mkJob(t, scratch, bin)
 		var dialedMu sync.Mutex
 		var dialed []string
@@ -702,7 +712,7 @@ func TestRunJobWorkerInheritsJobCwdAgents(t *testing.T) {
 
 	binDir := t.TempDir()
 	bin := buildBin(t, binDir)
-	scratch := t.TempDir()
+	scratch := shortTemp(t)
 	writeFakeCrontab(t, binDir, filepath.Join(scratch, "spool"))
 
 	dir := cfgDir(t, scratch)
@@ -811,7 +821,7 @@ func TestDefaultJobModelLegacyKeyIsNamedAtStart(t *testing.T) {
 	s := &bodySrv{}
 	srv := newBodySrv(t, s)
 	bin := buildBin(t, t.TempDir())
-	scratch := t.TempDir()
+	scratch := shortTemp(t)
 	dir := cfgDir(t, scratch)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
@@ -843,7 +853,7 @@ func TestOneSlotWireRecordsTheMenuWithTheDrainPair(t *testing.T) {
 	s := &bodySrv{}
 	srv := newBodySrv(t, s)
 	bin := buildBin(t, t.TempDir())
-	scratch := t.TempDir()
+	scratch := shortTemp(t)
 	cmd := exec.Command(bin, "-p", "hello", "-base-url", srv.URL+"/v1")
 	cmd.Dir = t.TempDir()
 	cmd.Env = rigEnv(t, scratch, "", "RIG_SWAP_URL="+srv.URL)
@@ -868,7 +878,7 @@ func TestTwoSlotWirePutsTheDrainPairOn(t *testing.T) {
 	s := &bodySrv{slots: 2}
 	srv := newBodySrv(t, s)
 	bin := buildBin(t, t.TempDir())
-	scratch := t.TempDir()
+	scratch := shortTemp(t)
 	cmd := exec.Command(bin, "-p", "hello", "-base-url", srv.URL+"/v1")
 	cmd.Dir = t.TempDir()
 	cmd.Env = rigEnv(t, scratch, "", "RIG_SWAP_URL="+srv.URL)
@@ -885,7 +895,7 @@ func TestWorkersFalseKeepsTheDrainPairOffAtTwoSlots(t *testing.T) {
 	s := &bodySrv{slots: 2}
 	srv := newBodySrv(t, s)
 	bin := buildBin(t, t.TempDir())
-	scratch := t.TempDir()
+	scratch := shortTemp(t)
 	dir := cfgDir(t, scratch)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
@@ -912,7 +922,7 @@ func TestRemoteSessionRowWiresTheDrainPairWithoutSlots(t *testing.T) {
 	s := &bodySrv{slots: 1}
 	srv := newBodySrv(t, s)
 	bin := buildBin(t, t.TempDir())
-	scratch := t.TempDir()
+	scratch := shortTemp(t)
 	dir := cfgDir(t, scratch)
 	remoteRow := `{"id": "brain", "window": 8192, "maxTokens": 1024, "reserve": 64, "keepRecent": 128, "remote": true, "baseUrl": "` + srv.URL + `/v1", "apiKey": "sk-test"}`
 	writeModelRows(t, dir, remoteRow)
@@ -930,7 +940,7 @@ func TestRemoteSessionRowWiresTheDrainPairWithoutSlots(t *testing.T) {
 
 func TestRetiredWorkersFileIsNamedOnceAtStart(t *testing.T) {
 	bin := buildBin(t, t.TempDir())
-	scratch := t.TempDir()
+	scratch := shortTemp(t)
 	dir := cfgDir(t, scratch)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
@@ -954,7 +964,7 @@ func TestSchedulerCreateWithoutAModelStoresTheUnnamedJob(t *testing.T) {
 		t.Fatalf("Load: %v", err)
 	}
 
-	home := t.TempDir()
+	home := shortTemp(t)
 	st := scratchStores(t, home, "/ws/default")
 	ct := newFakeCrontab()
 	tool := schedapi.New(st, ct, "rig run-job", "local", home)
@@ -983,7 +993,7 @@ func TestSchedulerCreateWithoutAModelStoresTheUnnamedJob(t *testing.T) {
 
 func TestMalformedConfigRefusesBeforeStores(t *testing.T) {
 	bin := buildBin(t, t.TempDir())
-	scratch := t.TempDir()
+	scratch := shortTemp(t)
 	dir := cfgDir(t, scratch)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
@@ -1023,7 +1033,7 @@ func TestRoundsAndResultCapEnvRefuseLoud(t *testing.T) {
 			bin := buildBin(t, t.TempDir())
 			cmd := exec.Command(bin, "-p", "hello")
 			cmd.Dir = t.TempDir()
-			env := rigEnv(t, t.TempDir(), "")
+			env := rigEnv(t, shortTemp(t), "")
 			env = append(env, tc.env+"="+tc.value)
 			cmd.Env = env
 			out, runErr := cmd.CombinedOutput()
@@ -1050,7 +1060,7 @@ func TestNegativeEnvBoundsRefuseLoud(t *testing.T) {
 			bin := buildBin(t, t.TempDir())
 			cmd := exec.Command(bin, "-p", "hello")
 			cmd.Dir = t.TempDir()
-			env := rigEnv(t, t.TempDir(), "")
+			env := rigEnv(t, shortTemp(t), "")
 			env = append(env, tc.env)
 			cmd.Env = env
 			out, runErr := cmd.CombinedOutput()
@@ -1183,7 +1193,7 @@ func TestNoModelRefusesBeforeAnyRequest(t *testing.T) {
 	s := &bodySrv{}
 	srv := newBodySrv(t, s)
 	bin := buildBin(t, t.TempDir())
-	scratch := t.TempDir()
+	scratch := shortTemp(t)
 	cmd := exec.Command(bin, "-p", "hello", "-base-url", srv.URL+"/v1")
 	cmd.Dir = t.TempDir()
 	cmd.Env = append(os.Environ(), "HOME="+scratch, "XDG_CONFIG_HOME="+scratch)
@@ -1203,7 +1213,7 @@ func TestNamedModelWithNoRowsRefusesBeforeAnyRequest(t *testing.T) {
 	s := &bodySrv{}
 	srv := newBodySrv(t, s)
 	bin := buildBin(t, t.TempDir())
-	scratch := t.TempDir()
+	scratch := shortTemp(t)
 	cmd := exec.Command(bin, "-p", "hello", "-base-url", srv.URL+"/v1")
 	cmd.Dir = t.TempDir()
 	cmd.Env = append(scrubSwap(os.Environ()),
@@ -1248,7 +1258,7 @@ func TestSpawnedRigWithoutASwapFixtureNeverReadsTheDefaultSwapPort(t *testing.T)
 	s := &bodySrv{}
 	srv := newBodySrv(t, s)
 	bin := buildBin(t, t.TempDir())
-	scratch := t.TempDir()
+	scratch := shortTemp(t)
 	cmd := exec.Command(bin, "-p", "hello", "-base-url", srv.URL+"/v1")
 	cmd.Dir = t.TempDir()
 	cmd.Env = rigEnv(t, scratch, "")
@@ -1280,11 +1290,11 @@ func TestRigEnvPinsTheSwapUnlessTheTestNamesOne(t *testing.T) {
 		}
 		return n, val
 	}
-	n, val := count(rigEnv(t, t.TempDir(), ""))
+	n, val := count(rigEnv(t, shortTemp(t), ""))
 	if n != 1 || val != "RIG_SWAP_URL="+testenv.ClosedSwapURL {
 		t.Fatalf("the default env must carry exactly the closed port, got %d × %q", n, val)
 	}
-	n, val = count(rigEnv(t, t.TempDir(), "", "RIG_SWAP_URL=http://127.0.0.1:9"))
+	n, val = count(rigEnv(t, shortTemp(t), "", "RIG_SWAP_URL=http://127.0.0.1:9"))
 	if n != 1 || val != "RIG_SWAP_URL=http://127.0.0.1:9" {
 		t.Fatalf("the test's own swap must win exactly once, got %d × %q", n, val)
 	}

@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/mrsirg97-rgb/rig/v2/models"
+	"github.com/mrsirg97-rgb/rig/v3/models"
 )
 
 func TestModelsMalformedNamesFileRowAndField(t *testing.T) {
@@ -21,7 +21,7 @@ func TestModelsMalformedNamesFileRowAndField(t *testing.T) {
 		{"duplicate id", `[{"id": "local", "window": 100, "maxTokens": 1, "reserve": 1, "keepRecent": 1}, {"id": "local", "window": 200, "maxTokens": 1, "reserve": 1, "keepRecent": 1}]`, `row 2: duplicate id "local"`},
 		{"unknown role", `[{"id": "x", "window": 100, "maxTokens": 1, "reserve": 1, "keepRecent": 1, "role": "boss"}]`, `row 1: role: "boss" (allowed: interactive, worker)`},
 		{"bad int", `[{"id": "x", "window": "big", "maxTokens": 1, "reserve": 1, "keepRecent": 1}]`, `row 1: window: expected an integer, got "big"`},
-		{"unknown row key", `[{"id": "x", "window": 100, "maxTokens": 1, "reserve": 1, "keepRecent": 1, "winodw": 1}]`, `row 1: unknown key "winodw" (known: apiKey, baseUrl, cacheControl, cacheReadPrice, cacheWritePrice, concurrency, effort, efforts, id, inputPrice, keepRecent, maxTokens, outputPrice, provider, providerPin, reasoning, remote, reserve, retries, role, thinkingBudget, vision, window)`},
+		{"unknown row key", `[{"id": "x", "window": 100, "maxTokens": 1, "reserve": 1, "keepRecent": 1, "winodw": 1}]`, `row 1: unknown key "winodw" (known: aliases, apiKey, baseUrl, cacheControl, cacheReadPrice, cacheWritePrice, command, concurrency, effort, efforts, environment, id, inputPrice, keepRecent, maxTokens, outputPrice, places, port, provider, providerPin, reasoning, remote, reserve, retries, role, stopGrace, thinkingBudget, vision, window)`},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

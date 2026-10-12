@@ -8,9 +8,9 @@ import (
 	"testing"
 
 	"github.com/mrsirg97-rgb/evt"
-	"github.com/mrsirg97-rgb/rig/v2/core"
-	"github.com/mrsirg97-rgb/rig/v2/store/state"
-	"github.com/mrsirg97-rgb/rig/v2/tool/file"
+	"github.com/mrsirg97-rgb/rig/v3/core"
+	"github.com/mrsirg97-rgb/rig/v3/store/state"
+	"github.com/mrsirg97-rgb/rig/v3/tool/file"
 )
 
 type probeFe struct{}

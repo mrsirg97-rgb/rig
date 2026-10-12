@@ -8,11 +8,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/mrsirg97-rgb/rig/v2/plugins"
+	"github.com/mrsirg97-rgb/rig/v3/plugins"
 )
 
 func TestListPluginFilesIgnoresThePendingZone(t *testing.T) {
-	home := t.TempDir()
+	home := shortTemp(t)
 	pluginsDir := filepath.Join(home, "plugins")
 	if err := os.MkdirAll(filepath.Join(pluginsDir, "pending"), 0o755); err != nil {
 		t.Fatal(err)
@@ -43,7 +43,7 @@ func writeCallArgs(t *testing.T, path, content string) string {
 }
 
 func TestModelWriteIntoPluginsRefusesLoud(t *testing.T) {
-	scratch := t.TempDir()
+	scratch := shortTemp(t)
 
 	s := &pluginSrv{replies: []string{
 		toolCallReply("c1", "write", writeCallArgs(t, filepath.Join(scratch, ".rig", "plugins", "evil.py"), "evil = 1")),
@@ -78,7 +78,7 @@ func TestModelWriteIntoThePendingZoneLands(t *testing.T) {
 	s := &pluginSrv{replies: []string{pongReply}}
 	srv := newPluginSrv(t, s)
 	bin := buildBin(t, t.TempDir())
-	scratch := t.TempDir()
+	scratch := shortTemp(t)
 	target := filepath.Join(scratch, ".rig", "plugins", "pending", "forge.py")
 
 	body := `DESCRIPTION = "the fixture forge plugin"
@@ -119,7 +119,7 @@ func TestDiscoveryNeverLoadsPending(t *testing.T) {
 	s := &pluginSrv{replies: []string{pongReply}}
 	srv := newPluginSrv(t, s)
 	bin := buildBin(t, t.TempDir())
-	scratch := t.TempDir()
+	scratch := shortTemp(t)
 	writePlugin(t, cfgDir(t, scratch), "echo.py", `DESCRIPTION = "the fixture echo plugin"
 SCHEMA = {"type": "object"}
 
@@ -181,7 +181,7 @@ func pipedCommands(t *testing.T, bin string, scratch string, lines ...string) st
 
 func TestApproveMovesThePendingPlugin(t *testing.T) {
 	bin := buildBin(t, t.TempDir())
-	scratch := t.TempDir()
+	scratch := shortTemp(t)
 	home := cfgDir(t, scratch)
 	zone := filepath.Join(home, "plugins", "pending")
 	if err := os.MkdirAll(zone, 0o755); err != nil {
@@ -238,7 +238,7 @@ def run(args):
 
 func TestApproveNativeCollisionRefusesAtTheNewDoor(t *testing.T) {
 	bin := buildBin(t, t.TempDir())
-	scratch := t.TempDir()
+	scratch := shortTemp(t)
 	home := cfgDir(t, scratch)
 	zone := filepath.Join(home, "plugins", "pending")
 	if err := os.MkdirAll(zone, 0o755); err != nil {

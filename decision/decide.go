@@ -10,8 +10,8 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/mrsirg97-rgb/rig/v2/tool"
-	"github.com/mrsirg97-rgb/rig/v2/tool/file"
+	"github.com/mrsirg97-rgb/rig/v3/tool"
+	"github.com/mrsirg97-rgb/rig/v3/tool/file"
 )
 
 const SiteDecide = "decide"

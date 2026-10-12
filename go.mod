@@ -1,4 +1,4 @@
-module github.com/mrsirg97-rgb/rig/v2
+module github.com/mrsirg97-rgb/rig/v3
 
 go 1.26.6
 

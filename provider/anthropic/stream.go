@@ -14,7 +14,7 @@ import (
 	"time"
 
 	"github.com/mrsirg97-rgb/evt"
-	"github.com/mrsirg97-rgb/rig/v2/core"
+	"github.com/mrsirg97-rgb/rig/v3/core"
 )
 
 func (p *provider) Stream(ctx context.Context, req core.Request) (<-chan evt.Signal, error) {

@@ -1,7 +1,7 @@
 package delegate
 
 import (
-	sched "github.com/mrsirg97-rgb/rig/v2/store/scheduler"
+	sched "github.com/mrsirg97-rgb/rig/v3/store/scheduler"
 )
 
 var doingSet = []string{"bash", "read", "write", "edit", "view", "python", "web", "rem"}

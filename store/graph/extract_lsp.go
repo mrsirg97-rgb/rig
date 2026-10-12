@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/mrsirg97-rgb/rig/v2/store"
+	"github.com/mrsirg97-rgb/rig/v3/store"
 )
 
 func (q *Queue) resolveRefs(ctx context.Context, c *lspClient, db store.DB, root string, sym symRow, force bool) error {

@@ -16,10 +16,10 @@ import (
 	"time"
 
 	"github.com/mrsirg97-rgb/evt"
-	"github.com/mrsirg97-rgb/rig/v2"
-	"github.com/mrsirg97-rgb/rig/v2/core"
-	"github.com/mrsirg97-rgb/rig/v2/loop"
-	"github.com/mrsirg97-rgb/rig/v2/tool/file"
+	"github.com/mrsirg97-rgb/rig/v3"
+	"github.com/mrsirg97-rgb/rig/v3/core"
+	"github.com/mrsirg97-rgb/rig/v3/loop"
+	"github.com/mrsirg97-rgb/rig/v3/tool/file"
 )
 
 type timedTool struct {

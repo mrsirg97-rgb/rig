@@ -16,10 +16,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mrsirg97-rgb/rig/v2/store/state"
+	"github.com/mrsirg97-rgb/rig/v3/store/state"
 
-	"github.com/mrsirg97-rgb/rig/v2/store"
-	sched "github.com/mrsirg97-rgb/rig/v2/store/scheduler"
+	"github.com/mrsirg97-rgb/rig/v3/store"
+	sched "github.com/mrsirg97-rgb/rig/v3/store/scheduler"
 )
 
 func writeFakeCrontab(t *testing.T, binDir, spool string) {
@@ -115,7 +115,7 @@ func TestRunJobColdShellFiresAndRecords(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	scratch := t.TempDir()
+	scratch := shortTemp(t)
 	binDir := t.TempDir()
 	workDir := t.TempDir()
 	spool := filepath.Join(scratch, "spool")
@@ -206,7 +206,7 @@ func TestRowResolutionRefusalIsLoudBeforeStores(t *testing.T) {
 	cmd := exec.Command(bin, "-p", "hi", "-model", "nope")
 	cmd.Dir = t.TempDir()
 
-	cmd.Env = rigEnv(t, t.TempDir(), "")
+	cmd.Env = rigEnv(t, shortTemp(t), "")
 	out, runErr := cmd.CombinedOutput()
 	if runErr == nil {
 		t.Fatalf("an unknown model with no env must refuse: %q", out)
@@ -251,7 +251,7 @@ func TestADelegatedWorkerOffersOnlyItsAllowList(t *testing.T) {
 	for _, tc := range cases {
 		s := &bodySrv{}
 		srv := newBodySrv(t, s)
-		scratch := t.TempDir()
+		scratch := shortTemp(t)
 		cmd := exec.Command(bin, "-p", "hello", "-base-url", srv.URL+"/v1", "-allow", tc.allow)
 		cmd.Dir = t.TempDir()
 		cmd.Env = rigEnv(t, scratch, "", "RIG_SWAP_URL="+srv.URL, sched.DelegateEnv+"=1")
@@ -272,7 +272,7 @@ func TestAHeadlessRunWithoutTheMarkerKeepsTheMenu(t *testing.T) {
 	bin := buildBinAt(t, t.TempDir(), root)
 	s := &bodySrv{}
 	srv := newBodySrv(t, s)
-	scratch := t.TempDir()
+	scratch := shortTemp(t)
 	cmd := exec.Command(bin, "-p", "hello", "-base-url", srv.URL+"/v1", "-allow", "bash,read")
 	cmd.Dir = t.TempDir()
 	cmd.Env = rigEnv(t, scratch, "", "RIG_SWAP_URL="+srv.URL)
@@ -289,7 +289,7 @@ func TestOneShotCompactsAndRecoversMidTurn(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	scratch := t.TempDir()
+	scratch := shortTemp(t)
 	binDir := t.TempDir()
 	workDir := t.TempDir()
 	bin := filepath.Join(binDir, "rig")
@@ -385,7 +385,7 @@ func TestAWorkerWhoseStderrReaderClosesStillAnswers(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	scratch := t.TempDir()
+	scratch := shortTemp(t)
 	bin := filepath.Join(t.TempDir(), "rig")
 	if out, err := exec.Command("go", "build", "-o", bin, filepath.Join(root, "cmd", "rig")).CombinedOutput(); err != nil {
 		t.Fatalf("build: %v\n%s", err, out)
@@ -459,7 +459,7 @@ func TestWithADecisionUrlTheBinaryStillReachesTheModelServer(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	scratch := t.TempDir()
+	scratch := shortTemp(t)
 	bin := filepath.Join(t.TempDir(), "rig")
 	if out, err := exec.Command("go", "build", "-o", bin, filepath.Join(root, "cmd", "rig")).CombinedOutput(); err != nil {
 		t.Fatalf("build: %v\n%s", err, out)

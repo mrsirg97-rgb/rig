@@ -3,9 +3,9 @@ package web
 import (
 	"context"
 	"errors"
-	sched "github.com/mrsirg97-rgb/rig/v2/store/scheduler"
-	"github.com/mrsirg97-rgb/rig/v2/store/state"
-	todostore "github.com/mrsirg97-rgb/rig/v2/store/todo"
+	sched "github.com/mrsirg97-rgb/rig/v3/store/scheduler"
+	"github.com/mrsirg97-rgb/rig/v3/store/state"
+	todostore "github.com/mrsirg97-rgb/rig/v3/store/todo"
 	"net/http"
 	"os"
 	"path/filepath"

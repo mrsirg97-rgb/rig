@@ -2,7 +2,7 @@ package cli
 
 import (
 	"fmt"
-	"github.com/mrsirg97-rgb/rig/v2/core"
+	"github.com/mrsirg97-rgb/rig/v3/core"
 	"io"
 	"strconv"
 

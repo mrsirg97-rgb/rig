@@ -61,7 +61,7 @@ chmod +x rig
 **go install** (the toolchain line pulls the newest matching patch):
 
 ```sh
-go install github.com/mrsirg97-rgb/rig/v2/cmd/rig@latest
+go install github.com/mrsirg97-rgb/rig/v3/cmd/rig@latest
 ```
 
 **`rig -update`** fetches, verifies, and atomically installs the latest

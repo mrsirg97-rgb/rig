@@ -5,8 +5,8 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/mrsirg97-rgb/rig/v2/decision"
-	"github.com/mrsirg97-rgb/rig/v2/middleware/perm"
+	"github.com/mrsirg97-rgb/rig/v3/decision"
+	"github.com/mrsirg97-rgb/rig/v3/middleware/perm"
 )
 
 type capture struct {

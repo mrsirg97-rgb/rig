@@ -4,9 +4,9 @@ import (
 	"context"
 	"encoding/json"
 
-	"github.com/mrsirg97-rgb/rig/v2/store"
-	todostore "github.com/mrsirg97-rgb/rig/v2/store/todo"
-	"github.com/mrsirg97-rgb/rig/v2/tool"
+	"github.com/mrsirg97-rgb/rig/v3/store"
+	todostore "github.com/mrsirg97-rgb/rig/v3/store/todo"
+	"github.com/mrsirg97-rgb/rig/v3/tool"
 )
 
 type Mode bool

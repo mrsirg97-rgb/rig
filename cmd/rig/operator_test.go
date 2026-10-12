@@ -8,12 +8,12 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/mrsirg97-rgb/rig/v2/core"
-	"github.com/mrsirg97-rgb/rig/v2/frontend/oneshot"
-	"github.com/mrsirg97-rgb/rig/v2/store"
-	sched "github.com/mrsirg97-rgb/rig/v2/store/scheduler"
-	todostore "github.com/mrsirg97-rgb/rig/v2/store/todo"
-	todoapi "github.com/mrsirg97-rgb/rig/v2/tool/todo"
+	"github.com/mrsirg97-rgb/rig/v3/core"
+	"github.com/mrsirg97-rgb/rig/v3/frontend/oneshot"
+	"github.com/mrsirg97-rgb/rig/v3/store"
+	sched "github.com/mrsirg97-rgb/rig/v3/store/scheduler"
+	todostore "github.com/mrsirg97-rgb/rig/v3/store/todo"
+	todoapi "github.com/mrsirg97-rgb/rig/v3/tool/todo"
 )
 
 func todoStoreFor(t *testing.T) store.DB {

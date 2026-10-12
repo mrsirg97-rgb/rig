@@ -4,10 +4,10 @@ import (
 	"context"
 	"errors"
 
-	"github.com/mrsirg97-rgb/rig/v2/core"
-	"github.com/mrsirg97-rgb/rig/v2/frontend/tui"
-	"github.com/mrsirg97-rgb/rig/v2/frontend/web"
-	"github.com/mrsirg97-rgb/rig/v2/store"
+	"github.com/mrsirg97-rgb/rig/v3/core"
+	"github.com/mrsirg97-rgb/rig/v3/frontend/tui"
+	"github.com/mrsirg97-rgb/rig/v3/frontend/web"
+	"github.com/mrsirg97-rgb/rig/v3/store"
 )
 
 func tuiStatusIn(r *root, db store.DB) func(context.Context) tui.StatusIn {

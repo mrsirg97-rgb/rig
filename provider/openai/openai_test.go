@@ -11,8 +11,8 @@ import (
 	"time"
 
 	"github.com/mrsirg97-rgb/evt"
-	"github.com/mrsirg97-rgb/rig/v2/core"
-	"github.com/mrsirg97-rgb/rig/v2/provider/openai"
+	"github.com/mrsirg97-rgb/rig/v3/core"
+	"github.com/mrsirg97-rgb/rig/v3/provider/openai"
 )
 
 func drain(t *testing.T, ctx context.Context, p core.Provider, req core.Request) ([]evt.Signal, error) {

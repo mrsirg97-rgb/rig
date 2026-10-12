@@ -1,8 +1,8 @@
 package openai
 
 import (
-	"github.com/mrsirg97-rgb/rig/v2/core"
-	"github.com/mrsirg97-rgb/rig/v2/imagemarker"
+	"github.com/mrsirg97-rgb/rig/v3/core"
+	"github.com/mrsirg97-rgb/rig/v3/imagemarker"
 )
 
 func wireMessages(msgs []core.Message) []wireMessage {

@@ -37,6 +37,13 @@ type Model struct {
 	CacheControl bool
 	Retries      int
 
+	Command   string
+	Env       []string
+	Port      int
+	Aliases   []string
+	StopGrace int
+	Places    int
+
 	ThinkingBudget  int
 	InputPrice      float64
 	OutputPrice     float64
@@ -100,6 +107,23 @@ func (m Model) Check() error {
 	}
 	if m.CacheControl && m.Provider != "openrouter" && m.Provider != "anthropic" {
 		return fmt.Errorf("models: %s: cacheControl needs the openrouter or anthropic provider (provider: %q)", m.ID, m.Provider)
+	}
+	if m.Port < 0 {
+		return fmt.Errorf("models: %s: port %d must be >= 0", m.ID, m.Port)
+	}
+	if m.Port == 0 && (m.Command != "" || len(m.Env) > 0 || m.StopGrace > 0 || m.Places > 0) {
+		return fmt.Errorf("models: %s: a child row needs a port", m.ID)
+	}
+	if m.Port > 0 {
+		if m.Command == "" {
+			return fmt.Errorf("models: %s: a child row needs a command (the child's command line, ${PORT} substituted)", m.ID)
+		}
+		if m.Places <= 0 {
+			return fmt.Errorf("models: %s: places %d must be > 0 (how many the child serves at once)", m.ID, m.Places)
+		}
+	}
+	if m.StopGrace < 0 {
+		return fmt.Errorf("models: %s: stopGrace %d must be >= 0", m.ID, m.StopGrace)
 	}
 	if m.Provider == "anthropic" && m.Reasoning != "" {
 		return fmt.Errorf("models: %s: reasoning is openai-wire naming (provider: %q; the thinking blocks carry their own)", m.ID, m.Provider)

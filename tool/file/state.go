@@ -7,7 +7,7 @@ import (
 	"os"
 	"sync"
 
-	"github.com/mrsirg97-rgb/rig/v2/core"
+	"github.com/mrsirg97-rgb/rig/v3/core"
 )
 
 var filesMu sync.Mutex

@@ -4,9 +4,9 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"github.com/mrsirg97-rgb/rig/v2/store"
-	remdom "github.com/mrsirg97-rgb/rig/v2/store/rem/domain"
-	"github.com/mrsirg97-rgb/rig/v2/store/sqlx"
+	"github.com/mrsirg97-rgb/rig/v3/store"
+	remdom "github.com/mrsirg97-rgb/rig/v3/store/rem/domain"
+	"github.com/mrsirg97-rgb/rig/v3/store/sqlx"
 	"strings"
 	"time"
 )

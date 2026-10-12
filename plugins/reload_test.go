@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	pythontool "github.com/mrsirg97-rgb/rig/v2/tool/python"
+	pythontool "github.com/mrsirg97-rgb/rig/v3/tool/python"
 )
 
 func TestEcosystemReloadRediscoversAndHandsOff(t *testing.T) {

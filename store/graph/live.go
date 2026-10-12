@@ -10,7 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/mrsirg97-rgb/rig/v2/store"
+	"github.com/mrsirg97-rgb/rig/v3/store"
 )
 
 func (q *Queue) refresh(ctx context.Context, db store.DB, root, rel string) (bool, error) {

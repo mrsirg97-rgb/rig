@@ -1,8 +1,8 @@
 package web
 
 import (
-	"github.com/mrsirg97-rgb/rig/v2/core"
-	todostore "github.com/mrsirg97-rgb/rig/v2/store/todo"
+	"github.com/mrsirg97-rgb/rig/v3/core"
+	todostore "github.com/mrsirg97-rgb/rig/v3/store/todo"
 )
 
 type sessionJSON struct {

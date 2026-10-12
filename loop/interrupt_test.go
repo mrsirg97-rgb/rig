@@ -7,9 +7,9 @@ import (
 	"testing"
 
 	"github.com/mrsirg97-rgb/evt"
-	rig "github.com/mrsirg97-rgb/rig/v2"
-	"github.com/mrsirg97-rgb/rig/v2/core"
-	"github.com/mrsirg97-rgb/rig/v2/loop"
+	rig "github.com/mrsirg97-rgb/rig/v3"
+	"github.com/mrsirg97-rgb/rig/v3/core"
+	"github.com/mrsirg97-rgb/rig/v3/loop"
 )
 
 type requestLog struct {
