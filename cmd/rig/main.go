@@ -66,18 +66,6 @@ func claimPriority(prompt string) int {
 	return machineroom.PriorityTurn
 }
 
-func modelPlaces(t models.Table) func(int64) int {
-	return func(key int64) int {
-		for _, id := range t.Known() {
-			if machineroom.KeyOf(id) == key {
-				m, _ := t.Get(id)
-				return m.Places
-			}
-		}
-		return 0
-	}
-}
-
 func main() {
 	if i := execDoor(os.Args, os.Getenv(sched.LandlockEnv)); i >= 0 {
 		if err := sched.ApplyLandlock(os.Getenv(sched.LandlockEnv)); err != nil {
@@ -286,7 +274,8 @@ func main() {
 
 	engine, room := newFleet()
 	voice := room.Add(rig.MemberDecision)
-	machine, err := machineroom.New(cfgDir, modelPlaces(cfg.Models), nil, func(n evt.Notice) {
+	kids := newChildren(cfgDir, cfg.Models)
+	machine, err := machineroom.New(cfgDir, kids.places, kids, func(n evt.Notice) {
 		broadcast.Say(voice, n.Source, n.Text, n.Level)
 	})
 	if err != nil {
@@ -842,7 +831,8 @@ func runJob(args []string) int {
 		engine, fleetroom := newFleet()
 		go engine.Start(context.Background())
 		defer engine.Stop()
-		machine, merr := machineroom.New(cfgDir, modelPlaces(cfg.Models), nil, nil)
+		kids := newChildren(cfgDir, cfg.Models)
+		machine, merr := machineroom.New(cfgDir, kids.places, kids, nil)
 		if merr != nil {
 			fmt.Fprintln(os.Stderr, "rig:", merr)
 		} else {

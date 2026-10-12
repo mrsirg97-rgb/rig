@@ -274,6 +274,8 @@ func (r *root) buildPair() (core.Provider, core.ContextPolicy) {
 		key:      machineroom.KeyOf(r.row.ID),
 		priority: r.priority,
 		talk:     machineroom.KeyOf(r.session.ID),
+		row:      r.row,
+		logs:     r.rigHome,
 	}
 	pol, err := compact.New(inner, r.rec, r.session, r.fullSystem, r.row)
 	if err != nil {
