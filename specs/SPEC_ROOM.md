@@ -269,12 +269,15 @@ floor, so nothing here is a magic number.
   children answer for the act's owner and leave the act to the others. The
   room's engine stays free while a child starts or stops: the start and the
   stop run on the children's own engine (the third consumer), because a
-  start waits the child's port for up to thirty seconds and a stop waits the
+  start waits the child's port for as long as the child lives and a stop waits the
   row's grace — a member that acknowledges nothing is exactly the disease
   this release removes, and the loop's engine must not inherit it.
 - **The others learn the outcome from the world, not from a message.** What
   is resident is state read from one place: the row's fixed port answering.
-  The owner writes the child's pid to `~/.rig/logs/<model id>.pid`, so any
+  The owner writes the child's pid and its start time to
+  `~/.rig/logs/<model id>.pid` at the spawn (a start that finds a living
+  child there waits on it and spawns nothing; a pid whose start time
+  differs is another process and names nobody), so any
   member's stop reaches the child through the pid file, and the child's
   output lands at `~/.rig/logs/<model id>.log` — a detached child needs
   somewhere durable to speak and the dashboard streams it. No timeout enters
@@ -287,6 +290,13 @@ floor, so nothing here is a magic number.
   it may start anything: a port that answers is a resident model, and the
   joiner starts nothing. No state file beside it: one path, or the two
   disagree.
+- **A claim that finds its row's port silent starts the child before it
+  sends.** It holds its place, publishes the start on its own key, and sends
+  once the port answers and the child's `/health` no longer says 503. When
+  another row's child is resident it publishes the swap on that row's key
+  instead: the swap waits for that row's holders, the resident child stops,
+  then the incoming one starts. One child at a time, the rule the router
+  had; a row that should share the machine with another is a later release.
 - **Stop sends SIGTERM and waits the model's grace.** Maya saves its
   conversation on SIGTERM and needs up to about 90 s; the row's stop grace
   carries that number, not a constant in code.
@@ -307,6 +317,9 @@ floor, so nothing here is a magic number.
 - **When the updater is the only member left and no model request is in
   flight**, every rig process is ended and the binary is renamed into place.
   It is lossy on running work and the operator's choice: no resume machinery.
+- **A member that left refuses, by name.** Its next request and its
+  dashboard reads return at once with the reason; nothing waits on a room it
+  is no longer in. (Ending the process is still the operator's restart.)
 - **The old binary is kept for rollback** when the new one does not start.
   An update run from inside a session detaches from it first.
 
@@ -442,7 +455,7 @@ with the branch gone.
 5. **The act's effect is the owner's, on the children's engine; the others
    read the world** — the alternative was every member running the effect
    (two children racing one pid file) or the room's engine waiting out a
-   thirty-second port probe (the draft's wedge). Residency has one shape:
+   port probe (the draft's wedge). Residency has one shape:
    the row's port.
 6. **The model logs land in `~/.rig/logs/<model id>.log`** — a detached
    child needs somewhere durable to speak; the dashboard streams the file.

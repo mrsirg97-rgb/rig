@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -29,7 +30,8 @@ type Member interface {
 	Id() int64
 	Seated() bool
 	Close()
-	Ask(f func())
+	Gone() <-chan struct{}
+	Ask(f func()) bool
 	Claim(key int64, priority int, talk int64, posted func(mint broadcast.Mint, admitted bool))
 	Release(claim broadcast.Mint, priority int)
 	Act(payload evt.Signal, key int64, priority int, posted func(admitted bool))
@@ -47,6 +49,7 @@ type member struct {
 	listener net.Listener
 	mu       sync.Mutex
 	trs      []broadcast.Transport
+	gone     <-chan struct{}
 	cancel   context.CancelFunc
 }
 
@@ -91,7 +94,7 @@ func New(home string, places func(int64) int, effects func(self int64) broadcast
 		extra = effects(id)
 	}
 	claim := broadcast.NewClaimant(engine, engine, id, broadcast.NewMinter(id, broadcast.MachineClock()), broadcast.NewFold(places, extra), PriorityFleet, told)
-	m := &member{id: id, engine: engine, claim: claim, home: home, listener: listener, cancel: cancel}
+	m := &member{id: id, engine: engine, claim: claim, home: home, listener: listener, gone: ctx.Done(), cancel: cancel}
 	go engine.Start(ctx)
 	go func() {
 		for {
@@ -150,16 +153,22 @@ func (m *member) track(tr broadcast.Transport) {
 
 func (m *member) Id() int64 { return m.id }
 
-func (m *member) Ask(f func()) {
+func (m *member) Gone() <-chan struct{} { return m.gone }
+
+func (m *member) Ask(f func()) bool {
 	done := make(chan struct{})
 	m.engine.Add(evt.Func(func(context.Context) { f(); close(done) }), PriorityFleet)
-	<-done
+	select {
+	case <-done:
+		return true
+	case <-m.gone:
+		return false
+	}
 }
 
 func (m *member) Seated() bool {
 	seated := false
-	m.Ask(func() { seated = m.claim.Seated() })
-	return seated
+	return m.Ask(func() { seated = m.claim.Seated() }) && seated
 }
 
 func (m *member) Claim(key int64, priority int, talk int64, posted func(mint broadcast.Mint, admitted bool)) {
@@ -174,19 +183,25 @@ func (m *member) Act(payload evt.Signal, key int64, priority int, posted func(ad
 
 func (m *member) Holders(key int64) []broadcast.Operation {
 	var out []broadcast.Operation
-	m.Ask(func() { out = m.claim.Holders(key) })
+	if !m.Ask(func() { out = m.claim.Holders(key) }) {
+		return nil
+	}
 	return out
 }
 
 func (m *member) Waiting(key int64) []broadcast.Operation {
 	var out []broadcast.Operation
-	m.Ask(func() { out = m.claim.Waiting(key) })
+	if !m.Ask(func() { out = m.claim.Waiting(key) }) {
+		return nil
+	}
 	return out
 }
 
 func (m *member) Live() []int64 {
 	var out []int64
-	m.Ask(func() { out = m.claim.Live() })
+	if !m.Ask(func() { out = m.claim.Live() }) {
+		return nil
+	}
 	return out
 }
 
@@ -240,6 +255,16 @@ func startTime() (int64, error) {
 		return 0, fmt.Errorf("room: /proc/self/stat starttime: %w", err)
 	}
 	return start, nil
+}
+
+func Loading(port int) bool {
+	client := http.Client{Timeout: time.Second}
+	resp, err := client.Get("http://" + net.JoinHostPort("127.0.0.1", strconv.Itoa(port)) + "/health")
+	if err != nil {
+		return false
+	}
+	resp.Body.Close()
+	return resp.StatusCode == http.StatusServiceUnavailable
 }
 
 func Answers(port int) bool {

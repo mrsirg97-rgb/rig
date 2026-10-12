@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -165,4 +166,13 @@ func await(t *testing.T, what string, within time.Duration, f func() bool) {
 		time.Sleep(25 * time.Millisecond)
 	}
 	t.Fatalf("%s never happened within %s", what, within)
+}
+
+func TestTheWireFrontTakesALongContextBody(t *testing.T) {
+	srv, _, _, _ := wireServer(t)
+	big := `{"model":"fake-alias","messages":[{"role":"user","content":"` + strings.Repeat("a", 2<<20) + `"}]}`
+	rec := doReq(t, srv.Handler(), "POST", "/v1/chat/completions", strings.NewReader(big), nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("a 2 MiB request must pass through whole: got %d %s", rec.Code, rec.Body.String())
+	}
 }

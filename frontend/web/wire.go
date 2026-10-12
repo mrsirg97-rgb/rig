@@ -3,6 +3,8 @@ package web
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"strconv"
@@ -13,7 +15,7 @@ import (
 	"github.com/mrsirg97-rgb/rig/v3/room"
 )
 
-const maxWireBody = 1 << 20
+const maxWireBody = 256 << 20
 
 func wirePath(path string) bool {
 	return path == "/v1/models" || path == "/v1/chat/completions" || path == "/running" || path == "/unload"
@@ -68,8 +70,13 @@ func (s *Server) handleWireChat(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusServiceUnavailable, "the wire front needs a member of the room")
 		return
 	}
-	body, err := io.ReadAll(io.LimitReader(r.Body, maxWireBody))
+	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, maxWireBody))
 	if err != nil {
+		var tooLarge *http.MaxBytesError
+		if errors.As(err, &tooLarge) {
+			writeErr(w, http.StatusRequestEntityTooLarge, fmt.Sprintf("the request body is over %d bytes", maxWireBody))
+			return
+		}
 		writeErr(w, http.StatusBadRequest, err.Error())
 		return
 	}
@@ -93,14 +100,26 @@ func (s *Server) handleWireChat(w http.ResponseWriter, r *http.Request) {
 	})
 	select {
 	case <-claimed:
+	case <-s.machine.Gone():
+		writeErr(w, http.StatusServiceUnavailable, "this instance left the room for an update: restart it")
+		return
 	case <-r.Context().Done():
 		go func() {
-			<-claimed
-			s.machine.Release(mint, room.PriorityOutside)
+			select {
+			case <-claimed:
+				s.machine.Release(mint, room.PriorityOutside)
+			case <-s.machine.Gone():
+			}
 		}()
 		return
 	}
 	defer s.machine.Release(mint, room.PriorityOutside)
+	if s.ready != nil {
+		if err := s.ready(r.Context(), row); err != nil {
+			writeErr(w, http.StatusBadGateway, err.Error())
+			return
+		}
+	}
 	up, err := http.NewRequestWithContext(r.Context(), http.MethodPost, s.endpoint(row), bytes.NewReader(body))
 	if err != nil {
 		writeErr(w, http.StatusBadGateway, err.Error())
@@ -122,7 +141,22 @@ func (s *Server) handleWireChat(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	w.WriteHeader(resp.StatusCode)
-	_, _ = io.Copy(w, resp.Body)
+	flusher, _ := w.(http.Flusher)
+	buf := make([]byte, 32<<10)
+	for {
+		n, rerr := resp.Body.Read(buf)
+		if n > 0 {
+			if _, werr := w.Write(buf[:n]); werr != nil {
+				return
+			}
+			if flusher != nil {
+				flusher.Flush()
+			}
+		}
+		if rerr != nil {
+			return
+		}
+	}
 }
 
 func (s *Server) endpoint(m models.Model) string {

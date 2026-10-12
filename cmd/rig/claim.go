@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"path/filepath"
 
 	"github.com/mrsirg97-rgb/evt"
 	"github.com/mrsirg97-rgb/evt/broadcast"
@@ -14,11 +13,11 @@ import (
 type claiming struct {
 	inner    core.Provider
 	machine  room.Member
+	kids     *children
 	key      int64
 	priority int
 	talk     int64
 	row      models.Model
-	logs     string
 }
 
 func (c claiming) Stream(ctx context.Context, req core.Request) (<-chan evt.Signal, error) {
@@ -33,23 +32,27 @@ func (c claiming) Stream(ctx context.Context, req core.Request) (<-chan evt.Sign
 	})
 	select {
 	case <-claimed:
+	case <-c.machine.Gone():
+		return nil, errLeft
 	case <-ctx.Done():
 		go func() {
-			<-claimed
-			c.machine.Release(mint, c.priority)
+			select {
+			case <-claimed:
+				c.machine.Release(mint, c.priority)
+			case <-c.machine.Gone():
+			}
 		}()
 		return nil, ctx.Err()
+	}
+	if c.kids != nil {
+		if err := c.kids.ready(ctx, c.machine, c.row); err != nil {
+			c.machine.Release(mint, c.priority)
+			return nil, err
+		}
 	}
 	inner, err := c.inner.Stream(ctx, req)
 	if err != nil {
 		c.machine.Release(mint, c.priority)
-		c.machine.Act(room.StartChild{
-			Model:   c.row.ID,
-			Port:    c.row.Port,
-			Command: c.row.Command,
-			Env:     c.row.Env,
-			Log:     filepath.Join(c.logs, c.row.ID+".log"),
-		}, c.key, room.PriorityChild, func(bool) {})
 		return nil, err
 	}
 	out := make(chan evt.Signal, 8)

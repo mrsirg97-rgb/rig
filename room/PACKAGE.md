@@ -10,9 +10,11 @@ the five signals the instances exchange beside the protocol's own.
 
 ## What it includes
 
-- `Member`: `Id`, `Seated`, `Close`, `Claim`, `Release`, `Act`,
-  `Holders`, `Waiting`, `Live`, `Say` — the ten verbs the instance and
-  the dashboard use. A claim is final by acknowledgement; a member is
+- `Member`: `Id`, `Seated`, `Close`, `Gone`, `Ask`, `Claim`, `Release`,
+  `Act`, `Holders`, `Waiting`, `Live`, `Say` — the verbs the instance and
+  the dashboard use. `Gone` closes when the member has left; `Ask` and
+  the reads return at once then (false, or nothing) instead of waiting
+  on an engine that stopped. A claim is final by acknowledgement; a member is
   gone only when its connection ends; nothing in the room polls.
 - `New(home, places, effects, told)`: joins the room. The socket binds
   before the directory is read, so two instances starting together end
@@ -25,6 +27,8 @@ the five signals the instances exchange beside the protocol's own.
   name.
 - `Answers(port int)`: the row's port probed once, at join when the room
   is empty — what is resident is read from the world, never replayed.
+- `Loading(port int)`: whether the child's `/health` says 503 — the port
+  answers before the model does.
 - The signals: `StartChild`, `StopChild`, `SwapChild` (`Swap() bool`),
   `TableChange` (one row's raw JSON) and `Update`, with `Codec` and
   `Registry` declaring rig's five kinds beside `broadcast.Protocol()`'s.

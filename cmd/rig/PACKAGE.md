@@ -45,9 +45,13 @@ sees core and models and nothing else.
   (new, a resume, a model switch) is visible to every closure with no
   re-wiring.
 - **children** (`children.go`): the child operations' effects, the act's
-  owner's on its own engine: a start waits the row's port, lands the log
-  at `~/.rig/logs/<model id>.log` and the pid file where the note names
-  them, so two starts converge on one child; a stop signals the child's
+  owner's on its own engine: a start waits the row's port for as long as
+  the child lives, lands the log at `~/.rig/logs/<model id>.log` and
+  writes the pid file at the spawn with the process's start time, so two
+  starts converge on one child and a stale file names nobody; `ready`
+  is the path a claim takes when its row's port is silent (the start,
+  or the swap on the resident row's key, then the wait while `/health`
+  says 503); a stop signals the child's
   session, not the shell that forked it, and waits the row's grace
   before the kill; a swap stops the outgoing child first. The room's
   engine stays free while a child starts or stops, and the others learn
@@ -57,9 +61,10 @@ sees core and models and nothing else.
   90, a delegate's return 70, a fleet worker 30, a scheduled job 20, an
   outside client 0), the turn waits the admission, and the stream's
   completion is the release. Within one priority the claim that
-  continues the session already served goes first; a request that finds
-  the child dead re-publishes the start so the next claim reconciles
-  against the world; `rig -update` publishes the update on the table's
+  continues the session already served goes first; a claim whose row's
+  port is silent starts the child (or swaps the resident one out) while
+  it holds its place, and sends once the child answers; a member that
+  left for an update refuses by name; `rig -update` publishes the update on the table's
   key and drains to its turn boundaries before the binary swaps.
 - **The decision wiring** (`decision.go`, the `decisionUrl` block in
   main, `root.frontend`): the decision store opens with the others; the

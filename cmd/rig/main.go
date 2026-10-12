@@ -279,7 +279,10 @@ func main() {
 	engine, fleetroom := newFleet()
 	voice := fleetroom.Add(rig.MemberDecision)
 	var machine machineroom.Member
-	kids := newChildren(cfgDir, cfg.Models, engine, func() { machine.Close() })
+	kids := newChildren(cfgDir, cfg.Models, engine, func() {
+		broadcast.Say(voice, "room", "rig was updated: this instance left the room, restart it", evt.LevelError)
+		machine.Close()
+	})
 	machine, err = machineroom.New(cfgDir, kids.places, kids.effects, func(n evt.Notice) {
 		broadcast.Say(voice, n.Source, n.Text, n.Level)
 	})
@@ -540,6 +543,7 @@ func main() {
 		engine:      engine,
 		room:        fleetroom,
 		machine:     machine,
+		kids:        kids,
 		priority:    claimPriority(*prompt, serveAddr != ""),
 	}
 
@@ -608,6 +612,7 @@ func main() {
 		srv, werr := web.New(web.Options{
 			Home: cfgDir, CWD: cwd, Models: cfg.Models,
 			Machine: machine, Version: Version,
+			Ready:   func(ctx context.Context, m models.Model) error { return kids.ready(ctx, machine, m) },
 			Crontab: sched.RealCrontab(""), RunnerCmd: self + " run-job", Natives: nativeToolNames,
 			Commands: command.All(), Env: env, Status: webStatus(r, sdb),
 			StopWorkers: stopWorkers,

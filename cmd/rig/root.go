@@ -41,6 +41,7 @@ type root struct {
 	baseURL   string
 	system    string
 	machine   machineroom.Member
+	kids      *children
 	priority  int
 	agents    string
 	project   string
@@ -271,11 +272,11 @@ func (r *root) buildPair() (core.Provider, core.ContextPolicy) {
 	inner := claiming{
 		inner:    r.buildProvider(),
 		machine:  r.machine,
+		kids:     r.kids,
 		key:      machineroom.KeyOf(r.row.ID),
 		priority: r.priority,
 		talk:     machineroom.KeyOf(r.session.ID),
 		row:      r.row,
-		logs:     r.rigHome,
 	}
 	pol, err := compact.New(inner, r.rec, r.session, r.fullSystem, r.row)
 	if err != nil {

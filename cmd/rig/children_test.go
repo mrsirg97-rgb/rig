@@ -237,7 +237,7 @@ func TestTwoInstancesRaceToStartAModelAndOneChildRuns(t *testing.T) {
 	b.Act(act, machineroom.KeyOf("fake"), machineroom.PriorityChild, func(bool) {})
 	await(t, "the child's port to answer", 15*time.Second, func() bool { return machineroom.Answers(port) })
 	await(t, "the pid file to name the child that holds the port", 10*time.Second, func() bool {
-		held := ka.heldPID("fake")
+		held := ka.held("fake")
 		return held != 0 && alive(held)
 	})
 	ka.stop("fake", 2)
@@ -272,13 +272,19 @@ func TestASwapWaitsForTheHoldsAndThenSwaps(t *testing.T) {
 	case <-time.After(10 * time.Second):
 		t.Fatal("the claim must hold the model's key")
 	}
+	pinned := make(chan struct{})
 	a.Act(machineroom.SwapChild{
 		Model: "new", Out: "old", Port: newPort,
 		Command: "python3 -m http.server ${PORT}", Grace: 1,
-	}, key, machineroom.PriorityChild, func(bool) {})
-	await(t, "the swap to wait behind the hold", 2*time.Second, func() bool {
-		return len(b.Waiting(key)) == 1 && machineroom.Answers(oldPort)
-	})
+	}, key, machineroom.PriorityChild, func(bool) { close(pinned) })
+	select {
+	case <-pinned:
+		t.Fatal("the swap must wait behind the hold")
+	case <-time.After(500 * time.Millisecond):
+	}
+	if !machineroom.Answers(oldPort) || machineroom.Answers(newPort) {
+		t.Fatal("nothing may stop or start while the hold stands")
+	}
 	a.Release(claim, machineroom.PriorityFleet)
 	await(t, "the new child to answer", 15*time.Second, func() bool { return machineroom.Answers(newPort) })
 	await(t, "the outgoing child to be stopped", 10*time.Second, func() bool { return !machineroom.Answers(oldPort) })

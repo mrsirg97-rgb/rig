@@ -38,75 +38,54 @@ func (d *decorator) Stream(ctx context.Context, req core.Request) (<-chan evt.Si
 func (d *decorator) relay(ctx context.Context, out chan<- evt.Signal, req core.Request, ch <-chan evt.Signal) {
 	attempt := 1
 	for {
-		usage, model, reasoning, empty := d.relayOnce(ctx, out, ch)
-		if ctx.Err() != nil {
-			return
-		}
+		usage, model, reasoning, empty := d.relayOnce(out, ch)
 		if !empty {
 			return
 		}
+		if ctx.Err() != nil {
+			out <- core.Done{Usage: usage, Model: model}
+			return
+		}
 		if attempt > maxResamples {
-			if !emit(ctx, out, core.Fault{Err: errors.New(faultMessage(reasoning))}) {
-				return
-			}
+			out <- core.Fault{Err: errors.New(faultMessage(reasoning))}
 			return
 		}
-		if !emit(ctx, out, core.EmptyTurn{Resample: attempt, Limit: maxResamples, Usage: usage, Model: model}) {
-			return
-		}
+		out <- core.EmptyTurn{Resample: attempt, Limit: maxResamples, Usage: usage, Model: model}
 		attempt++
 		ch2, err := d.inner.Stream(ctx, req)
 		if err != nil {
 			if ctx.Err() != nil {
+				out <- core.Done{Usage: usage, Model: model}
 				return
 			}
-			if !emit(ctx, out, core.Fault{Err: err}) {
-				return
-			}
+			out <- core.Fault{Err: err}
 			return
 		}
 		ch = ch2
 	}
 }
 
-func (d *decorator) relayOnce(ctx context.Context, out chan<- evt.Signal, ch <-chan evt.Signal) (core.Usage, string, string, bool) {
+func (d *decorator) relayOnce(out chan<- evt.Signal, ch <-chan evt.Signal) (core.Usage, string, string, bool) {
 	var (
 		content strings.Builder
 		reason  strings.Builder
 		calls   int
 	)
-	for {
-		select {
-		case ev, ok := <-ch:
-			if !ok {
-				return core.Usage{}, "", "", false
-			}
-			switch e := ev.(type) {
-			case core.TextDelta:
-				content.WriteString(e.Text)
-			case core.ReasoningDelta:
-				reason.WriteString(e.Text)
-			case core.ToolCallEvent:
-				calls++
-			}
-			switch e := ev.(type) {
-			case core.Done:
-				if e.StopReason == "stop" && strings.TrimSpace(content.String()) == "" && calls == 0 {
-					return e.Usage, e.Model, reason.String(), true
-				}
-				if !emit(ctx, out, ev) {
-					return core.Usage{}, "", "", false
-				}
-				return core.Usage{}, "", "", false
-			default:
-				if !emit(ctx, out, ev) {
-					return core.Usage{}, "", "", false
-				}
-			}
-		case <-ctx.Done():
-			return core.Usage{}, "", "", false
+	for ev := range ch {
+		switch e := ev.(type) {
+		case core.TextDelta:
+			content.WriteString(e.Text)
+		case core.ReasoningDelta:
+			reason.WriteString(e.Text)
+		case core.ToolCallEvent:
+			calls++
 		}
+		if e, ok := ev.(core.Done); ok && e.StopReason == "stop" && strings.TrimSpace(content.String()) == "" && calls == 0 {
+			return e.Usage, e.Model, reason.String(), true
+		}
+		out <- ev
 	}
+	return core.Usage{}, "", "", false
 }
 
 func faultMessage(reasoning string) string {
@@ -117,13 +96,4 @@ func faultMessage(reasoning string) string {
 		}
 	}
 	return msg
-}
-
-func emit(ctx context.Context, out chan<- evt.Signal, ev evt.Signal) bool {
-	select {
-	case out <- ev:
-		return true
-	case <-ctx.Done():
-		return false
-	}
 }

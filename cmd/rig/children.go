@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -19,7 +20,6 @@ import (
 )
 
 const (
-	childProbeTries = 300
 	childProbePause = 100 * time.Millisecond
 	childStopPoll   = 10 * time.Millisecond
 )
@@ -82,6 +82,9 @@ func (c *children) Next(op broadcast.Operation) error {
 		}
 		c.engine.Add(evt.Func(func(context.Context) {
 			c.stopping(act.Out, act.Grace)
+			if act.Model == "" {
+				return
+			}
 			if !c.starting(act.Model, act.Port, act.Command, act.Env, act.Log) {
 				c.note(act.Model, fmt.Sprintf("the child's port %d never answered", act.Port))
 			}
@@ -135,14 +138,16 @@ func (c *children) resident(machine room.Member) []string {
 		port int
 	}
 	live := []child{}
-	machine.Ask(func() {
+	if !machine.Ask(func() {
 		for _, id := range c.rows.Known() {
 			m, _ := c.rows.Get(id)
 			if m.Port > 0 {
 				live = append(live, child{id, m.Port})
 			}
 		}
-	})
+	}) {
+		return nil
+	}
 	out := []string{}
 	for _, ch := range live {
 		if room.Answers(ch.port) {
@@ -152,6 +157,74 @@ func (c *children) resident(machine room.Member) []string {
 	return out
 }
 
+var errLeft = errors.New("rig: this instance left the room for an update: restart it")
+
+func (c *children) ready(ctx context.Context, machine room.Member, row models.Model) error {
+	if row.Port <= 0 {
+		return nil
+	}
+	if !room.Answers(row.Port) {
+		var out []models.Model
+		for _, id := range c.resident(machine) {
+			if id == row.ID {
+				continue
+			}
+			var other models.Model
+			if machine.Ask(func() { other, _ = c.rows.Get(id) }) {
+				out = append(out, other)
+			}
+		}
+		in := room.SwapChild{Model: row.ID, Port: row.Port, Command: row.Command, Env: row.Env}
+		for i, other := range out {
+			act := room.SwapChild{Out: other.ID, Grace: other.StopGrace}
+			if i == len(out)-1 {
+				act = in
+				act.Out, act.Grace = other.ID, other.StopGrace
+			}
+			if err := c.act(ctx, machine, act, room.KeyOf(other.ID)); err != nil {
+				return err
+			}
+		}
+		if len(out) == 0 {
+			start := room.StartChild{Model: row.ID, Port: row.Port, Command: row.Command, Env: row.Env}
+			if err := c.act(ctx, machine, start, room.KeyOf(row.ID)); err != nil {
+				return err
+			}
+		}
+		if !room.Answers(row.Port) {
+			return fmt.Errorf("rig: %s: the child did not start (its output is %s)", row.ID, filepath.Join(c.home, "logs", row.ID+".log"))
+		}
+	}
+	for room.Loading(row.Port) {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(childProbePause):
+		}
+	}
+	return nil
+}
+
+func (c *children) act(ctx context.Context, machine room.Member, act evt.Signal, key int64) error {
+	pinned := make(chan struct{})
+	machine.Act(act, key, room.PriorityChild, func(bool) { close(pinned) })
+	select {
+	case <-pinned:
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-machine.Gone():
+		return errLeft
+	}
+	done := make(chan struct{})
+	c.engine.Add(evt.Func(func(context.Context) { close(done) }), room.PriorityChild)
+	select {
+	case <-done:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
 func (c *children) start(model string, port int, command string, env []string, log string) bool {
 	done := make(chan bool, 1)
 	c.engine.Add(evt.Func(func(context.Context) { done <- c.starting(model, port, command, env, log) }), room.PriorityChild)
@@ -159,7 +232,10 @@ func (c *children) start(model string, port int, command string, env []string, l
 }
 
 func (c *children) starting(model string, port int, command string, env []string, log string) bool {
-	if port > 0 && room.Answers(port) {
+	if port <= 0 || command == "" {
+		return false
+	}
+	if room.Answers(port) {
 		return true
 	}
 	dir := filepath.Join(c.home, "logs")
@@ -169,75 +245,111 @@ func (c *children) starting(model string, port int, command string, env []string
 	if log == "" {
 		log = filepath.Join(dir, model+".log")
 	}
-	f, err := os.OpenFile(log, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
-	if err != nil {
-		return false
-	}
-	defer f.Close()
-	pidPath := filepath.Join(dir, model+".pid")
-	if pid := c.pidOf(model); pid > 0 {
-		if sys, err := os.FindProcess(pid); err == nil {
-			sys.Kill()
-			c.waitGone(pid, 5*time.Second)
+	pid, mine := c.held(model), false
+	if pid == 0 {
+		f, err := os.OpenFile(log, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
+		if err != nil {
+			return false
 		}
+		defer f.Close()
+		cmd := exec.Command("sh", "-c", strings.ReplaceAll(command, "${PORT}", strconv.Itoa(port)))
+		cmd.Stdout = f
+		cmd.Stderr = f
+		cmd.Env = append(os.Environ(), env...)
+		cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
+		if err := cmd.Start(); err != nil {
+			fmt.Fprintf(f, "rig: %s: start: %v\n", model, err)
+			return false
+		}
+		pid, mine = cmd.Process.Pid, true
+		c.owned[model] = pid
+		if !c.hold(model, pid) {
+			return false
+		}
+		go func() {
+			cmd.Wait()
+			c.engine.Add(evt.Func(func(context.Context) { c.childGone(model, pid) }), room.PriorityChild)
+		}()
 	}
-	cmd := exec.Command("sh", "-c", strings.ReplaceAll(command, "${PORT}", strconv.Itoa(port)))
-	cmd.Stdout = f
-	cmd.Stderr = f
-	cmd.Env = append(os.Environ(), env...)
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
-	if err := cmd.Start(); err != nil {
-		fmt.Fprintf(f, "rig: %s: start: %v\n", model, err)
-		return false
-	}
-	pid := cmd.Process.Pid
-	go func() {
-		cmd.Wait()
-		c.engine.Add(evt.Func(func(context.Context) { c.childGone(model, pid) }), room.PriorityChild)
-	}()
-	for i := 0; i < childProbeTries; i++ {
-		if room.Answers(port) {
-			if alive(pid) {
-				time.Sleep(childProbePause)
-				if !alive(pid) {
-					c.owned[model] = 0
-					return true
-				}
-				if held := c.heldPID(model); held == 0 || held == pid || !alive(held) {
-					if err := os.WriteFile(pidPath, []byte(strconv.Itoa(pid)), 0o644); err != nil {
-						return false
-					}
-				}
-				c.owned[model] = pid
-			} else {
-				c.owned[model] = 0
-			}
+	for alive(pid) {
+		if !room.Answers(port) {
+			time.Sleep(childProbePause)
+			continue
+		}
+		if !mine {
 			return true
 		}
-		time.Sleep(childProbePause)
+		for other := c.held(model); other != 0 && other != pid && alive(pid); other = c.held(model) {
+			time.Sleep(childProbePause)
+		}
+		if alive(pid) && !c.hold(model, pid) {
+			return false
+		}
+		return true
 	}
-	return false
+	if mine {
+		c.owned[model] = 0
+	}
+	return room.Answers(port)
 }
 
 func (c *children) childGone(model string, pid int) {
 	if c.owned[model] == pid {
 		c.owned[model] = 0
 	}
-	if c.heldPID(model) == pid {
-		os.Remove(filepath.Join(c.home, "logs", model+".pid"))
-	}
 }
 
-func (c *children) heldPID(model string) int {
+func (c *children) hold(model string, pid int) bool {
+	line := strconv.Itoa(pid) + " " + strconv.FormatInt(startOf(pid), 10)
+	return os.WriteFile(filepath.Join(c.home, "logs", model+".pid"), []byte(line), 0o644) == nil
+}
+
+func (c *children) named(model string) (int, int64) {
 	b, err := os.ReadFile(filepath.Join(c.home, "logs", model+".pid"))
+	if err != nil {
+		return 0, 0
+	}
+	fields := strings.Fields(string(b))
+	if len(fields) != 2 {
+		return 0, 0
+	}
+	pid, err := strconv.Atoi(fields[0])
+	if err != nil || pid <= 0 {
+		return 0, 0
+	}
+	start, err := strconv.ParseInt(fields[1], 10, 64)
+	if err != nil {
+		return 0, 0
+	}
+	return pid, start
+}
+
+func (c *children) held(model string) int {
+	pid, start := c.named(model)
+	if pid == 0 || !alive(pid) || startOf(pid) != start {
+		return 0
+	}
+	return pid
+}
+
+func startOf(pid int) int64 {
+	stat, err := os.ReadFile("/proc/" + strconv.Itoa(pid) + "/stat")
 	if err != nil {
 		return 0
 	}
-	held, err := strconv.Atoi(strings.TrimSpace(string(b)))
-	if err != nil || held <= 0 {
+	end := strings.LastIndex(string(stat), ") ")
+	if end < 0 {
 		return 0
 	}
-	return held
+	fields := strings.Fields(string(stat[end+2:]))
+	if len(fields) < 20 {
+		return 0
+	}
+	start, err := strconv.ParseInt(fields[19], 10, 64)
+	if err != nil {
+		return 0
+	}
+	return start
 }
 
 func (c *children) note(model, text string) {
@@ -275,16 +387,13 @@ func (c *children) stopping(model string, grace int) {
 		c.waitGone(pid, deadline)
 	}
 	c.owned[model] = 0
-	if err := os.Remove(filepath.Join(c.home, "logs", model+".pid")); err != nil && !os.IsNotExist(err) {
-		return
-	}
 }
 
 func (c *children) pidOf(model string) int {
-	if pid := c.owned[model]; pid > 0 {
+	if pid := c.owned[model]; pid > 0 && alive(pid) {
 		return pid
 	}
-	return c.heldPID(model)
+	return c.held(model)
 }
 
 func (c *children) waitGone(pid int, within time.Duration) bool {

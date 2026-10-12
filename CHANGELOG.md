@@ -22,15 +22,26 @@ ${PORT} substituted, environment, port, aliases, stop grace, places) and
 start, stop and swap are guarded operations on the model's key. The
 child runs detached with the log at ~/.rig/logs/<model id>.log, the port
 answers before the operation settles, a stop sends SIGTERM to the
-child's session and waits the row's grace before the kill, and a request
-that finds the child dead re-publishes the start so the next claim
-reconciles against the world. The table change merges into every
-member's view; the places function reads it.
+child's session and waits the row's grace before the kill. A claim that
+finds its row's port silent holds its place, publishes the start and
+sends the request once the port answers and the child's /health no
+longer says 503; when another row's child is resident it publishes the
+swap on that row's key instead, so the resident one stops at its
+holders' end and before the incoming one starts — one child at a time,
+the rule the router had. A start waits for the port as long as the child
+lives: the pid file is written at the spawn with the process's start
+time, a second start finds the loading child and waits on it, and a pid
+whose start time differs names nobody, so a stale file never reaches
+another process. The table change merges into every member's view; the
+places function reads it.
 
 Every stream ends in a terminal event: a cancel yields Done with what
 was produced and no call that had not finished streaming, the loop
 appends on Done only, and the 2.17.1 branch leaves loop/loop.go, its
-line leaves specs/FREEZE.txt, the recorder's special case goes.
+line leaves specs/FREEZE.txt, the recorder's special case goes. The empty
+and compact decorators forward every event to the stream's close, so the
+provider's Done on a cancel reaches the loop and the interrupted reply
+lands.
 
 The dashboard's three pages: the room page shows the members and each
 model's residency (who holds it, who waits, whether the port answers,
@@ -39,7 +50,11 @@ the update page shows the build's version and runs rig -update, which
 drains the room first: the update's guarded operation rides the table's
 key at the operator's priority, every member stops claiming at its turn
 boundary and leaves, the coordinator waits the live set empty, and only
-then does the binary swap.
+then does the binary swap. A member that left says so and refuses its
+next request by name instead of waiting on a room it is no longer in.
+The wire front starts a cold child the way a session does, takes a body
+up to 256 MiB (over it is a 413, never a truncated read) and flushes
+each chunk as it arrives.
 
 Migration: rig's module is `github.com/mrsirg97-rgb/rig/v3`. The models
 file gains the child half for the models the machine serves — carry the

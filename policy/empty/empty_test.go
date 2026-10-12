@@ -374,3 +374,35 @@ func TestEmptyTurnCarriesTheSwallowedModel(t *testing.T) {
 		t.Fatalf("the empty turn must be noticed at all: %v", fe.snapshot())
 	}
 }
+
+type interrupted struct{}
+
+func (interrupted) Stream(ctx context.Context, _ core.Request) (<-chan evt.Signal, error) {
+	ch := make(chan evt.Signal)
+	go func() {
+		defer close(ch)
+		ch <- core.TextDelta{Text: "partial"}
+		<-ctx.Done()
+		ch <- core.Done{}
+	}()
+	return ch, nil
+}
+
+func TestAnInterruptedStreamStillEndsInItsTerminalEvent(t *testing.T) {
+	for i := 0; i < 50; i++ {
+		ctx, cancel := context.WithCancel(context.Background())
+		ch, err := empty.Decorator(interrupted{}).Stream(ctx, core.Request{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		<-ch
+		cancel()
+		done := false
+		for ev := range ch {
+			_, done = ev.(core.Done)
+		}
+		if !done {
+			t.Fatal("the provider's Done on a cancel must reach the loop: the interrupted reply lands on it")
+		}
+	}
+}

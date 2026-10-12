@@ -40,6 +40,7 @@ type Options struct {
 
 	Machine room.Member
 	Version string
+	Ready   func(ctx context.Context, m models.Model) error
 
 	StopWorkers func()
 }
@@ -62,6 +63,7 @@ type Server struct {
 	status  func(context.Context) Status
 	machine room.Member
 	version string
+	ready   func(ctx context.Context, m models.Model) error
 }
 
 func New(opts Options) (*Server, error) {
@@ -102,6 +104,7 @@ func New(opts Options) (*Server, error) {
 		chat:      newChat(opts.Commands, opts.Env, opts.StopWorkers),
 		status:    opts.Status,
 		machine:   opts.Machine,
+		ready:     opts.Ready,
 		version:   opts.Version,
 	}, nil
 }
