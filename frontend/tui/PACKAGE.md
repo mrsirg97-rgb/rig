@@ -173,6 +173,15 @@ width); no core or loop line (decision 10).
 
 ## Gotchas
 
+- **Text from outside is printed, never obeyed** (`printable.go`, 2.18.3):
+  a tool's result, the strings of its call, the model's text, a worker's
+  task and tool, a notice — each passes `printable` before it is laid
+  out, which drops every escape sequence and control character except
+  the newline and the tab. An editor that starts inside a bash call
+  writes the alternate screen and a scroll region to its pipe; printed
+  raw, the scroll region outlives the block and every later redraw
+  overwrites the transcript. A new door for outside text takes the same
+  call. The model still reads the bytes the tool produced.
 - The commit points are the events, exactly: unknown events are ignored,
   never misread.
 - The TUI's one departure from the CLI's bytes is the spacing rule

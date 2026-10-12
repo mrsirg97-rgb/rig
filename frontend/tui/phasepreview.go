@@ -14,6 +14,7 @@ func (t *tui) resetPhaseLocked() {
 }
 
 func (t *tui) appendPhaseLocked(text string) {
+	text = printable(text)
 	for {
 		i := strings.IndexByte(text, '\n')
 		if i < 0 {

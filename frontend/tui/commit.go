@@ -68,6 +68,7 @@ const (
 const elideSentinel = "\x00hidden\x00"
 
 func RenderToolBlock(t Theme, width int, name string, args json.RawMessage, content string, failed bool, dur time.Duration) string {
+	content = printable(content)
 	if name == "todo" || name == "scheduler" {
 		open := t.Paint(SlotEmber, t.Glyph(GlyphDone)) + " " + t.Paint(SlotEmber, name)
 		if d := verbDetail(args); d != "" {
@@ -114,7 +115,7 @@ func RenderReturnBlock(t Theme, width int, done core.WorkerDone) string {
 	b.WriteString(t.Paint(SlotEmber, t.Glyph(GlyphDone)))
 	b.WriteString(" ")
 	b.WriteString(t.Paint(SlotEmber, "delegate #"+strconv.Itoa(done.N)))
-	if task := firstLineOf(done.Task); task != "" {
+	if task := printable(firstLineOf(done.Task)); task != "" {
 		b.WriteString(t.Paint(SlotDim, " · "))
 		b.WriteString(t.Paint(SlotText, cutAt(task, width-WidthOf(t.Glyph(GlyphDone))-len("delegate #"+strconv.Itoa(done.N))-4)))
 	}
@@ -168,7 +169,7 @@ func toolDetail(name string, args json.RawMessage, content string) string {
 	}
 	s := func(k string) string {
 		x, _ := v[k].(string)
-		return x
+		return printable(x)
 	}
 	first := func(x string) string {
 		if i := strings.IndexByte(x, '\n'); i >= 0 {
@@ -289,7 +290,7 @@ func preview(t Theme, width int, content string) string {
 }
 
 func previewWith(t Theme, width int, content, prefix, slot string) string {
-	lines := strings.Split(content, "\n")
+	lines := strings.Split(printable(content), "\n")
 	if n := len(lines) - 1; n > 0 && lines[n] == "" {
 		lines = lines[:n]
 	}

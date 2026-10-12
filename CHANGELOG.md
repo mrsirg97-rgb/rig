@@ -1,4 +1,25 @@
 # Changelog
+## [2.18.3]: the TUI prints a tool's words, never its terminal controls
+
+A `git rebase --continue` inside a bash call opened an editor. The editor
+found no terminal and quit, but first wrote its start-up bytes to the
+pipe: the alternate screen, a 24-row scroll region, a clear, cursor
+moves. They came back as the tool's result and the TUI wrote them to the
+terminal inside the block's preview. The 27-row pane kept the 24-row
+scroll region, and every redraw after it overwrote the transcript: about
+150 rows of the session's scrollback were lost before the region was
+reset.
+
+- **tui**: `printable` drops every escape sequence and control character
+  except the newline and the tab. It is applied where text enters from
+  outside: a tool's result and the strings of its call, the model's text
+  and reasoning, a phase's preview, a worker's task and tool in the
+  band, a return's task, a notice. The TUI's own colours are painted
+  after it.
+
+The text the model reads is unchanged: the result still carries the
+bytes the tool produced.
+
 ## [2.18.2]: a return reaches the turn that is still running
 
 A background call's output was handed to the model only when `Input` was

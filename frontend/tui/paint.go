@@ -187,7 +187,7 @@ func (t *tui) flow(slot, text string) {
 	if slot != "" {
 		t.lastSlot = slot
 	}
-	t.pend = append(t.pend, seg{slot: slot, text: t.expandTabsLocked(text)})
+	t.pend = append(t.pend, seg{slot: slot, text: t.expandTabsLocked(printable(text))})
 	if lines := t.takeClosedLinesLocked(base); len(lines) > 0 {
 		t.flowChunks = append(t.flowChunks, strings.Join(lines, "\n")+"\n")
 	}
