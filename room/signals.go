@@ -7,11 +7,6 @@ import (
 	"github.com/mrsirg97-rgb/evt/broadcast"
 )
 
-type Resident struct {
-	evt.Mark
-	Models []string
-}
-
 type StartChild struct {
 	evt.Mark
 	Model   string
@@ -74,9 +69,6 @@ func Codec() broadcast.Encoder {
 func Registry() (broadcast.Registry, error) {
 	reg, err := broadcast.Protocol()
 	if err != nil {
-		return nil, err
-	}
-	if reg, err = jsonDeclare[Resident](reg, "room/resident"); err != nil {
 		return nil, err
 	}
 	if reg, err = jsonDeclare[StartChild](reg, "room/start-child"); err != nil {

@@ -1,9 +1,12 @@
 package main
 
 import (
+	"encoding/json"
 	"net"
 	"os"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -20,6 +23,100 @@ func freePort(t *testing.T) int {
 	port := l.Addr().(*net.TCPAddr).Port
 	l.Close()
 	return port
+}
+
+func TestAnActEffectRunsOnceOnItsOwner(t *testing.T) {
+	home := t.TempDir()
+	port := freePort(t)
+	marker := filepath.Join(home, "starts")
+	ka := newChildren(home, models.Table{}, nil, nil)
+	kb := newChildren(home, models.Table{}, nil, nil)
+	var a, b machineroom.Member
+	a, err := machineroom.New(home, ka.places, ka.effects, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err = machineroom.New(home, kb.places, kb.effects, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { a.Close(); b.Close(); ka.close(); kb.close() })
+	waitLive(t, a, b)
+	a.Act(machineroom.StartChild{
+		Model:   "fake",
+		Port:    port,
+		Command: "echo start >> " + marker + "; sleep 1; python3 -m http.server ${PORT}",
+	}, machineroom.KeyOf("fake"), machineroom.PriorityChild, func(bool) {})
+	await(t, "the child's port to answer", 10*time.Second, func() bool { return machineroom.Answers(port) })
+	starts, err := os.ReadFile(marker)
+	if err != nil {
+		t.Fatalf("the child never started: %v", err)
+	}
+	if n := strings.Count(string(starts), "start"); n != 1 {
+		t.Fatalf("the act's effect must run once, on the act's owner: %d starts", n)
+	}
+	ka.stop("fake", 2)
+}
+
+func TestTheRoomEngineStaysFreeWhileAChildStarts(t *testing.T) {
+	home := t.TempDir()
+	port := freePort(t)
+	ka := newChildren(home, models.Table{}, nil, nil)
+	kb := newChildren(home, models.Table{}, nil, nil)
+	var a, b machineroom.Member
+	a, err := machineroom.New(home, ka.places, ka.effects, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err = machineroom.New(home, kb.places, kb.effects, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { a.Close(); b.Close(); ka.close(); kb.close() })
+	waitLive(t, a, b)
+	a.Act(machineroom.StartChild{
+		Model:   "fake",
+		Port:    port,
+		Command: "sleep 3; python3 -m http.server ${PORT}",
+	}, machineroom.KeyOf("fake"), machineroom.PriorityChild, func(bool) {})
+	row := `{"id":"fake2","window":8192,"maxTokens":2048,"reserve":1024,"keepRecent":2048,"role":"worker","command":"python3 -m http.server 9","port":` + strconv.Itoa(port+1) + `,"places":1}`
+	a.Act(machineroom.TableChange{Row: json.RawMessage(row)}, machineroom.TableKey(), machineroom.PriorityChild, func(bool) {})
+	await(t, "the room to fold a table change while the child's start still waits the port", 1500*time.Millisecond, func() bool {
+		_, ok := kb.rows.Get("fake2")
+		return ok
+	})
+	await(t, "the child's port to answer", 10*time.Second, func() bool { return machineroom.Answers(port) })
+	ka.stop("fake", 2)
+}
+
+func waitLive(t *testing.T, members ...machineroom.Member) {
+	t.Helper()
+	deadline := time.Now().Add(10 * time.Second)
+	for time.Now().Before(deadline) {
+		ready := true
+		for _, m := range members {
+			if len(m.Live()) != len(members)-1 {
+				ready = false
+			}
+		}
+		if ready {
+			return
+		}
+		time.Sleep(25 * time.Millisecond)
+	}
+	t.Fatal("the members never saw each other")
+}
+
+func await(t *testing.T, what string, within time.Duration, f func() bool) {
+	t.Helper()
+	deadline := time.Now().Add(within)
+	for time.Now().Before(deadline) {
+		if f() {
+			return
+		}
+		time.Sleep(25 * time.Millisecond)
+	}
+	t.Fatalf("%s never happened within %s", what, within)
 }
 
 func TestStartChildWaitsForThePortThenStops(t *testing.T) {
@@ -63,12 +160,12 @@ func TestTheUpdateDrainsTheRoom(t *testing.T) {
 	home := t.TempDir()
 	var a, b machineroom.Member
 	ka := newChildren(home, models.Table{}, nil, nil)
-	a, err := machineroom.New(home, ka.places, ka, nil)
+	a, err := machineroom.New(home, ka.places, ka.effects, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	kb := newChildren(home, models.Table{}, nil, func() { b.Close() })
-	b, err = machineroom.New(home, kb.places, kb, nil)
+	b, err = machineroom.New(home, kb.places, kb.effects, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

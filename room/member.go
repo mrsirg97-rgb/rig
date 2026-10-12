@@ -49,7 +49,7 @@ type member struct {
 	cancel   context.CancelFunc
 }
 
-func New(home string, places func(int64) int, extra broadcast.Effects, told func(evt.Notice)) (Member, error) {
+func New(home string, places func(int64) int, effects func(self int64) broadcast.Effects, told func(evt.Notice)) (Member, error) {
 	dir := filepath.Join(home, "room")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return nil, err
@@ -84,6 +84,10 @@ func New(home string, places func(int64) int, extra broadcast.Effects, told func
 			break
 		}
 		listener.Close()
+	}
+	var extra broadcast.Effects
+	if effects != nil {
+		extra = effects(id)
 	}
 	claim := broadcast.NewClaimant(engine, engine, id, broadcast.NewMinter(id, broadcast.MachineClock()), broadcast.NewFold(places, extra), PriorityFleet, told)
 	m := &member{id: id, engine: engine, claim: claim, home: home, listener: listener, cancel: cancel}

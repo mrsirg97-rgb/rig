@@ -280,7 +280,7 @@ func main() {
 	voice := fleetroom.Add(rig.MemberDecision)
 	var machine machineroom.Member
 	kids := newChildren(cfgDir, cfg.Models, engine, func() { machine.Close() })
-	machine, err = machineroom.New(cfgDir, kids.places, kids, func(n evt.Notice) {
+	machine, err = machineroom.New(cfgDir, kids.places, kids.effects, func(n evt.Notice) {
 		broadcast.Say(voice, n.Source, n.Text, n.Level)
 	})
 	if err != nil {
@@ -288,6 +288,7 @@ func main() {
 		os.Exit(1)
 	}
 	defer machine.Close()
+	defer kids.close()
 
 	remPath := remstore.FilePath(cfgDir)
 	if err := os.MkdirAll(filepath.Dir(remPath), 0o755); err != nil {
@@ -838,7 +839,7 @@ func runJob(args []string) int {
 		go engine.Start(context.Background())
 		defer engine.Stop()
 		kids := newChildren(cfgDir, cfg.Models, engine, nil)
-		machine, merr := machineroom.New(cfgDir, kids.places, kids, nil)
+		machine, merr := machineroom.New(cfgDir, kids.places, kids.effects, nil)
 		if merr != nil {
 			fmt.Fprintln(os.Stderr, "rig:", merr)
 		} else {

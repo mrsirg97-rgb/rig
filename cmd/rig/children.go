@@ -31,10 +31,23 @@ type children struct {
 	loop   evt.Engine
 	leave  func()
 	closed bool
+	engine evt.Engine
+	cancel context.CancelFunc
+	self   int64
 }
 
 func newChildren(home string, rows models.Table, loop evt.Engine, leave func()) *children {
-	return &children{home: home, owned: make(map[string]int), rows: rows, loop: loop, leave: leave}
+	engine := evt.NewEngine()
+	ctx, cancel := context.WithCancel(context.Background())
+	go engine.Start(ctx)
+	return &children{home: home, owned: make(map[string]int), rows: rows, loop: loop, leave: leave, engine: engine, cancel: cancel}
+}
+
+func (c *children) close() { c.cancel() }
+
+func (c *children) effects(self int64) broadcast.Effects {
+	c.self = self
+	return c
 }
 
 func (c *children) places(key int64) int {
@@ -50,16 +63,29 @@ func (c *children) places(key int64) int {
 func (c *children) Next(op broadcast.Operation) error {
 	switch act := op.Signal().(type) {
 	case room.StartChild:
-		if !c.start(act.Model, act.Port, act.Command, act.Env, act.Log) {
-			return fmt.Errorf("rig: %s: the child's port %d never answered", act.Model, act.Port)
+		if op.Origin() != c.self {
+			return nil
 		}
+		c.engine.Add(evt.Func(func(context.Context) {
+			if !c.start(act.Model, act.Port, act.Command, act.Env, act.Log) {
+				c.note(act.Model, fmt.Sprintf("the child's port %d never answered", act.Port))
+			}
+		}), room.PriorityChild)
 	case room.StopChild:
-		c.stop(act.Model, act.Grace)
-	case room.SwapChild:
-		c.stop(act.Out, act.Grace)
-		if !c.start(act.Model, act.Port, act.Command, act.Env, act.Log) {
-			return fmt.Errorf("rig: %s: the child's port %d never answered", act.Model, act.Port)
+		if op.Origin() != c.self {
+			return nil
 		}
+		c.engine.Add(evt.Func(func(context.Context) { c.stop(act.Model, act.Grace) }), room.PriorityChild)
+	case room.SwapChild:
+		if op.Origin() != c.self {
+			return nil
+		}
+		c.engine.Add(evt.Func(func(context.Context) {
+			c.stop(act.Out, act.Grace)
+			if !c.start(act.Model, act.Port, act.Command, act.Env, act.Log) {
+				c.note(act.Model, fmt.Sprintf("the child's port %d never answered", act.Port))
+			}
+		}), room.PriorityChild)
 	case room.TableChange:
 		var row models.Model
 		if err := json.Unmarshal(act.Row, &row); err != nil {
@@ -136,17 +162,35 @@ func (c *children) start(model string, port int, command string, env []string, l
 		return false
 	}
 	go cmd.Wait()
-	c.owned[model] = cmd.Process.Pid
-	if err := os.WriteFile(pidPath, []byte(strconv.Itoa(cmd.Process.Pid)), 0o644); err != nil {
-		return false
-	}
+	pid := cmd.Process.Pid
+	c.owned[model] = pid
 	for i := 0; i < childProbeTries; i++ {
 		if room.Answers(port) {
+			if alive(pid) {
+				if err := os.WriteFile(pidPath, []byte(strconv.Itoa(pid)), 0o644); err != nil {
+					return false
+				}
+			} else {
+				c.owned[model] = 0
+			}
 			return true
 		}
 		time.Sleep(childProbePause)
 	}
 	return false
+}
+
+func (c *children) note(model, text string) {
+	dir := filepath.Join(c.home, "logs")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return
+	}
+	f, err := os.OpenFile(filepath.Join(dir, model+".log"), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
+	if err != nil {
+		return
+	}
+	defer f.Close()
+	fmt.Fprintf(f, "rig: %s: %s\n", model, text)
 }
 
 func (c *children) stop(model string, grace int) {
