@@ -2,6 +2,7 @@ package python
 
 import (
 	"context"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -16,12 +17,14 @@ func (b *countingBG) Submit(ctx context.Context, kind, name string, bound time.D
 
 func TestACellsBoundAloneRunsInTurnAndDeferSendsItToTheBackground(t *testing.T) {
 	py := pythonAvailable(t)
+	host := filepath.Join(t.TempDir(), "fake-host.py")
+	writeHost(t, host, fakePongHostSrc)
 	bg := &countingBG{}
-	kt := NewWith(py, DefaultHost(), bg)
+	kt := NewWith(py, host, bg)
 	defer kt.Close()
 
 	text, err := call(t, kt, map[string]any{"code": "print(6 * 7)", "timeoutMs": 20000})
-	if err != nil || !strings.Contains(text, "42") {
+	if err != nil || text != "fake-pong" {
 		t.Fatalf("a bound with no defer answers with the cell's output: %q %v", text, err)
 	}
 	if bg.calls != 0 {
