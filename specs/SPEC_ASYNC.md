@@ -21,6 +21,27 @@ This spec gives the board one rule.
 > is the caller's promise: *I expect this around N ms; if I am wrong,
 > kill it at N ms; either way, do not make me wait for it.*
 
+**Amended in 2.18.4 (the bound is a bound; `defer` is the hand-off)**:
+the rule above made one field say two things, and models read only the
+first. A session on GLM passed `timeoutMs` on 51 calls in one turn —
+builds and tests, each meaning *kill this if it hangs* — and every one
+went to the background; it reran commands, redirected output to files
+and read them back (2.18.1 reworded the field, 2.18.2 delivered the
+returns at the step boundary, and the habit stayed: a timeout is what
+the word means everywhere else). So the classification gets its own
+field. `timeoutMs` alone is a kill bound on an in-turn call: bash runs
+the command and kills its process group at the bound (`bash: killed at
+timeoutMs=N`, the output so far kept), python and web run under it as
+their own ceiling. `defer: true` with `timeoutMs` is the background run
+this spec describes, unchanged. `defer` without `timeoutMs` refuses by
+name (`defer needs timeoutMs, the bound a background run is killed
+at`): a background run with no bound is the thing the bound exists to
+prevent. `defer` absent or false is in-turn. The delegate tool is
+untouched: a worker is a hand-off by its name, and its `timeoutMs` is
+still the command worker's kill bound. Where the text below says
+"`timeoutMs` present promotes the call", read "`defer` with
+`timeoutMs`".
+
 The mechanism is the delegate pattern generalized: the delegate stops
 being "the tool that spawns model workers" and becomes the primitive
 every bounded call rides — a worker, model or deterministic, started

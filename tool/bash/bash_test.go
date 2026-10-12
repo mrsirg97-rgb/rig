@@ -3,6 +3,7 @@ package bash_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -318,13 +319,14 @@ func (f *fakeWorker) Command(ctx context.Context, command, workspace string, bou
 	return f.handBack, nil
 }
 
-func TestABoundedCommandDelegatesAndHandsBack(t *testing.T) {
+func TestADeferredCommandDelegatesAndHandsBack(t *testing.T) {
 	worker := &fakeWorker{handBack: "delegate: worker #1 started · run j1 · log runs/j1/x.log"}
 	tool := bash.New(worker)
 	out, err := tool.Exec(context.Background(), argsJSON(t, map[string]any{
 		"command":   "go test -race ./...",
 		"workspace": "/ws/elsewhere",
 		"timeoutMs": 300_000,
+		"defer":     true,
 	}))
 	if err != nil {
 		t.Fatalf("hand-back: %v", err)
@@ -337,6 +339,62 @@ func TestABoundedCommandDelegatesAndHandsBack(t *testing.T) {
 	}
 	if out != worker.handBack {
 		t.Fatalf("the hand-back is the worker's answer: %q", out)
+	}
+}
+
+func TestABoundAloneRunsInTurnAndNeverDelegates(t *testing.T) {
+	worker := &fakeWorker{handBack: "delegate: worker #1 started"}
+	tool := bash.New(worker)
+	for _, args := range []map[string]any{
+		{"command": "echo in-turn", "timeoutMs": 5000},
+		{"command": "echo in-turn", "timeoutMs": 5000, "defer": false},
+	} {
+		out, err := tool.Exec(context.Background(), argsJSON(t, args))
+		if err != nil || out != "in-turn\n" {
+			t.Fatalf("a bound with no defer answers with the command's output: %q %v", out, err)
+		}
+	}
+	if worker.calls != 0 {
+		t.Fatalf("a bound alone never delegates: %d", worker.calls)
+	}
+}
+
+func TestABoundAloneKillsTheCommandInTurn(t *testing.T) {
+	tool := bash.New(nil)
+	began := time.Now()
+	out, err := tool.Exec(context.Background(), argsJSON(t, map[string]any{
+		"command": "echo partial; sleep 30", "timeoutMs": 1000,
+	}))
+	if err == nil || err.Error() != "bash: killed at timeoutMs=1000" {
+		t.Fatalf("the kill names the bound: %v", err)
+	}
+	if !strings.Contains(out, "partial") {
+		t.Fatalf("the output before the kill is kept: %q", out)
+	}
+	if took := time.Since(began); took > 10*time.Second {
+		t.Fatalf("the command died at the bound, not at its own end: %s", took)
+	}
+}
+
+func TestAnInterruptedBoundedCommandIsAnInterruptNotAKill(t *testing.T) {
+	tool := bash.New(nil)
+	ctx, cancel := context.WithCancel(context.Background())
+	time.AfterFunc(200*time.Millisecond, cancel)
+	_, err := tool.Exec(ctx, argsJSON(t, map[string]any{"command": "sleep 30", "timeoutMs": 20_000}))
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("the turn's interrupt stays the interrupt: %v", err)
+	}
+}
+
+func TestDeferWithoutABoundRefuses(t *testing.T) {
+	worker := &fakeWorker{}
+	tool := bash.New(worker)
+	_, err := tool.Exec(context.Background(), argsJSON(t, map[string]any{"command": "echo hi", "defer": true}))
+	if err == nil || err.Error() != "bash: defer needs timeoutMs, the bound a background run is killed at" {
+		t.Fatalf("defer alone names what it needs: %v", err)
+	}
+	if worker.calls != 0 {
+		t.Fatalf("a refused defer never delegates: %d", worker.calls)
 	}
 }
 
@@ -367,10 +425,10 @@ func TestABoundedCommandRefusesByName(t *testing.T) {
 	}
 }
 
-func TestABoundedCommandWithoutAWorkerRefuses(t *testing.T) {
+func TestADeferredCommandWithoutAWorkerRefuses(t *testing.T) {
 	tool := bash.New(nil)
 	if _, err := tool.Exec(context.Background(), argsJSON(t, map[string]any{
-		"command": "echo hi", "timeoutMs": 5000,
+		"command": "echo hi", "timeoutMs": 5000, "defer": true,
 	})); err == nil || !strings.Contains(err.Error(), "no worker") {
 		t.Fatalf("the refusal must name the missing worker: %v", err)
 	}

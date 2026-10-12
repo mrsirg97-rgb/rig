@@ -46,6 +46,7 @@ type given struct {
 	Code      *string `json:"code"`
 	Action    string  `json:"action"`
 	TimeoutMs *int    `json:"timeoutMs"`
+	Defer     bool    `json:"defer"`
 }
 
 type Python interface {
@@ -95,10 +96,16 @@ func (t *pyTool) Exec(ctx context.Context, data json.RawMessage) (string, error)
 	if err := json.Unmarshal(data, &a); err != nil {
 		return "", fmt.Errorf("python: %v", err)
 	}
-	if a.TimeoutMs != nil {
+	if a.Defer {
+		if a.TimeoutMs == nil {
+			return "", errors.New(tool.DeferNeedsBound("python"))
+		}
 		return t.submit(ctx, a)
 	}
 	timeoutMs := defaultTimeoutMs
+	if a.TimeoutMs != nil {
+		timeoutMs = *a.TimeoutMs
+	}
 	switch a.Action {
 	case "", "code":
 		code := ""
@@ -122,7 +129,7 @@ func (t *pyTool) submit(ctx context.Context, a given) (string, error) {
 		return "", fmt.Errorf("python: timeoutMs must be between %d and %d, got %d", minTimeoutMs, maxTimeoutMs, ms)
 	}
 	if t.bg == nil {
-		return "", errors.New("python: no worker is wired for bounded cells")
+		return "", errors.New("python: no worker is wired for deferred cells")
 	}
 	var req request
 	name := ""

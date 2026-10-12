@@ -41,6 +41,7 @@ type args struct {
 	Command   string `json:"command"`
 	Workspace string `json:"workspace,omitempty"`
 	TimeoutMs *int64 `json:"timeoutMs"`
+	Defer     bool   `json:"defer"`
 }
 
 func (t bashTool) Exec(ctx context.Context, data json.RawMessage) (string, error) {
@@ -51,17 +52,29 @@ func (t bashTool) Exec(ctx context.Context, data json.RawMessage) (string, error
 	if strings.TrimSpace(a.Command) == "" {
 		return "", errors.New("bash: empty command")
 	}
-	if a.TimeoutMs != nil {
-		bound, err := tool.BoundMs("bash", a.TimeoutMs)
-		if err != nil {
-			return "", err
+	bound, err := tool.BoundMs("bash", a.TimeoutMs)
+	if err != nil {
+		return "", err
+	}
+	if a.Defer {
+		if bound == 0 {
+			return "", errors.New(tool.DeferNeedsBound("bash"))
 		}
 		if t.worker == nil {
-			return "", errors.New("bash: no worker is wired for bounded commands")
+			return "", errors.New("bash: no worker is wired for deferred commands")
 		}
 		return t.worker.Command(ctx, a.Command, a.Workspace, bound)
 	}
-	return t.Run(ctx, a.Command, a.Workspace)
+	if bound == 0 {
+		return t.Run(ctx, a.Command, a.Workspace)
+	}
+	bounded, cancel := context.WithTimeout(ctx, bound)
+	defer cancel()
+	out, err := t.Run(bounded, a.Command, a.Workspace)
+	if err != nil && ctx.Err() == nil && errors.Is(bounded.Err(), context.DeadlineExceeded) {
+		return out, fmt.Errorf("bash: killed at timeoutMs=%d", *a.TimeoutMs)
+	}
+	return out, err
 }
 
 func (bashTool) Run(ctx context.Context, command, workspace string) (string, error) {

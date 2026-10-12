@@ -122,6 +122,10 @@ func BoundMs(who string, raw *int64) (time.Duration, error) {
 	return time.Duration(*raw) * time.Millisecond, nil
 }
 
+func DeferNeedsBound(who string) string {
+	return who + ": defer needs timeoutMs, the bound a background run is killed at"
+}
+
 func FirstLine(s string) string {
 	line := strings.SplitN(strings.TrimSpace(s), "\n", 2)[0]
 	line = strings.TrimSpace(line)

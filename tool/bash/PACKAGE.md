@@ -37,7 +37,11 @@ bounded. Stdlib only.
   drops the rest, so a huge stream cannot pin memory: the child's
   writes are always fully consumed (it never blocks) and the kept output
   is byte-identical to the post-hoc truncation (head + marker).
-- `timeoutMs` hands the command to a delegate command worker: the call
-  answers with the hand-back and the result arrives on a later turn,
-  killed at the bound; without it the exec path is byte-identical to
-  the synchronous tool (2.16.0).
+- `timeoutMs` alone is a kill bound on the in-turn run (2.18.4): the
+  process group dies at the bound, the output so far is kept and the
+  error is `bash: killed at timeoutMs=N`; the turn's own interrupt
+  stays an interrupt. `defer: true` with `timeoutMs` hands the command
+  to a delegate command worker: the call answers with the hand-back and
+  the result arrives as a message once it ends, killed at the bound
+  (2.16.0). `defer` without `timeoutMs` refuses by name. With neither,
+  the exec path is byte-identical to the synchronous tool.
