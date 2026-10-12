@@ -23,7 +23,7 @@
           "type": "integer",
           "minimum": 1000,
           "maximum": 86400000,
-          "description": "the command delegates to a worker"
+          "description": "pass it to run the command in the background, killed after this many ms: the call returns a started line and the output arrives on a later turn. omit it to run in-turn and get the output now."
         }
       },
       "required": [
@@ -512,7 +512,7 @@
         },
         "timeoutMs": {
           "type": "integer",
-          "description": "timeout in ms (default 120000)",
+          "description": "pass it to run the cell in the background, killed after this many ms: the output arrives on a later turn. omit it to run in-turn, capped at 120000.",
           "minimum": 1000,
           "maximum": 600000
         }
@@ -554,7 +554,7 @@
         },
         "timeoutMs": {
           "type": "integer",
-          "description": "total timeout in ms (default 30000)",
+          "description": "fetch only: pass it to fetch in the background, killed after this many ms: the page arrives on a later turn. omit it to fetch in-turn, capped at 30000.",
           "minimum": 1000,
           "maximum": 300000
         }
