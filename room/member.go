@@ -116,8 +116,19 @@ func (m *member) track(tr broadcast.Transport) {
 	m.mu.Unlock()
 }
 
-func (m *member) Id() int64    { return m.id }
-func (m *member) Seated() bool { return m.claim.Seated() }
+func (m *member) Id() int64 { return m.id }
+
+func (m *member) ask(f func()) {
+	done := make(chan struct{})
+	m.engine.Add(evt.Func(func(context.Context) { f(); close(done) }), PriorityFleet)
+	<-done
+}
+
+func (m *member) Seated() bool {
+	seated := false
+	m.ask(func() { seated = m.claim.Seated() })
+	return seated
+}
 
 func (m *member) Claim(key int64, priority int, talk int64, posted func(mint broadcast.Mint, admitted bool)) {
 	m.claim.Claim(key, priority, talk, posted)
@@ -129,11 +140,23 @@ func (m *member) Act(payload evt.Signal, key int64, priority int, posted func(ad
 	m.claim.Act(payload, key, priority, posted)
 }
 
-func (m *member) Holders(key int64) []broadcast.Operation { return m.claim.Holders(key) }
+func (m *member) Holders(key int64) []broadcast.Operation {
+	var out []broadcast.Operation
+	m.ask(func() { out = m.claim.Holders(key) })
+	return out
+}
 
-func (m *member) Waiting(key int64) []broadcast.Operation { return m.claim.Waiting(key) }
+func (m *member) Waiting(key int64) []broadcast.Operation {
+	var out []broadcast.Operation
+	m.ask(func() { out = m.claim.Waiting(key) })
+	return out
+}
 
-func (m *member) Live() []int64 { return m.claim.Live() }
+func (m *member) Live() []int64 {
+	var out []int64
+	m.ask(func() { out = m.claim.Live() })
+	return out
+}
 
 func (m *member) Say(source, text string, level ...evt.Level) {
 	n := evt.Notice{Source: source, Text: text}

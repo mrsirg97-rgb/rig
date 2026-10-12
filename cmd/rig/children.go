@@ -92,6 +92,10 @@ func (c *children) Next(op broadcast.Operation) error {
 			return nil
 		}
 		c.closed = true
+		if c.loop == nil {
+			c.leave()
+			return nil
+		}
 		c.loop.Add(evt.Func(func(context.Context) { c.leave() }), room.PriorityTurn)
 	}
 	return nil
@@ -131,6 +135,7 @@ func (c *children) start(model string, port int, command string, env []string, l
 		fmt.Fprintf(f, "rig: %s: start: %v\n", model, err)
 		return false
 	}
+	go cmd.Wait()
 	c.owned[model] = cmd.Process.Pid
 	if err := os.WriteFile(pidPath, []byte(strconv.Itoa(cmd.Process.Pid)), 0o644); err != nil {
 		return false
@@ -153,10 +158,10 @@ func (c *children) stop(model string, grace int) {
 	if sys == nil {
 		return
 	}
-	sys.Signal(syscall.SIGTERM)
+	syscall.Kill(-pid, syscall.SIGTERM)
 	deadline := time.Duration(grace) * time.Second
 	if !c.waitGone(pid, deadline) {
-		sys.Kill()
+		syscall.Kill(-pid, syscall.SIGKILL)
 		c.waitGone(pid, deadline)
 	}
 	c.owned[model] = 0
