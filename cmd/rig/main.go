@@ -53,6 +53,19 @@ import (
 
 const Version = "2.18.4"
 
+func claimPriority(prompt string) int {
+	if v := os.Getenv("RIG_PRIORITY"); v != "" {
+		n, err := strconv.Atoi(v)
+		if err == nil && n >= 0 {
+			return n
+		}
+	}
+	if prompt != "" {
+		return machineroom.PriorityFleet
+	}
+	return machineroom.PriorityTurn
+}
+
 func modelPlaces(t models.Table) func(int64) int {
 	return func(key int64) int {
 		for _, id := range t.Known() {
@@ -273,7 +286,7 @@ func main() {
 
 	engine, room := newFleet()
 	voice := room.Add(rig.MemberDecision)
-	machine, err := machineroom.New(engine, cfgDir, modelPlaces(cfg.Models), nil, func(n evt.Notice) {
+	machine, err := machineroom.New(cfgDir, modelPlaces(cfg.Models), nil, func(n evt.Notice) {
 		broadcast.Say(voice, n.Source, n.Text, n.Level)
 	})
 	if err != nil {
@@ -526,6 +539,8 @@ func main() {
 		pluginInfos: pluginInfos,
 		engine:      engine,
 		room:        room,
+		machine:     machine,
+		priority:    claimPriority(*prompt),
 	}
 
 	r.tools["scheduler"] = schedapi.New(scdb, sched.RealCrontab(""), self+" run-job", modelID, cfgDir)
@@ -827,7 +842,7 @@ func runJob(args []string) int {
 		engine, fleetroom := newFleet()
 		go engine.Start(context.Background())
 		defer engine.Stop()
-		machine, merr := machineroom.New(engine, cfgDir, modelPlaces(cfg.Models), nil, nil)
+		machine, merr := machineroom.New(cfgDir, modelPlaces(cfg.Models), nil, nil)
 		if merr != nil {
 			fmt.Fprintln(os.Stderr, "rig:", merr)
 		} else {

@@ -27,6 +27,7 @@ import (
 	"github.com/mrsirg97-rgb/rig/v3/policy/operator"
 	"github.com/mrsirg97-rgb/rig/v3/provider/anthropic"
 	"github.com/mrsirg97-rgb/rig/v3/provider/openai"
+	machineroom "github.com/mrsirg97-rgb/rig/v3/room"
 	"github.com/mrsirg97-rgb/rig/v3/store"
 	remdom "github.com/mrsirg97-rgb/rig/v3/store/rem/domain"
 	sched "github.com/mrsirg97-rgb/rig/v3/store/scheduler"
@@ -39,6 +40,8 @@ type root struct {
 	pluginMax int
 	baseURL   string
 	system    string
+	machine   machineroom.Member
+	priority  int
 	agents    string
 	project   string
 	allow     []string
@@ -265,7 +268,13 @@ func (r *root) delegated() bool {
 }
 
 func (r *root) buildPair() (core.Provider, core.ContextPolicy) {
-	inner := r.buildProvider()
+	inner := claiming{
+		inner:    r.buildProvider(),
+		machine:  r.machine,
+		key:      machineroom.KeyOf(r.row.ID),
+		priority: r.priority,
+		talk:     machineroom.KeyOf(r.session.ID),
+	}
 	pol, err := compact.New(inner, r.rec, r.session, r.fullSystem, r.row)
 	if err != nil {
 		panic("rig: wire: " + err.Error())
@@ -321,7 +330,9 @@ func (r *root) buildProvider() core.Provider {
 		return openai.NewWithConfig(cfg)
 	}
 	baseURL := r.baseURL
-	if r.row.Remote {
+	if r.row.Port > 0 {
+		baseURL = fmt.Sprintf("http://127.0.0.1:%d/v1", r.row.Port)
+	} else if r.row.Remote {
 		baseURL = r.row.BaseURL
 	}
 	return openai.NewWithConfig(openai.Config{
