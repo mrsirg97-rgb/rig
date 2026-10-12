@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net"
@@ -12,6 +13,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/mrsirg97-rgb/evt"
 	"github.com/mrsirg97-rgb/evt/broadcast"
 	"github.com/mrsirg97-rgb/rig/v3/models"
 	"github.com/mrsirg97-rgb/rig/v3/room"
@@ -24,13 +26,16 @@ const (
 )
 
 type children struct {
-	home  string
-	owned map[string]int
-	rows  models.Table
+	home   string
+	owned  map[string]int
+	rows   models.Table
+	loop   evt.Engine
+	leave  func()
+	closed bool
 }
 
-func newChildren(home string, rows models.Table) *children {
-	return &children{home: home, owned: make(map[string]int), rows: rows}
+func newChildren(home string, rows models.Table, loop evt.Engine, leave func()) *children {
+	return &children{home: home, owned: make(map[string]int), rows: rows, loop: loop, leave: leave}
 }
 
 func (c *children) places(key int64) int {
@@ -83,6 +88,12 @@ func (c *children) Next(op broadcast.Operation) error {
 			return err
 		}
 		c.rows = merged
+	case room.Update:
+		if c.closed || c.leave == nil {
+			return nil
+		}
+		c.closed = true
+		c.loop.Add(evt.Func(func(context.Context) { c.leave() }), room.PriorityTurn)
 	}
 	return nil
 }

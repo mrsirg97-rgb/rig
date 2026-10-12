@@ -53,12 +53,15 @@ import (
 
 const Version = "2.18.4"
 
-func claimPriority(prompt string) int {
+func claimPriority(prompt string, served bool) int {
 	if v := os.Getenv("RIG_PRIORITY"); v != "" {
 		n, err := strconv.Atoi(v)
 		if err == nil && n >= 0 {
 			return n
 		}
+	}
+	if served {
+		return machineroom.PriorityOutside
 	}
 	if prompt != "" {
 		return machineroom.PriorityFleet
@@ -112,6 +115,7 @@ func main() {
 		cfg, err := defaultUpdateCfg()
 		if err == nil {
 			if home, herr := rigHome(); herr == nil {
+				cfg.home = home
 				if loaded, lerr := config.Load(home, "."); lerr == nil {
 					cfg.key = loaded.Settings.UpdateKey
 				}
@@ -272,10 +276,11 @@ func main() {
 		}
 	}
 
-	engine, room := newFleet()
-	voice := room.Add(rig.MemberDecision)
-	kids := newChildren(cfgDir, cfg.Models)
-	machine, err := machineroom.New(cfgDir, kids.places, kids, func(n evt.Notice) {
+	engine, fleetroom := newFleet()
+	voice := fleetroom.Add(rig.MemberDecision)
+	var machine machineroom.Member
+	kids := newChildren(cfgDir, cfg.Models, engine, func() { machine.Close() })
+	machine, err = machineroom.New(cfgDir, kids.places, kids, func(n evt.Notice) {
 		broadcast.Say(voice, n.Source, n.Text, n.Level)
 	})
 	if err != nil {
@@ -352,7 +357,7 @@ func main() {
 		Fetch:        sched.RealFetch(0),
 		Spawn:        sched.RealSpawn,
 		Models:       func() models.Table { return rt },
-		Room:         room,
+		Room:         fleetroom,
 		Cap:          handoff,
 	})
 
@@ -527,9 +532,9 @@ func main() {
 		pluginsHome: cfgDir,
 		pluginInfos: pluginInfos,
 		engine:      engine,
-		room:        room,
+		room:        fleetroom,
 		machine:     machine,
-		priority:    claimPriority(*prompt),
+		priority:    claimPriority(*prompt, serveAddr != ""),
 	}
 
 	r.tools["scheduler"] = schedapi.New(scdb, sched.RealCrontab(""), self+" run-job", modelID, cfgDir)
@@ -671,7 +676,7 @@ func main() {
 		} else {
 			rev := decision.NewReviewer(ctx, r.engine, reviews,
 				r.reviewFire(schedHome, scdb, swapURL, self, cfgDir, cfg.Settings.Sandbox, cfg.Settings.SandboxBinds),
-				cfg.Settings.ReviewBatchOrDefault(), row, room, scope.Key(cwd))
+				cfg.Settings.ReviewBatchOrDefault(), row, fleetroom, scope.Key(cwd))
 			r.decRev = rev
 			r.decQ = decision.NewQueue(dec, sink, reviews, drec, rev.Land, voice)
 			land = rev.Land
@@ -689,7 +694,7 @@ func main() {
 	if packScorer != nil {
 		opts = append(opts, graph.WithScorer(packScorer))
 	}
-	gq := graph.NewQueue(cfgDir, room.Add(rig.MemberGraph), opts...)
+	gq := graph.NewQueue(cfgDir, fleetroom.Add(rig.MemberGraph), opts...)
 	r.graph = gq
 	r.tools["rem"] = remapi.New(rdb, gq)
 
@@ -831,7 +836,7 @@ func runJob(args []string) int {
 		engine, fleetroom := newFleet()
 		go engine.Start(context.Background())
 		defer engine.Stop()
-		kids := newChildren(cfgDir, cfg.Models)
+		kids := newChildren(cfgDir, cfg.Models, engine, nil)
 		machine, merr := machineroom.New(cfgDir, kids.places, kids, nil)
 		if merr != nil {
 			fmt.Fprintln(os.Stderr, "rig:", merr)
