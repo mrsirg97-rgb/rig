@@ -1,4 +1,52 @@
 # Changelog
+## [3.0.0]: the room, no center
+
+Every rig instance on the machine is a member of one room over unix
+sockets, and no process is the center. The ordering primitive came first
+in evt 0.3.0 (see that release); rig joins the room at start: the socket
+binds before the directory is read, the member id is the hash of the
+machine's boot id, the process id and the start time at 62 bits and
+re-derives on a collision, and arrivals land on the room engine at the
+class's priority. The model is a guarded key in that room: before a
+request the instance claims at its class's priority (the operator's turn
+90, a delegate's return 70, a fleet worker 30, a scheduled job 20, an
+outside client 0), the turn waits on the room engine's confirmation that
+every live member applied the admission, and the request goes to the
+row's port directly — llama-swap retires as a router and
+settings.json's swapUrl retires with it. The stream's completion is the
+release. Within one priority the claim that continues the session
+already in the model goes first.
+
+The instances own the models: the row gains the child half (command with
+${PORT} substituted, environment, port, aliases, stop grace, places) and
+start, stop and swap are guarded operations on the model's key. The
+child runs detached with the log at ~/.rig/logs/<model id>.log, the port
+answers before the operation settles, a stop sends SIGTERM to the
+child's session and waits the row's grace before the kill, and a request
+that finds the child dead re-publishes the start so the next claim
+reconciles against the world. The table change merges into every
+member's view; the places function reads it.
+
+Every stream ends in a terminal event: a cancel yields Done with what
+was produced and no call that had not finished streaming, the loop
+appends on Done only, and the 2.17.1 branch leaves loop/loop.go, its
+line leaves specs/FREEZE.txt, the recorder's special case goes.
+
+The dashboard's three pages: the room page shows the members and each
+model's residency (who holds it, who waits, whether the port answers,
+the log's tail); the models page carries the residency beside the row;
+the update page shows the build's version and runs rig -update, which
+drains the room first: the update's guarded operation rides the table's
+key at the operator's priority, every member stops claiming at its turn
+boundary and leaves, the coordinator waits the live set empty, and only
+then does the binary swap.
+
+Migration: rig's module is `github.com/mrsirg97-rgb/rig/v3`. The models
+file gains the child half for the models the machine serves — carry the
+port range and the names in from the router they ran behind, one port
+per model, and the rows are local again. settings.json's swapUrl stays
+parsed and is no longer consulted.
+
 ## [2.18.4]: a timeout is a timeout; defer is the hand-off
 
 Since 2.16.0 passing `timeoutMs` to bash, python or a web fetch sent the

@@ -136,7 +136,7 @@ creating session's.
 | web fetch     |                | `RIG_WEB_FETCH_PROXY`  | `webFetchProxy` | `http://127.0.0.1:8889`; **presence key**: set empty = direct |
 | extraction    |                | `RIG_TRAFILATURA`      | `trafilatura`   | none (auto); **presence key**: set empty = the stdlib text pass |
 | session model |                | `RIG_MODEL`            | `model`          | no embedded default; the worker model resolves at claim time: the named one, else the resident model, else this |
-| swap endpoint |                | `RIG_SWAP_URL`         | `swapUrl`         | `http://127.0.0.1:8090`; the jailed worker's socket proxy forwards to it |
+| swap endpoint |                | `RIG_SWAP_URL`         | `swapUrl`         | retired as a router at 3.0.0: the provider sends to the model row's port directly; the setting stays parsed for older configs |
 | decision server |  | `RIG_DECISION_URL`     | `decisionUrl`     | none; set it and every bash call gets a pending risk proposal the reviewer settles, and the `decide` tool joins the live table so the model hands it the sorting (SPEC_DECISION); unset, nothing proposes and the menu, the wire sha, and the system prompt do not move |
 | decision unit |  |  | `decisionUnit`    | none; the systemd user unit file a promotion rewrites — the one `Environment=` line naming `RIG_DECISION_CHECKPOINT` (SPEC_DECISION 2.13.0); unset, runs score and record but promote nothing |
 | trainer interpreter |  |  | `trainPython`     | none; the `train/` zone's own interpreter, run headless with torch — two gigabytes that do not belong in the session kernel's venv (SPEC_DECISION 2.13.0); a run without it refuses naming the key |

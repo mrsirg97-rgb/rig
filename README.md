@@ -4,6 +4,11 @@ A small operating system for agents. The kernel is a few hundred lines.
 
 rig assembles context, streams the model, executes tool calls, returns results, and repeats. The TUI, piped CLI, headless worker, and dashboard share the same session, task, memory, and scheduler stores.
 
+Every rig instance on the machine is a member of one room over unix
+sockets, and no process is the center: the model is a guarded key, the
+instances own the models' children, and a swap and an update are
+operations in the same order the requests are (specs/SPEC_ROOM.md).
+
 Anyone can ship a harness that edits files. The difference shows at midnight on turn four hundred, when something goes sideways: the refusal names its rule instead of retrying blind, every decision lands as a row in a store you own, the session follows you to your phone, and the tree is small enough to read before you trust it. The measured block below is computed from this repo by CI — rig checks its own homework.
 
 ## install
