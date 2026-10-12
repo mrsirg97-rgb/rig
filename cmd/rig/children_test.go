@@ -83,11 +83,13 @@ func TestTheRoomEngineStaysFreeWhileAChildStarts(t *testing.T) {
 	row := `{"id":"fake2","window":8192,"maxTokens":2048,"reserve":1024,"keepRecent":2048,"role":"worker","command":"python3 -m http.server 9","port":` + strconv.Itoa(port+1) + `,"places":1}`
 	a.Act(machineroom.TableChange{Row: json.RawMessage(row)}, machineroom.TableKey(), machineroom.PriorityChild, func(bool) {})
 	await(t, "the room to fold a table change while the child's start still waits the port", 1500*time.Millisecond, func() bool {
-		_, ok := kb.rows.Get("fake2")
+		ok := false
+		b.Ask(func() { _, ok = kb.rows.Get("fake2") })
 		return ok
 	})
 	await(t, "the child's port to answer", 10*time.Second, func() bool { return machineroom.Answers(port) })
-	ka.stop("fake", 2)
+	a.Act(machineroom.StopChild{Model: "fake", Grace: 2}, machineroom.KeyOf("fake"), machineroom.PriorityChild, func(bool) {})
+	await(t, "the child's port to stop answering", 15*time.Second, func() bool { return !machineroom.Answers(port) })
 }
 
 func waitLive(t *testing.T, members ...machineroom.Member) {
@@ -161,8 +163,12 @@ func TestAJoinerReadsTheWorld(t *testing.T) {
 	}
 	a.Act(machineroom.TableChange{Row: json.RawMessage(rowOf("other", port+7, 2))}, machineroom.TableKey(), machineroom.PriorityChild, func(bool) {})
 	await(t, "the first member's table to take the change", 5*time.Second, func() bool {
-		m, _ := ka.rows.Get("other")
-		return m.Places == 2
+		taken := false
+		a.Ask(func() {
+			m, _ := ka.rows.Get("other")
+			taken = m.Places == 2
+		})
+		return taken
 	})
 	a.Act(machineroom.StartChild{
 		Model:   "fake",
@@ -182,11 +188,14 @@ func TestAJoinerReadsTheWorld(t *testing.T) {
 	}
 	t.Cleanup(func() { b.Close(); kb.close() })
 	waitLive(t, a, b)
-	if ka.places(machineroom.KeyOf("fake")) != 1 {
-		t.Fatalf("the row's places must be the key's places: %d", ka.places(machineroom.KeyOf("fake")))
+	places := 0
+	a.Ask(func() { places = ka.places(machineroom.KeyOf("fake")) })
+	if places != 1 {
+		t.Fatalf("the row's places must be the key's places: %d", places)
 	}
-	mine, _ := ka.rows.Get("other")
-	theirs, _ := kb.rows.Get("other")
+	var mine, theirs models.Model
+	a.Ask(func() { mine, _ = ka.rows.Get("other") })
+	b.Ask(func() { theirs, _ = kb.rows.Get("other") })
 	if mine.Places != theirs.Places || mine.Port != theirs.Port || mine.Command != theirs.Command || mine.StopGrace != theirs.StopGrace {
 		t.Fatalf("the joiner's view must agree with the first member's: %v against %v", mine, theirs)
 	}
@@ -203,7 +212,8 @@ func TestAJoinerReadsTheWorld(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(home, "logs", "fake.pid")); err != nil {
 		t.Fatalf("the pid file must be the world a later stop reads: %v", err)
 	}
-	ka.stop("fake", 2)
+	a.Act(machineroom.StopChild{Model: "fake", Grace: 2}, machineroom.KeyOf("fake"), machineroom.PriorityChild, func(bool) {})
+	await(t, "the child's port to stop answering", 15*time.Second, func() bool { return !machineroom.Answers(port) })
 }
 
 func TestTwoInstancesRaceToStartAModelAndOneChildRuns(t *testing.T) {

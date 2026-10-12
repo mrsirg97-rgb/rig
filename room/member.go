@@ -29,6 +29,7 @@ type Member interface {
 	Id() int64
 	Seated() bool
 	Close()
+	Ask(f func())
 	Claim(key int64, priority int, talk int64, posted func(mint broadcast.Mint, admitted bool))
 	Release(claim broadcast.Mint, priority int)
 	Act(payload evt.Signal, key int64, priority int, posted func(admitted bool))
@@ -149,7 +150,7 @@ func (m *member) track(tr broadcast.Transport) {
 
 func (m *member) Id() int64 { return m.id }
 
-func (m *member) ask(f func()) {
+func (m *member) Ask(f func()) {
 	done := make(chan struct{})
 	m.engine.Add(evt.Func(func(context.Context) { f(); close(done) }), PriorityFleet)
 	<-done
@@ -157,7 +158,7 @@ func (m *member) ask(f func()) {
 
 func (m *member) Seated() bool {
 	seated := false
-	m.ask(func() { seated = m.claim.Seated() })
+	m.Ask(func() { seated = m.claim.Seated() })
 	return seated
 }
 
@@ -173,19 +174,19 @@ func (m *member) Act(payload evt.Signal, key int64, priority int, posted func(ad
 
 func (m *member) Holders(key int64) []broadcast.Operation {
 	var out []broadcast.Operation
-	m.ask(func() { out = m.claim.Holders(key) })
+	m.Ask(func() { out = m.claim.Holders(key) })
 	return out
 }
 
 func (m *member) Waiting(key int64) []broadcast.Operation {
 	var out []broadcast.Operation
-	m.ask(func() { out = m.claim.Waiting(key) })
+	m.Ask(func() { out = m.claim.Waiting(key) })
 	return out
 }
 
 func (m *member) Live() []int64 {
 	var out []int64
-	m.ask(func() { out = m.claim.Live() })
+	m.Ask(func() { out = m.claim.Live() })
 	return out
 }
 

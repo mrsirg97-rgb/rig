@@ -67,7 +67,7 @@ func (c *children) Next(op broadcast.Operation) error {
 			return nil
 		}
 		c.engine.Add(evt.Func(func(context.Context) {
-			if !c.start(act.Model, act.Port, act.Command, act.Env, act.Log) {
+			if !c.starting(act.Model, act.Port, act.Command, act.Env, act.Log) {
 				c.note(act.Model, fmt.Sprintf("the child's port %d never answered", act.Port))
 			}
 		}), room.PriorityChild)
@@ -75,14 +75,14 @@ func (c *children) Next(op broadcast.Operation) error {
 		if op.Origin() != c.self {
 			return nil
 		}
-		c.engine.Add(evt.Func(func(context.Context) { c.stop(act.Model, act.Grace) }), room.PriorityChild)
+		c.engine.Add(evt.Func(func(context.Context) { c.stopping(act.Model, act.Grace) }), room.PriorityChild)
 	case room.SwapChild:
 		if op.Origin() != c.self {
 			return nil
 		}
 		c.engine.Add(evt.Func(func(context.Context) {
-			c.stop(act.Out, act.Grace)
-			if !c.start(act.Model, act.Port, act.Command, act.Env, act.Log) {
+			c.stopping(act.Out, act.Grace)
+			if !c.starting(act.Model, act.Port, act.Command, act.Env, act.Log) {
 				c.note(act.Model, fmt.Sprintf("the child's port %d never answered", act.Port))
 			}
 		}), room.PriorityChild)
@@ -129,18 +129,36 @@ func (c *children) Next(op broadcast.Operation) error {
 
 func (c *children) Previous(op broadcast.Operation) error { return nil }
 
-func (c *children) resident() []string {
+func (c *children) resident(machine room.Member) []string {
+	type child struct {
+		id   string
+		port int
+	}
+	live := []child{}
+	machine.Ask(func() {
+		for _, id := range c.rows.Known() {
+			m, _ := c.rows.Get(id)
+			if m.Port > 0 {
+				live = append(live, child{id, m.Port})
+			}
+		}
+	})
 	out := []string{}
-	for _, id := range c.rows.Known() {
-		m, _ := c.rows.Get(id)
-		if m.Port > 0 && room.Answers(m.Port) {
-			out = append(out, id)
+	for _, ch := range live {
+		if room.Answers(ch.port) {
+			out = append(out, ch.id)
 		}
 	}
 	return out
 }
 
 func (c *children) start(model string, port int, command string, env []string, log string) bool {
+	done := make(chan bool, 1)
+	c.engine.Add(evt.Func(func(context.Context) { done <- c.starting(model, port, command, env, log) }), room.PriorityChild)
+	return <-done
+}
+
+func (c *children) starting(model string, port int, command string, env []string, log string) bool {
 	if port > 0 && room.Answers(port) {
 		return true
 	}
@@ -236,6 +254,12 @@ func (c *children) note(model, text string) {
 }
 
 func (c *children) stop(model string, grace int) {
+	done := make(chan struct{})
+	c.engine.Add(evt.Func(func(context.Context) { c.stopping(model, grace); close(done) }), room.PriorityChild)
+	<-done
+}
+
+func (c *children) stopping(model string, grace int) {
 	pid := c.pidOf(model)
 	if pid <= 0 {
 		return
