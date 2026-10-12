@@ -5,8 +5,9 @@
 The one-shot worker tool (`specs/SPEC_DELEGATE.md`, the workers of
 `specs/SPEC_WORKERS.md`): spawn a headless worker on a task now, in a
 workspace, and hand it off — the turn gets one line naming the worker,
-and the worker's message comes back on a later turn (2.14.0,
-SPEC_DELEGATE 8). A piped session has no later turn, so there the tool
+and the worker's message comes back as a message of its own — at the
+live turn's next step boundary, or as the next turn's input when no turn
+is live (2.14.0, 2.18.2, SPEC_DELEGATE 8). A piped session has no later turn, so there the tool
 waits and answers with the message itself (`Opts.Await`,
 SPEC_DELEGATE 9). The worker model
 resolves at claim time — the named one, else the resident model, else
@@ -36,8 +37,9 @@ nothing scheduled) and a resumable transcript in the state store.
   worker ends, `settle` clears the band row, and publishes
   `core.WorkerDone` (the worker's number, its task, its content — the
   same text the synchronous result always was — its exit, duration,
-  session and log) on the tool's room member; the frontends fold it
-  into the next turn. The error out of `settle` is the runner's, the
+  session and log) on the tool's room member; the frontends keep it
+  in their inbox, and the loop takes it at the next step boundary or
+  `Input` returns it. The error out of `settle` is the runner's, the
   one the blocking shape used to return; a handed-off worker's failure
   is its return's exit code, not an error of the turn that handed it
   off, and a worker that never ran has no stdout to cap — the fault

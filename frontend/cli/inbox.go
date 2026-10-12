@@ -6,6 +6,8 @@ import (
 	"github.com/mrsirg97-rgb/rig/v2/core"
 )
 
+func (c *cli) Returns() (string, bool) { return c.drainInbox() }
+
 func (c *cli) drainInbox() (string, bool) {
 	c.mu.Lock()
 	defer c.mu.Unlock()

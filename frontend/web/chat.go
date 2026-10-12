@@ -431,6 +431,7 @@ func capResult(s string) string {
 }
 
 func (s *Server) Input(ctx context.Context) (string, error) { return s.chat.Input(ctx) }
+func (s *Server) Returns() (string, bool)                   { return s.chat.Returns() }
 func (s *Server) Notify(ev evt.Signal)                      { s.chat.Notify(ev) }
 func (s *Server) Ask(ctx context.Context, prompt string) bool {
 	return s.chat.Ask(ctx, prompt)

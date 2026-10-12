@@ -205,7 +205,7 @@ func (r *root) buildSystem() string {
 }
 
 func asyncSection() string {
-	return "when a tool offers timeoutMs and you pass a valid integer, the tool runs in the background: the result arrives on a later turn, and a run past its bound is killed; without it the tool runs in-turn."
+	return "when a tool offers timeoutMs and you pass a valid integer, the tool runs in the background: the result arrives as a message once it ends, and a run past its bound is killed; without it the tool runs in-turn."
 }
 
 func idsSection() string {

@@ -23,7 +23,7 @@
           "type": "integer",
           "minimum": 1000,
           "maximum": 86400000,
-          "description": "pass it to run the command in the background, killed after this many ms: the call returns a started line and the output arrives on a later turn. omit it to run in-turn and get the output now."
+          "description": "pass it to run the command in the background, killed after this many ms: the call returns a started line and the output arrives as a message once it ends. omit it to run in-turn and get the output now."
         }
       },
       "required": [
@@ -448,7 +448,7 @@
   {
     "name": "delegate",
     "enabled": true,
-    "what": "fan out bounded sub-tasks to headless workers: starts a worker to run a task now and answers at once; its result comes back on a later turn.",
+    "what": "fan out bounded sub-tasks to headless workers: starts a worker to run a task now and answers at once; its result comes back as a message once it ends.",
     "guidelines": "the task should be bounded with a message-shaped result. use for long computations, broad research, or reviews, never a conversation. several delegate calls in one turn run as parallel fan-out. a model that is not resident refuses, naming the holder. the workspace must be under the session's workspace or the rig home. a worker holds only the doing set (bash, read, write, edit, view, python, web, rem), so write the task to fit it. never wait for a worker: keep working, and the returns arrive as a turn of their own. a command is one deterministic bash line on a command worker (no model, no clock).",
     "reply": "one line naming the worker, its session and its log.",
     "mutates": [
@@ -512,7 +512,7 @@
         },
         "timeoutMs": {
           "type": "integer",
-          "description": "pass it to run the cell in the background, killed after this many ms: the output arrives on a later turn. omit it to run in-turn, capped at 120000.",
+          "description": "pass it to run the cell in the background, killed after this many ms: the output arrives as a message once it ends. omit it to run in-turn, capped at 120000.",
           "minimum": 1000,
           "maximum": 600000
         }
@@ -554,7 +554,7 @@
         },
         "timeoutMs": {
           "type": "integer",
-          "description": "fetch only: pass it to fetch in the background, killed after this many ms: the page arrives on a later turn. omit it to fetch in-turn, capped at 30000.",
+          "description": "fetch only: pass it to fetch in the background, killed after this many ms: the page arrives as a message once it is fetched. omit it to fetch in-turn, capped at 30000.",
           "minimum": 1000,
           "maximum": 300000
         }

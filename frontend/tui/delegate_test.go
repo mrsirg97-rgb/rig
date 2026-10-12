@@ -410,3 +410,35 @@ func TestTheCallRowPaintsTheCallWarnAndTheAgeDim(t *testing.T) {
 		t.Fatalf("no call yet stays a dim dash: %q", idle[2])
 	}
 }
+
+func TestAReturnInsideATurnIsCommittedAndHandedOverOnce(t *testing.T) {
+	th, _ := ResolveTheme("oled", nil, true)
+	s := newScriptedSession(t, th, WithWidth(90))
+
+	if line := s.inputWhile("open the turn\n"); line != "open the turn" {
+		t.Fatalf("the operator's text opens the turn: %q", line)
+	}
+	if _, ok := s.fe.Returns(); ok {
+		t.Fatal("an empty inbox hands nothing over")
+	}
+	s.fe.Notify(core.WorkerDone{N: 1, Task: "go build", Content: "BUILD-OK", Exit: 0, Duration: time.Second, Kind: core.KindCommand, RunID: "j1"})
+	s.fe.Notify(core.WorkerDone{N: 2, Task: "go vet", Content: "VET-OK", Exit: 0, Duration: time.Second, Kind: core.KindCommand, RunID: "j2"})
+	s.tail = len(s.out.Bytes())
+	block, ok := s.fe.Returns()
+	if !ok || !strings.HasPrefix(block, "delegate #1 returned") || !strings.Contains(block, "delegate #2 returned") {
+		t.Fatalf("both returns ride one block in arrival order: %q", block)
+	}
+	plain := stripANSI(s.since())
+	for _, want := range []string{"delegate #1", "BUILD-OK", "VET-OK", "delegate #1, #2 returned"} {
+		if !strings.Contains(plain, want) {
+			t.Fatalf("the transcript shows what the model was told (%q):\n%s", want, plain)
+		}
+	}
+	if _, ok := s.fe.Returns(); ok {
+		t.Fatal("a return is handed over once")
+	}
+	s.fe.Notify(core.TurnEnd{Reason: core.TurnOver})
+	if _, ok := s.fe.drainInbox(context.Background()); ok {
+		t.Fatal("the boundary has nothing left to carry")
+	}
+}

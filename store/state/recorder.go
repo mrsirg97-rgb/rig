@@ -68,6 +68,24 @@ func (r *Recorder) Input(ctx context.Context) (string, error) {
 	return text, err
 }
 
+func (r *Recorder) Returns() (string, bool) {
+	in, ok := r.inner.(core.Inbox)
+	if !ok {
+		return "", false
+	}
+	text, ok := in.Returns()
+	if !ok {
+		return "", false
+	}
+	seq, e := RecordMessage(context.Background(), r.db, r.sid, "user", text, nil, nil, nil)
+	if e != nil {
+		r.loud("returns message", e)
+	} else {
+		r.setLastSeq(seq)
+	}
+	return text, true
+}
+
 func (r *Recorder) labelSession(text string) {
 	r.mu.Lock()
 	if r.labeled {

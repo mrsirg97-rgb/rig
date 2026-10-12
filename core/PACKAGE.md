@@ -24,8 +24,11 @@ type, an interface, or a context helper.
   so the text the model reads is one shape in every frontend; it is
   deliberately **not** a `Snapshot`, because returns accumulate and two of
   them must not collapse into one — the frontend keeps every worker that
-  comes back, the inbox appends them and hands them to the next turn in the
-  order they arrived, and `Content` is the same text the synchronous tool
+  comes back, the inbox appends them and hands them over in the order they
+  arrived — to the live turn at its next step boundary through the
+  optional `Inbox` seam (`Returns`, 2.18.2: a frontend that keeps an
+  inbox implements it, and a frontend wrapper forwards it), else as the
+  next turn's input, and `Content` is the same text the synchronous tool
   result always was, the worker's capped stdout and its trailer line), and
   `Notice` — the 2.8.3 reopening: one event for a background notice, `Source`
   (2.11.0 folded `SwarmNotice` into it: the swarm is a source like any other;
