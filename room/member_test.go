@@ -1,6 +1,8 @@
 package room
 
 import (
+	"fmt"
+	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -76,6 +78,58 @@ func TestTwoMembersAgreeOnWhoHolds(t *testing.T) {
 		if len(m.Holders(key)) != 2 {
 			t.Fatalf("holders = %d, want 2", len(m.Holders(key)))
 		}
+	}
+}
+
+func TestTwoMembersStartedTogetherEndInOneRoom(t *testing.T) {
+	home := t.TempDir()
+	type outcome struct {
+		m   Member
+		err error
+	}
+	out := make(chan outcome, 2)
+	for i := 0; i < 2; i++ {
+		go func() {
+			m, err := New(home, func(int64) int { return 1 }, nil, nil)
+			out <- outcome{m, err}
+		}()
+	}
+	var joined [2]Member
+	for i := 0; i < 2; i++ {
+		select {
+		case o := <-out:
+			if o.err != nil {
+				t.Fatalf("join: %v", o.err)
+			}
+			m := o.m
+			t.Cleanup(m.Close)
+			joined[i] = m
+		case <-time.After(10 * time.Second):
+			t.Fatal("the two starts never returned")
+		}
+	}
+	waitFor(t, "the two members started together to end in one room", func() bool {
+		return len(joined[0].Live()) == 1 && len(joined[1].Live()) == 1
+	})
+	if joined[0].Live()[0] != joined[1].Id() || joined[1].Live()[0] != joined[0].Id() {
+		t.Fatalf("each member must see the other: %v against %v", joined[0].Live(), joined[1].Live())
+	}
+}
+
+func TestAPeerGoneAtTheDialIsSkipped(t *testing.T) {
+	home := t.TempDir()
+	dir := filepath.Join(home, "room")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	ghost := broadcast.MemberOf([]byte("a member that is gone at the dial"))
+	name := fmt.Sprintf("%s-%d.sock", broadcast.EncodeID(ghost), os.Getpid())
+	if err := os.WriteFile(filepath.Join(dir, name), nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	m := newRoom(t, home, 1)
+	if got := m.Live(); len(got) != 0 {
+		t.Fatalf("the peer gone at the dial must be skipped, not the whole start: live %v", got)
 	}
 }
 

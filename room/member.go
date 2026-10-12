@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/mrsirg97-rgb/evt"
@@ -55,20 +56,34 @@ func New(home string, places func(int64) int, extra broadcast.Effects, told func
 	}
 	engine := evt.NewEngine()
 	ctx, cancel := context.WithCancel(context.Background())
-	members, err := broadcast.Scan(dir)
+	seed, err := identity()
 	if err != nil {
 		cancel()
 		return nil, err
 	}
-	id, err := identify(dir, members)
-	if err != nil {
-		cancel()
-		return nil, err
-	}
-	listener, err := broadcast.Listen(dir, id)
-	if err != nil {
-		cancel()
-		return nil, err
+	var listener net.Listener
+	var members []int64
+	var id int64
+	for i := 0; ; i++ {
+		id = broadcast.MemberOf([]byte(seed + " " + strconv.Itoa(i)))
+		listener, err = broadcast.Listen(dir, id)
+		if err != nil {
+			if !errors.Is(err, syscall.EADDRINUSE) {
+				cancel()
+				return nil, err
+			}
+			continue
+		}
+		members, err = broadcast.Scan(dir)
+		if err != nil {
+			listener.Close()
+			cancel()
+			return nil, err
+		}
+		if mine(id, members) == 1 {
+			break
+		}
+		listener.Close()
 	}
 	claim := broadcast.NewClaimant(engine, engine, id, broadcast.NewMinter(id, broadcast.MachineClock()), broadcast.NewFold(places, extra), PriorityFleet, told)
 	m := &member{id: id, engine: engine, claim: claim, home: home, listener: listener, cancel: cancel}
@@ -85,10 +100,12 @@ func New(home string, places func(int64) int, extra broadcast.Effects, told func
 		}
 	}()
 	for _, peer := range members {
+		if peer == id {
+			continue
+		}
 		conn, err := broadcast.Dial(dir, peer)
 		if err != nil {
-			m.Close()
-			return nil, err
+			continue
 		}
 		tr := broadcast.NewPipeTransport(peer, conn, Codec())
 		m.track(tr)
@@ -96,6 +113,16 @@ func New(home string, places func(int64) int, extra broadcast.Effects, told func
 	}
 	claim.Settle()
 	return m, nil
+}
+
+func mine(id int64, members []int64) int {
+	n := 0
+	for _, other := range members {
+		if other == id {
+			n++
+		}
+	}
+	return n
 }
 
 func (m *member) Close() {
@@ -166,26 +193,16 @@ func (m *member) Say(source, text string, level ...evt.Level) {
 	m.claim.Act(n, KeyOf("notice/"+source), PriorityFleet, func(bool) {})
 }
 
-func identify(dir string, members []int64) (int64, error) {
+func identity() (string, error) {
 	boot, err := bootID()
 	if err != nil {
-		return 0, err
+		return "", err
 	}
 	start, err := startTime()
 	if err != nil {
-		return 0, err
+		return "", err
 	}
-	taken := make(map[int64]bool, len(members))
-	for _, id := range members {
-		taken[id] = true
-	}
-	seed := boot + fmt.Sprintf(" %d %d", os.Getpid(), start)
-	for i := 0; ; i++ {
-		id := broadcast.MemberOf([]byte(seed + " " + strconv.Itoa(i)))
-		if !taken[id] {
-			return id, nil
-		}
-	}
+	return boot + fmt.Sprintf(" %d %d", os.Getpid(), start), nil
 }
 
 func bootID() (string, error) {
