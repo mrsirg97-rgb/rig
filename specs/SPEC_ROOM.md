@@ -61,7 +61,8 @@ other choices behind them.
 - **Finality** is the acknowledged claim (below). Lift's eventual finality —
   a tick is past the freshness window, so no earlier tick can still arrive —
   is replaced by every live member having acknowledged the operation.
-- **The clock** is the machine's monotonic clock. Nothing above the clock may
+- **The clock** is the machine's clock, wall-anchored and monotone within
+  the process (the order names the read). Nothing above the clock may
   assume it is the kernel's; 3.1.0's VDF is a clock swap, not a rewrite.
 - **The transport** is a unix socket. Nothing above the transport may ask for
   a file descriptor, an address family or a listener; the `Transport`
@@ -110,20 +111,27 @@ The order is **priority first, then tick, then member**:
 (priority desc, tick asc, member asc, nonce asc)
 ```
 
-- Priority is the room's table (below). Tick is the machine's monotonic clock
-  at mint, read through the standard library's `time.Now()` monotonic
-  reading, anchored to a per-process epoch so the nanoseconds are comparable
-  across processes (the clock underneath is system-wide): the runtime reads
+- Priority is the room's table (below). Tick is the machine's clock read as
+  the wall clock taken once at process start (`UnixNano`), plus the
+  monotonic time elapsed since that read. Go's monotonic reading counts from
+  each process's own start and the standard library exposes only differences
+  of it, so an epoch anchored at start is not comparable across processes: a
+  process up for a second would mint smaller ticks than one up for an hour,
+  and within a priority the newest process would always sort first while a
+  long-lived member waited behind every new one. The wall-anchored sum never
+  goes backwards within a process, it is comparable across processes to
+  within the wall clock's accuracy at their starts, and it is the standard
+  library on both platforms — the runtime reads
   `clock_gettime(CLOCK_MONOTONIC)` through the vDSO on Linux and
-  `mach_absolute_time` scaled by `mach_timebase_info` on macOS — named
-  because evt imports only the standard library and its CI holds that on
-  ubuntu and macos. The tick travels in the operation, so the order is
-  agreed whatever the clocks say: every member sorts by the tick the
-  operation carries. Only fairness within a priority depends on the clocks
-  agreeing — a lagging member's mint sorts later than its arrival — and a
-  tie at one nanosecond is broken by member and nonce, so the order is total
-  regardless. Member is the 62-bit member id; nonce separates a member's
-  mints within a tick.
+  `mach_absolute_time` scaled by `mach_timebase_info` on macOS for the
+  elapsed part. **The clock seam returns this tick.** The tick travels in
+  the operation, so the order is agreed whatever the clocks say: every
+  member sorts by the tick the operation carries. What the axis owes the
+  wall clock is fairness only: a wall-clock step between two processes'
+  starts can misorder their claims within one priority by the size of the
+  step — fairness, never safety — and a tie at one nanosecond is broken by
+  member and nonce, so the order is total regardless. Member is the 62-bit
+  member id; nonce separates a member's mints within a tick.
 - Lift orders `(tick asc, id asc)` where lift's `Priority` *is* the tick; the
   meaning — earliest verified time wins within an axis — is unchanged: the
   mint's id sorts by tick, then member, then nonce, and priority leads. One
@@ -455,7 +463,8 @@ New to evt: a claim is never acted on before it is final; a member that
 leaves mid-claim does not hold the others; priority outranks arrival; a 90
 minted after a 30 became final on a full key is not admitted until the 30
 releases; under shuffled delivery of two conflicting claims, every member
-ends with the same single holder.
+ends with the same single holder; two members started a known interval
+apart mint in real-time order, not in order of process age.
 
 Rig's own, against a fake model server and several members over real sockets:
 three members claim at once and enter in priority order; never more holders
