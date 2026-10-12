@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/mrsirg97-rgb/evt"
-	"github.com/mrsirg97-rgb/rig/v2/core"
+	"github.com/mrsirg97-rgb/rig/v3/core"
 )
 
 const editorNoise = "\x1b[?2004h\x1b(B\x1b)0\x1b[?1049h\x1b[1;24r\x1b[m\x0f\x1b[4l\x1b[39;49m\x1b[?1h\x1b=\x1b[?25l\x1b[H\x1b[J\x1b[22;34H\x1b[0;7m\x0f[ Reading... ]\x1b[m\x0f\x1b[34h\x1b[?25h\x1b[24;1H\x1b[?1049l\r\x1b[?1l\x1b>\x1b[?2004lStandard input is not a terminal\nerror: There was a problem with the editor 'editor'.\n"
