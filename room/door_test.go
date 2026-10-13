@@ -137,7 +137,7 @@ func TestTheSilentDoorSHoldsAreReleased(t *testing.T) {
 	})
 }
 
-func TestALoneDoorPacesTheChain(t *testing.T) {
+func TestALoneDoorSClockRuns(t *testing.T) {
 	m := doorMember(t, t.TempDir())
 	defer m.Close()
 	d, err := NewDoor(m, doorConfig("a", doorPorts(t, 1)[0], nil), nil, nil)
