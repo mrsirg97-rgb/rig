@@ -74,7 +74,7 @@ func NewDoor(member Member, cfg broadcast.MeshConfig, remote, home []int64) (Doo
 		return nil, err
 	}
 	probe.Close()
-	d.mesh = broadcast.NewMesh(member.Id(), cfg)
+	d.mesh = broadcast.NewMesh(broadcast.MemberOf([]byte(cfg.Machine)), cfg)
 	go func() { _ = d.mesh.Start(ctx) }()
 	go engine.Start(ctx)
 	go d.poll(ctx)

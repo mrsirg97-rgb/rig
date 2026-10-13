@@ -41,7 +41,9 @@ the five signals the instances exchange beside the protocol's own.
   the operator's turn 90.
 - The door (3.1.0): `NewDoor(member, cfg, remote, home)` — the machine's
   one mesh member beside the unix room, constructed only when
-  settings.json's `mesh` is set. The config carries
+  settings.json's `mesh` is set. The mesh member's id is the machine's
+  (`broadcast.MemberOf` over the door address), not the unix room
+  member's process id. The config carries
   `broadcast.NewTickClock(period, window, the fleet priority)` — the
   machine's time counted in periods, no proof, nothing computed between
   ticks — and the mesh's order is advisory: the key's home machine is its

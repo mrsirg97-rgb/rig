@@ -724,8 +724,9 @@ binds before the first dial**, the joiner dials a door, the dial makes it
 mutual, and the `Seated` answer introduces the rest of the doors. The member
 id is the same 62-bit `MemberOf` over the machine's identity, the process id
 and the start time, re-derived on a collision; the door-holder's id churns
-with its process, and the machine's identity in the mesh is its door address,
-which the setting holds.
+with its process, and the mesh member's id is the machine's — `MemberOf`
+over the door address the setting holds — not the process's: the mesh joins
+machines, not instances, and a machine re-joins as the same member.
 
 **Discovery.** One door per machine: `rig serve`, and no other instance
 binds the door address — when serve is down the machine is out of the mesh
@@ -936,11 +937,10 @@ periods, the stand-in for a machine whose clock is wrong), and the front
 ends a clock-refused claim as an error the caller reads**; **serve down
 means out of the mesh: no other instance binds the door and a remote request
 to the front refuses**; and the unix room's wire is byte-for-byte 3.0.4's
-with the setting on and off. The tests run two doors in one process, so the
-doors share a member id, and evt's expiry re-runs past the round count; the
-partition test pins the heal's property rather than the seen set's length —
-production ids are distinct, so the mesh's machines list is unaffected
-there.
+with the setting on and off. The tests run two doors in one process; the
+doors' mesh ids derive from their door addresses, so they are distinct
+members and evt's expiry re-runs harmlessly — the partition test pins the
+seen set: the silent machine leaves it and one machine remains.
 
 ### the mechanics
 

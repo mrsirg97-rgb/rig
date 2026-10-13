@@ -293,16 +293,8 @@ func TestPartitionHealingLeavesNoTwoHolders(t *testing.T) {
 
 	ma.Close()
 	da.Close()
-	doorAwait(t, "the silent door's holds to be released as acts and the partition to heal without a second holder", func() bool {
-		if len(mb.Holders(key)) != 0 {
-			return false
-		}
-		for _, machine := range db.Machines() {
-			if machine == "a" {
-				return false
-			}
-		}
-		return true
+	doorAwait(t, "the silent door's holds to be released as acts and the partition to heal with one holder", func() bool {
+		return len(mb.Holders(key)) == 0 && len(db.Machines()) == 1
 	})
 }
 
