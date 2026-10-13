@@ -44,8 +44,9 @@ the mesh and the re-bind leaves.
 The dashboard's room page shows the mesh's mode, the machines it sees
 and the tick horizon with the setting on, and its 3.0.4 shape with it
 off. The mesh's `Post` carries the unix-room claim it mirrors; rig
-consumes evt at the tag v0.4.1 (the clock as a construction value, the
-machine's clock and the claim's mint on one tag). The mesh's tests run on
+consumes evt at the tag v0.4.2 (the clock as a construction value, the
+machine's clock and the claim's mint on one tag, and a member refusing
+its own id from another machine). The mesh's tests run on
 the tick clock, wait on their conditions, and pass pinned to one core
 (`taskset -c 0`) under the race detector.
 

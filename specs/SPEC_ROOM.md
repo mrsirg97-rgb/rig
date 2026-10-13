@@ -950,8 +950,12 @@ untouched, now because nothing under those tests moved. The operator tagged
 v0.4.0 (main c174705), then v0.4.1 (main 9a6574d), which makes the clock a
 construction value, adds the machine's clock and gives the mesh's `Post` the
 unix-room claim it mirrors — the claim-mint fault found in step 4, reported
-with a failing test on the branch `evt-0.4.1-claim-mint`; rig builds against
-the tag v0.4.1 from here and the untracked `go.work` is gone. rig's work
+with a failing test on the branch `evt-0.4.1-claim-mint` — then v0.4.2
+(main 16de571), which refuses a member's own id from another machine: an act
+minted under this member's id does not fold, and a peer that answers under
+it is not counted as a door, the belt behind rig's machine-name id
+derivation. rig builds against
+the tag v0.4.2 from here and the untracked `go.work` is gone. rig's work
 runs on `feat/3.1.0-mesh` (the note and its amendments are its commits so
 far), a commit per step, pushed as it lands, a PR in each repository for the
 operator at the end. evt imports
