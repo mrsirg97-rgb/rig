@@ -258,6 +258,39 @@ tool call; it is not a retry allowance. `approve: "manual"` pauses every
 mutating call for your y/n; `sandbox: "off"` is the operator's explicit
 unjailing of the scheduled worker, one loud line per run.
 
+**`mesh`** (absent by default — 3.0.4 byte for byte without it) joins the
+machine to the mesh, the machines' orders ordered across them by the
+machine's clock, converging by gossip over TCP:
+
+```json
+"mesh": {
+  "room": "operator",
+  "listen": "100.118.31.66:7780",
+  "peers": ["100.120.230.71:7780"],
+  "period": 250,
+  "window": 4
+}
+```
+
+`room` names the mesh (the machines that join agree on it), `listen` is
+this machine's door — one address the tailnet reaches, a wildcard bind
+refused — and `peers` the other machines' doors. The clock runs on the
+machine's time counted in periods: `period` (milliseconds, default 250 —
+a tailnet round measured 96 ms and the period holds it comfortably)
+paces the ticks and the gossip rounds, `window` (default 4) is the
+freshness horizon the ticks count. The cost of turning it on: a remote
+request waits the horizon at the front — about 1.3 s at the defaults,
+measured on loopback (a tailnet dial measured 96 ms; cross-machine gossip
+not measured) — a turn that mints one claim per model call pays it per
+call; the mesh member idles between ticks (a lone mesh measured 0.00% of
+a core over 20 s). `iterations` is retired: a file that still carries it
+is refused by name, not ignored. A remote row (`baseURL` naming another
+machine's front, no port) is what the mesh carries: its holds post into
+the mesh, and a foreign claim past the horizon reposts at the home
+machine, where the row's child runs. The dashboard's room page shows the
+mesh's mode, the machines it sees and the tick horizon while the setting
+is on.
+
 **`models.json`**: the per-model table — this file is the table, merged
 by id over whatever the build ships:
 

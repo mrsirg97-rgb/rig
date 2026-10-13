@@ -215,6 +215,18 @@ the Apple meta tags, safe-area insets).
   flushed as it arrives, and the reply lifts the server's write deadline
   the way the chat stream does (3.0.1): a cold start or a long reply
   outlives the thirty seconds every other route is held to.
+- The mesh's gate (3.1.0): a remote row's request carries the
+  instance's unix-room claim mint (`X-Rig-Mint`, set by the claiming
+  provider) and is served when the door's mirror of that mint holds the
+  key — never a second claim for a holder, released at the reply's end
+  through the door, the remote release deleting nothing. The wait ends
+  four ways: the mirror holds, the caller's context ends, the mint's
+  machine leaves the mesh's machines (silent past `rounds` periods), or
+  the mint's claim is proven refused — the fold holds no act for it past
+  the horizon's window (`door.Refused`, the wrong clock) — and the last
+  two answer 503 naming what happened. With the setting on the room page
+  shows the mesh's mode, the machines it sees and the tick horizon; with
+  it off the page is 3.0.4's.
 - The models table is `cfg.Models` (the config's table, every row): the
   crontab is `sched.RealCrontab("")` (injected in tests); the runner
   command is `<self> run-job` (the store's `rig run-job` when empty).

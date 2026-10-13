@@ -39,6 +39,25 @@ the five signals the instances exchange beside the protocol's own.
   `Registry` declaring rig's five kinds beside `broadcast.Protocol()`'s.
 - The priorities: outside 0, child 20, fleet 30, delegate's return 70,
   the operator's turn 90.
+- The door (3.1.0): `NewDoor(member, cfg, remote, home)` — the machine's
+  one mesh member beside the unix room, constructed only when
+  settings.json's `mesh` is set. The config carries
+  `broadcast.NewTickClock(period, window, the fleet priority)` — the
+  machine's time counted in periods, no proof, nothing computed between
+  ticks — and the mesh's order is advisory: the key's home machine is its
+  authority. The door mirrors the two orders: a fold hold on a key whose
+  row names another machine's front posts into the mesh, and a foreign
+  claim past the freshness horizon (the window) reposts into the unix
+  room at the remote claim's priority — a hold, never a start: child
+  operations run only on the row's machine. `Holding(key, mint)` is the
+  front's mirror read; `Refused(key, mint, since)` is the clock's proof —
+  the fold holds no act for the mint and the horizon has passed the
+  mint's window (`since + window + 2`: an act folds while the horizon is
+  at most its tick plus the window, and its tick is at most the request's
+  arrival plus the door's sweep delay) — so the claim can no longer land
+  and the front answers 503 naming the clock. A door whose dial goes
+  unanswered for `rounds` periods is dropped, and what it held leaves as
+  acts.
 
 ## How it is consumed
 

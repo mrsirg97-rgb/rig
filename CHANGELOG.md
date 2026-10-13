@@ -1,4 +1,54 @@
 # Changelog
+## [3.1.0]: the machines join one mesh, and a remote peer's request is ordered by it
+
+`settings.json` gains `mesh`. With the setting on, `rig serve` binds the
+door address (the setting's `listen`, the tailnet address beside loopback)
+and joins the named mesh room over TCP, the machines' orders ordered by
+the ticks their clocks agree on and converged by gossip: the clock is the
+machine's (`broadcast.NewTickClock`, the tick the wall clock taken once at
+construction plus the monotonic time since — no proof rides the act,
+nothing is computed between ticks, a joiner posts at once), and the mesh's
+order is advisory, because a key's home machine is its authority. The
+setting's `room` is required (the machines that join agree on it), `listen`
+is required and must name one address (wildcard binds are refused), `peers`
+lists the other machines' doors, `period` defaults to 250 milliseconds (a
+tailnet round measured 96 ms and the period holds it comfortably) and
+`window` to 4 (about 1.25 s measured on loopback, the front's worst-case
+wait about 1.3 s). `iterations` is retired: a file that still carries it
+is refused by name, not ignored. The VDF stays evt's second clock and a
+later release's question; nothing in rig names the prime, the iterations
+or the genesis seed, and the mesh member idles between ticks (a lone mesh
+measured 0.00% of a core over 20 s, below the kernel's 10 ms accounting
+resolution, against the chain's core at 100%). Absent, nothing changes: no
+mesh piece is constructed and the unix room's wire is 3.0.4's byte for
+byte.
+
+One door per machine: `rig serve`'s instance is the door-holder, and its
+unix room runs 3.0.4 unchanged. The door mirrors the two orders: the
+fold's holds on the keys whose row names another machine's front post
+into the mesh, and a foreign claim past the freshness horizon reposts
+into the unix room at the remote claim's priority — a hold, never a
+start: child operations run only on the row's machine. A remote peer's
+request carries the instance's unix-room claim mint (`X-Rig-Mint`, set
+by the provider from the claiming decorator's context) and the wire
+front's gate serves it when the door's mirror of that mint holds the
+key, never claiming a second time for a holder, releasing at the reply's
+end, and ending its wait four ways: the mirror holding, the caller's
+context, the mint's machine going silent after `rounds` periods of
+unanswered dials, or the mint's claim proven refused — the mesh's fold
+holds no act for it past the horizon's window, the machine's clock wrong
+— as 503s the caller reads, never a wait. A door that misses three
+gossip rounds is gone and its holds leave as acts; serve down is out of
+the mesh and the re-bind leaves.
+
+The dashboard's room page shows the mesh's mode, the machines it sees
+and the tick horizon with the setting on, and its 3.0.4 shape with it
+off. The mesh's `Post` carries the unix-room claim it mirrors; rig
+consumes evt at the tag v0.4.1 (the clock as a construction value, the
+machine's clock and the claim's mint on one tag). The mesh's tests run on
+the tick clock, wait on their conditions, and pass pinned to one core
+(`taskset -c 0`) under the race detector.
+
 ## [3.0.4]: the room page reads like a terminal
 
 The room page draws what a terminal would. Each loaded model gets one
