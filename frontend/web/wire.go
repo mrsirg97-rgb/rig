@@ -12,11 +12,27 @@ import (
 	"time"
 
 	"github.com/mrsirg97-rgb/evt/broadcast"
+	"github.com/mrsirg97-rgb/rig/v3/core"
 	"github.com/mrsirg97-rgb/rig/v3/models"
 	"github.com/mrsirg97-rgb/rig/v3/room"
 )
 
-const maxWireBody = 256 << 20
+const (
+	maxWireBody = 256 << 20
+	gatePoll    = 50 * time.Millisecond
+)
+
+func mintOf(r *http.Request) (broadcast.Mint, bool) {
+	v := r.Header.Get(core.MintHeader)
+	if v == "" {
+		return broadcast.Mint{}, false
+	}
+	var m broadcast.Mint
+	if err := json.Unmarshal([]byte(v), &m); err != nil {
+		return broadcast.Mint{}, false
+	}
+	return m, true
+}
 
 func wirePath(path string) bool {
 	return path == "/v1/models" || path == "/v1/chat/completions" || path == "/running" || path == "/unload"
@@ -66,62 +82,7 @@ func (s *Server) resolve(name string) (models.Model, bool) {
 	return models.Model{}, false
 }
 
-func (s *Server) handleWireChat(w http.ResponseWriter, r *http.Request) {
-	if s.machine == nil {
-		writeErr(w, http.StatusServiceUnavailable, "the wire front needs a member of the room")
-		return
-	}
-	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, maxWireBody))
-	if err != nil {
-		var tooLarge *http.MaxBytesError
-		if errors.As(err, &tooLarge) {
-			writeErr(w, http.StatusRequestEntityTooLarge, fmt.Sprintf("the request body is over %d bytes", maxWireBody))
-			return
-		}
-		writeErr(w, http.StatusBadRequest, err.Error())
-		return
-	}
-	var req struct {
-		Model string `json:"model"`
-	}
-	if err := json.Unmarshal(body, &req); err != nil {
-		writeErr(w, http.StatusBadRequest, "the request names no model: "+err.Error())
-		return
-	}
-	row, ok := s.resolve(req.Model)
-	if !ok {
-		writeErr(w, http.StatusNotFound, "no such model: "+req.Model)
-		return
-	}
-	_ = http.NewResponseController(w).SetWriteDeadline(time.Time{})
-	claimed := make(chan struct{})
-	var mint broadcast.Mint
-	s.machine.Claim(room.KeyOf(row.ID), room.PriorityOutside, 0, func(m broadcast.Mint, ok bool) {
-		mint = m
-		close(claimed)
-	})
-	select {
-	case <-claimed:
-	case <-s.machine.Gone():
-		writeErr(w, http.StatusServiceUnavailable, "this instance left the room for an update: restart it")
-		return
-	case <-r.Context().Done():
-		go func() {
-			select {
-			case <-claimed:
-				s.machine.Release(mint, room.PriorityOutside)
-			case <-s.machine.Gone():
-			}
-		}()
-		return
-	}
-	defer s.machine.Release(mint, room.PriorityOutside)
-	if s.ready != nil {
-		if err := s.ready(r.Context(), row); err != nil {
-			writeErr(w, http.StatusBadGateway, err.Error())
-			return
-		}
-	}
+func (s *Server) upstream(w http.ResponseWriter, r *http.Request, body []byte, row models.Model) {
 	up, err := http.NewRequestWithContext(r.Context(), http.MethodPost, s.endpoint(row), bytes.NewReader(body))
 	if err != nil {
 		writeErr(w, http.StatusBadGateway, err.Error())
@@ -159,6 +120,106 @@ func (s *Server) handleWireChat(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+}
+
+func (s *Server) handleWireChat(w http.ResponseWriter, r *http.Request) {
+	if s.machine == nil {
+		writeErr(w, http.StatusServiceUnavailable, "the wire front needs a member of the room")
+		return
+	}
+	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, maxWireBody))
+	if err != nil {
+		var tooLarge *http.MaxBytesError
+		if errors.As(err, &tooLarge) {
+			writeErr(w, http.StatusRequestEntityTooLarge, fmt.Sprintf("the request body is over %d bytes", maxWireBody))
+			return
+		}
+		writeErr(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	var req struct {
+		Model string `json:"model"`
+	}
+	if err := json.Unmarshal(body, &req); err != nil {
+		writeErr(w, http.StatusBadRequest, "the request names no model: "+err.Error())
+		return
+	}
+	row, ok := s.resolve(req.Model)
+	if !ok {
+		writeErr(w, http.StatusNotFound, "no such model: "+req.Model)
+		return
+	}
+	_ = http.NewResponseController(w).SetWriteDeadline(time.Time{})
+	key := room.KeyOf(row.ID)
+	mint, remote := mintOf(r)
+	if remote && s.door == nil {
+		writeErr(w, http.StatusServiceUnavailable, "the wire front has no door: the mesh setting is off")
+		return
+	}
+	if remote {
+		serving := make(chan string, 1)
+		gone := make(chan string, 1)
+		go func() {
+			for {
+				holding, machine := s.door.Holding(key, mint)
+				if holding {
+					serving <- machine
+					return
+				}
+				if machine != "" {
+					seen := make(map[string]bool)
+					for _, m := range s.door.Machines() {
+						seen[m] = true
+					}
+					if !seen[machine] {
+						gone <- machine
+						return
+					}
+				}
+				time.Sleep(gatePoll)
+			}
+		}()
+		select {
+		case <-serving:
+		case <-r.Context().Done():
+			return
+		case m := <-gone:
+			writeErr(w, http.StatusServiceUnavailable, "the machine holding "+m+" went silent: the mint's claim is refused")
+			return
+		}
+		defer s.door.Release(mint)
+		s.upstream(w, r, body, row)
+		return
+	}
+	claimed := make(chan struct{})
+	own := broadcast.Mint{}
+	s.machine.Claim(key, room.PriorityOutside, 0, func(m broadcast.Mint, ok bool) {
+		own = m
+		close(claimed)
+	})
+	select {
+	case <-claimed:
+	case <-s.machine.Gone():
+		writeErr(w, http.StatusServiceUnavailable, "this instance left the room for an update: restart it")
+		return
+	case <-r.Context().Done():
+		go func() {
+			select {
+			case <-claimed:
+				s.machine.Release(own, room.PriorityOutside)
+			case <-s.machine.Gone():
+			}
+		}()
+		return
+	}
+	defer s.machine.Release(own, room.PriorityOutside)
+	if s.ready != nil {
+		if err := s.ready(r.Context(), row); err != nil {
+			writeErr(w, http.StatusBadGateway, err.Error())
+			return
+		}
+	}
+	s.upstream(w, r, body, row)
 }
 
 func (s *Server) endpoint(m models.Model) string {

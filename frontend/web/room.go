@@ -20,6 +20,7 @@ const (
 func (s *Server) handleRoom(w http.ResponseWriter, r *http.Request) {
 	members := []int64{}
 	models := map[string]any{}
+	mesh := map[string]any{"mode": "unix"}
 	if s.machine != nil {
 		live := s.machine.Live()
 		members = append(members, live...)
@@ -38,7 +39,12 @@ func (s *Server) handleRoom(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"members": members, "models": models})
+	if s.door != nil {
+		mesh["mode"] = "mesh"
+		mesh["machines"] = s.door.Machines()
+		mesh["horizon"] = s.door.Horizon()
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"members": members, "models": models, "mesh": mesh})
 }
 
 func (s *Server) handleUpdate(w http.ResponseWriter, r *http.Request) {

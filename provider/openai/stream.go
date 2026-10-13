@@ -82,6 +82,9 @@ func (p *provider) Stream(ctx context.Context, req core.Request) (<-chan evt.Sig
 			}
 			httpReq.Header.Set("Content-Type", "application/json")
 			httpReq.Header.Set("Accept", "text/event-stream")
+			if encoded, ok := core.MintFrom(ctx); ok {
+				httpReq.Header.Set(core.MintHeader, encoded)
+			}
 			if p.apiKey != "" {
 				httpReq.Header.Set("Authorization", "Bearer "+p.apiKey)
 			}

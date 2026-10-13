@@ -742,7 +742,10 @@ places and the local priorities — and the row on that machine is a remote
 row: `baseURL` names the home machine's wire front, the port is 0, there is
 no child half, and the provider's endpoint rule already sends the request
 there. The machine's door sees that hold in its unix room's fold and posts
-it into the mesh: the claim's mint, key, priority and machine. On the home
+it into the mesh: the act carries the door's own mint, the key, the priority
+and the machine, and the unix-room claim's mint rides the act's `Claim`
+field — the seam the mesh's `Post` gains, so the mirror's home door can map
+the front's request mint to the act. On the home
 machine, the door folds the remote claim, and once its tick is past the
 freshness horizon in that door's view, the door reposts it into the home
 machine's unix room as a fresh act at the remote claim's priority — the home
@@ -753,10 +756,12 @@ own fold shows
 that mint holding the key — the fold of the home machine's room, where the
 door's repost carries the remote claim's mint — and it waits until it does,
 because a remote peer can be admitted in its own view before the home
-machine has the act. The wait ends two ways, named: the mint's hold appears
-(the repost landed, the request is served) or the caller's context ends (the
-remote peer gives up). The horizon bounds the repost, so the wait is at most
-about (window + 1) tick periods.
+machine has the act. The wait ends three ways, named: the mint's hold appears
+(the repost landed, the request is served), the caller's context ends (the
+remote peer gives up), or the mint's machine goes silent — a claim refused
+as stale by the home door would never land, so the silent-door rule ends the
+wait as an error the caller sees. The horizon bounds the repost, so the wait
+is at most about (window + 1) tick periods.
 
 **The hold ends where the request ends.** The home machine releases a remote
 claim's hold when its front finishes the reply it served for that mint —
@@ -903,9 +908,12 @@ setting on and off.
 (main d7a18a9), the pieces beside the claimant — every v0.3.0 test passing
 untouched, now because nothing under those tests moved. The operator tagged
 v0.4.0 (main c174705); rig builds against the tag from here and the
-untracked `go.work` is gone. rig's work runs on
-`feat/3.1.0-mesh` (the note and its amendments are its commits so far), a
-commit per step, pushed as it lands, a PR in each repository for the
+untracked `go.work` is gone. The front's gate needs the mesh's `Post` to
+carry the unix-room claim it mirrors — the fault is reported with a failing
+test on the branch `evt-0.4.1-claim-mint`, and rig builds against that
+branch through the untracked `go.work` until the operator tags. rig's work
+runs on `feat/3.1.0-mesh` (the note and its amendments are its commits so
+far), a commit per step, pushed as it lands, a PR in each repository for the
 operator at the end. evt imports
 only the standard library; rig takes no new dependency and no cgo; no
 comments in Go code; no Co-Authored-By or generated-with lines.

@@ -609,18 +609,20 @@ func main() {
 	var webSrv *web.Server
 	closeFrontend := func() {}
 	if serveAddr != "" {
+		var door machineroom.Door
 		if cfg.Settings.Mesh != nil {
 			remote, home := meshKeys(cfg.Models)
-			door, derr := machineroom.NewDoor(machine, meshConfig(cfg.Settings.Mesh), remote, home)
+			d, derr := machineroom.NewDoor(machine, meshConfig(cfg.Settings.Mesh), remote, home)
 			if derr != nil {
 				fmt.Fprintln(os.Stderr, "rig serve:", derr)
 				os.Exit(1)
 			}
+			door = d
 			defer door.Close()
 		}
 		srv, werr := web.New(web.Options{
 			Home: cfgDir, CWD: cwd, Models: cfg.Models,
-			Machine: machine, Version: Version,
+			Machine: machine, Door: door, Version: Version,
 			Ready:   func(ctx context.Context, m models.Model) error { return kids.ready(ctx, machine, m) },
 			Crontab: sched.RealCrontab(""), RunnerCmd: self + " run-job", Natives: nativeToolNames,
 			Commands: command.All(), Env: env, Status: webStatus(r, sdb),

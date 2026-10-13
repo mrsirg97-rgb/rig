@@ -39,6 +39,7 @@ type Options struct {
 	Status   func(context.Context) Status
 
 	Machine room.Member
+	Door    room.Door
 	Version string
 	Ready   func(ctx context.Context, m models.Model) error
 
@@ -62,6 +63,7 @@ type Server struct {
 	chat    *chat
 	status  func(context.Context) Status
 	machine room.Member
+	door    room.Door
 	version string
 	ready   func(ctx context.Context, m models.Model) error
 }
@@ -104,6 +106,7 @@ func New(opts Options) (*Server, error) {
 		chat:      newChat(opts.Commands, opts.Env, opts.StopWorkers),
 		status:    opts.Status,
 		machine:   opts.Machine,
+		door:      opts.Door,
 		ready:     opts.Ready,
 		version:   opts.Version,
 	}, nil

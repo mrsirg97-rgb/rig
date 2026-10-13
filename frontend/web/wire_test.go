@@ -15,11 +15,17 @@ import (
 	"testing"
 	"time"
 
+	"github.com/mrsirg97-rgb/evt/broadcast"
+	"github.com/mrsirg97-rgb/rig/v3/core"
 	"github.com/mrsirg97-rgb/rig/v3/models"
 	"github.com/mrsirg97-rgb/rig/v3/room"
 )
 
 func wireServer(t *testing.T) (*Server, string, *httptest.Server, room.Member) {
+	return wireServerDoor(t, nil, nil)
+}
+
+func wireServerDoor(t *testing.T, machine room.Member, door room.Door) (*Server, string, *httptest.Server, room.Member) {
 	t.Helper()
 	up := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/v1/chat/completions" {
@@ -39,12 +45,15 @@ func wireServer(t *testing.T) (*Server, string, *httptest.Server, room.Member) {
 		t.Fatal(err)
 	}
 	home := seedHome(t)
-	machine, err := room.New(home, func(int64) int { return 1 }, nil, nil)
-	if err != nil {
-		t.Fatal(err)
+	if machine == nil {
+		m, err := room.New(home, func(int64) int { return 1 }, nil, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(m.Close)
+		machine = m
 	}
-	t.Cleanup(machine.Close)
-	srv, err := New(Options{Home: home, CWD: testCWD, Models: table, Crontab: &fakeCrontab{}, Natives: []string{"bash", "read"}, Root: home, Machine: machine, Version: "3.0.0"})
+	srv, err := New(Options{Home: home, CWD: testCWD, Models: table, Crontab: &fakeCrontab{}, Natives: []string{"bash", "read"}, Root: home, Machine: machine, Door: door, Version: "3.0.0"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -222,4 +231,84 @@ func TestTheLogsTailReadsTheEndOfALongFile(t *testing.T) {
 	if none := tail(filepath.Join(t.TempDir(), "absent.log"), 5); len(none) != 0 {
 		t.Fatalf("a model with no log reads empty, got %v", none)
 	}
+}
+
+func TestTheFrontSGateServesAMintWhenTheFoldShowsIt(t *testing.T) {
+	key := room.KeyOf("fake-child")
+	machine, err := room.New(seedHome(t), func(int64) int { return 1 }, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(machine.Close)
+	remote, err := room.New(seedHome(t), func(int64) int { return 1 }, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(remote.Close)
+	ports := freePorts(t, 2)
+	remoteDoor, err := room.NewDoor(remote, room.MeshConfig("gate-test", ports[0], []string{ports[1]}), []int64{key}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(remoteDoor.Close)
+	door, err := room.NewDoor(machine, room.MeshConfig("gate-test", ports[1], []string{ports[0]}), nil, []int64{key})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(door.Close)
+	srv, _, _, _ := wireServerDoor(t, machine, door)
+	claimed := make(chan broadcast.Mint, 1)
+	remote.Claim(key, room.PriorityTurn, 0, func(m broadcast.Mint, ok bool) { claimed <- m })
+	mint := <-claimed
+	await(t, "the mirror to hold the key in the home machine's fold", 20*time.Second, func() bool {
+		for _, op := range machine.Holders(key) {
+			if op.Priority() == room.PriorityTurn {
+				return true
+			}
+		}
+		return false
+	})
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	encoded, err := json.Marshal(mint)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", jsonBody(t, map[string]any{"model": "fake-child", "messages": []any{}}))
+	req.Header.Set(core.MintHeader, string(encoded))
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("a mint the fold shows must be served: got %d %s", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), "chat-1") {
+		t.Fatalf("the gate must serve the reply through the mirror: got %q", rec.Body.String())
+	}
+	await(t, "the gate to have served without claiming (the fold holds no outside-floor claim)", 5*time.Second, func() bool {
+		for _, op := range machine.Holders(key) {
+			if op.Priority() == room.PriorityOutside {
+				return false
+			}
+		}
+		return true
+	})
+	remote.Release(mint, room.PriorityTurn)
+	await(t, "the front's release to end the mirror at the reply's end", 20*time.Second, func() bool {
+		return len(machine.Holders(key)) == 0
+	})
+}
+
+func freePorts(t *testing.T, n int) []string {
+	t.Helper()
+	addrs := make([]string, n)
+	for i := range addrs {
+		ln, err := net.Listen("tcp", "127.0.0.1:0")
+		if err != nil {
+			t.Fatal(err)
+		}
+		addrs[i] = ln.Addr().String()
+		ln.Close()
+	}
+	return addrs
 }

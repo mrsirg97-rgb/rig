@@ -21,6 +21,8 @@ type Door interface {
 	Close()
 	Machines() []string
 	Horizon() int64
+	Holding(key int64, mint broadcast.Mint) (bool, string)
+	Release(mint broadcast.Mint)
 }
 
 type repost struct {
@@ -28,32 +30,32 @@ type repost struct {
 	priority int
 	admitted bool
 	released bool
+	remote   broadcast.Mint
+	machine  string
 }
 
 type door struct {
-	member   Member
-	mesh     broadcast.Mesh
-	engine   evt.Engine
-	cancel   context.CancelFunc
-	remote   []int64
-	home     map[int64]bool
-	out      map[int64]map[broadcast.Mint]broadcast.Act
-	in       map[int64]map[broadcast.Mint]*repost
-	machines map[broadcast.Mint]string
+	member Member
+	mesh   broadcast.Mesh
+	engine evt.Engine
+	cancel context.CancelFunc
+	remote []int64
+	home   map[int64]bool
+	out    map[int64]map[broadcast.Mint]broadcast.Act
+	in     map[int64]map[broadcast.Mint]*repost
 }
 
 func NewDoor(member Member, cfg broadcast.MeshConfig, remote, home []int64) (Door, error) {
 	engine := evt.NewEngine()
 	ctx, cancel := context.WithCancel(context.Background())
 	d := &door{
-		member:   member,
-		engine:   engine,
-		cancel:   cancel,
-		remote:   remote,
-		home:     make(map[int64]bool, len(home)),
-		out:      make(map[int64]map[broadcast.Mint]broadcast.Act),
-		in:       make(map[int64]map[broadcast.Mint]*repost),
-		machines: make(map[broadcast.Mint]string),
+		member: member,
+		engine: engine,
+		cancel: cancel,
+		remote: remote,
+		home:   make(map[int64]bool, len(home)),
+		out:    make(map[int64]map[broadcast.Mint]broadcast.Act),
+		in:     make(map[int64]map[broadcast.Mint]*repost),
 	}
 	for _, key := range home {
 		d.home[key] = true
@@ -122,8 +124,7 @@ func (d *door) absorb(act broadcast.Act) {
 		if _, ok := d.in[act.Key][act.Mint]; ok {
 			return
 		}
-		d.in[act.Key][act.Mint] = &repost{priority: act.Priority}
-		d.machines[act.Mint] = act.Machine
+		d.in[act.Key][act.Mint] = &repost{priority: act.Priority, remote: mirrored(act), machine: act.Machine}
 		d.member.Claim(act.Key, act.Priority, 0, d.entered(act.Key, act.Mint))
 	case broadcast.ActRelease:
 		if act.Claim == nil {
@@ -164,7 +165,51 @@ func (d *door) entered(key int64, origin broadcast.Mint) func(broadcast.Mint, bo
 
 func (d *door) forget(key int64, mint broadcast.Mint) {
 	delete(d.in[key], mint)
-	delete(d.machines, mint)
+}
+
+func (d *door) Release(mint broadcast.Mint) {
+	d.engine.Add(evt.Func(func(context.Context) {
+		for key, entries := range d.in {
+			for actMint, r := range entries {
+				if r.remote != mint {
+					continue
+				}
+				if r.admitted {
+					d.member.Release(r.claim, r.priority)
+				} else {
+					r.released = true
+				}
+				d.forget(key, actMint)
+				return
+			}
+		}
+	}), PriorityFleet)
+}
+
+func mirrored(act broadcast.Act) broadcast.Mint {
+	if act.Claim == nil {
+		return broadcast.Mint{}
+	}
+	return act.Claim.Mint
+}
+
+func (d *door) Holding(key int64, mint broadcast.Mint) (bool, string) {
+	found := make(chan *repost, 1)
+	d.engine.Add(evt.Func(func(context.Context) {
+		for _, r := range d.in[key] {
+			if r.remote != mint {
+				continue
+			}
+			found <- r
+			return
+		}
+		close(found)
+	}), PriorityFleet)
+	r, ok := <-found
+	if !ok {
+		return false, ""
+	}
+	return r.admitted, r.machine
 }
 
 func (d *door) sweep() {
@@ -176,7 +221,7 @@ func (d *door) sweep() {
 			if _, ok := d.out[key][op.Mint()]; ok {
 				continue
 			}
-			act, ok := d.mesh.Post(key, op.Priority())
+			act, ok := d.mesh.Post(key, op.Priority(), op.Mint())
 			if !ok {
 				continue
 			}
