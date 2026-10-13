@@ -1,4 +1,24 @@
 # Changelog
+## [3.0.4]: the room page reads like a terminal
+
+The room page draws what a terminal would. Each loaded model gets one
+line of state (resident or loading, how many hold it, how many wait),
+one line of its last request's speeds (decode, prompt, the cached share
+of the prompt), the requests served as a table in fixed columns (time,
+who, in, cache, out, tok/s) and the child's log in a box that scrolls
+and stays at its newest line unless the reader scrolled up. The page
+fills those in place every four seconds; it repaints only when the set
+of loaded models changes, so a scroll position survives. Escape
+sequences and overwritten progress lines are taken out of the log.
+
+Only the models that are loaded, held or waited on are drawn. The rest
+are one line that names them.
+
+The log's tail is read from the end of the file, its last 64 KB, where
+it was read whole on every request: a server that logs every request
+grows its file without bound. The page shows up to 200 lines of it and
+the last twelve requests.
+
 ## [3.0.3]: the phone reaches the room page; one job's command no longer breaks the list
 
 The phone's more menu lists the room and update pages. 3.0.0 added both

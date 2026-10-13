@@ -1387,13 +1387,51 @@ function tokens(n) {
   return n >= 1000 ? (n / 1000).toFixed(n >= 100000 ? 0 : 1) + 'k' : String(n);
 }
 
-function servedText(r) {
-  const parts = ['in ' + tokens(r.prompt)];
-  if (r.prompt > 0) parts.push('cached ' + Math.round(100 * r.cached / r.prompt) + '%');
-  parts.push('out ' + tokens(r.completion));
-  if (r.decode_per_second > 0) parts.push('decode ' + r.decode_per_second.toFixed(1) + ' tok/s');
-  if (r.prompt_per_second > 0) parts.push('prompt ' + Math.round(r.prompt_per_second) + ' tok/s');
-  return parts.join(' ' + G.dot + ' ');
+const SERVED_COLS = [
+  ['time', 8, false, (r) => new Date(r.at).toLocaleTimeString([], { hour12: false })],
+  ['who', 7, false, (r) => claimClass(r.priority)],
+  ['in', 6, true, (r) => tokens(r.prompt)],
+  ['cache', 5, true, (r) => (r.prompt > 0 ? Math.round(100 * r.cached / r.prompt) + '%' : '-')],
+  ['out', 6, true, (r) => tokens(r.completion)],
+  ['tok/s', 6, true, (r) => (r.decode_per_second > 0 ? r.decode_per_second.toFixed(1) : '-')],
+];
+
+function servedTable(rows) {
+  const cell = (text, width, right) => (right ? text.padStart(width) : text.padEnd(width));
+  const out = [SERVED_COLS.map(([name, width, right]) => cell(name, width, right)).join(' ')];
+  for (const r of rows) out.push(SERVED_COLS.map(([, width, right, read]) => cell(read(r), width, right)).join(' '));
+  return out.join('\n');
+}
+
+function servedHeadline(rows) {
+  const last = rows[rows.length - 1];
+  if (!last) return 'nothing served yet';
+  const parts = [];
+  if (last.decode_per_second > 0) parts.push(last.decode_per_second.toFixed(1) + ' tok/s decode');
+  if (last.prompt_per_second > 0) parts.push(Math.round(last.prompt_per_second) + ' tok/s prompt');
+  if (last.prompt > 0) parts.push(Math.round(100 * last.cached / last.prompt) + '% cached');
+  return parts.length ? parts.join(' ' + G.dot + ' ') : 'the server reported no speeds';
+}
+
+function logText(lines) {
+  return lines.map((l) => l.replace(/\x1b\[[0-9;?]*[ -\/]*[@-~]/g, '').split('\r').pop()).join('\n');
+}
+
+function roomShown(models) {
+  return Object.keys(models).filter((id) => models[id].live || models[id].holders > 0 || models[id].waiting > 0);
+}
+
+function fillTerm(pre, text) {
+  const pinned = pre.scrollTop + pre.clientHeight >= pre.scrollHeight - 4;
+  if (pre.textContent !== text) pre.textContent = text;
+  if (pinned) pre.scrollTop = pre.scrollHeight;
+}
+
+function fillRoomModel(parts, m) {
+  parts.state.textContent = (m.live ? 'resident' : 'loading') + ' ' + G.dot + ' ' + m.holders + ' holding ' + G.dot + ' ' + m.waiting + ' waiting';
+  parts.headline.textContent = servedHeadline(m.served || []);
+  parts.served.textContent = servedTable(m.served || []);
+  fillTerm(parts.log, logText(m.tail || []));
 }
 
 function paintRoom(data) {
@@ -1401,41 +1439,44 @@ function paintRoom(data) {
   const tb = toolBlock('room', 'members');
   main.appendChild(tb.el);
   const members = data.members || [];
-  if (!members.length) tb.body.appendChild(line('dim')).textContent = 'no other members live; this rig is a room of one';
-  for (const m of members) {
+  const models = data.models || {};
+  const shown = roomShown(models);
+  const parts = { members: line('dim'), rest: line('dim'), models: {}, shown: shown.join(' ') };
+  tb.body.appendChild(parts.members);
+  for (const id of shown) {
+    const box = el('div', 'roommodel');
     const head = line();
     head.appendChild(span(G.done + ' ', 'ember'));
-    head.appendChild(span('member ' + m, 'text bold'));
-    tb.body.appendChild(head);
-  }
-  tb.body.appendChild(line()).textContent = ' ';
-  const models = data.models || {};
-  for (const id of Object.keys(models)) {
-    const m = models[id];
-    const head = line();
-    head.appendChild(span((m.live ? G.done : G.pending) + ' ', m.live ? 'ember' : 'dim'));
     head.appendChild(span(id, 'text bold'));
-    head.appendChild(span('  ' + m.holders + ' holder(s), ' + m.waiting + ' waiting', 'ember'));
-    tb.body.appendChild(head);
-    const served = m.served || [];
-    for (const r of served) {
-      const row = line('detail');
-      const at = new Date(r.at);
-      row.textContent = at.toLocaleTimeString() + '  ' + claimClass(r.priority) + '  ' + servedText(r);
-      tb.body.appendChild(row);
-    }
-    const tail = m.tail || [];
-    if (served.length && tail.length) tb.body.appendChild(line('dim')).textContent = '  the child\'s log:';
-    for (const l of tail) {
-      tb.body.appendChild(line('dim')).textContent = '  ' + l;
-    }
-    tb.body.appendChild(line()).textContent = ' ';
+    const p = { state: span('', 'dim'), headline: line('ember'), served: el('pre', 'term served'), log: el('pre', 'term log') };
+    head.appendChild(span('  '));
+    head.appendChild(p.state);
+    box.appendChild(head);
+    box.appendChild(p.headline);
+    box.appendChild(el('div', 'termlabel', 'served'));
+    box.appendChild(p.served);
+    box.appendChild(el('div', 'termlabel', 'log'));
+    box.appendChild(p.log);
+    tb.body.appendChild(box);
+    parts.models[id] = p;
   }
-  tb.body.appendChild(el('div', 'hint', 'each row is one request a rig served from this model, newest last; the page re-reads while it is open'));
+  tb.body.appendChild(parts.rest);
+  fillRoom(parts, data);
+  for (const id of shown) parts.models[id].log.scrollTop = parts.models[id].log.scrollHeight;
+  return parts;
+}
+
+function fillRoom(parts, data) {
+  const members = data.members || [];
+  const models = data.models || {};
+  parts.members.textContent = members.length ? members.length + ' other member(s) in the room' : 'no other members live; this rig is a room of one';
+  for (const id of Object.keys(parts.models)) fillRoomModel(parts.models[id], models[id]);
+  const rest = Object.keys(models).filter((id) => !parts.models[id]);
+  parts.rest.textContent = rest.length ? 'not loaded: ' + rest.join(' ' + G.dot + ' ') : '';
 }
 
 async function renderRoom() {
-  paintRoom(await api('/api/room'));
+  let parts = paintRoom(await api('/api/room'));
   if (roomTimer) clearInterval(roomTimer);
   roomTimer = setInterval(async () => {
     if (state.view !== 'room') {
@@ -1447,9 +1488,8 @@ async function renderRoom() {
     try {
       const data = await api('/api/room');
       if (state.view !== 'room') return;
-      const y = window.scrollY;
-      paintRoom(data);
-      window.scrollTo(0, y);
+      if (roomShown(data.models || {}).join(' ') === parts.shown) fillRoom(parts, data);
+      else parts = paintRoom(data);
     } catch (e) {
       return;
     }

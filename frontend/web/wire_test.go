@@ -8,7 +8,9 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -196,5 +198,28 @@ func TestTheWireFrontOutlivesTheServersWriteTimeout(t *testing.T) {
 	body, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode != http.StatusOK || !strings.Contains(string(body), "chat-1") {
 		t.Fatalf("got %d %s", resp.StatusCode, body)
+	}
+}
+
+func TestTheLogsTailReadsTheEndOfALongFile(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "child.log")
+	var b strings.Builder
+	for i := 0; i < 20000; i++ {
+		b.WriteString("line ")
+		b.WriteString(strconv.Itoa(i))
+		b.WriteString("\n")
+	}
+	if err := os.WriteFile(path, []byte(b.String()), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	got := tail(path, 5)
+	if len(got) != 5 || got[4] != "line 19999" || got[0] != "line 19995" {
+		t.Fatalf("want the last five lines in order, got %v", got)
+	}
+	if all := tail(path, 1<<20); len(all) >= 20000 || all[0] == "line 0" || strings.Contains(all[0], "\n") {
+		t.Fatalf("a long file is read from its end and never from a cut line: %d lines, first %q", len(all), all[0])
+	}
+	if none := tail(filepath.Join(t.TempDir(), "absent.log"), 5); len(none) != 0 {
+		t.Fatalf("a model with no log reads empty, got %v", none)
 	}
 }

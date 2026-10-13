@@ -194,7 +194,12 @@ the Apple meta tags, safe-area insets).
   it, who waits, whether the row's port answers, the last requests any
   rig served from it (`room.Recent`: the claim's class, the prompt and
   how much of it was cached, the output, the decode and prompt speed)
-  and the child's log tail; it re-reads while it is open (3.0.2). The
+  and the child's log tail; it re-reads while it is open (3.0.2). Since
+  3.0.4 the page draws only the models that are loaded, held or waited
+  on (the rest are one line), the requests as a fixed-column table
+  (`SERVED_COLS`) and the log in a scrolling box that keeps its newest
+  line in view, and fills them in place; `tail` reads the file's last
+  64 KB, never the whole of it. The
   models page carries the residency beside the row. The scheduler page
   reads `sched.ListOpen`: active and paused jobs, with the count of
   finished one-off runs it leaves out. On the phone the room, models,
