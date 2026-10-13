@@ -23,6 +23,7 @@ type claiming struct {
 	priority int
 	talk     int64
 	row      models.Model
+	mesh     bool
 }
 
 func (c claiming) Stream(ctx context.Context, req core.Request) (<-chan evt.Signal, error) {
@@ -55,7 +56,10 @@ func (c claiming) Stream(ctx context.Context, req core.Request) (<-chan evt.Sign
 			return nil, err
 		}
 	}
-	inner, err := c.inner.Stream(mintContext(ctx, mint), req)
+	if c.mesh && c.row.Remote {
+		ctx = mintContext(ctx, mint)
+	}
+	inner, err := c.inner.Stream(ctx, req)
 	if err != nil {
 		c.machine.Release(mint, c.priority)
 		return nil, err

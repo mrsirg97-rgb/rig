@@ -89,6 +89,7 @@ func (s *Server) upstream(w http.ResponseWriter, r *http.Request, body []byte, r
 		return
 	}
 	up.Header = r.Header.Clone()
+	up.Header.Del(core.MintHeader)
 	if up.Header.Get("Authorization") == "" && row.APIKey != "" {
 		up.Header.Set("Authorization", "Bearer "+row.APIKey)
 	}
@@ -151,12 +152,8 @@ func (s *Server) handleWireChat(w http.ResponseWriter, r *http.Request) {
 	}
 	_ = http.NewResponseController(w).SetWriteDeadline(time.Time{})
 	key := room.KeyOf(row.ID)
-	mint, remote := mintOf(r)
-	if remote && s.door == nil {
-		writeErr(w, http.StatusServiceUnavailable, "the wire front has no door: the mesh setting is off")
-		return
-	}
-	if remote {
+	mint, minted := mintOf(r)
+	if minted && s.door != nil {
 		serving := make(chan string, 1)
 		gone := make(chan string, 1)
 		refused := make(chan struct{}, 1)
@@ -197,37 +194,30 @@ func (s *Server) handleWireChat(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		defer s.door.Release(mint)
-		if s.ready != nil {
-			if err := s.ready(r.Context(), row); err != nil {
-				writeErr(w, http.StatusBadGateway, err.Error())
-				return
-			}
+	} else {
+		claimed := make(chan struct{})
+		own := broadcast.Mint{}
+		s.machine.Claim(key, room.PriorityOutside, 0, func(m broadcast.Mint, ok bool) {
+			own = m
+			close(claimed)
+		})
+		select {
+		case <-claimed:
+		case <-s.machine.Gone():
+			writeErr(w, http.StatusServiceUnavailable, "this instance left the room for an update: restart it")
+			return
+		case <-r.Context().Done():
+			go func() {
+				select {
+				case <-claimed:
+					s.machine.Release(own, room.PriorityOutside)
+				case <-s.machine.Gone():
+				}
+			}()
+			return
 		}
-		s.upstream(w, r, body, row)
-		return
+		defer s.machine.Release(own, room.PriorityOutside)
 	}
-	claimed := make(chan struct{})
-	own := broadcast.Mint{}
-	s.machine.Claim(key, room.PriorityOutside, 0, func(m broadcast.Mint, ok bool) {
-		own = m
-		close(claimed)
-	})
-	select {
-	case <-claimed:
-	case <-s.machine.Gone():
-		writeErr(w, http.StatusServiceUnavailable, "this instance left the room for an update: restart it")
-		return
-	case <-r.Context().Done():
-		go func() {
-			select {
-			case <-claimed:
-				s.machine.Release(own, room.PriorityOutside)
-			case <-s.machine.Gone():
-			}
-		}()
-		return
-	}
-	defer s.machine.Release(own, room.PriorityOutside)
 	if s.ready != nil {
 		if err := s.ready(r.Context(), row); err != nil {
 			writeErr(w, http.StatusBadGateway, err.Error())

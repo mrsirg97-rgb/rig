@@ -525,6 +525,7 @@ func main() {
 		rigHome:    cfgDir,
 		activeID:   modelID,
 		row:        row,
+		mesh:       cfg.Settings.Mesh != nil,
 		effort:     effortLevel,
 		runtime:    rt,
 

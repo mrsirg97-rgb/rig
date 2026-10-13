@@ -773,7 +773,10 @@ machine, the door folds the remote claim, and once its tick is past the
 freshness horizon in that door's view, the door reposts it into the home
 machine's unix room as a fresh act at the remote claim's priority — the home
 machine's room decides, by the rules 3.0.4 already has, whether that hold
-takes a place. The request the instance sent to the front carries its mint,
+takes a place. The request the instance sent to the front carries its mint
+— the claiming decorator puts `X-Rig-Mint` on its provider's request only
+when the mesh setting is on and the row is a remote row, so a machine
+without the setting and a child row cost today's price —
 and **the front waits**: a request carrying a mint is served when the front's
 own fold shows
 that mint holding the key — the fold of the home machine's room, where the

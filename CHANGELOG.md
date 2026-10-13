@@ -30,7 +30,8 @@ into the mesh, and a foreign claim past the freshness horizon reposts
 into the unix room at the remote claim's priority — a hold, never a
 start: child operations run only on the row's machine. A remote peer's
 request carries the instance's unix-room claim mint (`X-Rig-Mint`, set
-by the provider from the claiming decorator's context) and the wire
+by the provider from the claiming decorator's context, only with the
+setting on and the row a remote row) and the wire
 front's gate serves it when the door's mirror of that mint holds the
 key, never claiming a second time for a holder, releasing at the reply's
 end, and ending its wait four ways: the mirror holding, the caller's

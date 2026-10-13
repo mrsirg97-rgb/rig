@@ -31,12 +31,17 @@ func wireServer(t *testing.T) (*Server, string, *httptest.Server, room.Member) {
 	return wireServerDoor(t, nil, nil)
 }
 
+var upstreamMint chan string
+
 func wireServerDoor(t *testing.T, machine room.Member, door room.Door) (*Server, string, *httptest.Server, room.Member) {
 	t.Helper()
 	up := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/v1/chat/completions" {
 			http.NotFound(w, r)
 			return
+		}
+		if upstreamMint != nil {
+			upstreamMint <- r.Header.Get(core.MintHeader)
 		}
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"id":"chat-1","choices":[{"message":{"role":"assistant","content":"hello"}}]}`))
@@ -263,6 +268,8 @@ func TestTheFrontSGateServesAMintWhenTheFoldShowsIt(t *testing.T) {
 	}
 	t.Cleanup(door.Close)
 	srv, _, _, _ := wireServerDoor(t, machine, door)
+	upstreamMint = make(chan string, 1)
+	t.Cleanup(func() { upstreamMint = nil })
 	claimed := make(chan broadcast.Mint, 1)
 	remote.Claim(key, room.PriorityTurn, 0, func(m broadcast.Mint, ok bool) { claimed <- m })
 	mint := <-claimed
@@ -290,6 +297,9 @@ func TestTheFrontSGateServesAMintWhenTheFoldShowsIt(t *testing.T) {
 	}
 	if !strings.Contains(rec.Body.String(), "chat-1") {
 		t.Fatalf("the gate must serve the reply through the mirror: got %q", rec.Body.String())
+	}
+	if got := <-upstreamMint; got != "" {
+		t.Fatalf("the front must not forward the mint to the child it serves: %q", got)
 	}
 	await(t, "the gate to have served without claiming (the fold holds no outside-floor claim)", 5*time.Second, func() bool {
 		for _, op := range machine.Holders(key) {
@@ -353,6 +363,19 @@ func TestTheFrontSEndsAClockRefusedClaimAsAnError(t *testing.T) {
 	await(t, "the remote release to leave the remote machine's room", 20*time.Second, func() bool {
 		return len(remote.Holders(key)) == 0
 	})
+}
+
+func TestAMintAtAFrontWithNoDoorIsServed(t *testing.T) {
+	srv, _, _, _ := wireServer(t)
+	encoded, _ := json.Marshal(broadcast.Mint{Step: 5, Member: 9, Nonce: 1})
+	req := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", jsonBody(t, map[string]any{"model": "fake-child", "messages": []any{}}))
+	req.Header.Set(core.MintHeader, string(encoded))
+	rec := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, req)
+	t.Logf("mesh off, request carrying a mint: %d %s", rec.Code, rec.Body.String())
+	if rec.Code != http.StatusOK {
+		t.Fatal("3.0.4 served this request; with the mesh off it is refused")
+	}
 }
 
 func TestTheGateMakesTheChildReadyForARemoteRequest(t *testing.T) {

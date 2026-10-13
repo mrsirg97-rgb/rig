@@ -214,6 +214,65 @@ func TestAChildRowIsSentToItsPortWhateverTheBaseURL(t *testing.T) {
 	}
 }
 
+type mintSeen struct {
+	saw chan bool
+}
+
+func (m mintSeen) Stream(ctx context.Context, _ core.Request) (<-chan evt.Signal, error) {
+	_, ok := core.MintFrom(ctx)
+	m.saw <- ok
+	ch := make(chan evt.Signal, 1)
+	ch <- core.Done{}
+	close(ch)
+	return ch, nil
+}
+
+func TestTheMintRidesOnlyARemoteRowOfAMesh(t *testing.T) {
+	_, kids, m := roomOf(t)
+	saw := make(chan bool, 1)
+	remote := models.Model{ID: "far", Window: 8192, MaxTokens: 2048, Reserve: 1024, KeepRecent: 2048, Role: models.RoleInteractive, BaseURL: "http://100.118.31.66:7777/v1", Provider: "openai"}
+	table, err := models.New(remote)
+	if err != nil {
+		t.Fatal(err)
+	}
+	row, _ := table.Get("far")
+	key := machineroom.KeyOf("far")
+	c := claiming{inner: mintSeen{saw}, machine: m, kids: kids, key: key, priority: machineroom.PriorityTurn, row: row, mesh: true}
+	ch, err := c.Stream(context.Background(), core.Request{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for range ch {
+	}
+	if !<-saw {
+		t.Fatal("a remote row of a mesh sends its request to the home machine's front, the mint must ride it")
+	}
+	await(t, "the claim to release", 5*time.Second, func() bool { return len(m.Holders(key)) == 0 })
+	c = claiming{inner: mintSeen{saw}, machine: m, kids: kids, key: key, priority: machineroom.PriorityTurn, row: row, mesh: false}
+	ch, err = c.Stream(context.Background(), core.Request{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for range ch {
+	}
+	if <-saw {
+		t.Fatal("a machine without the mesh setting must not carry the mint to its provider")
+	}
+	await(t, "the claim to release", 5*time.Second, func() bool { return len(m.Holders(key)) == 0 })
+	child := childRow("kid", freePort(t))
+	c = claiming{inner: mintSeen{saw}, machine: m, key: machineroom.KeyOf("kid"), priority: machineroom.PriorityTurn, row: child, mesh: true}
+	ch, err = c.Stream(context.Background(), core.Request{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for range ch {
+	}
+	if <-saw {
+		t.Fatal("a child row's request goes to its own port, the front is not involved and carries no mint")
+	}
+	await(t, "the claim to release", 5*time.Second, func() bool { return len(m.Holders(machineroom.KeyOf("kid"))) == 0 })
+}
+
 type speaking struct{}
 
 func (speaking) Stream(context.Context, core.Request) (<-chan evt.Signal, error) {
