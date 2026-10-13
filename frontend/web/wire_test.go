@@ -325,6 +325,60 @@ func TestTheFrontSGateServesAMintWhenTheFoldShowsIt(t *testing.T) {
 	})
 }
 
+func TestTheFrontSEndsAClaimNoDoorCarriesAsAnError(t *testing.T) {
+	key := room.KeyOf("fake-alias")
+	machine, err := room.New(seedHome(t), func(int64) int { return 1 }, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(machine.Close)
+	remote, err := room.New(seedHome(t), func(int64) int { return 1 }, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(remote.Close)
+	ports := freePorts(t, 2)
+	remoteDoor, err := room.NewDoor(remote, room.MeshConfig(ports[0], []string{ports[1]}, meshTestPeriod, meshTestWindow), []int64{key}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(remoteDoor.Close)
+	door, err := room.NewDoor(machine, room.MeshConfig(ports[1], []string{ports[0]}, meshTestPeriod, meshTestWindow), nil, []int64{room.KeyOf("fake-child")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(door.Close)
+	srv, _, _, _ := wireServerDoor(t, machine, door)
+	await(t, "the home door's clock to run", 20*time.Second, func() bool {
+		return door.Horizon() > 0
+	})
+	claimed := make(chan broadcast.Mint, 1)
+	remote.Claim(key, room.PriorityTurn, 0, func(m broadcast.Mint, ok bool) { claimed <- m })
+	mint := <-claimed
+	await(t, "the home door to see the claim under the key it does not carry", 20*time.Second, func() bool {
+		return door.Foreign(mint)
+	})
+	encoded, err := json.Marshal(mint)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", jsonBody(t, map[string]any{"model": "fake-alias", "messages": []any{}}))
+	req.Header.Set(core.MintHeader, string(encoded))
+	rec := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("a claim no door carries must end as an error the caller reads: got %d %s", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), "fake-alias") {
+		t.Fatalf("the refusal must name the model id: %q", rec.Body.String())
+	}
+	if strings.Contains(rec.Body.String(), "clock") {
+		t.Fatalf("the refusal must not blame the clock: %q", rec.Body.String())
+	}
+	t.Logf("debug: foreign=%v horizon=%d", door.Foreign(mint), door.Horizon())
+	remote.Release(mint, room.PriorityTurn)
+}
+
 func TestTheFrontSEndsAClockRefusedClaimAsAnError(t *testing.T) {
 	key := room.KeyOf("fake-child")
 	machine, err := room.New(seedHome(t), func(int64) int { return 1 }, nil, nil)

@@ -34,9 +34,12 @@ by the provider from the claiming decorator's context, only with the
 setting on and the row a remote row) and the wire
 front's gate serves it when the door's mirror of that mint holds the
 key, never claiming a second time for a holder, releasing at the reply's
-end, and ending its wait four ways: the mirror holding, the caller's
+end, and ending its wait five ways: the mirror holding, the caller's
 context, the mint's machine going silent after `rounds` periods of
-unanswered dials, or the mint's claim proven refused — the mesh's fold
+unanswered dials, the mesh's fold showing the claim under a key no door
+carries (a remote row whose id differs from the home row's — the front
+answers 503 naming the model id, the row's id the same on both machines),
+or the mint's claim proven refused — the mesh's fold
 holds no act for it past the horizon's window, the machine's clock wrong
 — as 503s the caller reads, never a wait. A door that misses three
 gossip rounds is gone and its holds leave as acts; serve down is out of

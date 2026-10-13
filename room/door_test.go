@@ -60,6 +60,37 @@ func doorConfig(machine, addr string, peers []string) broadcast.MeshConfig {
 	}
 }
 
+func TestTheDoorAnswersTheMintsItSawUnderKeysItDoesNotCarry(t *testing.T) {
+	ma := doorMember(t, t.TempDir())
+	mb := doorMember(t, t.TempDir())
+	defer ma.Close()
+	defer mb.Close()
+	key := KeyOf("alias-on-one-side")
+	addrs := doorPorts(t, 2)
+	da, err := NewDoor(ma, doorConfig("a", addrs[0], []string{addrs[1]}), []int64{key}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer da.Close()
+	db, err := NewDoor(mb, doorConfig("b", addrs[1], []string{addrs[0]}), nil, []int64{KeyOf("home-row")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	claimed := make(chan broadcast.Mint, 1)
+	ma.Claim(key, PriorityTurn, 0, func(m broadcast.Mint, ok bool) { claimed <- m })
+	mint := <-claimed
+
+	doorAwait(t, "the door must answer the mints it saw under keys it does not carry", func() bool {
+		return db.Foreign(mint)
+	})
+	doorAwait(t, "the answer must leave past the horizon's window", func() bool {
+		return !db.Foreign(mint)
+	})
+	ma.Release(mint, PriorityTurn)
+}
+
 func TestTheDoorMirrorsAHoldAcrossMachines(t *testing.T) {
 	ma := doorMember(t, t.TempDir())
 	mb := doorMember(t, t.TempDir())

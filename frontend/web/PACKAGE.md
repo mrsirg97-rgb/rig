@@ -229,11 +229,14 @@ the Apple meta tags, safe-area insets).
   a child or a provider, never rig. With the setting on the front binds
   the setting's listen host at the serve port beside loopback, the wire
   paths only, and the dashboard and its token gate stay loopback. The wait ends
-  four ways: the mirror holds, the caller's context ends, the mint's
-  machine leaves the mesh's machines (silent past `rounds` periods), or
-  the mint's claim is proven refused — the fold holds no act for it past
+  five ways: the mirror holds, the caller's context ends, the mint's
+  machine leaves the mesh's machines (silent past `rounds` periods), the
+  mesh's fold shows the claim under a key no door carries (a remote row
+  whose id differs from the home row's — the front answers 503 naming the
+  model id, the row's id the same on both machines), or the
+  mint's claim is proven refused — the fold holds no act for it past
   the horizon's window (`door.Refused`, the wrong clock) — and the last
-  two answer 503 naming what happened. With the setting on the room page
+  three answer 503 naming what happened. With the setting on the room page
   shows the mesh's mode, the machines it sees and the tick horizon; with
   it off the page is 3.0.4's.
 - The models table is `cfg.Models` (the config's table, every row): the

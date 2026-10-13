@@ -782,12 +782,16 @@ own fold shows
 that mint holding the key — the fold of the home machine's room, where the
 door's repost carries the remote claim's mint — and it waits until it does,
 because a remote peer can be admitted in its own view before the home
-machine has the act. The wait ends four ways, named: the mint's hold appears
+machine has the act. The wait ends five ways, named: the mint's hold appears
 (the repost landed, the request is served), the caller's context ends (the
 remote peer gives up), the mint's machine goes silent (a door whose dial
 goes unanswered for `rounds` periods is dropped and what it held leaves as
 acts; the front sees the machine leave the mesh's machines and answers 503
-naming it), or the mint's claim is proven refused — the mesh's fold holds no
+naming it), the mesh's fold shows the claim under a key no door carries (a
+remote row whose id differs from the home row's — an alias on one side —
+posts a key the home door does not carry, and the front answers 503 naming
+the model id, the row's id the same on both machines), or the mint's claim
+is proven refused — the mesh's fold holds no
 act for it past the horizon's window (the machine's clock is wrong, its tick
 outside every door's window) and the front answers 503 naming the clock. A
 refused claim ends as an error the caller reads, not a wait. The horizon

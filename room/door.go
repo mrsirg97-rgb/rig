@@ -22,6 +22,7 @@ type Door interface {
 	Machines() []string
 	Horizon() int64
 	Holding(key int64, mint broadcast.Mint) (bool, string, int)
+	Foreign(mint broadcast.Mint) bool
 	Refused(key int64, mint broadcast.Mint, since int64) bool
 	Release(mint broadcast.Mint)
 }
@@ -36,29 +37,31 @@ type repost struct {
 }
 
 type door struct {
-	member Member
-	mesh   broadcast.Mesh
-	engine evt.Engine
-	cancel context.CancelFunc
-	window int64
-	remote []int64
-	home   map[int64]bool
-	out    map[int64]map[broadcast.Mint]broadcast.Act
-	in     map[int64]map[broadcast.Mint]*repost
+	member  Member
+	mesh    broadcast.Mesh
+	engine  evt.Engine
+	cancel  context.CancelFunc
+	window  int64
+	remote  []int64
+	home    map[int64]bool
+	foreign map[broadcast.Mint]broadcast.Act
+	out     map[int64]map[broadcast.Mint]broadcast.Act
+	in      map[int64]map[broadcast.Mint]*repost
 }
 
 func NewDoor(member Member, cfg broadcast.MeshConfig, remote, home []int64) (Door, error) {
 	engine := evt.NewEngine()
 	ctx, cancel := context.WithCancel(context.Background())
 	d := &door{
-		member: member,
-		engine: engine,
-		cancel: cancel,
-		window: cfg.Window,
-		remote: remote,
-		home:   make(map[int64]bool, len(home)),
-		out:    make(map[int64]map[broadcast.Mint]broadcast.Act),
-		in:     make(map[int64]map[broadcast.Mint]*repost),
+		member:  member,
+		engine:  engine,
+		cancel:  cancel,
+		window:  cfg.Window,
+		remote:  remote,
+		home:    make(map[int64]bool, len(home)),
+		foreign: make(map[broadcast.Mint]broadcast.Act),
+		out:     make(map[int64]map[broadcast.Mint]broadcast.Act),
+		in:      make(map[int64]map[broadcast.Mint]*repost),
 	}
 	for _, key := range home {
 		d.home[key] = true
@@ -119,6 +122,7 @@ func (d *door) absorb(act broadcast.Act) {
 	switch act.Kind {
 	case broadcast.ActClaim:
 		if !d.home[act.Key] {
+			d.foreign[mirrored(act)] = act
 			return
 		}
 		if d.in[act.Key] == nil {
@@ -215,6 +219,15 @@ func (d *door) Holding(key int64, mint broadcast.Mint) (bool, string, int) {
 	return r.admitted, r.machine, r.priority
 }
 
+func (d *door) Foreign(mint broadcast.Mint) bool {
+	seen := make(chan bool, 1)
+	d.engine.Add(evt.Func(func(context.Context) {
+		_, ok := d.foreign[mint]
+		seen <- ok
+	}), PriorityFleet)
+	return <-seen
+}
+
 func (d *door) Refused(key int64, mint broadcast.Mint, since int64) bool {
 	answer := make(chan bool, 1)
 	d.engine.Add(evt.Func(func(context.Context) {
@@ -230,6 +243,12 @@ func (d *door) Refused(key int64, mint broadcast.Mint, since int64) bool {
 }
 
 func (d *door) sweep() {
+	h := d.mesh.Horizon()
+	for mint, act := range d.foreign {
+		if h > int64(act.Tick())+d.window+2 {
+			delete(d.foreign, mint)
+		}
+	}
 	for _, key := range d.remote {
 		holders := d.member.Holders(key)
 		live := make(map[broadcast.Mint]bool, len(holders))

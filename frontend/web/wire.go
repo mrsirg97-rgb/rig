@@ -159,6 +159,7 @@ func (s *Server) handleWireChat(w http.ResponseWriter, r *http.Request) {
 		serving := make(chan int, 1)
 		gone := make(chan string, 1)
 		refused := make(chan struct{}, 1)
+		foreign := make(chan struct{}, 1)
 		since := s.door.Horizon()
 		go func() {
 			for {
@@ -177,6 +178,10 @@ func (s *Server) handleWireChat(w http.ResponseWriter, r *http.Request) {
 						return
 					}
 				}
+				if s.door.Foreign(mint) {
+					foreign <- struct{}{}
+					return
+				}
 				if s.door.Refused(key, mint, since) {
 					refused <- struct{}{}
 					return
@@ -190,6 +195,9 @@ func (s *Server) handleWireChat(w http.ResponseWriter, r *http.Request) {
 			return
 		case m := <-gone:
 			writeErr(w, http.StatusServiceUnavailable, "the machine holding "+m+" went silent: the mint's claim is refused")
+			return
+		case <-foreign:
+			writeErr(w, http.StatusServiceUnavailable, "no door carries the key of "+req.Model+": the row's id must be the same on both machines")
 			return
 		case <-refused:
 			writeErr(w, http.StatusServiceUnavailable, "the mint's claim never landed in the mesh's fold: the machine's clock may be wrong")
