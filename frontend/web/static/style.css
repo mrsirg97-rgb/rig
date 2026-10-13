@@ -172,6 +172,10 @@ button::after { content: " ]"; color: var(--faint); }
 .rowact { display: inline-block; min-height: 44px; padding: 10px 12px; }
 
 pre.verbatim { margin: 0; white-space: pre-wrap; word-break: break-word; color: var(--text); }
+.roommodel { margin: 10px 0 14px; }
+.termlabel { color: var(--dim); margin: 8px 0 2px; }
+pre.term { margin: 0; padding: 8px 10px; background: var(--bg2); border: 1px solid var(--rule); border-radius: 4px; font-family: var(--mono); color: var(--text); white-space: pre; overflow: auto; }
+pre.term.log { max-height: 45vh; color: var(--reasoning); }
 
 .prompt { display: flex; align-items: flex-start; gap: 8px; margin: 8px 0 0; }
 .prompt .mark { color: var(--ember); padding-top: 3px; flex-shrink: 0; }

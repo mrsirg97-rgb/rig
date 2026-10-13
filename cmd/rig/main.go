@@ -51,7 +51,7 @@ import (
 	webtool "github.com/mrsirg97-rgb/rig/v3/tool/web"
 )
 
-const Version = "3.0.3"
+const Version = "3.0.4"
 
 func claimPriority(prompt string, served bool) int {
 	if v := os.Getenv("RIG_PRIORITY"); v != "" {

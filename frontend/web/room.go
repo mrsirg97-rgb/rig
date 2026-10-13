@@ -1,17 +1,20 @@
 package web
 
 import (
+	"io"
 	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 
 	"github.com/mrsirg97-rgb/rig/v3/room"
 )
 
 const (
-	logTail     = 24
-	servedShown = 8
+	logTail      = 200
+	logTailBytes = 64 * 1024
+	servedShown  = 12
 )
 
 func (s *Server) handleRoom(w http.ResponseWriter, r *http.Request) {
@@ -59,25 +62,38 @@ func (s *Server) handleUpdate(w http.ResponseWriter, r *http.Request) {
 }
 
 func tail(path string, n int) []string {
-	b, err := os.ReadFile(path)
+	lines := []string{}
+	f, err := os.Open(path)
 	if err != nil {
-		return []string{}
+		return lines
 	}
-	var lines []string
-	start := len(b)
-	for i := len(b) - 1; i >= 0 && len(lines) < n; i-- {
-		if b[i] == '\n' {
-			if start > i+1 {
-				lines = append(lines, string(b[i+1:start]))
-			}
-			start = i
+	defer f.Close()
+	info, err := f.Stat()
+	if err != nil {
+		return lines
+	}
+	from := info.Size() - logTailBytes
+	if from < 0 {
+		from = 0
+	}
+	if _, err := f.Seek(from, io.SeekStart); err != nil {
+		return lines
+	}
+	b, err := io.ReadAll(f)
+	if err != nil {
+		return lines
+	}
+	all := strings.Split(strings.TrimRight(string(b), "\n"), "\n")
+	if from > 0 && len(all) > 0 {
+		all = all[1:]
+	}
+	if len(all) > n {
+		all = all[len(all)-n:]
+	}
+	for _, l := range all {
+		if l != "" {
+			lines = append(lines, l)
 		}
-	}
-	if len(lines) < n && start < len(b) {
-		lines = append(lines, string(b[:start]))
-	}
-	for i, j := 0, len(lines)-1; i < j; i, j = i+1, j-1 {
-		lines[i], lines[j] = lines[j], lines[i]
 	}
 	return lines
 }
