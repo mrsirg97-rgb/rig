@@ -69,7 +69,10 @@ adapter's problem; the loop sees `evt.Signal` only.
 - `usage` is read from the usage chunk (the `stream_options.include_usage`
   request); cached tokens are a subset of `prompt` on this wire, and
   `total_tokens` is read and ignored. `usage.cost` (dollars, where the
-  endpoint returns it) becomes `Usage.Cost`.
+  endpoint returns it) becomes `Usage.Cost`. A chunk's `timings` object
+  (llama.cpp's and Maya's: `prompt_per_second`, `predicted_per_second`)
+  becomes `Usage.PromptPerSecond` and `Usage.DecodePerSecond` (3.0.2),
+  kept whichever of the two chunks arrives last.
 - **Retry**: a 429 or 5xx re-posts the identical body with backoff
   `base * 2^attempt * (1 + jitter)` inside the stream goroutine — the loop
   sees no event until the bound is exhausted, then the existing loud

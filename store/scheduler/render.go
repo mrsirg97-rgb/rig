@@ -113,6 +113,15 @@ type jobLineSet struct {
 }
 
 func List(ctx context.Context, db DB, ct Crontab, sessionCwd, home string, probe func(key string) bool, now func() time.Time) (string, error) {
+	text, _, err := list(ctx, db, ct, sessionCwd, home, probe, now, false)
+	return text, err
+}
+
+func ListOpen(ctx context.Context, db DB, ct Crontab, sessionCwd, home string, probe func(key string) bool, now func() time.Time) (string, int, error) {
+	return list(ctx, db, ct, sessionCwd, home, probe, now, true)
+}
+
+func list(ctx context.Context, db DB, ct Crontab, sessionCwd, home string, probe func(key string) bool, now func() time.Time, open bool) (string, int, error) {
 	var lines map[string]TaggedLine
 	if text, err := ct.List(); err == nil {
 		lines = map[string]TaggedLine{}
@@ -124,12 +133,12 @@ func List(ctx context.Context, db DB, ct Crontab, sessionCwd, home string, probe
 	}
 	_, tx, err := db.TxReadOnly(ctx)
 	if err != nil {
-		return "", err
+		return "", 0, err
 	}
 	f, err := eventsOf(tx)
 	if err != nil {
 		tx.Rollback()
-		return "", err
+		return "", 0, err
 	}
 	tx.Rollback()
 
@@ -143,10 +152,15 @@ func List(ctx context.Context, db DB, ct Crontab, sessionCwd, home string, probe
 		sort.Strings(orphans)
 	}
 
+	finished := 0
 	groups := map[string][]jobLineSet{}
 	for id := range f.jobs {
 		j := f.jobs[id]
 		if j.State == "removed" {
+			continue
+		}
+		if open && j.State == "done" {
+			finished++
 			continue
 		}
 		running := false
@@ -175,7 +189,7 @@ func List(ctx context.Context, db DB, ct Crontab, sessionCwd, home string, probe
 	}
 
 	if len(groups) == 0 && len(orphans) == 0 {
-		return "scheduler: no jobs (global.sqlite)", nil
+		return "scheduler: no jobs (global.sqlite)", finished, nil
 	}
 	var dirs []string
 	if g, ok := groups[sessionCwd]; ok && len(g) > 0 {
@@ -221,5 +235,5 @@ func List(ctx context.Context, db DB, ct Crontab, sessionCwd, home string, probe
 			fmt.Fprintf(&b, "  %s (no job row; remove the line)\n", key)
 		}
 	}
-	return b.String(), nil
+	return b.String(), finished, nil
 }

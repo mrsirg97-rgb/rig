@@ -9,6 +9,11 @@ import (
 	"github.com/mrsirg97-rgb/rig/v3/room"
 )
 
+const (
+	logTail     = 24
+	servedShown = 8
+)
+
 func (s *Server) handleRoom(w http.ResponseWriter, r *http.Request) {
 	members := []int64{}
 	models := map[string]any{}
@@ -25,7 +30,8 @@ func (s *Server) handleRoom(w http.ResponseWriter, r *http.Request) {
 				"holders": len(s.machine.Holders(key)),
 				"waiting": len(s.machine.Waiting(key)),
 				"live":    m.Port == 0 || room.Answers(m.Port),
-				"tail":    tail(filepath.Join(s.home, "logs", id+".log"), 8),
+				"tail":    tail(filepath.Join(s.home, "logs", id+".log"), logTail),
+				"served":  room.Recent(s.home, id, servedShown),
 			}
 		}
 	}

@@ -191,8 +191,13 @@ the Apple meta tags, safe-area insets).
   plus a registration line in `main.go`). `Machine` is the room member
   the three pages read; `Version` is the build the update page shows.
 - The room page shows the members and each model's residency: who holds
-  it, who waits, whether the row's port answers, the log's tail. The
-  models page carries the residency beside the row. The update page
+  it, who waits, whether the row's port answers, the last requests any
+  rig served from it (`room.Recent`: the claim's class, the prompt and
+  how much of it was cached, the output, the decode and prompt speed)
+  and the child's log tail; it re-reads while it is open (3.0.2). The
+  models page carries the residency beside the row. The scheduler page
+  reads `sched.ListOpen`: active and paused jobs, with the count of
+  finished one-off runs it leaves out. The update page
   shows the build's version and runs `rig -update`, which drains the
   room first.
 - The wire front (`wire.go`) answers `/v1/chat/completions`,

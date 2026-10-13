@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"time"
 
 	"github.com/mrsirg97-rgb/evt"
 	"github.com/mrsirg97-rgb/evt/broadcast"
@@ -59,6 +60,17 @@ func (c claiming) Stream(ctx context.Context, req core.Request) (<-chan evt.Sign
 	go func() {
 		defer c.machine.Release(mint, c.priority)
 		for ev := range inner {
+			if done, ok := ev.(core.Done); ok && c.kids != nil {
+				_ = room.Record(c.kids.home, c.row.ID, room.Served{
+					At:              time.Now().UTC(),
+					Priority:        c.priority,
+					Prompt:          done.Usage.Prompt,
+					Cached:          done.Usage.CacheRead,
+					Completion:      done.Usage.Completion,
+					PromptPerSecond: done.Usage.PromptPerSecond,
+					DecodePerSecond: done.Usage.DecodePerSecond,
+				})
+			}
 			out <- ev
 		}
 		close(out)

@@ -46,6 +46,8 @@ type, an interface, or a context helper.
   1.5.0's bytes): `Usage.Cost` (dollars, 0 when the endpoint reports none),
   `ReasoningDelta.Details` (the raw `reasoning_details` array chunk), and
   `Message.ReasoningDetails` (the full array, echoed back on later turns).
+  3.0.2 adds `Usage.PromptPerSecond` and `Usage.DecodePerSecond`, the
+  server's own speeds where it reports them and zero where it does not.
 - **The fleet's own readings** (2.14.0): `ToolStart.BoundedCall()` — a call
   that crossed a fleet transport carries the tool's name and one short
   argument in `Call.Args` as a JSON string, never a body, and this is the

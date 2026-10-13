@@ -321,9 +321,15 @@ func (r *root) buildProvider() core.Provider {
 			CacheWritePrice: r.row.CacheWritePrice,
 		})
 	}
+	baseURL := r.baseURL
+	if r.row.Port > 0 {
+		baseURL = fmt.Sprintf("http://127.0.0.1:%d/v1", r.row.Port)
+	} else if r.row.Remote {
+		baseURL = r.row.BaseURL
+	}
 	if !r.row.Remote && r.row.APIKey == "" {
 		cfg := openai.Config{
-			BaseURL:       r.baseURL,
+			BaseURL:       baseURL,
 			Model:         r.activeID,
 			HeaderTimeout: headerTimeout,
 		}
@@ -331,12 +337,6 @@ func (r *root) buildProvider() core.Provider {
 			cfg.BlobsDir = r.blobsDir()
 		}
 		return openai.NewWithConfig(cfg)
-	}
-	baseURL := r.baseURL
-	if r.row.Port > 0 {
-		baseURL = fmt.Sprintf("http://127.0.0.1:%d/v1", r.row.Port)
-	} else if r.row.Remote {
-		baseURL = r.row.BaseURL
 	}
 	return openai.NewWithConfig(openai.Config{
 		BaseURL:       baseURL,

@@ -67,6 +67,12 @@ type streamChunk struct {
 	Model   string       `json:"model"`
 	Choices []wireChoice `json:"choices"`
 	Usage   *wireUsage   `json:"usage"`
+	Timings *wireTimings `json:"timings"`
+}
+
+type wireTimings struct {
+	PromptPerSecond    float64 `json:"prompt_per_second"`
+	PredictedPerSecond float64 `json:"predicted_per_second"`
 }
 
 type wireChoice struct {

@@ -342,7 +342,10 @@ floor, so nothing here is a magic number.
 The dashboard keeps its pages and gains three, kept simple:
 
 - **the room** — members, claims by priority, who holds each place, what is
-  resident or loading;
+  resident or loading, and the last requests served from each model (the
+  class, the prompt and its cached share, the output, the decode and prompt
+  speed), read from `~/.rig/logs/<model id>.served`, which the instance that
+  made the request appends to (3.0.2);
 - **model logs** — each child's output, streamed from the log file while the
   page is connected;
 - **system stats** — GPU utilisation, temperature, power and memory; CPU use,

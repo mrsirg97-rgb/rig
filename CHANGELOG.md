@@ -1,4 +1,31 @@
 # Changelog
+## [3.0.2]: a child row is sent to its port; the dashboard shows what the models are doing
+
+A row with a port is sent to that port. 3.0.0 said so and did it only
+for a row with a key: a keyless local row, every row on the operator's
+box, still took the base URL. With the router gone and the scheduler's
+`swapUrl` on `rig serve`, a worker claimed the model, sent its request
+to the wire front, and the wire front claimed the same model behind the
+worker's own hold. The job waited on itself until someone ended it. The
+endpoint is now chosen once, before the row's kind: the port, then the
+remote row's base URL, then the base URL.
+
+The room page shows what each model is doing. Every request a rig
+serves is one line in `~/.rig/logs/<model id>.served`, written by the
+instance that made it: when, the claim's class, the prompt and how much
+of it was cached, the output, and the server's own decode and prompt
+speed (`Usage.PromptPerSecond` and `Usage.DecodePerSecond`, read from
+the `timings` object llama.cpp and Maya send). The page lists the last
+eight beside twenty-four lines of the child's log and re-reads every
+four seconds while it is open. A request an outside client sends
+through the wire front is not on the record yet.
+
+The scheduler page lists the jobs that can still fire. Every delegate
+run and every `once` job stays in the store as done, and the page drew
+all of them: 261 finished runs around two live jobs on the operator's
+box. It now shows active and paused jobs and says how many finished
+runs it left out. The scheduler tool's own list is unchanged.
+
 ## [3.0.1]: the first night without the router
 
 Two things the first cold start on the operator's box found.

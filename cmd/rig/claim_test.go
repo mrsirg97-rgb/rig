@@ -3,6 +3,10 @@ package main
 import (
 	"context"
 	"errors"
+	"io"
+	"net"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -179,4 +183,57 @@ func TestAStalePidFileNamesNobody(t *testing.T) {
 		t.Fatalf("a pid whose start time differs is another process: held %d", held)
 	}
 	kids.stop("gone", 0)
+}
+
+func TestAChildRowIsSentToItsPortWhateverTheBaseURL(t *testing.T) {
+	hit := make(chan string, 1)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hit <- r.URL.Path
+		w.Header().Set("Content-Type", "text/event-stream")
+		io.WriteString(w, "data: {\"choices\":[{\"delta\":{\"content\":\"x\"},\"finish_reason\":\"stop\"}]}\n\ndata: [DONE]\n\n")
+	}))
+	defer srv.Close()
+	row := childRow("local", srv.Listener.Addr().(*net.TCPAddr).Port)
+	r := &root{row: row, activeID: row.ID, baseURL: "http://127.0.0.1:1/v1"}
+	ch, err := r.buildProvider().Stream(context.Background(), core.Request{Messages: []core.Message{{Role: core.RoleUser, Content: "hi"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for ev := range ch {
+		if f, ok := ev.(core.Fault); ok {
+			t.Fatalf("a child row's request goes to the row's port, not the base URL: %v", f.Err)
+		}
+	}
+	select {
+	case path := <-hit:
+		if path != "/v1/chat/completions" {
+			t.Fatalf("path = %q", path)
+		}
+	default:
+		t.Fatal("the row's port was never asked")
+	}
+}
+
+type speaking struct{}
+
+func (speaking) Stream(context.Context, core.Request) (<-chan evt.Signal, error) {
+	ch := make(chan evt.Signal, 1)
+	ch <- core.Done{Usage: core.Usage{Prompt: 1000, CacheRead: 990, Completion: 12, DecodePerSecond: 88.5, PromptPerSecond: 2100}}
+	close(ch)
+	return ch, nil
+}
+
+func TestAServedRequestIsRecordedBesideTheChildsLog(t *testing.T) {
+	home, kids, m := roomOf(t)
+	c := claiming{inner: speaking{}, machine: m, kids: kids, key: machineroom.KeyOf("remote"), priority: machineroom.PriorityFleet, row: models.Model{ID: "remote"}}
+	ch, err := c.Stream(context.Background(), core.Request{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for range ch {
+	}
+	got := machineroom.Recent(home, "remote", 4)
+	if len(got) != 1 || got[0].Prompt != 1000 || got[0].Cached != 990 || got[0].DecodePerSecond != 88.5 || got[0].Priority != machineroom.PriorityFleet {
+		t.Fatalf("the request's usage and speeds must be on the record: %+v", got)
+	}
 }
