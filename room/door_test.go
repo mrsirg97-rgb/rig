@@ -150,6 +150,74 @@ func TestALoneDoorPacesTheChain(t *testing.T) {
 	})
 }
 
+func TestTheFoldSHoldKeepsAClaimUnrefused(t *testing.T) {
+	ma := doorMember(t, t.TempDir())
+	mb := doorMember(t, t.TempDir())
+	defer ma.Close()
+	defer mb.Close()
+	key := KeyOf("remote-model")
+	addrs := doorPorts(t, 2)
+	da, err := NewDoor(ma, doorConfig("a", addrs[0], []string{addrs[1]}), []int64{key}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer da.Close()
+	db, err := NewDoor(mb, doorConfig("b", addrs[1], []string{addrs[0]}), nil, []int64{key})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	claimed := make(chan broadcast.Mint, 1)
+	ma.Claim(key, PriorityTurn, 0, func(m broadcast.Mint, ok bool) { claimed <- m })
+	mint := <-claimed
+
+	doorAwait(t, "the hold must mirror before the refusal is asked", func() bool {
+		return len(mb.Holders(key)) == 1
+	})
+	since := db.Horizon()
+	if db.Refused(key, mint, since) {
+		t.Fatal("the fold holds the claim: the door must not call it refused")
+	}
+}
+
+func TestTheDoorProvesAClaimRefusedPastTheHorizon(t *testing.T) {
+	ma := doorMember(t, t.TempDir())
+	mb := doorMember(t, t.TempDir())
+	defer ma.Close()
+	defer mb.Close()
+	key := KeyOf("remote-model")
+	addrs := doorPorts(t, 2)
+	da, err := NewDoor(ma, doorConfig("a", addrs[0], []string{addrs[1]}), []int64{key}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer da.Close()
+	db, err := NewDoor(mb, broadcast.MeshConfig{
+		Machine: "b",
+		Addr:    addrs[1],
+		Peers:   []string{addrs[0]},
+		Clock:   broadcast.NewTickClock(doorTestPeriod/2, doorTestWindow, PriorityFleet),
+		Window:  doorTestWindow,
+	}, nil, []int64{key})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	claimed := make(chan broadcast.Mint, 1)
+	ma.Claim(key, PriorityTurn, 0, func(m broadcast.Mint, ok bool) { claimed <- m })
+	mint := <-claimed
+
+	doorAwait(t, "the home door's clock to run", func() bool {
+		return db.Horizon() > 0
+	})
+	since := db.Horizon()
+	doorAwait(t, "the fold's absence past the horizon proves the claim refused (the machine's clock is wrong)", func() bool {
+		return db.Refused(key, mint, since)
+	})
+}
+
 func TestTheRoomSWireCarriesNoMeshSignal(t *testing.T) {
 	enc := Codec()
 	_, err := enc.Encode(broadcast.NewMessage(1, true, broadcast.Act{Machine: "a"}))

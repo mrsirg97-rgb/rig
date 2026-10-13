@@ -304,6 +304,56 @@ func TestTheFrontSGateServesAMintWhenTheFoldShowsIt(t *testing.T) {
 	})
 }
 
+func TestTheFrontSEndsAClockRefusedClaimAsAnError(t *testing.T) {
+	key := room.KeyOf("fake-child")
+	machine, err := room.New(seedHome(t), func(int64) int { return 1 }, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(machine.Close)
+	remote, err := room.New(seedHome(t), func(int64) int { return 1 }, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(remote.Close)
+	ports := freePorts(t, 2)
+	remoteDoor, err := room.NewDoor(remote, room.MeshConfig(ports[0], []string{ports[1]}, meshTestPeriod, meshTestWindow), []int64{key}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(remoteDoor.Close)
+	door, err := room.NewDoor(machine, room.MeshConfig(ports[1], []string{ports[0]}, meshTestPeriod/2, meshTestWindow), nil, []int64{key})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(door.Close)
+	srv, _, _, _ := wireServerDoor(t, machine, door)
+	claimed := make(chan broadcast.Mint, 1)
+	remote.Claim(key, room.PriorityTurn, 0, func(m broadcast.Mint, ok bool) { claimed <- m })
+	mint := <-claimed
+	await(t, "the home door's clock to run", 20*time.Second, func() bool {
+		return door.Horizon() > 0
+	})
+	encoded, err := json.Marshal(mint)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", jsonBody(t, map[string]any{"model": "fake-child", "messages": []any{}}))
+	req.Header.Set(core.MintHeader, string(encoded))
+	rec := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("a claim the home machine's clock refuses must end as an error the caller reads: got %d %s", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), "the machine's clock may be wrong") {
+		t.Fatalf("the refusal must name the clock: got %q", rec.Body.String())
+	}
+	remote.Release(mint, room.PriorityTurn)
+	await(t, "the remote release to leave the remote machine's room", 20*time.Second, func() bool {
+		return len(remote.Holders(key)) == 0
+	})
+}
+
 func freePorts(t *testing.T, n int) []string {
 	t.Helper()
 	addrs := make([]string, n)

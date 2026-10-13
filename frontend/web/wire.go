@@ -159,6 +159,8 @@ func (s *Server) handleWireChat(w http.ResponseWriter, r *http.Request) {
 	if remote {
 		serving := make(chan string, 1)
 		gone := make(chan string, 1)
+		refused := make(chan struct{}, 1)
+		since := s.door.Horizon()
 		go func() {
 			for {
 				holding, machine := s.door.Holding(key, mint)
@@ -176,6 +178,10 @@ func (s *Server) handleWireChat(w http.ResponseWriter, r *http.Request) {
 						return
 					}
 				}
+				if s.door.Refused(key, mint, since) {
+					refused <- struct{}{}
+					return
+				}
 				time.Sleep(gatePoll)
 			}
 		}()
@@ -185,6 +191,9 @@ func (s *Server) handleWireChat(w http.ResponseWriter, r *http.Request) {
 			return
 		case m := <-gone:
 			writeErr(w, http.StatusServiceUnavailable, "the machine holding "+m+" went silent: the mint's claim is refused")
+			return
+		case <-refused:
+			writeErr(w, http.StatusServiceUnavailable, "the mint's claim never landed in the mesh's fold: the machine's clock may be wrong")
 			return
 		}
 		defer s.door.Release(mint)
