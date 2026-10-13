@@ -1,4 +1,23 @@
 # Changelog
+## [3.0.3]: the phone reaches the room page; one job's command no longer breaks the list
+
+The phone's more menu lists the room and update pages. 3.0.0 added both
+to the sidebar, and the phone has no sidebar: its more menu still named
+plugins and models only, so on a phone neither page could be opened.
+The menu's views are one list now, and the tab's highlight reads it.
+
+A job's command lists on one line. The list put a command in the job's
+detail line as it was stored, so a command written over several lines
+continued on lines that belong to no job. The dashboard reads the list
+by its shape, refused the whole of it, and drew plain text: no job on
+the page could be edited, paused or removed. One such delegate run on
+the operator's box did it. The detail line now carries the command with
+its line breaks as spaces; the stored command is unchanged.
+
+The dashboard's script and style are sent `Cache-Control: no-store`,
+as the page already was: a browser or the installed app kept the old
+script across an update.
+
 ## [3.0.2]: a child row is sent to its port; the dashboard shows what the models are doing
 
 A row with a port is sent to that port. 3.0.0 said so and did it only

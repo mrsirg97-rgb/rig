@@ -77,7 +77,7 @@ func jobLines(j *jobState, line *TaggedLine, running bool, now func() time.Time)
 	}
 	payload := "model " + j.Model
 	if j.Command != "" {
-		payload = "command " + j.Command
+		payload = "command " + strings.Join(strings.Fields(j.Command), " ")
 	}
 	if j.TimeoutSet {
 		payload += fmt.Sprintf(" · timeout %dm", j.Timeout)
