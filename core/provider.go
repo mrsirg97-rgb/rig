@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/mrsirg97-rgb/evt"
+	"github.com/mrsirg97-rgb/evt/broadcast"
 )
 
 var (
@@ -197,6 +198,23 @@ const (
 	KindKernel  = "kernel"
 	KindFetch   = "fetch"
 )
+
+const MintHeader = "X-Rig-Mint"
+
+type mintKey struct{}
+
+func MintContext(ctx context.Context, mint broadcast.Mint) context.Context {
+	encoded, err := json.Marshal(mint)
+	if err != nil {
+		return ctx
+	}
+	return context.WithValue(ctx, mintKey{}, string(encoded))
+}
+
+func MintFrom(ctx context.Context) (string, bool) {
+	v, ok := ctx.Value(mintKey{}).(string)
+	return v, ok
+}
 
 type WorkerDone struct {
 	N        int

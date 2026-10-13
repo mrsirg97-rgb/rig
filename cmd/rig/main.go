@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"net"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -13,6 +14,7 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/mrsirg97-rgb/evt"
 	"github.com/mrsirg97-rgb/evt/broadcast"
@@ -51,7 +53,7 @@ import (
 	webtool "github.com/mrsirg97-rgb/rig/v3/tool/web"
 )
 
-const Version = "3.0.4"
+const Version = "3.1.0"
 
 func claimPriority(prompt string, served bool) int {
 	if v := os.Getenv("RIG_PRIORITY"); v != "" {
@@ -525,6 +527,7 @@ func main() {
 		rigHome:    cfgDir,
 		activeID:   modelID,
 		row:        row,
+		mesh:       cfg.Settings.Mesh != nil,
 		effort:     effortLevel,
 		runtime:    rt,
 
@@ -609,9 +612,29 @@ func main() {
 	var webSrv *web.Server
 	closeFrontend := func() {}
 	if serveAddr != "" {
+		var door machineroom.Door
+		var tailnet string
+		if cfg.Settings.Mesh != nil {
+			remote, home := meshKeys(cfg.Models)
+			mesh := cfg.Settings.Mesh
+			d, derr := machineroom.NewDoor(machine, machineroom.MeshConfig(mesh.Listen, mesh.Peers, time.Duration(mesh.Period)*time.Millisecond, mesh.Window), remote, home)
+			if derr != nil {
+				fmt.Fprintln(os.Stderr, "rig serve:", derr)
+				os.Exit(1)
+			}
+			door = d
+			defer door.Close()
+			if host, _, err := net.SplitHostPort(cfg.Settings.Mesh.Listen); err == nil {
+				if _, port, err := net.SplitHostPort(serveAddr); err == nil {
+					if addr := net.JoinHostPort(host, port); addr != serveAddr {
+						tailnet = addr
+					}
+				}
+			}
+		}
 		srv, werr := web.New(web.Options{
 			Home: cfgDir, CWD: cwd, Models: cfg.Models,
-			Machine: machine, Version: Version,
+			Machine: machine, Door: door, Tailnet: tailnet, Version: Version,
 			Ready:   func(ctx context.Context, m models.Model) error { return kids.ready(ctx, machine, m) },
 			Crontab: sched.RealCrontab(""), RunnerCmd: self + " run-job", Natives: nativeToolNames,
 			Commands: command.All(), Env: env, Status: webStatus(r, sdb),

@@ -12,19 +12,36 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/mrsirg97-rgb/evt/broadcast"
+	"github.com/mrsirg97-rgb/rig/v3/core"
 	"github.com/mrsirg97-rgb/rig/v3/models"
 	"github.com/mrsirg97-rgb/rig/v3/room"
 )
 
+const (
+	meshTestPeriod = 50 * time.Millisecond
+	meshTestWindow = 4
+)
+
 func wireServer(t *testing.T) (*Server, string, *httptest.Server, room.Member) {
+	return wireServerDoor(t, nil, nil)
+}
+
+var upstreamMint chan string
+
+func wireServerDoor(t *testing.T, machine room.Member, door room.Door) (*Server, string, *httptest.Server, room.Member) {
 	t.Helper()
 	up := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/v1/chat/completions" {
 			http.NotFound(w, r)
 			return
+		}
+		if upstreamMint != nil {
+			upstreamMint <- r.Header.Get(core.MintHeader)
 		}
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"id":"chat-1","choices":[{"message":{"role":"assistant","content":"hello"}}]}`))
@@ -39,12 +56,15 @@ func wireServer(t *testing.T) (*Server, string, *httptest.Server, room.Member) {
 		t.Fatal(err)
 	}
 	home := seedHome(t)
-	machine, err := room.New(home, func(int64) int { return 1 }, nil, nil)
-	if err != nil {
-		t.Fatal(err)
+	if machine == nil {
+		m, err := room.New(home, func(int64) int { return 1 }, nil, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(m.Close)
+		machine = m
 	}
-	t.Cleanup(machine.Close)
-	srv, err := New(Options{Home: home, CWD: testCWD, Models: table, Crontab: &fakeCrontab{}, Natives: []string{"bash", "read"}, Root: home, Machine: machine, Version: "3.0.0"})
+	srv, err := New(Options{Home: home, CWD: testCWD, Models: table, Crontab: &fakeCrontab{}, Natives: []string{"bash", "read"}, Root: home, Machine: machine, Door: door, Version: "3.0.0"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -222,4 +242,259 @@ func TestTheLogsTailReadsTheEndOfALongFile(t *testing.T) {
 	if none := tail(filepath.Join(t.TempDir(), "absent.log"), 5); len(none) != 0 {
 		t.Fatalf("a model with no log reads empty, got %v", none)
 	}
+}
+
+func TestTheFrontSGateServesAMintWhenTheFoldShowsIt(t *testing.T) {
+	key := room.KeyOf("fake-child")
+	machine, err := room.New(seedHome(t), func(int64) int { return 1 }, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(machine.Close)
+	remote, err := room.New(seedHome(t), func(int64) int { return 1 }, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(remote.Close)
+	ports := freePorts(t, 2)
+	remoteDoor, err := room.NewDoor(remote, room.MeshConfig(ports[0], []string{ports[1]}, meshTestPeriod, meshTestWindow), []int64{key}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(remoteDoor.Close)
+	door, err := room.NewDoor(machine, room.MeshConfig(ports[1], []string{ports[0]}, meshTestPeriod, meshTestWindow), nil, []int64{key})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(door.Close)
+	srv, _, _, _ := wireServerDoor(t, machine, door)
+	upstreamMint = make(chan string, 1)
+	t.Cleanup(func() { upstreamMint = nil })
+	claimed := make(chan broadcast.Mint, 1)
+	remote.Claim(key, room.PriorityTurn, 0, func(m broadcast.Mint, ok bool) { claimed <- m })
+	mint := <-claimed
+	await(t, "the mirror to hold the key in the home machine's fold", 20*time.Second, func() bool {
+		for _, op := range machine.Holders(key) {
+			if op.Priority() == room.PriorityTurn {
+				return true
+			}
+		}
+		return false
+	})
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	encoded, err := json.Marshal(mint)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", jsonBody(t, map[string]any{"model": "fake-child", "messages": []any{}}))
+	req.Header.Set(core.MintHeader, string(encoded))
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("a mint the fold shows must be served: got %d %s", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), "chat-1") {
+		t.Fatalf("the gate must serve the reply through the mirror: got %q", rec.Body.String())
+	}
+	if got := <-upstreamMint; got != "" {
+		t.Fatalf("the front must not forward the mint to the child it serves: %q", got)
+	}
+	await(t, "the front to record the request it served", 5*time.Second, func() bool {
+		return len(room.Recent(srv.home, "fake-child", 4)) == 1
+	})
+	recorded := room.Recent(srv.home, "fake-child", 4)[0]
+	if recorded.Priority != room.PriorityTurn {
+		t.Fatalf("the record carries the remote claim's class: got %d", recorded.Priority)
+	}
+	if recorded.At.IsZero() {
+		t.Fatal("the record carries the time the reply ended")
+	}
+	await(t, "the gate to have served without claiming (the fold holds no outside-floor claim)", 5*time.Second, func() bool {
+		for _, op := range machine.Holders(key) {
+			if op.Priority() == room.PriorityOutside {
+				return false
+			}
+		}
+		return true
+	})
+	remote.Release(mint, room.PriorityTurn)
+	await(t, "the front's release to end the mirror at the reply's end", 20*time.Second, func() bool {
+		return len(machine.Holders(key)) == 0
+	})
+}
+
+func TestTheFrontSEndsAClaimNoDoorCarriesAsAnError(t *testing.T) {
+	key := room.KeyOf("fake-alias")
+	machine, err := room.New(seedHome(t), func(int64) int { return 1 }, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(machine.Close)
+	remote, err := room.New(seedHome(t), func(int64) int { return 1 }, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(remote.Close)
+	ports := freePorts(t, 2)
+	remoteDoor, err := room.NewDoor(remote, room.MeshConfig(ports[0], []string{ports[1]}, meshTestPeriod, meshTestWindow), []int64{key}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(remoteDoor.Close)
+	door, err := room.NewDoor(machine, room.MeshConfig(ports[1], []string{ports[0]}, meshTestPeriod, meshTestWindow), nil, []int64{room.KeyOf("fake-child")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(door.Close)
+	srv, _, _, _ := wireServerDoor(t, machine, door)
+	await(t, "the home door's clock to run", 20*time.Second, func() bool {
+		return door.Horizon() > 0
+	})
+	claimed := make(chan broadcast.Mint, 1)
+	remote.Claim(key, room.PriorityTurn, 0, func(m broadcast.Mint, ok bool) { claimed <- m })
+	mint := <-claimed
+	await(t, "the home door to see the claim under the key it does not carry", 20*time.Second, func() bool {
+		return door.Foreign(mint)
+	})
+	encoded, err := json.Marshal(mint)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", jsonBody(t, map[string]any{"model": "fake-alias", "messages": []any{}}))
+	req.Header.Set(core.MintHeader, string(encoded))
+	rec := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("a claim no door carries must end as an error the caller reads: got %d %s", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), "fake-alias") {
+		t.Fatalf("the refusal must name the model id: %q", rec.Body.String())
+	}
+	if strings.Contains(rec.Body.String(), "clock") {
+		t.Fatalf("the refusal must not blame the clock: %q", rec.Body.String())
+	}
+	t.Logf("debug: foreign=%v horizon=%d", door.Foreign(mint), door.Horizon())
+	remote.Release(mint, room.PriorityTurn)
+}
+
+func TestTheFrontSEndsAClockRefusedClaimAsAnError(t *testing.T) {
+	key := room.KeyOf("fake-child")
+	machine, err := room.New(seedHome(t), func(int64) int { return 1 }, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(machine.Close)
+	remote, err := room.New(seedHome(t), func(int64) int { return 1 }, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(remote.Close)
+	ports := freePorts(t, 2)
+	remoteDoor, err := room.NewDoor(remote, room.MeshConfig(ports[0], []string{ports[1]}, meshTestPeriod, meshTestWindow), []int64{key}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(remoteDoor.Close)
+	door, err := room.NewDoor(machine, room.MeshConfig(ports[1], []string{ports[0]}, meshTestPeriod/2, meshTestWindow), nil, []int64{key})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(door.Close)
+	srv, _, _, _ := wireServerDoor(t, machine, door)
+	claimed := make(chan broadcast.Mint, 1)
+	remote.Claim(key, room.PriorityTurn, 0, func(m broadcast.Mint, ok bool) { claimed <- m })
+	mint := <-claimed
+	await(t, "the home door's clock to run", 20*time.Second, func() bool {
+		return door.Horizon() > 0
+	})
+	encoded, err := json.Marshal(mint)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", jsonBody(t, map[string]any{"model": "fake-child", "messages": []any{}}))
+	req.Header.Set(core.MintHeader, string(encoded))
+	rec := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("a claim the home machine's clock refuses must end as an error the caller reads: got %d %s", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), "the machine's clock may be wrong") {
+		t.Fatalf("the refusal must name the clock: got %q", rec.Body.String())
+	}
+	remote.Release(mint, room.PriorityTurn)
+	await(t, "the remote release to leave the remote machine's room", 20*time.Second, func() bool {
+		return len(remote.Holders(key)) == 0
+	})
+}
+
+func TestAMintAtAFrontWithNoDoorIsServed(t *testing.T) {
+	srv, _, _, _ := wireServer(t)
+	encoded, _ := json.Marshal(broadcast.Mint{Step: 5, Member: 9, Nonce: 1})
+	req := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", jsonBody(t, map[string]any{"model": "fake-child", "messages": []any{}}))
+	req.Header.Set(core.MintHeader, string(encoded))
+	rec := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, req)
+	t.Logf("mesh off, request carrying a mint: %d %s", rec.Code, rec.Body.String())
+	if rec.Code != http.StatusOK {
+		t.Fatal("3.0.4 served this request; with the mesh off it is refused")
+	}
+}
+
+func TestTheGateMakesTheChildReadyForARemoteRequest(t *testing.T) {
+	key := room.KeyOf("fake-child")
+	machine, err := room.New(seedHome(t), func(int64) int { return 1 }, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(machine.Close)
+	remote, err := room.New(seedHome(t), func(int64) int { return 1 }, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(remote.Close)
+	ports := freePorts(t, 2)
+	remoteDoor, err := room.NewDoor(remote, room.MeshConfig(ports[0], []string{ports[1]}, meshTestPeriod, meshTestWindow), []int64{key}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(remoteDoor.Close)
+	door, err := room.NewDoor(machine, room.MeshConfig(ports[1], []string{ports[0]}, meshTestPeriod, meshTestWindow), nil, []int64{key})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(door.Close)
+	srv, _, _, _ := wireServerDoor(t, machine, door)
+	var readied atomic.Int32
+	srv.ready = func(context.Context, models.Model) error { readied.Add(1); return nil }
+	claimed := make(chan broadcast.Mint, 1)
+	remote.Claim(key, room.PriorityTurn, 0, func(m broadcast.Mint, ok bool) { claimed <- m })
+	mint := <-claimed
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	encoded, _ := json.Marshal(mint)
+	req := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", jsonBody(t, map[string]any{"model": "fake-child", "messages": []any{}}))
+	req.Header.Set(core.MintHeader, string(encoded))
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, req)
+	t.Logf("remote request: %d, ready calls: %d", rec.Code, readied.Load())
+	if readied.Load() == 0 {
+		t.Fatal("the gate served a remote request without the ready path: a cold child is never started")
+	}
+}
+
+func freePorts(t *testing.T, n int) []string {
+	t.Helper()
+	addrs := make([]string, n)
+	for i := range addrs {
+		ln, err := net.Listen("tcp", "127.0.0.1:0")
+		if err != nil {
+			t.Fatal(err)
+		}
+		addrs[i] = ln.Addr().String()
+		ln.Close()
+	}
+	return addrs
 }

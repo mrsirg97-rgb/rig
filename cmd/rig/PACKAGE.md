@@ -143,6 +143,19 @@ sees core and models and nothing else.
 - The frontend: the REPL by default, one-shot under `-p`, the TUI under
   `-tui`, the dashboard over the web door. All four dispatch
   `/`-commands, at the quiet prompt and at re-entry.
+- The mesh (3.1.0): settings.json's `mesh` set, `rig serve` constructs
+  the door (`machineroom.NewDoor(machine, machineroom.MeshConfig(...),
+  remote, home)`) before the web server and closes it on exit —
+  `room.MeshConfig` builds `broadcast.MeshConfig` with the tick clock from the
+  setting's `period` (milliseconds) and `window`, the door's `Machine`
+  and `Addr` the setting's `listen`, the `peers` the other machines'
+  doors; the keys the mesh carries split by the row: a remote row (a
+  `baseURL`) posts its holds, a row with a port is home; with the setting
+  on the front also binds the setting's listen host at the serve port
+  beside loopback, the model paths only (`/v1/models`,
+  `/v1/chat/completions`), and `/running`, `/unload`, the dashboard and
+  its token gate stay loopback. Absent, no mesh
+  piece is constructed and 3.0.4's wire is byte for byte.
 - `loop.Run(ctx, k)` drives the kernel: interrupt cancels the turn at
   its next boundary. The session row closes with what the run was
   (ok / fault / cancelled).

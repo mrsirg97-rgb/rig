@@ -5,7 +5,11 @@ import (
 	"path/filepath"
 )
 
-const DefaultReviewBatch = 3
+const (
+	DefaultReviewBatch = 3
+	DefaultMeshPeriod  = 250
+	DefaultMeshWindow  = 4
+)
 
 type Settings struct {
 	BaseURL       string
@@ -33,6 +37,7 @@ type Settings struct {
 	Approve       string
 	Plugins       SettingsPlugins
 	UpdateKey     string
+	Mesh          *Mesh
 
 	legacyJobModel string
 	legacyJobKey   bool
@@ -42,7 +47,15 @@ type SettingsPlugins struct {
 	Max int
 }
 
-var knownSettings = []string{"allow", "approve", "baseUrl", "decisionUnit", "decisionUrl", "defaultJobModel", "maxWorkers", "model", "plugins", "python", "reviewBatch", "resultCap", "retries", "rounds", "sandbox", "sandboxBinds", "searxngUrl", "swapUrl", "system", "theme", "trafilatura", "trainPython", "updateKey", "webFetchProxy", "workerWindow", "workers"}
+type Mesh struct {
+	Room   string
+	Listen string
+	Peers  []string
+	Period int64
+	Window int64
+}
+
+var knownSettings = []string{"allow", "approve", "baseUrl", "decisionUnit", "decisionUrl", "defaultJobModel", "maxWorkers", "mesh", "model", "plugins", "python", "reviewBatch", "resultCap", "retries", "rounds", "sandbox", "sandboxBinds", "searxngUrl", "swapUrl", "system", "theme", "trafilatura", "trainPython", "updateKey", "webFetchProxy", "workerWindow", "workers"}
 
 var knownSettingsSet = func() map[string]bool {
 	m := make(map[string]bool, len(knownSettings))
@@ -161,6 +174,9 @@ func mergeSettings(base, file Settings) Settings {
 	}
 	if file.WorkerWindow != 0 {
 		out.WorkerWindow = file.WorkerWindow
+	}
+	if file.Mesh != nil {
+		out.Mesh = file.Mesh
 	}
 	return out
 }

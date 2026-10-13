@@ -25,6 +25,16 @@ no core, no store types (decision 1). JSON only, stdlib encoding/json.
 - `plugins`: `max` caps the door's enum: `enabled` is retired (SPEC_GROWTH 9,
   amended); a non-empty one refuses at load naming the directory switch
   (`plugins/disabled/`), an empty one is dropped.
+- `mesh` (3.1.0): the machines' setting, absent by default — no mesh piece
+  is constructed and the unix room's wire is 3.0.4's byte for byte. `room`
+  names the mesh (the machines that join agree on it; nothing on the wire
+  carries it), `listen` is the machine's door (one address the tailnet
+  reaches; a wildcard bind refuses), `peers` the other machines' doors,
+  `period` the machine clock's cadence in milliseconds (default 250: a
+  tailnet round measured 96 ms and the period holds it) and `window` the
+  horizon in ticks (default 4: about 1.25 s measured on loopback).
+  `iterations` is retired: a file that still carries it is refused by
+  name, not ignored.
 - `loadSettings` / `parseSettings` / `mergeSettings`: the settings
   chain's file-over-embedded layer. The chain also reports whether the
   file named its own allow; a present `defaultJobModel` is carried to

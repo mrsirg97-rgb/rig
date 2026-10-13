@@ -11,6 +11,10 @@ import (
 	"github.com/mrsirg97-rgb/rig/v3/room"
 )
 
+func mintContext(ctx context.Context, mint broadcast.Mint) context.Context {
+	return core.MintContext(ctx, mint)
+}
+
 type claiming struct {
 	inner    core.Provider
 	machine  room.Member
@@ -19,6 +23,7 @@ type claiming struct {
 	priority int
 	talk     int64
 	row      models.Model
+	mesh     bool
 }
 
 func (c claiming) Stream(ctx context.Context, req core.Request) (<-chan evt.Signal, error) {
@@ -50,6 +55,9 @@ func (c claiming) Stream(ctx context.Context, req core.Request) (<-chan evt.Sign
 			c.machine.Release(mint, c.priority)
 			return nil, err
 		}
+	}
+	if c.mesh && c.row.Remote {
+		ctx = mintContext(ctx, mint)
 	}
 	inner, err := c.inner.Stream(ctx, req)
 	if err != nil {

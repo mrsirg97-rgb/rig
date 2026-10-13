@@ -125,7 +125,7 @@ func TestSettingsMalformedNamesFileAndField(t *testing.T) {
 		{"retries negative", `{"retries": -3}`, `retries: expected a non-negative number, got -3`},
 		{"retries overflow", `{"retries": 1e300}`, `retries: expected an integer within the platform range, got 1e+300`},
 		{"rounds overflow", `{"rounds": 1e300}`, `rounds: expected an integer within the platform range, got 1e+300`},
-		{"unknown key", `{"allowd": ["bash"]}`, `unknown key "allowd" (known: allow, approve, baseUrl, decisionUnit, decisionUrl, defaultJobModel, maxWorkers, model, plugins, python, reviewBatch, resultCap, retries, rounds, sandbox, sandboxBinds, searxngUrl, swapUrl, system, theme, trafilatura, trainPython, updateKey, webFetchProxy, workerWindow, workers)`},
+		{"unknown key", `{"allowd": ["bash"]}`, `unknown key "allowd" (known: allow, approve, baseUrl, decisionUnit, decisionUrl, defaultJobModel, maxWorkers, mesh, model, plugins, python, reviewBatch, resultCap, retries, rounds, sandbox, sandboxBinds, searxngUrl, swapUrl, system, theme, trafilatura, trainPython, updateKey, webFetchProxy, workerWindow, workers)`},
 		{"not an object", `[1]`, `expected a JSON object`},
 		{"allow element", `{"allow": ["bash", "read", 5]}`, `allow[2]: expected a string, got 5`},
 		{"sandbox value", `{"sandbox": "maybe"}`, `sandbox: expected "jailed", "landlock", or "off", got "maybe"`},
@@ -432,5 +432,118 @@ func TestWorkerWindowIsTheOperators(t *testing.T) {
 	write(t, dir, "settings.json", `{"workerWindow": -1}`)
 	if _, err := config.Load(dir, t.TempDir()); err == nil || !strings.Contains(err.Error(), "workerWindow: expected a non-negative number (0 = the row's window), got -1") {
 		t.Fatalf("a negative window refuses naming the key: %v", err)
+	}
+}
+
+func TestMeshIsAbsentByDefault(t *testing.T) {
+	cfg := load(t, t.TempDir(), t.TempDir())
+	if cfg.Settings.Mesh != nil {
+		t.Fatalf("absent mesh = %v, want nil (3.0.4 is byte-for-byte without the setting)", cfg.Settings.Mesh)
+	}
+}
+
+func TestMeshParsesTheDoorSConfig(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, "settings.json", `{"mesh": {"room": "operator", "listen": "100.118.31.66:7780", "peers": ["100.120.230.71:7780"], "period": 500, "window": 6}}`)
+	cfg := load(t, dir, t.TempDir())
+	m := cfg.Settings.Mesh
+	if m == nil {
+		t.Fatal("mesh = nil, want the door's config")
+	}
+	if m.Room != "operator" || m.Listen != "100.118.31.66:7780" {
+		t.Fatalf("mesh = %v, want the room and the door address named", m)
+	}
+	if len(m.Peers) != 1 || m.Peers[0] != "100.120.230.71:7780" {
+		t.Fatalf("peers = %v, want the other machine's door", m.Peers)
+	}
+	if m.Period != 500 || m.Window != 6 {
+		t.Fatalf("period = %d window = %d, want the operator's numbers", m.Period, m.Window)
+	}
+}
+
+func TestMeshDefaultsAreTheMeasuredNumbers(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, "settings.json", `{"mesh": {"room": "operator", "listen": "100.118.31.66:7780"}}`)
+	cfg := load(t, dir, t.TempDir())
+	m := cfg.Settings.Mesh
+	if m.Period != config.DefaultMeshPeriod {
+		t.Fatalf("period = %d, want %d (the tailnet's ping measured 96ms and the period holds a gossip round comfortably)", m.Period, config.DefaultMeshPeriod)
+	}
+	if m.Window != config.DefaultMeshWindow {
+		t.Fatalf("window = %d, want %d (about 1.25s a window at the default period, measured on loopback, comfortably longer than a tailnet round)", m.Window, config.DefaultMeshWindow)
+	}
+}
+
+func TestMeshRefusesUnknownKeys(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, "settings.json", `{"mesh": {"room": "operator", "listen": "100.118.31.66:7780", "mode": "on"}}`)
+	err := loadErr(t, dir, t.TempDir())
+	if !strings.Contains(err.Error(), `mesh: unknown key "mode" (known: listen, peers, period, room, window)`) {
+		t.Fatalf("an unknown mesh key refuses naming the known ones: %v", err)
+	}
+}
+
+func TestMeshIterationsIsRefusedByName(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, "settings.json", `{"mesh": {"room": "operator", "listen": "100.118.31.66:7780", "iterations": 500000}}`)
+	err := loadErr(t, dir, t.TempDir())
+	if !strings.Contains(err.Error(), `mesh: unknown key "iterations" (known: listen, peers, period, room, window)`) {
+		t.Fatalf("a file that still carries iterations is refused by name: %v", err)
+	}
+}
+
+func TestMeshRequiresListen(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, "settings.json", `{"mesh": {"listen": "100.118.31.66:7780"}}`)
+	cfg := load(t, dir, t.TempDir())
+	if cfg.Settings.Mesh == nil || cfg.Settings.Mesh.Listen != "100.118.31.66:7780" {
+		t.Fatalf("a mesh without a room loads — the room is the operators' agreement, nothing reads it: %v", cfg.Settings.Mesh)
+	}
+	dir = t.TempDir()
+	write(t, dir, "settings.json", `{"mesh": {"room": "operator"}}`)
+	err := loadErr(t, dir, t.TempDir())
+	if !strings.Contains(err.Error(), "mesh: listen is required") {
+		t.Fatalf("a mesh without a door address refuses: %v", err)
+	}
+}
+
+func TestMeshListenIsOneAddress(t *testing.T) {
+	for _, addr := range []string{"0.0.0.0:7780", ":7780", "[::]:7780", "100.118.31.66"} {
+		dir := t.TempDir()
+		write(t, dir, "settings.json", `{"mesh": {"room": "operator", "listen": "`+addr+`"}}`)
+		err := loadErr(t, dir, t.TempDir())
+		if err == nil {
+			t.Fatalf("listen %q loads, want a refusal (the door binds one address the tailnet reaches)", addr)
+		}
+	}
+}
+
+func TestMeshPeersAreAddresses(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, "settings.json", `{"mesh": {"room": "operator", "listen": "100.118.31.66:7780", "peers": ["100.120.230.71"]}}`)
+	err := loadErr(t, dir, t.TempDir())
+	if !strings.Contains(err.Error(), "mesh.peers: peers[0]") {
+		t.Fatalf("a peer without a port refuses naming the entry: %v", err)
+	}
+	dir = t.TempDir()
+	write(t, dir, "settings.json", `{"mesh": {"room": "operator", "listen": "100.118.31.66:7780", "peers": ["100.120.230.71:7780"]}}`)
+	cfg := load(t, dir, t.TempDir())
+	if len(cfg.Settings.Mesh.Peers) != 1 {
+		t.Fatalf("peers = %v, want the other machine's door", cfg.Settings.Mesh.Peers)
+	}
+}
+
+func TestMeshWindowAndPeriodArePositive(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, "settings.json", `{"mesh": {"room": "operator", "listen": "100.118.31.66:7780", "window": 0}}`)
+	err := loadErr(t, dir, t.TempDir())
+	if !strings.Contains(err.Error(), "mesh.window: expected a positive number (the horizon window in ticks), got 0") {
+		t.Fatalf("a zero window refuses: %v", err)
+	}
+	dir = t.TempDir()
+	write(t, dir, "settings.json", `{"mesh": {"room": "operator", "listen": "100.118.31.66:7780", "period": 0}}`)
+	err = loadErr(t, dir, t.TempDir())
+	if !strings.Contains(err.Error(), "mesh.period: expected a positive number (the machine's clock period in milliseconds), got 0") {
+		t.Fatalf("a zero period refuses: %v", err)
 	}
 }

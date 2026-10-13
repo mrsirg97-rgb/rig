@@ -75,6 +75,7 @@ type root struct {
 
 	activeID string
 	row      models.Model
+	mesh     bool
 	runtime  models.Table
 
 	effort string
@@ -277,6 +278,7 @@ func (r *root) buildPair() (core.Provider, core.ContextPolicy) {
 		priority: r.priority,
 		talk:     machineroom.KeyOf(r.session.ID),
 		row:      r.row,
+		mesh:     r.mesh,
 	}
 	pol, err := compact.New(inner, r.rec, r.session, r.fullSystem, r.row)
 	if err != nil {

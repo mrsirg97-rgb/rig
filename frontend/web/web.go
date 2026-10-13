@@ -39,6 +39,8 @@ type Options struct {
 	Status   func(context.Context) Status
 
 	Machine room.Member
+	Door    room.Door
+	Tailnet string
 	Version string
 	Ready   func(ctx context.Context, m models.Model) error
 
@@ -62,6 +64,8 @@ type Server struct {
 	chat    *chat
 	status  func(context.Context) Status
 	machine room.Member
+	door    room.Door
+	tailnet string
 	version string
 	ready   func(ctx context.Context, m models.Model) error
 }
@@ -104,6 +108,8 @@ func New(opts Options) (*Server, error) {
 		chat:      newChat(opts.Commands, opts.Env, opts.StopWorkers),
 		status:    opts.Status,
 		machine:   opts.Machine,
+		door:      opts.Door,
+		tailnet:   opts.Tailnet,
 		ready:     opts.Ready,
 		version:   opts.Version,
 	}, nil
@@ -137,6 +143,16 @@ func (s *Server) Handler() http.Handler {
 	})
 }
 
+func (s *Server) WireHandler() http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !modelPath(r.URL.Path) {
+			http.NotFound(w, r)
+			return
+		}
+		s.handleWire(w, r, r.URL.Path)
+	})
+}
+
 func (s *Server) ListenAndServe(ctx context.Context, addr string) error {
 	if err := Loopback(addr); err != nil {
 		return err
@@ -160,21 +176,45 @@ func (s *Server) ListenAndServe(ctx context.Context, addr string) error {
 	if err != nil {
 		return err
 	}
+	var tln net.Listener
+	if s.tailnet != "" && s.tailnet != addr {
+		tln, err = net.Listen("tcp", s.tailnet)
+		if err != nil {
+			ln.Close()
+			return fmt.Errorf("serve: the tailnet bind %s: %v", s.tailnet, err)
+		}
+	}
 	srv := &http.Server{
 		Handler:           s.Handler(),
 		ReadHeaderTimeout: 5 * time.Second,
 		WriteTimeout:      30 * time.Second,
 		IdleTimeout:       60 * time.Second,
 	}
-	errCh := make(chan error, 1)
+	var tailSrv *http.Server
+	errCh := make(chan error, 2)
 	go func() {
 		errCh <- srv.Serve(ln)
 	}()
+	if tln != nil {
+		tail := &http.Server{
+			Handler:           s.WireHandler(),
+			ReadHeaderTimeout: 5 * time.Second,
+			WriteTimeout:      30 * time.Second,
+			IdleTimeout:       60 * time.Second,
+		}
+		tailSrv = tail
+		go func() {
+			errCh <- tail.Serve(tln)
+		}()
+	}
 	select {
 	case <-ctx.Done():
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		defer cancel()
 		_ = srv.Shutdown(shutdownCtx)
+		if tailSrv != nil {
+			_ = tailSrv.Shutdown(shutdownCtx)
+		}
 		return nil
 	case err := <-errCh:
 		if errors.Is(err, http.ErrServerClosed) {
