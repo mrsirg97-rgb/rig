@@ -471,8 +471,11 @@ The room crosses machines. One protocol, two modes. `ipc` is 3.0.4 and stays
 the default: the instances of one machine over unix sockets, a claim final
 when every live member has acknowledged it. `mesh` is a setting: the
 machines' orders joined across more than one machine, ordered by verifiable
-time, converging by gossip. The operator's steer rules three things: the mesh
-has no quorum; it joins machines, not instances; and the VDF stays its clock.
+time, converging by gossip. The operator's steers rule five things: the mesh
+has no quorum; it joins machines, not instances; the VDF stays its clock;
+there is no finality seam in evt; and the door is `rig serve`, one per
+machine.
+
 An instance never knows which mode it is in: its room is the machine's unix
 room in both modes, and 3.0.4's code runs unchanged on it. The door is where
 the modes meet: a member of the machine's unix room and the machine's one
@@ -491,31 +494,32 @@ anti-entropy, and its storm test runs 7 peers under shuffled, contended,
 duplicated delivery with zero divergence. Lift remains the reference for
 meaning; the port conforms to evt's shapes.
 
-### finality becomes a seam in evt
+### evt v0.4.0: the mesh adds beside the claimant
 
-evt v0.3.0 carries two of the three seams. The clock is one
-(`NewMinter(member, clock)`, `MachineClock()`), the transport is one
-(`Transport`, the pipe and the unix socket). Finality is not: the rule —
-final when every live member acknowledged, admitted when every live member
-voted — is written into the claimant (`broadcast/claim.go` `mark`, `tally`,
-`left`). evt v0.4.0 lifts that rule behind one interface the claimant
-consults, and the claimant keeps its three rounds unchanged. The seam owns
-three answers:
+There is no finality seam. evt v0.4.0 does not touch the claimant: the
+claimant keeps its code, its tests and its wire, and every request on this
+box rides it — 3.0.4 went live on 2026-10-12 and replaced the router the
+same night, so a seam with one implementation is bought by refactoring
+`broadcast/claim.go`'s `mark`, `tally` and `left`, machinery for its own
+sake. The mesh does not run the claimant at all: a mesh write is lift's
+gossip core, appended locally and converged by anti-entropy, and finality in
+mesh is the horizon alone — the rule lives in the sequencer, which is one of
+the new types.
 
-- **when the act is final** — what `mark` asks;
-- **when the admission is decided** — what `tally` asks;
-- **what a closed connection means** — what `left` does.
+evt v0.4.0 is lift's VDF clock, the sequencer's horizon and reorg path, the
+TCP transport, gossip and its summaries, and the WAL, added beside the
+claimant. Which of evt's existing seams the mesh's pieces go behind: **the
+clock** — the VDF clock is a `Clock` behind `NewMinter(member, clock)`, the
+seam v0.3.0 already has — and **the transport** — the TCP transport
+satisfies `Transport` (Send with an ack, Recv with a callback, Close) and
+brings Peers, Serve, Sync and Gossip beside them. Which pieces are simply
+new types the door constructs: the sequencer (the horizon and the reorg
+path), gossip and its summaries, and the WAL — v0.3.0 has no seam for them
+and none is built. The step-2 test "every v0.3.0 test passes untouched"
+stays, now because nothing under those tests moved. The evt engine does not
+change; the fold, the guard and the signals do not change shape.
 
-The default implementation is ipc's rule, verbatim; every v0.3.0 test passes
-untouched with it behind the claimant. The seam is a constructor argument
-(`NewClaimant(..., finality)`) — constructed whole, never a global, never a
-mode branch in the claimant's body. mesh's rule goes behind the same seam,
-and mesh's member is lift's gossip core, not the claimant's three rounds: a
-write is local, the horizon decides what is acted on, and the log converges
-by gossip. The evt engine does not change; the fold, the guard and the
-signals do not change shape.
-
-### what mesh puts behind the three seams
+### the mesh's rules and the pieces behind them
 
 **Finality: the horizon alone.** The mesh has no quorum. An act is acted on
 once its tick is past the freshness horizon in the acting member's view —
@@ -605,19 +609,12 @@ room decides between a local claim and a remote one for the same key**: both
 are acts in its order, one clock, the rules 3.0.4 already has — priority
 first, then the mint; places, the entry, the continuation. The remote claim
 inside the home machine's room is the door's hold: the door member holds it,
-at the remote claim's priority, and what releases it is an act — the remote
-machine's own release carried by its door, or the release the home door
-mints when the remote machine goes quiet. The mesh's fold is the doors'
+at the remote claim's priority, and what releases it is an act — the home
+door's own release at the end of the reply it served for that mint, or the
+remote machine's own release carried across, or the release the doors mint
+when a door goes silent past its rounds. The mesh's fold is the doors'
 bookkeeping: which machine holds which key, the mirror's source, and the
 horizon's order.
-
-**One liveness rule, not two.** A member is gone when its connection ends —
-the mesh's door-to-door connection and the unix room's socket speak the same
-rule. The release of a gone member's holds is an act in the order that every
-member folds the same way: the door mints it, the gossip carries it, and a
-duplicate release deletes nothing and pins as nothing. The mesh adds no
-second rule: a partition's close is the connection's end, and the horizon,
-not a liveness guess, decides what the gone member's acts can still do.
 
 **What does not come across.** Every structure is touched only on the
 consumer: lift's mutexes on the sequencer and the gossip core do not join —
@@ -655,10 +652,15 @@ it names the room and the machine's door:
 - `iterations` and `window` are the clock's and finality's numbers above.
 
 The door is `rig serve`'s instance — the process the wire front already
-lives in and the one long-lived instance rig runs — and a machine that runs
-no serve has no door: the mesh does not carry it, its unix room is 3.0.4,
-and its requests cost today's price. The mesh's config is the door's, and
-the door reads the same settings.json the instances read. In evt, the mode
+lives in and the one long-lived instance rig runs — and it is the only
+door-holder: **a machine whose serve is down is out of the mesh until serve
+returns**, its unix room running as 3.0.4, a remote request to its front
+refusing, and no other instance binding the door, because the door carries
+the VDF frontier, the WAL and the pacer, and a worker that lives thirty
+seconds cannot carry them. A machine that runs no serve has no door: the
+mesh does not carry it, its unix room is 3.0.4, and its requests cost
+today's price. The mesh's config is the door's, and the door reads the same
+settings.json the instances read. In evt, the mode
 is what is constructed, never a global: the door builds the mesh's clock,
 transport, sequencer, WAL and gossip in its constructor, the way an instance
 builds the unix room's pipe transports today. The instances' code never
@@ -679,8 +681,9 @@ and the two orders meet in its two mirrors. The concrete meetings:
 - **The door's absence.** The machine's unix room runs as 3.0.4 while its
   door is down: its order never depends on the door for its own members, so
   local requests cost what they cost today. The mesh room runs on the
-  surviving doors; the doorless machine's holds are released by the peers as
-  acts, and a remote request to its front refuses until serve returns.
+  surviving doors; the doorless machine's holds are released at the round
+  count, a remote request to its front refuses until serve returns, and no
+  other instance binds the door.
 - **The room's own subprocesses.** A worker, a `run-job`, an update — every
   rig process joins the machine's unix room as it does today, claims as it
   does today, and pays today's price; when the key it claims names another
@@ -701,25 +704,34 @@ and the start time, re-derived on a collision; the door-holder's id churns
 with its process, and the machine's identity in the mesh is its door address,
 which the setting holds.
 
-**Discovery without a hole.** When a machine's door-holder exits and its
-other members live on, a joiner from the other machine still finds the room,
-by two mechanisms and no poll. First, the door-holder's exit is an event the
-machine's own instances see — the door is a member of their unix room, and
-its leave is the connection's end 3.0.4 already delivers — and the instances
-that saw it attempt the door's bind, first bind wins, the losers stand down;
-the machine's door address is held again at once by a living member. Second,
-the gossip round re-dials: a refused door costs nothing and is tried again
-each round, paced by the tick, so a door that joins inside the hole connects
-on a later round. The hole is about one tick period, and the mesh's order
-never waited on it: the home machine's room runs as 3.0.4 through the whole
-thing.
+**Discovery.** One door per machine: `rig serve`, and no other instance
+binds the door address — when serve is down the machine is out of the mesh
+until serve returns, and the discovery question is only when serve comes
+back. The gossip round re-dials: a refused door costs nothing and is tried
+again each round, paced by the tick, so a door that returns is found on a
+later round. A door that is down holds the mesh's order nowhere: the home
+machine's room runs as 3.0.4 through the whole outage, and the down
+machine's holds are released at the round count.
 
-**Liveness is the connection, in both rooms.** A member is gone when its
-connection ends — the unix room's socket and the mesh's door-to-door
-connection speak one rule. What the gone member held is released as an act
-in the order that every member folds the same way, and a member that returns
-re-claims: its stale acts are refused past the horizon-window, its fresh
-ones take their rightful place.
+**Liveness is the connection inside a machine's unix room, and the gossip
+round between the doors.** A member of the unix room is gone when its
+connection ends — there it is certain: the sockets close on process death.
+Between the doors the connection is not certain death — a machine that
+sleeps does not close its TCP connection, and the kernel can hold the socket
+for hours — so while the chain runs, **a door that is silent is gone: each
+finished tick drives one gossip round, and a door whose dial goes unanswered
+for N consecutive rounds is gone — what it holds leaves as acts, and its
+entries leave the mesh's fold.** N is a construction value beside `window`.
+The number and why: a healthy door cannot miss a round by being slow to
+compute — its round is driven by its own tick, and the chain is
+deterministic, so every door computes the same ticks — so a missed dial is
+the network or the machine, and the value must ride out a tailnet blip
+without idling a sleeping machine's holds for long. **N = 3 is the note's
+proposal: about 5 s of silence at the measured tick, three dials
+unanswered**, the round's own dial timeout stretching it. A door that
+returns re-claims: its stale acts are refused past the horizon-window, its
+fresh ones take their rightful place, and the gossip round re-dials it until
+it answers.
 
 ### how a remote peer reaches the model
 
@@ -737,15 +749,32 @@ machine's unix room as a fresh act at the remote claim's priority — the home
 machine's room decides, by the rules 3.0.4 already has, whether that hold
 takes a place. The request the instance sent to the front carries its mint,
 and **the front waits**: a request carrying a mint is served when the front's
-own fold shows that mint holding the key — the fold of the home machine's
-room, where the door's repost carries the remote claim's mint — and it waits
-until it does, because a remote peer can be admitted in its own view before
-the home machine has the act. The wait ends three ways, named: the mint's
-hold appears (the repost landed, the request is served), the caller's
-context ends (the remote peer gives up), or the release act lands — the
-remote machine gone quiet releases the hold as an act in the order, the fold
-no longer shows it, and the front's wait ends refusing. The horizon bounds
-the repost, so the wait is at most about (window + 1) tick periods.
+own fold shows
+that mint holding the key — the fold of the home machine's room, where the
+door's repost carries the remote claim's mint — and it waits until it does,
+because a remote peer can be admitted in its own view before the home
+machine has the act. The wait ends two ways, named: the mint's hold appears
+(the repost landed, the request is served) or the caller's context ends (the
+remote peer gives up). The horizon bounds the repost, so the wait is at most
+about (window + 1) tick periods.
+
+**The hold ends where the request ends.** The home machine releases a remote
+claim's hold when its front finishes the reply it served for that mint —
+3.0.4's front already releases its own claim at the end of the reply (the
+deferred release in the wire handler) — and it releases the remote hold the
+same way at the same place, as an act in its own room, without waiting for
+the remote release to cross the mesh. The key is free the moment the reply
+ends, so a remote turn at 90 does not leave the home machine's own turn at
+90 waiting behind an idle hold, and nothing waits on a machine that stopped
+speaking. The remote machine's own release, when it arrives, deletes nothing
+and pins as nothing, as a duplicate does today. A hold whose request never
+reaches the front is released by the mesh's two voices: the remote machine's
+own release when it arrives — the instance's error path releases its
+unix-room claim and its door carries the release across — and, if the
+remote machine goes silent first, the release the doors mint at the round
+count. A release that arrives for a hold already gone deletes nothing
+and pins as nothing, so the front's release and the round-count release race
+safely.
 
 **The front does not claim a second time for a caller that already holds the
 claim.** The gate exists for the measured failure, not for ceremony: before
@@ -758,9 +787,17 @@ is the boundary and the home machine's fold is the authority.
 tailnet address beside loopback; the dashboard and its token gate stay
 loopback. A request with no mint from a non-loopback address is a caller the
 tailnet vouches for, and it claims at the floor as today's loopback callers
-do. `/unload` stays loopback: an unload is the operator's gesture, and a
-remote machine's stop is its own release carried by the order — the tailnet
-front serves the model wire and the resident read, not the stop.
+do. `/unload` moves behind the dashboard's token, because loopback is not a
+check: the operator's `tailscale serve` forwards the tailnet port to loopback
+7777, the proxy is in front of the bind, and a call through it arrives from
+127.0.0.1 the same as the operator's own — `handleUnload` reads no remote
+address today, so today's behaviour is that any device on the tailnet can
+stop a model. The check a second device runs to confirm it: from the
+MacBook, call the unload through the tailnet URL with no token — today the
+model stops and the hole is confirmed from a second device; after the token,
+a refusal naming the gate. An unload is the operator's gesture and the token
+is the operator's credential; a remote machine's stop is its own release
+carried by the order.
 
 A remote machine's requests are recorded by the front — the instance that
 served them — so they appear in the served table of the machine that holds
@@ -819,25 +856,14 @@ things 3.0.4 reads come from `/proc`:
   same number). The row's port stays the residency proof; the start time
   stays the pid file's identity check.
 
-### the two open rules (the operator's)
+### the two rules the operator ruled
 
-Two rules of this note are not true of 3.0.0 as merged. Each is the
-operator's to rule on; neither is on the room's engine.
-
-1. **`room/member.go` holds a `sync.Mutex` over its transports.** The slice
-   is appended by the accept loop and the join dials and read by `Close` —
-   three goroutines, none of them the room engine, so the engine's contract
-   is untouched. Keep it (my reading: it guards a genuinely multi-goroutine
-   list and removing it restructures merged 3.0.0 code for style's sake), or
-   rule it a lock above the seams and move the bookkeeping onto the room
-   engine.
-2. **The children's engine polls** (the port probe at 100 ms, the wait while
-   `/health` says 503, the stop grace's 10 ms). The world's readiness has no
-   event to wait on — a port answering, a 503 lifting, a child dying
-   mid-grace are world facts with no signal — and the children's engine is
-   the third consumer 3.0.0 built for exactly this waiting. Keep them (my
-   reading: a poll on the children's engine is the honest mechanism and it
-   never holds the room engine), or name the events and pay the machinery.
+- **The mutex over the member's transports stays**: three goroutines touch
+  the list — the accept loop, the join dials and `Close` — none of them the
+  room engine.
+- **The polls on the children's engine stay**: the port probe at 100 ms, the
+  wait while `/health` says 503, the stop grace's 10 ms — the world's
+  readiness has no event, and the polls never hold the room engine.
 
 ### the tests, named
 
@@ -850,30 +876,36 @@ its version-slot claim leaves with the CAS), and the capstone's shape (three
 peers on real TCP sockets, keys minted from a live VDF clock, converged
 byte-identical order). **The quorum suites leave**: the cluster's five
 invariants, the recovery round, the frontier's characterizations and the
-guarded CAS cluster — their machinery stays in lift. Two suites are new:
-**one runs the same scenario through both rooms and compares the order** —
-the admitted sequence must agree, not the latency — and **one shows a peer
-cut off from the home machine is never served**.
+guarded CAS cluster — their machinery stays in lift. One suite is new:
+**one shows a peer cut off from the home machine is never served**; the
+suite that ran one scenario through both rooms and compared their orders
+leaves with the seam — the mesh does not run the claimant, and each room's
+order is its own.
 
 Rig's, across processes on loopback standing in for machines (step 5): two
 "machines", each with its unix room and its door, agree on one order for the
 keys the mesh carries; a claim is not acted on before the horizon (the
 door's repost waits it); a peer cut off from the home machine is never
-served, and its holds are released as acts; a remote claim enters the home
-machine's room as the door's act at the remote claim's priority; the front's
-wait gets its test (a mint served when the fold shows it, ended by the
-release act or the caller's context); the door handover leaves the room
-findable (the re-bind and the gossip re-dial); and the unix room's wire is
-byte-for-byte 3.0.4's with the setting on and off.
+served; a remote claim enters the home machine's room as the door's act at
+the remote claim's priority; the front's wait gets its test (a mint served
+when the fold shows it, ended by the caller's context); **the front's
+release gets its test: the remote hold ends at the end of the reply it
+served, and the remote release arriving later deletes nothing and pins as
+nothing**; **the silent door gets its test: a door that misses its rounds is
+gone and its holds are released as acts**; **serve down means out of the
+mesh: no other instance binds the door and a remote request to the front
+refuses**; and the unix room's wire is byte-for-byte 3.0.4's with the
+setting on and off.
 
 ### the mechanics
 
 `evt` gains lift's inter-system half as v0.4.0 on the branch `evt-0.4.0`
-(main d7a18a9), finality first — every v0.3.0 test passing untouched — then
-the port. Until the operator tags v0.4.0, rig builds against the local evt
+(main d7a18a9), the pieces beside the claimant — every v0.3.0 test passing
+untouched, now because nothing under those tests moved. Until the operator
+tags v0.4.0, rig builds against the local evt
 through an untracked `go.work`, as 3.0.0 did; the `go.mod` requirement moves
 to v0.4.0 and the `go.work` goes in the last commit. rig's work runs on
-`feat/3.1.0-mesh` (the note and its amendment are its commits so far), a
+`feat/3.1.0-mesh` (the note and its amendments are its commits so far), a
 commit per step, pushed as it lands, a PR in each repository for the
 operator at the end. evt imports
 only the standard library; rig takes no new dependency and no cgo; no
