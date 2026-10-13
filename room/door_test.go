@@ -10,8 +10,9 @@ import (
 )
 
 const (
-	doorTestIterations = int64(40000)
-	doorTestPatience   = 20 * time.Second
+	doorTestPeriod   = 50 * time.Millisecond
+	doorTestWindow   = 4
+	doorTestPatience = 20 * time.Second
 )
 
 func doorAwait(t *testing.T, claim string, met func() bool) {
@@ -49,15 +50,13 @@ func doorMember(t *testing.T, home string) Member {
 	return m
 }
 
-func doorConfig(room, machine, addr string, peers []string) broadcast.MeshConfig {
+func doorConfig(machine, addr string, peers []string) broadcast.MeshConfig {
 	return broadcast.MeshConfig{
-		Room:       room,
-		Machine:    machine,
-		Addr:       addr,
-		Peers:      peers,
-		Prime:      broadcast.RFC3526Prime1536(),
-		Iterations: doorTestIterations,
-		Window:     4,
+		Machine: machine,
+		Addr:    addr,
+		Peers:   peers,
+		Clock:   broadcast.NewTickClock(doorTestPeriod, doorTestWindow, PriorityFleet),
+		Window:  doorTestWindow,
 	}
 }
 
@@ -68,12 +67,12 @@ func TestTheDoorMirrorsAHoldAcrossMachines(t *testing.T) {
 	defer mb.Close()
 	key := KeyOf("remote-model")
 	addrs := doorPorts(t, 2)
-	da, err := NewDoor(ma, doorConfig("door-room", "a", addrs[0], []string{addrs[1]}), []int64{key}, nil)
+	da, err := NewDoor(ma, doorConfig("a", addrs[0], []string{addrs[1]}), []int64{key}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer da.Close()
-	db, err := NewDoor(mb, doorConfig("door-room", "b", addrs[1], []string{addrs[0]}), nil, []int64{key})
+	db, err := NewDoor(mb, doorConfig("b", addrs[1], []string{addrs[0]}), nil, []int64{key})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -114,11 +113,11 @@ func TestTheSilentDoorSHoldsAreReleased(t *testing.T) {
 	defer mb.Close()
 	key := KeyOf("remote-model")
 	addrs := doorPorts(t, 2)
-	da, err := NewDoor(ma, doorConfig("door-room", "a", addrs[0], []string{addrs[1]}), []int64{key}, nil)
+	da, err := NewDoor(ma, doorConfig("a", addrs[0], []string{addrs[1]}), []int64{key}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	db, err := NewDoor(mb, doorConfig("door-room", "b", addrs[1], []string{addrs[0]}), nil, []int64{key})
+	db, err := NewDoor(mb, doorConfig("b", addrs[1], []string{addrs[0]}), nil, []int64{key})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -141,12 +140,12 @@ func TestTheSilentDoorSHoldsAreReleased(t *testing.T) {
 func TestALoneDoorPacesTheChain(t *testing.T) {
 	m := doorMember(t, t.TempDir())
 	defer m.Close()
-	d, err := NewDoor(m, doorConfig("door-room", "a", doorPorts(t, 1)[0], nil), nil, nil)
+	d, err := NewDoor(m, doorConfig("a", doorPorts(t, 1)[0], nil), nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer d.Close()
-	doorAwait(t, "the chain must run from the door's start (the tag's clock has no gate)", func() bool {
+	doorAwait(t, "the machine's clock must run from the door's start (one tick a period, nothing between ticks)", func() bool {
 		return d.Horizon() > 0
 	})
 }
@@ -170,12 +169,12 @@ func TestAJoinerNeverLearnsHoldsOlderThanTheWindow(t *testing.T) {
 	defer mb.Close()
 	key := KeyOf("remote-model")
 	addrs := doorPorts(t, 2)
-	da, err := NewDoor(ma, doorConfig("door-room", "a", addrs[0], []string{addrs[1]}), []int64{key}, nil)
+	da, err := NewDoor(ma, doorConfig("a", addrs[0], []string{addrs[1]}), []int64{key}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer da.Close()
-	db, err := NewDoor(mb, doorConfig("door-room", "b", addrs[1], []string{addrs[0]}), nil, []int64{key})
+	db, err := NewDoor(mb, doorConfig("b", addrs[1], []string{addrs[0]}), nil, []int64{key})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -205,12 +204,12 @@ func TestPartitionHealingLeavesNoTwoHolders(t *testing.T) {
 	defer mb.Close()
 	key := KeyOf("remote-model")
 	addrs := doorPorts(t, 2)
-	da, err := NewDoor(ma, doorConfig("door-room", "a", addrs[0], []string{addrs[1]}), []int64{key}, nil)
+	da, err := NewDoor(ma, doorConfig("a", addrs[0], []string{addrs[1]}), []int64{key}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer da.Close()
-	db, err := NewDoor(mb, doorConfig("door-room", "b", addrs[1], []string{addrs[0]}), nil, []int64{key})
+	db, err := NewDoor(mb, doorConfig("b", addrs[1], []string{addrs[0]}), nil, []int64{key})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -226,8 +225,16 @@ func TestPartitionHealingLeavesNoTwoHolders(t *testing.T) {
 
 	ma.Close()
 	da.Close()
-	doorAwait(t, "the silent door's holds to be released as acts and the partition to heal with one holder", func() bool {
-		return len(mb.Holders(key)) == 0 && len(db.Machines()) == 1
+	doorAwait(t, "the silent door's holds to be released as acts and the partition to heal without a second holder", func() bool {
+		if len(mb.Holders(key)) != 0 {
+			return false
+		}
+		for _, machine := range db.Machines() {
+			if machine == "a" {
+				return false
+			}
+		}
+		return true
 	})
 }
 
@@ -238,11 +245,11 @@ func TestServeDownMeansOutOfTheMesh(t *testing.T) {
 	defer mb.Close()
 	key := KeyOf("remote-model")
 	addrs := doorPorts(t, 2)
-	da, err := NewDoor(ma, doorConfig("door-room", "a", addrs[0], []string{addrs[1]}), []int64{key}, nil)
+	da, err := NewDoor(ma, doorConfig("a", addrs[0], []string{addrs[1]}), []int64{key}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	db, err := NewDoor(mb, doorConfig("door-room", "b", addrs[1], []string{addrs[0]}), nil, []int64{key})
+	db, err := NewDoor(mb, doorConfig("b", addrs[1], []string{addrs[0]}), nil, []int64{key})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -253,7 +260,7 @@ func TestServeDownMeansOutOfTheMesh(t *testing.T) {
 	doorAwait(t, "the hold to mirror", func() bool {
 		return len(mb.Holders(key)) == 1
 	})
-	second, err := NewDoor(mb, doorConfig("door-room", "a", addrs[0], nil), nil, []int64{key})
+	second, err := NewDoor(mb, doorConfig("a", addrs[0], nil), nil, []int64{key})
 	if err == nil {
 		second.Close()
 		t.Fatal("no other instance must bind the door address")

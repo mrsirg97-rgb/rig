@@ -444,7 +444,7 @@ func TestMeshIsAbsentByDefault(t *testing.T) {
 
 func TestMeshParsesTheDoorSConfig(t *testing.T) {
 	dir := t.TempDir()
-	write(t, dir, "settings.json", `{"mesh": {"room": "operator", "listen": "100.118.31.66:7780", "peers": ["100.120.230.71:7780"], "iterations": 500000, "window": 6}}`)
+	write(t, dir, "settings.json", `{"mesh": {"room": "operator", "listen": "100.118.31.66:7780", "peers": ["100.120.230.71:7780"], "period": 500, "window": 6}}`)
 	cfg := load(t, dir, t.TempDir())
 	m := cfg.Settings.Mesh
 	if m == nil {
@@ -456,8 +456,8 @@ func TestMeshParsesTheDoorSConfig(t *testing.T) {
 	if len(m.Peers) != 1 || m.Peers[0] != "100.120.230.71:7780" {
 		t.Fatalf("peers = %v, want the other machine's door", m.Peers)
 	}
-	if m.Iterations != 500000 || m.Window != 6 {
-		t.Fatalf("iterations = %d window = %d, want the operator's numbers", m.Iterations, m.Window)
+	if m.Period != 500 || m.Window != 6 {
+		t.Fatalf("period = %d window = %d, want the operator's numbers", m.Period, m.Window)
 	}
 }
 
@@ -466,11 +466,11 @@ func TestMeshDefaultsAreTheMeasuredNumbers(t *testing.T) {
 	write(t, dir, "settings.json", `{"mesh": {"room": "operator", "listen": "100.118.31.66:7780"}}`)
 	cfg := load(t, dir, t.TempDir())
 	m := cfg.Settings.Mesh
-	if m.Iterations != config.DefaultMeshIterations {
-		t.Fatalf("iterations = %d, want %d (the measured tick: 1.45-1.68s a tick at 1M on the 1536-bit prime)", m.Iterations, config.DefaultMeshIterations)
+	if m.Period != config.DefaultMeshPeriod {
+		t.Fatalf("period = %d, want %d (the tailnet's ping measured 96ms and the period holds a gossip round comfortably)", m.Period, config.DefaultMeshPeriod)
 	}
 	if m.Window != config.DefaultMeshWindow {
-		t.Fatalf("window = %d, want %d (about 6s a window at the measured tick)", m.Window, config.DefaultMeshWindow)
+		t.Fatalf("window = %d, want %d (about 1.25s a window at the default period, measured on loopback, comfortably longer than a tailnet round)", m.Window, config.DefaultMeshWindow)
 	}
 }
 
@@ -478,8 +478,17 @@ func TestMeshRefusesUnknownKeys(t *testing.T) {
 	dir := t.TempDir()
 	write(t, dir, "settings.json", `{"mesh": {"room": "operator", "listen": "100.118.31.66:7780", "mode": "on"}}`)
 	err := loadErr(t, dir, t.TempDir())
-	if !strings.Contains(err.Error(), `mesh: unknown key "mode" (known: iterations, listen, peers, room, window)`) {
+	if !strings.Contains(err.Error(), `mesh: unknown key "mode" (known: listen, peers, period, room, window)`) {
 		t.Fatalf("an unknown mesh key refuses naming the known ones: %v", err)
+	}
+}
+
+func TestMeshIterationsIsRefusedByName(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, "settings.json", `{"mesh": {"room": "operator", "listen": "100.118.31.66:7780", "iterations": 500000}}`)
+	err := loadErr(t, dir, t.TempDir())
+	if !strings.Contains(err.Error(), `mesh: unknown key "iterations" (known: listen, peers, period, room, window)`) {
+		t.Fatalf("a file that still carries iterations is refused by name: %v", err)
 	}
 }
 
@@ -524,7 +533,7 @@ func TestMeshPeersAreAddresses(t *testing.T) {
 	}
 }
 
-func TestMeshWindowAndIterationsArePositive(t *testing.T) {
+func TestMeshWindowAndPeriodArePositive(t *testing.T) {
 	dir := t.TempDir()
 	write(t, dir, "settings.json", `{"mesh": {"room": "operator", "listen": "100.118.31.66:7780", "window": 0}}`)
 	err := loadErr(t, dir, t.TempDir())
@@ -532,9 +541,9 @@ func TestMeshWindowAndIterationsArePositive(t *testing.T) {
 		t.Fatalf("a zero window refuses: %v", err)
 	}
 	dir = t.TempDir()
-	write(t, dir, "settings.json", `{"mesh": {"room": "operator", "listen": "100.118.31.66:7780", "iterations": 0}}`)
+	write(t, dir, "settings.json", `{"mesh": {"room": "operator", "listen": "100.118.31.66:7780", "period": 0}}`)
 	err = loadErr(t, dir, t.TempDir())
-	if !strings.Contains(err.Error(), "mesh.iterations: expected a positive number (the VDF's compute per tick), got 0") {
-		t.Fatalf("zero iterations refuse: %v", err)
+	if !strings.Contains(err.Error(), "mesh.period: expected a positive number (the machine's clock period in milliseconds), got 0") {
+		t.Fatalf("a zero period refuses: %v", err)
 	}
 }

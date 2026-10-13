@@ -1,6 +1,8 @@
 package main
 
 import (
+	"time"
+
 	"github.com/mrsirg97-rgb/evt/broadcast"
 	"github.com/mrsirg97-rgb/rig/v3/config"
 	"github.com/mrsirg97-rgb/rig/v3/models"
@@ -23,13 +25,12 @@ func meshKeys(rows models.Table) (remote []int64, home []int64) {
 }
 
 func meshConfig(setting *config.Mesh) broadcast.MeshConfig {
+	period := time.Duration(setting.Period) * time.Millisecond
 	return broadcast.MeshConfig{
-		Room:       setting.Room,
-		Machine:    setting.Listen,
-		Addr:       setting.Listen,
-		Peers:      setting.Peers,
-		Prime:      broadcast.RFC3526Prime1536(),
-		Iterations: setting.Iterations,
-		Window:     setting.Window,
+		Machine: setting.Listen,
+		Addr:    setting.Listen,
+		Peers:   setting.Peers,
+		Clock:   broadcast.NewTickClock(period, setting.Window, machineroom.PriorityFleet),
+		Window:  setting.Window,
 	}
 }

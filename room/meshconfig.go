@@ -1,15 +1,17 @@
 package room
 
-import "github.com/mrsirg97-rgb/evt/broadcast"
+import (
+	"time"
 
-func MeshConfig(room, addr string, peers []string) broadcast.MeshConfig {
+	"github.com/mrsirg97-rgb/evt/broadcast"
+)
+
+func MeshConfig(addr string, peers []string, period time.Duration, window int64) broadcast.MeshConfig {
 	return broadcast.MeshConfig{
-		Room:       room,
-		Machine:    addr,
-		Addr:       addr,
-		Peers:      peers,
-		Prime:      broadcast.RFC3526Prime1536(),
-		Iterations: 40000,
-		Window:     4,
+		Machine: addr,
+		Addr:    addr,
+		Peers:   peers,
+		Clock:   broadcast.NewTickClock(period, window, PriorityFleet),
+		Window:  window,
 	}
 }

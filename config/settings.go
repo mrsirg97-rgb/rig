@@ -6,9 +6,9 @@ import (
 )
 
 const (
-	DefaultReviewBatch    = 3
-	DefaultMeshIterations = 1000000
-	DefaultMeshWindow     = 4
+	DefaultReviewBatch = 3
+	DefaultMeshPeriod  = 250
+	DefaultMeshWindow  = 4
 )
 
 type Settings struct {
@@ -48,11 +48,11 @@ type SettingsPlugins struct {
 }
 
 type Mesh struct {
-	Room       string
-	Listen     string
-	Peers      []string
-	Iterations int64
-	Window     int64
+	Room   string
+	Listen string
+	Peers  []string
+	Period int64
+	Window int64
 }
 
 var knownSettings = []string{"allow", "approve", "baseUrl", "decisionUnit", "decisionUrl", "defaultJobModel", "maxWorkers", "mesh", "model", "plugins", "python", "reviewBatch", "resultCap", "retries", "rounds", "sandbox", "sandboxBinds", "searxngUrl", "swapUrl", "system", "theme", "trafilatura", "trainPython", "updateKey", "webFetchProxy", "workerWindow", "workers"}

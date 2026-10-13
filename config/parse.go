@@ -259,7 +259,7 @@ func parseMesh(raw json.RawMessage, path string) (Mesh, error) {
 	if err := json.Unmarshal(raw, &obj); err != nil {
 		return Mesh{}, fmt.Errorf("config: %s: mesh: expected an object", path)
 	}
-	known := []string{"iterations", "listen", "peers", "room", "window"}
+	known := []string{"listen", "peers", "period", "room", "window"}
 	knownSet := make(map[string]bool, len(known))
 	for _, k := range known {
 		knownSet[k] = true
@@ -283,7 +283,7 @@ func parseMesh(raw json.RawMessage, path string) (Mesh, error) {
 		m.Room = v
 	}
 	if m.Room == "" {
-		return Mesh{}, fmt.Errorf("config: %s: mesh: room is required (the clock's seed and the room's namespace)", path)
+		return Mesh{}, fmt.Errorf("config: %s: mesh: room is required (the mesh's name: the machines that join agree on it)", path)
 	}
 	if raw, ok := obj["listen"]; ok {
 		v, err := jsonString(raw)
@@ -309,16 +309,16 @@ func parseMesh(raw json.RawMessage, path string) (Mesh, error) {
 		}
 		m.Peers = v
 	}
-	m.Iterations = DefaultMeshIterations
-	if raw, ok := obj["iterations"]; ok {
+	m.Period = DefaultMeshPeriod
+	if raw, ok := obj["period"]; ok {
 		v, err := jsonInt(raw)
 		if err != nil {
-			return Mesh{}, fmt.Errorf("config: %s: mesh.iterations: %v", path, err)
+			return Mesh{}, fmt.Errorf("config: %s: mesh.period: %v", path, err)
 		}
 		if v < 1 {
-			return Mesh{}, fmt.Errorf("config: %s: mesh.iterations: expected a positive number (the VDF's compute per tick), got %d", path, v)
+			return Mesh{}, fmt.Errorf("config: %s: mesh.period: expected a positive number (the machine's clock period in milliseconds), got %d", path, v)
 		}
-		m.Iterations = int64(v)
+		m.Period = int64(v)
 	}
 	m.Window = DefaultMeshWindow
 	if raw, ok := obj["window"]; ok {

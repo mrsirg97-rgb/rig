@@ -21,6 +21,11 @@ import (
 	"github.com/mrsirg97-rgb/rig/v3/room"
 )
 
+const (
+	meshTestPeriod = 50 * time.Millisecond
+	meshTestWindow = 4
+)
+
 func wireServer(t *testing.T) (*Server, string, *httptest.Server, room.Member) {
 	return wireServerDoor(t, nil, nil)
 }
@@ -246,12 +251,12 @@ func TestTheFrontSGateServesAMintWhenTheFoldShowsIt(t *testing.T) {
 	}
 	t.Cleanup(remote.Close)
 	ports := freePorts(t, 2)
-	remoteDoor, err := room.NewDoor(remote, room.MeshConfig("gate-test", ports[0], []string{ports[1]}), []int64{key}, nil)
+	remoteDoor, err := room.NewDoor(remote, room.MeshConfig(ports[0], []string{ports[1]}, meshTestPeriod, meshTestWindow), []int64{key}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(remoteDoor.Close)
-	door, err := room.NewDoor(machine, room.MeshConfig("gate-test", ports[1], []string{ports[0]}), nil, []int64{key})
+	door, err := room.NewDoor(machine, room.MeshConfig(ports[1], []string{ports[0]}, meshTestPeriod, meshTestWindow), nil, []int64{key})
 	if err != nil {
 		t.Fatal(err)
 	}
