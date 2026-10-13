@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"net"
 	"sort"
 	"strconv"
 	"strings"
@@ -243,7 +244,117 @@ func parseSettings(data []byte, path string) (Settings, error) {
 			s.Plugins.Max = v
 		}
 	}
+	if raw, ok := keys["mesh"]; ok {
+		m, err := parseMesh(raw, path)
+		if err != nil {
+			return Settings{}, err
+		}
+		s.Mesh = &m
+	}
 	return s, nil
+}
+
+func parseMesh(raw json.RawMessage, path string) (Mesh, error) {
+	var obj map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &obj); err != nil {
+		return Mesh{}, fmt.Errorf("config: %s: mesh: expected an object", path)
+	}
+	known := []string{"iterations", "listen", "peers", "room", "window"}
+	knownSet := make(map[string]bool, len(known))
+	for _, k := range known {
+		knownSet[k] = true
+	}
+	var unknown []string
+	for k := range obj {
+		if !knownSet[k] {
+			unknown = append(unknown, k)
+		}
+	}
+	if len(unknown) > 0 {
+		sort.Strings(unknown)
+		return Mesh{}, fmt.Errorf("config: %s: mesh: unknown key %q (known: %s)", path, unknown[0], strings.Join(known, ", "))
+	}
+	var m Mesh
+	if raw, ok := obj["room"]; ok {
+		v, err := jsonString(raw)
+		if err != nil {
+			return Mesh{}, fmt.Errorf("config: %s: mesh.room: %v", path, err)
+		}
+		m.Room = v
+	}
+	if m.Room == "" {
+		return Mesh{}, fmt.Errorf("config: %s: mesh: room is required (the clock's seed and the room's namespace)", path)
+	}
+	if raw, ok := obj["listen"]; ok {
+		v, err := jsonString(raw)
+		if err != nil {
+			return Mesh{}, fmt.Errorf("config: %s: mesh.listen: %v", path, err)
+		}
+		m.Listen = v
+	}
+	if m.Listen == "" {
+		return Mesh{}, fmt.Errorf("config: %s: mesh: listen is required (the machine's door: the address the door-holder binds)", path)
+	}
+	host, _, err := net.SplitHostPort(m.Listen)
+	if err != nil {
+		return Mesh{}, fmt.Errorf("config: %s: mesh.listen: %v", path, err)
+	}
+	if host == "" || host == "0.0.0.0" || host == "::" {
+		return Mesh{}, fmt.Errorf("config: %s: mesh.listen: %q binds every interface; the door binds one address the tailnet reaches (a wildcard bind takes the mesh port past the trust boundary)", path, m.Listen)
+	}
+	if raw, ok := obj["peers"]; ok {
+		v, err := jsonAddresses(raw)
+		if err != nil {
+			return Mesh{}, fmt.Errorf("config: %s: mesh.peers: %v", path, err)
+		}
+		m.Peers = v
+	}
+	m.Iterations = DefaultMeshIterations
+	if raw, ok := obj["iterations"]; ok {
+		v, err := jsonInt(raw)
+		if err != nil {
+			return Mesh{}, fmt.Errorf("config: %s: mesh.iterations: %v", path, err)
+		}
+		if v < 1 {
+			return Mesh{}, fmt.Errorf("config: %s: mesh.iterations: expected a positive number (the VDF's compute per tick), got %d", path, v)
+		}
+		m.Iterations = int64(v)
+	}
+	m.Window = DefaultMeshWindow
+	if raw, ok := obj["window"]; ok {
+		v, err := jsonInt(raw)
+		if err != nil {
+			return Mesh{}, fmt.Errorf("config: %s: mesh.window: %v", path, err)
+		}
+		if v < 1 {
+			return Mesh{}, fmt.Errorf("config: %s: mesh.window: expected a positive number (the horizon window in ticks), got %d", path, v)
+		}
+		m.Window = int64(v)
+	}
+	return m, nil
+}
+
+func jsonAddresses(raw json.RawMessage) ([]string, error) {
+	var v any
+	if err := json.Unmarshal(raw, &v); err != nil {
+		return nil, err
+	}
+	arr, ok := v.([]any)
+	if !ok {
+		return nil, fmt.Errorf("expected an array of door addresses, got %s", gojson(v))
+	}
+	out := make([]string, 0, len(arr))
+	for i, el := range arr {
+		str, ok := el.(string)
+		if !ok {
+			return nil, fmt.Errorf("peers[%d]: expected an address, got %s", i, gojson(el))
+		}
+		if _, _, err := net.SplitHostPort(str); err != nil {
+			return nil, fmt.Errorf("peers[%d]: %v", i, err)
+		}
+		out = append(out, str)
+	}
+	return out, nil
 }
 
 func jsonString(raw json.RawMessage) (string, error) {

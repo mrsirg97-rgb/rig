@@ -544,10 +544,11 @@ idle and decoding runs on the 1536-bit prime and **2.5 s** on RSA-2048, and a
 proof verifies in **0.48-0.65 ms** on either modulus. The evidence's "about
 18 s" figure for 1M iterations is not measured on this box; if the MacBook
 paces, its band is that number's, and the wait scales with the pacer's tick.
-With window 2 a remote request waits about 5 s at the front; a turn on the
-remote machine mints one claim per model call, so a 40-step turn pays it 40
-times — the price of ordering cross-machine claims, set by the window and
-the iteration count, both construction values that do not exist in ipc.
+With window 4 — the setting's default, about 6 s a window at the measured
+tick — a remote request waits about 8 s at the front; a turn on the remote
+machine mints one claim per model call, so a 40-step turn pays it 40 times
+— the price of ordering cross-machine claims, set by the window and the
+iteration count, both numbers the mesh setting carries and ipc does not.
 
 **The clock: the VDF.** The clock seam is evt's `Clock`
 (`NewMinter(member, clock)`), and mesh puts the VDF clock behind it. The
@@ -562,12 +563,11 @@ member, then nonce — one `opLess` for both rooms), and the act's envelope
 carries its tick's proof, which every receiver verifies before it folds —
 an unverified tick is refused, never trusted. The frontier (tick index →
 output) is what a door keeps to verify the next proof and what gossip
-carries with the ops. **The chain runs only while more than one machine is
-in the room**: a machine alone in `mesh` computes nothing, its unix room
-never uses the VDF, and the pacer is one goroutine on one core, continuously,
-only for the window the room spans machines. The GPU machine is the natural
-pacer — its arithmetic is the fastest measured here — and the other doors
-verify and follow. **What the pacer costs the decode: measured, nothing we
+carries with the ops. **The chain runs from the door's start**: the tag's
+clock has no gate, so a machine alone in `mesh` paces alone — one goroutine
+on one core, continuously — and its unix room never uses the VDF. The GPU
+machine is the natural pacer — its arithmetic is the fastest measured here —
+and the other doors verify and follow. **What the pacer costs the decode: measured, nothing we
 can see.** With ox-alpha-s resident and decoding a 900-token prompt at 52
 tok/s, the tick's compute ran 1.57-1.68 s against 1.45-1.60 s idle and the
 decodes with the tick running measured 51.1 and 52.1 tok/s against 52.3
@@ -641,7 +641,7 @@ it names the room and the machine's door:
   "listen": "100.118.31.66:7780",
   "peers": ["100.120.230.71:7780"],
   "iterations": 1000000,
-  "window": 2
+  "window": 4
 }
 ```
 
@@ -901,10 +901,9 @@ setting on and off.
 
 `evt` gains lift's inter-system half as v0.4.0 on the branch `evt-0.4.0`
 (main d7a18a9), the pieces beside the claimant — every v0.3.0 test passing
-untouched, now because nothing under those tests moved. Until the operator
-tags v0.4.0, rig builds against the local evt
-through an untracked `go.work`, as 3.0.0 did; the `go.mod` requirement moves
-to v0.4.0 and the `go.work` goes in the last commit. rig's work runs on
+untouched, now because nothing under those tests moved. The operator tagged
+v0.4.0 (main c174705); rig builds against the tag from here and the
+untracked `go.work` is gone. rig's work runs on
 `feat/3.1.0-mesh` (the note and its amendments are its commits so far), a
 commit per step, pushed as it lands, a PR in each repository for the
 operator at the end. evt imports

@@ -609,6 +609,15 @@ func main() {
 	var webSrv *web.Server
 	closeFrontend := func() {}
 	if serveAddr != "" {
+		if cfg.Settings.Mesh != nil {
+			remote, home := meshKeys(cfg.Models)
+			door, derr := machineroom.NewDoor(machine, meshConfig(cfg.Settings.Mesh), remote, home)
+			if derr != nil {
+				fmt.Fprintln(os.Stderr, "rig serve:", derr)
+				os.Exit(1)
+			}
+			defer door.Close()
+		}
 		srv, werr := web.New(web.Options{
 			Home: cfgDir, CWD: cwd, Models: cfg.Models,
 			Machine: machine, Version: Version,
