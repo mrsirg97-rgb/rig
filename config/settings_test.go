@@ -492,16 +492,16 @@ func TestMeshIterationsIsRefusedByName(t *testing.T) {
 	}
 }
 
-func TestMeshRequiresRoomAndListen(t *testing.T) {
+func TestMeshRequiresListen(t *testing.T) {
 	dir := t.TempDir()
 	write(t, dir, "settings.json", `{"mesh": {"listen": "100.118.31.66:7780"}}`)
-	err := loadErr(t, dir, t.TempDir())
-	if !strings.Contains(err.Error(), "mesh: room is required") {
-		t.Fatalf("a mesh without a room refuses: %v", err)
+	cfg := load(t, dir, t.TempDir())
+	if cfg.Settings.Mesh == nil || cfg.Settings.Mesh.Listen != "100.118.31.66:7780" {
+		t.Fatalf("a mesh without a room loads — the room is the operators' agreement, nothing reads it: %v", cfg.Settings.Mesh)
 	}
 	dir = t.TempDir()
 	write(t, dir, "settings.json", `{"mesh": {"room": "operator"}}`)
-	err = loadErr(t, dir, t.TempDir())
+	err := loadErr(t, dir, t.TempDir())
 	if !strings.Contains(err.Error(), "mesh: listen is required") {
 		t.Fatalf("a mesh without a door address refuses: %v", err)
 	}

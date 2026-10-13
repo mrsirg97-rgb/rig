@@ -282,9 +282,6 @@ func parseMesh(raw json.RawMessage, path string) (Mesh, error) {
 		}
 		m.Room = v
 	}
-	if m.Room == "" {
-		return Mesh{}, fmt.Errorf("config: %s: mesh: room is required (the mesh's name: the machines that join agree on it)", path)
-	}
 	if raw, ok := obj["listen"]; ok {
 		v, err := jsonString(raw)
 		if err != nil {

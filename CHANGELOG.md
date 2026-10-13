@@ -9,7 +9,8 @@ machine's (`broadcast.NewTickClock`, the tick the wall clock taken once at
 construction plus the monotonic time since — no proof rides the act,
 nothing is computed between ticks, a joiner posts at once), and the mesh's
 order is advisory, because a key's home machine is its authority. The
-setting's `room` is required (the machines that join agree on it), `listen`
+setting's `room` names the mesh (the machines that join agree on it),
+`listen`
 is required and must name one address (wildcard binds are refused), `peers`
 lists the other machines' doors, `period` defaults to 250 milliseconds (a
 tailnet round measured 96 ms and the period holds it comfortably) and
