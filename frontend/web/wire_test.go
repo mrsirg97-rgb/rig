@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -352,6 +353,49 @@ func TestTheFrontSEndsAClockRefusedClaimAsAnError(t *testing.T) {
 	await(t, "the remote release to leave the remote machine's room", 20*time.Second, func() bool {
 		return len(remote.Holders(key)) == 0
 	})
+}
+
+func TestTheGateMakesTheChildReadyForARemoteRequest(t *testing.T) {
+	key := room.KeyOf("fake-child")
+	machine, err := room.New(seedHome(t), func(int64) int { return 1 }, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(machine.Close)
+	remote, err := room.New(seedHome(t), func(int64) int { return 1 }, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(remote.Close)
+	ports := freePorts(t, 2)
+	remoteDoor, err := room.NewDoor(remote, room.MeshConfig(ports[0], []string{ports[1]}, meshTestPeriod, meshTestWindow), []int64{key}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(remoteDoor.Close)
+	door, err := room.NewDoor(machine, room.MeshConfig(ports[1], []string{ports[0]}, meshTestPeriod, meshTestWindow), nil, []int64{key})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(door.Close)
+	srv, _, _, _ := wireServerDoor(t, machine, door)
+	var readied atomic.Int32
+	srv.ready = func(context.Context, models.Model) error { readied.Add(1); return nil }
+	claimed := make(chan broadcast.Mint, 1)
+	remote.Claim(key, room.PriorityTurn, 0, func(m broadcast.Mint, ok bool) { claimed <- m })
+	mint := <-claimed
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	encoded, _ := json.Marshal(mint)
+	req := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", jsonBody(t, map[string]any{"model": "fake-child", "messages": []any{}}))
+	req.Header.Set(core.MintHeader, string(encoded))
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, req)
+	t.Logf("remote request: %d, ready calls: %d", rec.Code, readied.Load())
+	if readied.Load() == 0 {
+		t.Fatal("the gate served a remote request without the ready path: a cold child is never started")
+	}
 }
 
 func freePorts(t *testing.T, n int) []string {

@@ -197,6 +197,12 @@ func (s *Server) handleWireChat(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		defer s.door.Release(mint)
+		if s.ready != nil {
+			if err := s.ready(r.Context(), row); err != nil {
+				writeErr(w, http.StatusBadGateway, err.Error())
+				return
+			}
+		}
 		s.upstream(w, r, body, row)
 		return
 	}
