@@ -1729,3 +1729,26 @@ func TestTodoRoutesResolveThroughTheRepoScope(t *testing.T) {
 		t.Fatalf("another workspace must not see the repo queue: %s", rec.Body.String())
 	}
 }
+
+func TestThePhonesMoreMenuReachesTheRoomAndNothingStaticIsCached(t *testing.T) {
+	srv, tok := newTestServer(t)
+	h := srv.Handler()
+	rec := doReq(t, h, "GET", "/static/app.js", nil, bearer(tok))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("app.js: got %d", rec.Code)
+	}
+	if cc := rec.Header().Get("Cache-Control"); cc != "no-store" {
+		t.Fatalf("a new build's script must reach an open dashboard: Cache-Control = %q", cc)
+	}
+	js := rec.Body.String()
+	at := strings.Index(js, "const MORE_VIEWS = [")
+	if at < 0 {
+		t.Fatal("the more menu's views must be one list")
+	}
+	menu := js[at : at+strings.Index(js[at:], "];")]
+	for _, view := range []string{"'room'", "'models'", "'plugins'", "'update'"} {
+		if !strings.Contains(menu, view) {
+			t.Fatalf("the phone has no sidebar: the more menu must reach %s", view)
+		}
+	}
+}

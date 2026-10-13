@@ -263,3 +263,19 @@ func TestTheOpenListLeavesFinishedRunsOutAndCountsThem(t *testing.T) {
 	}
 	contains(t, open, "nightly")
 }
+
+func TestACommandOverSeveralLinesListsOnOne(t *testing.T) {
+	cwd := realCwd(t, "manylines")
+	h := newHarness(t, cwd)
+	_, err := h.create(sched.CreateInput{Name: "many", Command: "echo one &\nSRV=$!; sleep 1\necho two", Cron: "0 0 * * *", Cwd: cwd})
+	mustOK(t, err)
+	list, err := h.list()
+	mustOK(t, err)
+	contains(t, list, "command echo one & SRV=$!; sleep 1 echo two")
+	for _, l := range strings.Split(list, "\n") {
+		if l == "" || strings.HasSuffix(l, ":") || strings.HasPrefix(l, "j") || strings.HasPrefix(l, "  ") {
+			continue
+		}
+		t.Fatalf("every line of the list is a directory, a job's head or its detail; a command's own line break left %q", l)
+	}
+}

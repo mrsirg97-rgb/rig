@@ -160,6 +160,9 @@ A command job's fire skips the busy probe and
   fire at the cap records a skip naming the spend, and each fire and
   delegate records its worker's cost (read from the state store's cost
   column, SPEC_HOSTED 5).
+- A job's detail line carries its command with the line breaks as
+  spaces (3.0.3): every line of the list is a directory, a head or a
+  detail, which is the shape the dashboard parses.
 - `ListOpen` (3.0.2): the list without the jobs that are done, and their
   count; the dashboard's page reads it, the tool keeps `List`.
 - `render.go`: the list/rendering: one list grouped by each job's own

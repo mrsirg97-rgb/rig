@@ -1715,12 +1715,19 @@ async function openForge(host, name, zone) {
   ed.focus();
 }
 
+const MORE_VIEWS = [
+  ['room', 'room ' + G.dot + ' members, served requests, the models\' logs'],
+  ['models', 'models ' + G.dot + ' switch, effort'],
+  ['plugins', 'plugins ' + G.dot + ' the forge'],
+  ['update', 'update ' + G.dot + ' this build, rig -update'],
+];
+
 function renderMore() {
   clear();
   main.classList.add('more');
   const views = el('div', 'group');
   views.appendChild(el('h2', null, 'more'));
-  for (const [v, label] of [['plugins', 'plugins ' + G.dot + ' the forge'], ['models', 'models ' + G.dot + ' switch, effort']]) {
+  for (const [v, label] of MORE_VIEWS) {
     const b = button(label, 'rowact', () => setView(v));
     views.appendChild(b);
     views.appendChild(el('br'));
@@ -1875,7 +1882,7 @@ function setView(v) {
   state.view = v;
   state.transcript = null;
   for (const x of nav.querySelectorAll('button')) x.classList.toggle('active', x.dataset.view === v);
-  for (const x of tabs.querySelectorAll('button')) x.classList.toggle('active', x.dataset.view === v || (v !== 'chat' && x.dataset.view === 'more' && ['plugins', 'models'].includes(v)));
+  for (const x of tabs.querySelectorAll('button')) x.classList.toggle('active', x.dataset.view === v || (v !== 'chat' && x.dataset.view === 'more' && MORE_VIEWS.some(([name]) => name === v)));
   render();
 }
 

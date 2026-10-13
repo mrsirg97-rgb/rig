@@ -17,6 +17,7 @@ func (s *Server) serveStatic(w http.ResponseWriter, name, ct string) {
 		return
 	}
 	w.Header().Set("Content-Type", ct)
+	w.Header().Set("Cache-Control", "no-store")
 	_, _ = w.Write(data)
 }
 
@@ -31,6 +32,7 @@ func (s *Server) serveStaticFile(w http.ResponseWriter, r *http.Request, name st
 		return
 	}
 	w.Header().Set("Content-Type", mimeFor(name))
+	w.Header().Set("Cache-Control", "no-store")
 	_, _ = w.Write(data)
 }
 

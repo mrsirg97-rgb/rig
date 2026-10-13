@@ -197,7 +197,9 @@ the Apple meta tags, safe-area insets).
   and the child's log tail; it re-reads while it is open (3.0.2). The
   models page carries the residency beside the row. The scheduler page
   reads `sched.ListOpen`: active and paused jobs, with the count of
-  finished one-off runs it leaves out. The update page
+  finished one-off runs it leaves out. On the phone the room, models,
+  plugins and update pages open from the more menu (`MORE_VIEWS`, one
+  list; 3.0.3), and every static file is sent `no-store`. The update page
   shows the build's version and runs `rig -update`, which drains the
   room first.
 - The wire front (`wire.go`) answers `/v1/chat/completions`,
