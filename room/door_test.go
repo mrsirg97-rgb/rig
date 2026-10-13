@@ -162,3 +162,111 @@ func TestTheRoomSWireCarriesNoMeshSignal(t *testing.T) {
 		t.Fatalf("the mesh's tick must not cross the unix room's wire: %v", err)
 	}
 }
+
+func TestAJoinerNeverLearnsHoldsOlderThanTheWindow(t *testing.T) {
+	ma := doorMember(t, t.TempDir())
+	mb := doorMember(t, t.TempDir())
+	defer ma.Close()
+	defer mb.Close()
+	key := KeyOf("remote-model")
+	addrs := doorPorts(t, 2)
+	da, err := NewDoor(ma, doorConfig("door-room", "a", addrs[0], []string{addrs[1]}), []int64{key}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer da.Close()
+	db, err := NewDoor(mb, doorConfig("door-room", "b", addrs[1], []string{addrs[0]}), nil, []int64{key})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	claimed := make(chan broadcast.Mint, 1)
+	ma.Claim(key, PriorityTurn, 0, func(m broadcast.Mint, ok bool) { claimed <- m })
+	mint := <-claimed
+
+	doorAwait(t, "the act must not be acted on before the horizon (the repost waits it)", func() bool {
+		return len(mb.Holders(key)) == 0
+	})
+	doorAwait(t, "the repost must land past the horizon", func() bool {
+		return len(mb.Holders(key)) == 1
+	})
+
+	ma.Release(mint, PriorityTurn)
+	doorAwait(t, "the hold's end must cross the mesh", func() bool {
+		return len(mb.Holders(key)) == 0
+	})
+}
+
+func TestPartitionHealingLeavesNoTwoHolders(t *testing.T) {
+	ma := doorMember(t, t.TempDir())
+	mb := doorMember(t, t.TempDir())
+	defer ma.Close()
+	defer mb.Close()
+	key := KeyOf("remote-model")
+	addrs := doorPorts(t, 2)
+	da, err := NewDoor(ma, doorConfig("door-room", "a", addrs[0], []string{addrs[1]}), []int64{key}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer da.Close()
+	db, err := NewDoor(mb, doorConfig("door-room", "b", addrs[1], []string{addrs[0]}), nil, []int64{key})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	claimed := make(chan broadcast.Mint, 1)
+	ma.Claim(key, PriorityTurn, 0, func(m broadcast.Mint, ok bool) { claimed <- m })
+	<-claimed
+
+	doorAwait(t, "the mirror to hold the key", func() bool {
+		return len(mb.Holders(key)) == 1
+	})
+
+	ma.Close()
+	da.Close()
+	doorAwait(t, "the silent door's holds to be released as acts and the partition to heal with one holder", func() bool {
+		return len(mb.Holders(key)) == 0 && len(db.Machines()) == 1
+	})
+}
+
+func TestServeDownMeansOutOfTheMesh(t *testing.T) {
+	ma := doorMember(t, t.TempDir())
+	mb := doorMember(t, t.TempDir())
+	defer ma.Close()
+	defer mb.Close()
+	key := KeyOf("remote-model")
+	addrs := doorPorts(t, 2)
+	da, err := NewDoor(ma, doorConfig("door-room", "a", addrs[0], []string{addrs[1]}), []int64{key}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	db, err := NewDoor(mb, doorConfig("door-room", "b", addrs[1], []string{addrs[0]}), nil, []int64{key})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	claimed := make(chan broadcast.Mint, 1)
+	ma.Claim(key, PriorityTurn, 0, func(m broadcast.Mint, ok bool) { claimed <- m })
+	<-claimed
+	doorAwait(t, "the hold to mirror", func() bool {
+		return len(mb.Holders(key)) == 1
+	})
+	second, err := NewDoor(mb, doorConfig("door-room", "a", addrs[0], nil), nil, []int64{key})
+	if err == nil {
+		second.Close()
+		t.Fatal("no other instance must bind the door address")
+	}
+	da.Close()
+	doorAwait(t, "serve down is out of the mesh: the machine leaves and the holds leave as acts", func() bool {
+		machines := db.Machines()
+		gone := true
+		for _, m := range machines {
+			if m == "a" {
+				gone = false
+			}
+		}
+		return gone && len(mb.Holders(key)) == 0
+	})
+}
