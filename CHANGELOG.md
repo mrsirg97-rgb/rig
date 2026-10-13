@@ -1,4 +1,27 @@
 # Changelog
+## [3.0.1]: the first night without the router
+
+Two things the first cold start on the operator's box found.
+
+The wire front's replies outlive the server's write timeout. `rig serve`
+closes a response at thirty seconds, the dashboard's own stream lifts
+that deadline, and the wire front did not: a request that started a cold
+child, or any reply longer than thirty seconds, ended with the
+connection closed and nothing sent. The wire front lifts it the same
+way.
+
+`scripts/import-llama-swap` joins a command the router's config wraps
+over several lines into one. rig hands the row's command to a shell, and
+a shell reads each line as its own command: the first line ran alone and
+the flags after it ran as commands of their own.
+
+Migration, for a box whose router ran as root: the files its children
+wrote (an engine's own log, its kept conversations) are root's, and a
+child rig starts as the operator cannot open them. `chown` them to the
+operator before the first start. Set a row's `stopGrace` to what its
+engine needs to save on SIGTERM; the import writes the router's ten
+seconds.
+
 ## [3.0.0]: the room, no center
 
 Every rig instance on the machine is a member of one room over unix

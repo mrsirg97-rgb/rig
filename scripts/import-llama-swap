@@ -5,7 +5,9 @@ usage: import-llama-swap <config.yaml> <rig-home> [--running <url>]
 Reads the router's config (startPort, per-model cmd/env/aliases), matches it
 against <rig-home>/models.json rows by id or alias, and rewrites that file
 with the child half added: command, environment, port, aliases, stopGrace,
-places. The numeric and hosted fields of every row are kept as they are; a
+places. A command the router's config wraps over several lines is joined
+into one: rig hands the command to a shell, and a shell reads each line as
+its own command. The numeric and hosted fields of every row are kept as they are; a
 row the config does not name is left untouched, and a config entry no row
 names is reported and dropped (the row is the table's unit).
 
@@ -31,7 +33,7 @@ def llama_swap_models(path):
     models = doc.get("models", {})
     rows = {}
     for i, (mid, m) in enumerate(models.items()):
-        cmd = m.get("cmd", "").strip()
+        cmd = re.sub(r"\s*\n\s*", " ", m.get("cmd", "")).strip()
         if not cmd:
             continue
         rows[mid] = {
