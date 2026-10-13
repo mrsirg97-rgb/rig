@@ -2,6 +2,7 @@ package web
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"io"
 	"net"
@@ -174,5 +175,26 @@ func TestTheWireFrontTakesALongContextBody(t *testing.T) {
 	rec := doReq(t, srv.Handler(), "POST", "/v1/chat/completions", strings.NewReader(big), nil)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("a 2 MiB request must pass through whole: got %d %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestTheWireFrontOutlivesTheServersWriteTimeout(t *testing.T) {
+	srv, _, _, _ := wireServer(t)
+	srv.ready = func(context.Context, models.Model) error {
+		time.Sleep(300 * time.Millisecond)
+		return nil
+	}
+	front := httptest.NewUnstartedServer(srv.Handler())
+	front.Config.WriteTimeout = 100 * time.Millisecond
+	front.Start()
+	t.Cleanup(front.Close)
+	resp, err := http.Post(front.URL+"/v1/chat/completions", "application/json", jsonBody(t, map[string]any{"model": "fake-alias", "messages": []any{}}))
+	if err != nil {
+		t.Fatalf("a reply slower than the server's write timeout must still arrive: %v", err)
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode != http.StatusOK || !strings.Contains(string(body), "chat-1") {
+		t.Fatalf("got %d %s", resp.StatusCode, body)
 	}
 }

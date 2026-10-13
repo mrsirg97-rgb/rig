@@ -1,10 +1,10 @@
 {
   "measured_at": "2026-10-12",
-  "sessions": 2638,
-  "turns": 53633,
-  "prompt": 6009192705,
-  "completion": 33969116,
-  "cache_read": 5906602187,
+  "sessions": 2641,
+  "turns": 53639,
+  "prompt": 6009240965,
+  "completion": 33969907,
+  "cache_read": 5906633863,
   "earliest_version": "0.2.0",
   "eras": [
     {
@@ -37,7 +37,7 @@
     },
     {
       "era": "2.10.x",
-      "turns": 14782,
+      "turns": 14785,
       "new_per_turn": 3946,
       "completion_per_turn": 667,
       "cache_pct": 96.37

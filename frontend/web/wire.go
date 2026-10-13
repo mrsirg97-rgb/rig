@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/mrsirg97-rgb/evt/broadcast"
 	"github.com/mrsirg97-rgb/rig/v3/models"
@@ -92,6 +93,7 @@ func (s *Server) handleWireChat(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusNotFound, "no such model: "+req.Model)
 		return
 	}
+	_ = http.NewResponseController(w).SetWriteDeadline(time.Time{})
 	claimed := make(chan struct{})
 	var mint broadcast.Mint
 	s.machine.Claim(room.KeyOf(row.ID), room.PriorityOutside, 0, func(m broadcast.Mint, ok bool) {

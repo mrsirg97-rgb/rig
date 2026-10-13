@@ -199,8 +199,10 @@ the Apple meta tags, safe-area insets).
   `/v1/models` (the rows' aliases), `/running` and `/unload` on
   loopback, and claims at the floor for anything that is not rig. A cold
   row starts through `Options.Ready` (the root's same path a session
-  takes); a body over 256 MiB is a 413, and each chunk of the reply is
-  flushed as it arrives.
+  takes); a body over 256 MiB is a 413, each chunk of the reply is
+  flushed as it arrives, and the reply lifts the server's write deadline
+  the way the chat stream does (3.0.1): a cold start or a long reply
+  outlives the thirty seconds every other route is held to.
 - The models table is `cfg.Models` (the config's table, every row): the
   crontab is `sched.RealCrontab("")` (injected in tests); the runner
   command is `<self> run-job` (the store's `rig run-job` when empty).
