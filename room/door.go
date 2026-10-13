@@ -183,10 +183,10 @@ func (d *door) Release(mint broadcast.Mint) {
 				}
 				if r.admitted {
 					d.member.Release(r.claim, r.priority)
+					d.forget(key, actMint)
 				} else {
 					r.released = true
 				}
-				d.forget(key, actMint)
 				return
 			}
 		}

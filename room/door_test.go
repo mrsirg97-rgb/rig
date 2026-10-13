@@ -91,6 +91,49 @@ func TestTheDoorAnswersTheMintsItSawUnderKeysItDoesNotCarry(t *testing.T) {
 	ma.Release(mint, PriorityTurn)
 }
 
+func TestARepostReleasedBeforeItsAdmissionStillEnds(t *testing.T) {
+	home := t.TempDir()
+	ma := doorMember(t, home)
+	defer ma.Close()
+	mb, err := New(home, func(int64) int { return 1 }, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer mb.Close()
+	mc := doorMember(t, t.TempDir())
+	defer mc.Close()
+	key := KeyOf("the-model")
+	addrs := doorPorts(t, 2)
+	db, err := NewDoor(ma, doorConfig("a", addrs[0], []string{addrs[1]}), nil, []int64{key})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	dc, err := NewDoor(mc, doorConfig("c", addrs[1], []string{addrs[0]}), []int64{key}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer dc.Close()
+
+	held := make(chan broadcast.Mint, 1)
+	mb.Claim(key, PriorityTurn, 0, func(m broadcast.Mint, ok bool) { held <- m })
+	his := <-held
+
+	claimed := make(chan broadcast.Mint, 1)
+	mc.Claim(key, PriorityTurn, 0, func(m broadcast.Mint, ok bool) { claimed <- m })
+	mint := <-claimed
+
+	doorAwait(t, "the home door to carry the repost unadmitted behind the seat holder", func() bool {
+		h, machine, _ := db.Holding(key, mint)
+		return !h && machine != ""
+	})
+	db.Release(mint)
+	mb.Release(his, PriorityTurn)
+	doorAwait(t, "the repost's later admission to release the home room's claim", func() bool {
+		return len(ma.Holders(key)) == 0
+	})
+}
+
 func TestTheDoorMirrorsAHoldAcrossMachines(t *testing.T) {
 	ma := doorMember(t, t.TempDir())
 	mb := doorMember(t, t.TempDir())
