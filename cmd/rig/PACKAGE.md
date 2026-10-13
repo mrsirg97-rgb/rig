@@ -150,7 +150,10 @@ sees core and models and nothing else.
   setting's `period` (milliseconds) and `window`, the door's `Machine`
   and `Addr` the setting's `listen`, the `peers` the other machines'
   doors; the keys the mesh carries split by the row: a remote row (a
-  `baseURL`) posts its holds, a row with a port is home. Absent, no mesh
+  `baseURL`) posts its holds, a row with a port is home; with the setting
+  on the front also binds the setting's listen host at the serve port
+  beside loopback, the wire paths only, and the dashboard and its token
+  gate stay loopback. Absent, no mesh
   piece is constructed and 3.0.4's wire is byte for byte.
 - `loop.Run(ctx, k)` drives the kernel: interrupt cancels the turn at
   its next boundary. The session row closes with what the run was

@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"net"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -611,6 +612,7 @@ func main() {
 	closeFrontend := func() {}
 	if serveAddr != "" {
 		var door machineroom.Door
+		var tailnet string
 		if cfg.Settings.Mesh != nil {
 			remote, home := meshKeys(cfg.Models)
 			d, derr := machineroom.NewDoor(machine, meshConfig(cfg.Settings.Mesh), remote, home)
@@ -620,10 +622,17 @@ func main() {
 			}
 			door = d
 			defer door.Close()
+			if host, _, err := net.SplitHostPort(cfg.Settings.Mesh.Listen); err == nil {
+				if _, port, err := net.SplitHostPort(serveAddr); err == nil {
+					if addr := net.JoinHostPort(host, port); addr != serveAddr {
+						tailnet = addr
+					}
+				}
+			}
 		}
 		srv, werr := web.New(web.Options{
 			Home: cfgDir, CWD: cwd, Models: cfg.Models,
-			Machine: machine, Door: door, Version: Version,
+			Machine: machine, Door: door, Tailnet: tailnet, Version: Version,
 			Ready:   func(ctx context.Context, m models.Model) error { return kids.ready(ctx, machine, m) },
 			Crontab: sched.RealCrontab(""), RunnerCmd: self + " run-job", Natives: nativeToolNames,
 			Commands: command.All(), Env: env, Status: webStatus(r, sdb),

@@ -301,6 +301,16 @@ func TestTheFrontSGateServesAMintWhenTheFoldShowsIt(t *testing.T) {
 	if got := <-upstreamMint; got != "" {
 		t.Fatalf("the front must not forward the mint to the child it serves: %q", got)
 	}
+	await(t, "the front to record the request it served", 5*time.Second, func() bool {
+		return len(room.Recent(srv.home, "fake-child", 4)) == 1
+	})
+	recorded := room.Recent(srv.home, "fake-child", 4)[0]
+	if recorded.Priority != room.PriorityTurn {
+		t.Fatalf("the record carries the remote claim's class: got %d", recorded.Priority)
+	}
+	if recorded.At.IsZero() {
+		t.Fatal("the record carries the time the reply ended")
+	}
 	await(t, "the gate to have served without claiming (the fold holds no outside-floor claim)", 5*time.Second, func() bool {
 		for _, op := range machine.Holders(key) {
 			if op.Priority() == room.PriorityOutside {

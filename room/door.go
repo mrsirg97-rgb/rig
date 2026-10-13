@@ -21,7 +21,7 @@ type Door interface {
 	Close()
 	Machines() []string
 	Horizon() int64
-	Holding(key int64, mint broadcast.Mint) (bool, string)
+	Holding(key int64, mint broadcast.Mint) (bool, string, int)
 	Refused(key int64, mint broadcast.Mint, since int64) bool
 	Release(mint broadcast.Mint)
 }
@@ -196,7 +196,7 @@ func mirrored(act broadcast.Act) broadcast.Mint {
 	return act.Claim.Mint
 }
 
-func (d *door) Holding(key int64, mint broadcast.Mint) (bool, string) {
+func (d *door) Holding(key int64, mint broadcast.Mint) (bool, string, int) {
 	found := make(chan *repost, 1)
 	d.engine.Add(evt.Func(func(context.Context) {
 		for _, r := range d.in[key] {
@@ -210,9 +210,9 @@ func (d *door) Holding(key int64, mint broadcast.Mint) (bool, string) {
 	}), PriorityFleet)
 	r, ok := <-found
 	if !ok {
-		return false, ""
+		return false, "", 0
 	}
-	return r.admitted, r.machine
+	return r.admitted, r.machine, r.priority
 }
 
 func (d *door) Refused(key int64, mint broadcast.Mint, since int64) bool {

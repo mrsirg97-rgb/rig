@@ -221,10 +221,14 @@ the Apple meta tags, safe-area insets).
   machine without the setting, or a child row, sends its provider request
   bare) and is served when the door's mirror of that mint holds the
   key — never a second claim for a holder, released at the reply's end
-  through the door, the remote release deleting nothing. A mint that
+  through the door, the remote release deleting nothing. The front
+  records the remote requests it serves in the served table — the
+  claim's class and the time, the usage it never sees. A mint that
   reaches a front with no door is served as 3.0.4 served it, at the
   outside floor, and the front forwards the mint nowhere: the upstream is
-  a child or a provider, never rig. The wait ends
+  a child or a provider, never rig. With the setting on the front binds
+  the setting's listen host at the serve port beside loopback, the wire
+  paths only, and the dashboard and its token gate stay loopback. The wait ends
   four ways: the mirror holds, the caller's context ends, the mint's
   machine leaves the mesh's machines (silent past `rounds` periods), or
   the mint's claim is proven refused — the fold holds no act for it past

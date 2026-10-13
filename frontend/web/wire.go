@@ -153,16 +153,18 @@ func (s *Server) handleWireChat(w http.ResponseWriter, r *http.Request) {
 	_ = http.NewResponseController(w).SetWriteDeadline(time.Time{})
 	key := room.KeyOf(row.ID)
 	mint, minted := mintOf(r)
-	if minted && s.door != nil {
-		serving := make(chan string, 1)
+	gated := minted && s.door != nil
+	var priority int
+	if gated {
+		serving := make(chan int, 1)
 		gone := make(chan string, 1)
 		refused := make(chan struct{}, 1)
 		since := s.door.Horizon()
 		go func() {
 			for {
-				holding, machine := s.door.Holding(key, mint)
+				holding, machine, priority := s.door.Holding(key, mint)
 				if holding {
-					serving <- machine
+					serving <- priority
 					return
 				}
 				if machine != "" {
@@ -183,7 +185,7 @@ func (s *Server) handleWireChat(w http.ResponseWriter, r *http.Request) {
 			}
 		}()
 		select {
-		case <-serving:
+		case priority = <-serving:
 		case <-r.Context().Done():
 			return
 		case m := <-gone:
@@ -225,6 +227,9 @@ func (s *Server) handleWireChat(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	s.upstream(w, r, body, row)
+	if gated {
+		_ = room.Record(s.home, row.ID, room.Served{At: time.Now().UTC(), Priority: priority})
+	}
 }
 
 func (s *Server) endpoint(m models.Model) string {

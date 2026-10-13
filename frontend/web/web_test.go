@@ -253,6 +253,45 @@ func TestLoopbackRefusal(t *testing.T) {
 	}
 }
 
+func TestTheTailnetAnswersTheWireBesideLoopback(t *testing.T) {
+	addresses := freePorts(t, 2)
+	tailnet, loop := addresses[0], addresses[1]
+	srv, _, _, _ := wireServer(t)
+	srv.tailnet = tailnet
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	served := make(chan error, 1)
+	go func() { served <- srv.ListenAndServe(ctx, loop) }()
+	await(t, "the tailnet's wire front to answer without the token", 5*time.Second, func() bool {
+		resp, err := http.Get("http://" + tailnet + "/v1/models")
+		if err != nil {
+			return false
+		}
+		resp.Body.Close()
+		return resp.StatusCode == http.StatusOK
+	})
+	resp, err := http.Get("http://" + tailnet + "/api/room")
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusNotFound {
+		t.Fatalf("the dashboard stays loopback: got %d from the tailnet", resp.StatusCode)
+	}
+	resp, err = http.Get("http://" + loop + "/api/room")
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("the loopback dashboard keeps its token gate: got %d", resp.StatusCode)
+	}
+	cancel()
+	if err := <-served; err != nil {
+		t.Fatalf("serve: %v", err)
+	}
+}
+
 func TestAllowList404And405(t *testing.T) {
 	srv, tok := newTestServer(t)
 	h := srv.Handler()
