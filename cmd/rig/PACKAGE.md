@@ -144,9 +144,9 @@ sees core and models and nothing else.
   `-tui`, the dashboard over the web door. All four dispatch
   `/`-commands, at the quiet prompt and at re-entry.
 - The mesh (3.1.0): settings.json's `mesh` set, `rig serve` constructs
-  the door (`machineroom.NewDoor(machine, meshConfig(cfg.Settings.Mesh),
+  the door (`machineroom.NewDoor(machine, machineroom.MeshConfig(...),
   remote, home)`) before the web server and closes it on exit —
-  `meshConfig` builds `broadcast.MeshConfig` with the tick clock from the
+  `room.MeshConfig` builds `broadcast.MeshConfig` with the tick clock from the
   setting's `period` (milliseconds) and `window`, the door's `Machine`
   and `Addr` the setting's `listen`, the `peers` the other machines'
   doors; the keys the mesh carries split by the row: a remote row (a

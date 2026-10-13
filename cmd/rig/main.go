@@ -14,6 +14,7 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/mrsirg97-rgb/evt"
 	"github.com/mrsirg97-rgb/evt/broadcast"
@@ -615,7 +616,8 @@ func main() {
 		var tailnet string
 		if cfg.Settings.Mesh != nil {
 			remote, home := meshKeys(cfg.Models)
-			d, derr := machineroom.NewDoor(machine, meshConfig(cfg.Settings.Mesh), remote, home)
+			mesh := cfg.Settings.Mesh
+			d, derr := machineroom.NewDoor(machine, machineroom.MeshConfig(mesh.Listen, mesh.Peers, time.Duration(mesh.Period)*time.Millisecond, mesh.Window), remote, home)
 			if derr != nil {
 				fmt.Fprintln(os.Stderr, "rig serve:", derr)
 				os.Exit(1)
