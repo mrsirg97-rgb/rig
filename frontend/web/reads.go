@@ -202,12 +202,16 @@ func (s *Server) handleScheduler(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	text, err := sched.List(ctx, sdb, s.crontab, cwd, s.home, nil, time.Now)
+	text, finished, err := sched.ListOpen(ctx, sdb, s.crontab, cwd, s.home, nil, time.Now)
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"cwd": cwd, "text": text, "worker": "resident"})
+	body := map[string]any{"cwd": cwd, "text": text, "worker": "resident"}
+	if finished > 0 {
+		body["finished"] = finished
+	}
+	writeJSON(w, http.StatusOK, body)
 }
 
 func (s *Server) handleModels(w http.ResponseWriter, r *http.Request) {
@@ -227,8 +231,9 @@ func (s *Server) handleModels(w http.ResponseWriter, r *http.Request) {
 			Reserve: m.Reserve, KeepRecent: m.KeepRecent,
 			Role: m.Role, Effort: m.Effort, Efforts: efforts,
 			Places: m.Places, Port: m.Port,
-			Live: m.Port == 0 || room.Answers(m.Port),
-			Tail: tail(filepath.Join(s.home, "logs", id+".log"), 8),
+			Live:   m.Port == 0 || room.Answers(m.Port),
+			Tail:   tail(filepath.Join(s.home, "logs", id+".log"), logTail),
+			Served: room.Recent(s.home, id, servedShown),
 		}
 		if s.machine != nil {
 			key := room.KeyOf(id)

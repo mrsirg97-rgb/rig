@@ -168,12 +168,18 @@ func (p *provider) Stream(ctx context.Context, req core.Request) (<-chan evt.Sig
 				}
 				if chunk.Usage != nil {
 					usage = core.Usage{
-						Prompt:     chunk.Usage.PromptTokens,
-						Completion: chunk.Usage.CompletionTokens,
-						CacheRead:  chunk.Usage.PromptTokensDetails.CachedTokens,
-						CacheWrite: chunk.Usage.PromptTokensDetails.CacheWriteTokens,
-						Cost:       chunk.Usage.Cost,
+						Prompt:          chunk.Usage.PromptTokens,
+						Completion:      chunk.Usage.CompletionTokens,
+						CacheRead:       chunk.Usage.PromptTokensDetails.CachedTokens,
+						CacheWrite:      chunk.Usage.PromptTokensDetails.CacheWriteTokens,
+						Cost:            chunk.Usage.Cost,
+						PromptPerSecond: usage.PromptPerSecond,
+						DecodePerSecond: usage.DecodePerSecond,
 					}
+				}
+				if chunk.Timings != nil {
+					usage.PromptPerSecond = chunk.Timings.PromptPerSecond
+					usage.DecodePerSecond = chunk.Timings.PredictedPerSecond
 				}
 				for _, choice := range chunk.Choices {
 					if text, d := p.reasoningDelta(choice.Delta); text != "" || len(d) > 0 {

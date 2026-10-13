@@ -56,8 +56,15 @@ sees core and models and nothing else.
   before the kill; a swap stops the outgoing child first. The room's
   engine stays free while a child starts or stops, and the others learn
   the outcome from the world — the row's port and the pid file.
+- **the provider's endpoint** (`root.buildProvider`): a row with a port is
+  sent to `http://127.0.0.1:<port>/v1` whatever the base URL says (3.0.2:
+  a keyless local row took the base URL, so a worker handed the wire
+  front's address claimed, then asked the front, which claimed again
+  behind it); a remote row to its own base URL; anything else to the
+  base URL.
 - **claim** (`claim.go`): the claiming provider every model call rides:
-  it claims the model's key at its class's priority (the operator's turn
+  it records each finished request beside the child's log
+  (`room.Record`) and claims the model's key at its class's priority (the operator's turn
   90, a delegate's return 70, a fleet worker 30, a scheduled job 20, an
   outside client 0), the turn waits the admission, and the stream's
   completion is the release. Within one priority the claim that

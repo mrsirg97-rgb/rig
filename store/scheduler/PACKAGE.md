@@ -160,6 +160,8 @@ A command job's fire skips the busy probe and
   fire at the cap records a skip naming the spend, and each fire and
   delegate records its worker's cost (read from the state store's cost
   column, SPEC_HOSTED 5).
+- `ListOpen` (3.0.2): the list without the jobs that are done, and their
+  count; the dashboard's page reads it, the tool keeps `List`.
 - `render.go`: the list/rendering: one list grouped by each job's own
   `cwd` (this directory first, then the rest by path), the empty store
   named (`scheduler: no jobs (global.sqlite)`), and tagged crontab

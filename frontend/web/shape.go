@@ -2,6 +2,7 @@ package web
 
 import (
 	"github.com/mrsirg97-rgb/rig/v3/core"
+	"github.com/mrsirg97-rgb/rig/v3/room"
 	todostore "github.com/mrsirg97-rgb/rig/v3/store/todo"
 )
 
@@ -49,20 +50,21 @@ type transcriptJSON struct {
 }
 
 type modelJSON struct {
-	ID         string   `json:"id"`
-	Window     int      `json:"window"`
-	MaxTokens  int      `json:"max_tokens"`
-	Reserve    int      `json:"reserve"`
-	KeepRecent int      `json:"keep_recent"`
-	Role       string   `json:"role"`
-	Effort     string   `json:"effort"`
-	Efforts    []string `json:"efforts"`
-	Places     int      `json:"places"`
-	Port       int      `json:"port"`
-	Live       bool     `json:"live"`
-	Holders    int      `json:"holders"`
-	Waiting    int      `json:"waiting"`
-	Tail       []string `json:"tail"`
+	ID         string        `json:"id"`
+	Window     int           `json:"window"`
+	MaxTokens  int           `json:"max_tokens"`
+	Reserve    int           `json:"reserve"`
+	KeepRecent int           `json:"keep_recent"`
+	Role       string        `json:"role"`
+	Effort     string        `json:"effort"`
+	Efforts    []string      `json:"efforts"`
+	Places     int           `json:"places"`
+	Port       int           `json:"port"`
+	Live       bool          `json:"live"`
+	Holders    int           `json:"holders"`
+	Waiting    int           `json:"waiting"`
+	Tail       []string      `json:"tail"`
+	Served     []room.Served `json:"served"`
 }
 
 type pluginJSON struct {

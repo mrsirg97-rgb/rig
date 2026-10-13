@@ -29,6 +29,11 @@ the five signals the instances exchange beside the protocol's own.
   is empty — what is resident is read from the world, never replayed.
 - `Loading(port int)`: whether the child's `/health` says 503 — the port
   answers before the model does.
+- `Served`, `Record(home, model, served)` and `Recent(home, model, n)`
+  (3.0.2): one line per request a rig served, appended to
+  `~/.rig/logs/<model id>.served` by the instance that made it and read
+  from the file's last 64 KB by the dashboard — what a model is doing is
+  read from the world, like its residency.
 - The signals: `StartChild`, `StopChild`, `SwapChild` (`Swap() bool`),
   `TableChange` (one row's raw JSON) and `Update`, with `Codec` and
   `Registry` declaring rig's five kinds beside `broadcast.Protocol()`'s.

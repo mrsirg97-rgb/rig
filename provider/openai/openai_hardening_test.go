@@ -397,3 +397,27 @@ func TestALocalRowKeepsWaitingForHeadersPastTheOldBound(t *testing.T) {
 		t.Fatalf("events = %v, want the late headers delivered", got)
 	}
 }
+
+func TestTheServersTimingsRideTheUsage(t *testing.T) {
+	body := strings.Join([]string{
+		`data: {"choices":[{"delta":{"content":"x"}}]}`,
+		`data: {"choices":[{"delta":{},"finish_reason":"stop"}],"timings":{"prompt_per_second":2301.5,"predicted_per_second":90.6}}`,
+		`data: {"choices":[],"usage":{"prompt_tokens":922,"completion_tokens":10,"prompt_tokens_details":{"cached_tokens":918}}}`,
+		`data: [DONE]`,
+		"",
+	}, "\n")
+	srv := sseServer(t, body)
+
+	p := openai.New(srv.URL, "local")
+	events, err := drain(t, context.Background(), p, userReq())
+	if err != nil {
+		t.Fatalf("stream: %v", err)
+	}
+	done := events[len(events)-1].(core.Done)
+	if done.Usage.DecodePerSecond != 90.6 || done.Usage.PromptPerSecond != 2301.5 {
+		t.Fatalf("usage = %+v, want the server's decode and prompt speed kept across the usage chunk", done.Usage)
+	}
+	if done.Usage.Prompt != 922 || done.Usage.CacheRead != 918 {
+		t.Fatalf("usage = %+v, want the token counts beside the speeds", done.Usage)
+	}
+}

@@ -1232,6 +1232,9 @@ async function renderScheduler(q) {
   const hint = el('div', 'hint');
   hint.textContent = 'tap a job to update its fields in place; the list re-reads after a move';
   tb.body.appendChild(hint);
+  if (data.finished) {
+    tb.body.appendChild(el('div', 'hint', data.finished + ' finished one-off runs are not shown (delegate and once jobs that ended)'));
+  }
 
   if (!data.worker) {
     const refusal = el('div', 'hint');
@@ -1369,8 +1372,31 @@ async function renderModels() {
   tb.body.appendChild(el('div', 'hint', 'switch and effort take effect on the next turn (/models, /effort in the chat)'));
 }
 
-async function renderRoom() {
-  const data = await api('/api/room');
+const ROOM_REFRESH_MS = 4000;
+let roomTimer = null;
+
+function claimClass(p) {
+  if (p >= 90) return 'turn';
+  if (p >= 70) return 'return';
+  if (p >= 30) return 'worker';
+  if (p >= 20) return 'job';
+  return 'outside';
+}
+
+function tokens(n) {
+  return n >= 1000 ? (n / 1000).toFixed(n >= 100000 ? 0 : 1) + 'k' : String(n);
+}
+
+function servedText(r) {
+  const parts = ['in ' + tokens(r.prompt)];
+  if (r.prompt > 0) parts.push('cached ' + Math.round(100 * r.cached / r.prompt) + '%');
+  parts.push('out ' + tokens(r.completion));
+  if (r.decode_per_second > 0) parts.push('decode ' + r.decode_per_second.toFixed(1) + ' tok/s');
+  if (r.prompt_per_second > 0) parts.push('prompt ' + Math.round(r.prompt_per_second) + ' tok/s');
+  return parts.join(' ' + G.dot + ' ');
+}
+
+function paintRoom(data) {
   clear();
   const tb = toolBlock('room', 'members');
   main.appendChild(tb.el);
@@ -1391,11 +1417,43 @@ async function renderRoom() {
     head.appendChild(span(id, 'text bold'));
     head.appendChild(span('  ' + m.holders + ' holder(s), ' + m.waiting + ' waiting', 'ember'));
     tb.body.appendChild(head);
-    for (const l of m.tail || []) {
+    const served = m.served || [];
+    for (const r of served) {
+      const row = line('detail');
+      const at = new Date(r.at);
+      row.textContent = at.toLocaleTimeString() + '  ' + claimClass(r.priority) + '  ' + servedText(r);
+      tb.body.appendChild(row);
+    }
+    const tail = m.tail || [];
+    if (served.length && tail.length) tb.body.appendChild(line('dim')).textContent = '  the child\'s log:';
+    for (const l of tail) {
       tb.body.appendChild(line('dim')).textContent = '  ' + l;
     }
     tb.body.appendChild(line()).textContent = ' ';
   }
+  tb.body.appendChild(el('div', 'hint', 'each row is one request a rig served from this model, newest last; the page re-reads while it is open'));
+}
+
+async function renderRoom() {
+  paintRoom(await api('/api/room'));
+  if (roomTimer) clearInterval(roomTimer);
+  roomTimer = setInterval(async () => {
+    if (state.view !== 'room') {
+      clearInterval(roomTimer);
+      roomTimer = null;
+      return;
+    }
+    if (document.hidden) return;
+    try {
+      const data = await api('/api/room');
+      if (state.view !== 'room') return;
+      const y = window.scrollY;
+      paintRoom(data);
+      window.scrollTo(0, y);
+    } catch (e) {
+      return;
+    }
+  }, ROOM_REFRESH_MS);
 }
 
 async function renderUpdate() {

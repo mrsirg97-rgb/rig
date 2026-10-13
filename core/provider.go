@@ -76,6 +76,9 @@ type Usage struct {
 	CacheRead  int
 	CacheWrite int
 	Cost       float64
+
+	PromptPerSecond float64
+	DecodePerSecond float64
 }
 
 type ToolStart struct {

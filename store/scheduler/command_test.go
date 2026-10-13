@@ -1,6 +1,7 @@
 package scheduler_test
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -233,4 +234,32 @@ func TestSchemaThreeAddsTheCommandColumnToAV2Store(t *testing.T) {
 	if row := jobsRow(t, h, "j2"); row == nil || row["command"] != "true" {
 		t.Fatalf("the migrated store must carry command jobs: %v", row)
 	}
+}
+
+func TestTheOpenListLeavesFinishedRunsOutAndCountsThem(t *testing.T) {
+	cwd := realCwd(t, "openlist")
+	h := newHarness(t, cwd)
+	_, err := h.create(sched.CreateInput{Name: "once-cmd", Command: "true", Cron: "once", At: "2026-08-16T00:00:00Z", Cwd: cwd})
+	mustOK(t, err)
+	_, err = h.create(sched.CreateInput{Model: "w", Name: "nightly", Prompt: "p", Cron: "0 0 * * *", Cwd: cwd})
+	mustOK(t, err)
+	spawn := &fakeSpawn{result: sched.SpawnResult{Exit: 0}}
+	if err := sched.RunJob("j1", sched.RunOpts{
+		Home: h.home, Crontab: h.ct, RigHome: h.rigHome, Fetch: func(string) (json.RawMessage, error) {
+			return nil, jsonError("busy probe must not run")
+		},
+		Spawn: spawn.spawn, WorkerCmd: []string{"/x/rig"},
+		Now: func() time.Time { return runnerNow }, Sandbox: "off",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	whole, err := h.list()
+	mustOK(t, err)
+	contains(t, whole, "once-cmd")
+	open, finished, err := sched.ListOpen(context.Background(), h.db, h.ct, h.sessCwd, h.rigHome, nil, func() time.Time { return nowFixed })
+	mustOK(t, err)
+	if finished != 1 || strings.Contains(open, "once-cmd") {
+		t.Fatalf("the open list must leave the finished run out and count it: finished=%d\n%s", finished, open)
+	}
+	contains(t, open, "nightly")
 }
