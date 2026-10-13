@@ -7,7 +7,9 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -17,6 +19,7 @@ import (
 	"github.com/mrsirg97-rgb/rig/v3/frontend/web"
 	"github.com/mrsirg97-rgb/rig/v3/models"
 	machineroom "github.com/mrsirg97-rgb/rig/v3/room"
+	"github.com/mrsirg97-rgb/rig/v3/testenv"
 )
 
 const (
@@ -30,9 +33,9 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 class Reply(BaseHTTPRequestHandler):
     def do_POST(self):
         self.rfile.read(int(self.headers.get("Content-Length", 0)))
-        body = json.dumps({"id": "chat-1", "choices": [{"message": {"role": "assistant", "content": "hello"}}]}).encode()
+        body = b'data: ' + json.dumps({"id": "chat-1", "choices": [{"delta": {"content": "hello"}, "finish_reason": "stop"}]}).encode() + b'\n\ndata: [DONE]\n\n'
         self.send_response(200)
-        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Type", "text/event-stream")
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         self.wfile.write(body)
@@ -134,4 +137,120 @@ func TestARemoteRequestStartsTheColdChildAndSwapsTheResidentOut(t *testing.T) {
 		return !machineroom.Answers(resident.Port)
 	})
 	remote.Release(mint, machineroom.PriorityTurn)
+}
+
+func writeServeHome(t *testing.T, scratch string, rows, settings string) {
+	t.Helper()
+	dir := filepath.Join(scratch, ".rig")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "models.json"), []byte("["+rows+"]"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "settings.json"), []byte(settings), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func startServe(t *testing.T, bin, scratch, addr, binDir string) {
+	t.Helper()
+	log := &lockedBuffer{}
+	cmd := exec.Command(bin, "serve", "-addr", "127.0.0.1:"+addr)
+	cmd.Env = append(scrubSwap(os.Environ()),
+		"HOME="+scratch, "XDG_CONFIG_HOME="+scratch,
+		"RIG_MODEL=fake-child",
+		"RIG_SWAP_URL="+testenv.ClosedSwapURL,
+		"PATH="+binDir+string(os.PathListSeparator)+os.Getenv("PATH"),
+	)
+	cmd.Dir = scratch
+	cmd.Stdout = log
+	cmd.Stderr = log
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		cmd.Process.Kill()
+		_ = cmd.Wait()
+		if t.Failed() {
+			t.Logf("serve %s:\n%s", addr, log.String())
+		}
+	})
+}
+
+func TestARemoteTurnCrossesTwoRealServes(t *testing.T) {
+	root, err := filepath.Abs("../..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	binDir := t.TempDir()
+	bin := filepath.Join(binDir, "rig")
+	if out, err := exec.Command("go", "build", "-o", bin, filepath.Join(root, "cmd", "rig")).CombinedOutput(); err != nil {
+		t.Fatalf("build: %v\n%s", err, out)
+	}
+	ports := make([]string, 5)
+	for i := range ports {
+		ports[i] = strconv.Itoa(freePort(t))
+	}
+	front2, front1, door2, door1 := ports[0], ports[1], ports[2], ports[3]
+	child := fakeChildRow(t, "fake-child")
+	childRow := fmt.Sprintf(`{"id": "fake-child", "window": 8192, "maxTokens": 2048, "reserve": 1024, "keepRecent": 2048, "role": "worker", "command": %q, "port": %d, "places": 1, "stopGrace": 1}`, child.Command, child.Port)
+	remoteRow := fmt.Sprintf(`{"id": "fake-child", "window": 8192, "maxTokens": 2048, "reserve": 1024, "keepRecent": 2048, "role": "worker", "provider": "openai", "baseUrl": "http://127.0.0.1:%s/v1"}`, front2)
+
+	home2 := shortTemp(t)
+	writeServeHome(t, home2, childRow, fmt.Sprintf(`{"sandbox":"off","swapUrl":%q,"mesh":{"listen":"127.0.0.1:%s","peers":["127.0.0.1:%s"]}}`, testenv.ClosedSwapURL, door2, door1))
+	home1 := shortTemp(t)
+	writeServeHome(t, home1, remoteRow, fmt.Sprintf(`{"sandbox":"off","swapUrl":%q,"mesh":{"listen":"127.0.0.1:%s","peers":["127.0.0.1:%s"]}}`, testenv.ClosedSwapURL, door1, door2))
+	home3 := shortTemp(t)
+	writeServeHome(t, home3, remoteRow, `{"sandbox":"off","swapUrl":"`+testenv.ClosedSwapURL+`"}`)
+
+	startServe(t, bin, home2, front2, binDir)
+	startServe(t, bin, home1, front1, binDir)
+	for _, addr := range []string{front2, front1} {
+		await(t, "the front to answer", 60*time.Second, func() bool {
+			resp, err := http.Get("http://127.0.0.1:" + addr + "/v1/models")
+			if err != nil {
+				return false
+			}
+			resp.Body.Close()
+			return resp.StatusCode == http.StatusOK
+		})
+	}
+
+	turn := func(scratch string) (string, time.Duration) {
+		env := append(scrubSwap(os.Environ()),
+			"HOME="+scratch, "XDG_CONFIG_HOME="+scratch,
+			"RIG_SWAP_URL="+testenv.ClosedSwapURL,
+			"PATH="+binDir+string(os.PathListSeparator)+os.Getenv("PATH"),
+		)
+		started := time.Now()
+		cmd := exec.Command(bin, "-p", "hi", "-model", "fake-child")
+		cmd.Env = env
+		cmd.Dir = scratch
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("the turn failed: %v\n%s", err, out)
+		}
+		return string(out), time.Since(started)
+	}
+
+	plain, plainTook := turn(home3)
+	if !strings.Contains(plain, "hello") {
+		t.Fatalf("the front's own floor claim must serve the row: %q", plain)
+	}
+	await(t, "the cold child to answer its port", 30*time.Second, func() bool {
+		return machineroom.Answers(child.Port)
+	})
+	meshed, meshedTook := turn(home1)
+	if !strings.Contains(meshed, "hello") {
+		t.Fatalf("the remote peer's turn must come back through the gate: %q", meshed)
+	}
+	await(t, "the front to record the request it served", 30*time.Second, func() bool {
+		return len(machineroom.Recent(filepath.Join(home2, ".rig"), "fake-child", 4)) == 1
+	})
+	recorded := machineroom.Recent(filepath.Join(home2, ".rig"), "fake-child", 4)[0]
+	if recorded.Priority != machineroom.PriorityFleet {
+		t.Fatalf("the record carries the remote claim's class: got %d", recorded.Priority)
+	}
+	t.Logf("the turn across the two serves took %s (the front's own floor claim, cold child included: %s); the served record carries the class %d at %s", meshedTook, plainTook, recorded.Priority, recorded.At.Format(time.RFC3339))
 }
