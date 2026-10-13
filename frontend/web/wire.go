@@ -34,8 +34,12 @@ func mintOf(r *http.Request) (broadcast.Mint, bool) {
 	return m, true
 }
 
+func modelPath(path string) bool {
+	return path == "/v1/models" || path == "/v1/chat/completions"
+}
+
 func wirePath(path string) bool {
-	return path == "/v1/models" || path == "/v1/chat/completions" || path == "/running" || path == "/unload"
+	return modelPath(path) || path == "/running" || path == "/unload"
 }
 
 func (s *Server) handleWire(w http.ResponseWriter, r *http.Request, path string) {

@@ -152,8 +152,9 @@ sees core and models and nothing else.
   doors; the keys the mesh carries split by the row: a remote row (a
   `baseURL`) posts its holds, a row with a port is home; with the setting
   on the front also binds the setting's listen host at the serve port
-  beside loopback, the wire paths only, and the dashboard and its token
-  gate stay loopback. Absent, no mesh
+  beside loopback, the model paths only (`/v1/models`,
+  `/v1/chat/completions`), and `/running`, `/unload`, the dashboard and
+  its token gate stay loopback. Absent, no mesh
   piece is constructed and 3.0.4's wire is byte for byte.
 - `loop.Run(ctx, k)` drives the kernel: interrupt cancels the turn at
   its next boundary. The session row closes with what the run was

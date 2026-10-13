@@ -46,6 +46,11 @@ holds no act for it past the horizon's window, the machine's clock wrong
 gossip rounds is gone and its holds leave as acts; serve down is out of
 the mesh and the re-bind leaves.
 
+With the setting on the front also answers on the listen host at the
+serve port, the model paths only (`/v1/models`, `/v1/chat/completions`):
+`/running`, `/unload` and the dashboard stay loopback, so the bind adds
+no way to stop a model from another device.
+
 The dashboard's room page shows the mesh's mode, the machines it sees
 and the tick horizon with the setting on, and its 3.0.4 shape with it
 off. The mesh's `Post` carries the unix-room claim it mirrors; rig

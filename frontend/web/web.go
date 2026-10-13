@@ -145,7 +145,7 @@ func (s *Server) Handler() http.Handler {
 
 func (s *Server) WireHandler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if !wirePath(r.URL.Path) {
+		if !modelPath(r.URL.Path) {
 			http.NotFound(w, r)
 			return
 		}

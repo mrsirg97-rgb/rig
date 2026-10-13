@@ -828,7 +828,11 @@ is the boundary and the home machine's fold is the authority.
 tailnet address beside loopback; the dashboard and its token gate stay
 loopback. A request with no mint from a non-loopback address is a caller the
 tailnet vouches for, and it claims at the floor as today's loopback callers
-do. `/unload` moves behind the dashboard's token, because loopback is not a
+do. The tailnet bind answers the model paths only (`/v1/models`,
+`/v1/chat/completions`): `/running` and `/unload` are not served there, so
+the bind adds no way to stop a model. What follows is the operator's
+`tailscale serve` forward, a separate path and still his open question, not
+built in 3.1.0. `/unload` moves behind the dashboard's token, because loopback is not a
 check: the operator's `tailscale serve` forwards the tailnet port to loopback
 7777, the proxy is in front of the bind, and a call through it arrives from
 127.0.0.1 the same as the operator's own — `handleUnload` reads no remote

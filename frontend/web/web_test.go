@@ -278,6 +278,22 @@ func TestTheTailnetAnswersTheWireBesideLoopback(t *testing.T) {
 	if resp.StatusCode != http.StatusNotFound {
 		t.Fatalf("the dashboard stays loopback: got %d from the tailnet", resp.StatusCode)
 	}
+	resp, err = http.Get("http://" + tailnet + "/running")
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusNotFound {
+		t.Fatalf("what is resident stays loopback: got %d from the tailnet", resp.StatusCode)
+	}
+	resp, err = http.Post("http://"+tailnet+"/unload", "application/json", strings.NewReader(`{"model":"fake-child"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusNotFound {
+		t.Fatalf("an unload stays loopback: got %d from the tailnet", resp.StatusCode)
+	}
 	resp, err = http.Get("http://" + loop + "/api/room")
 	if err != nil {
 		t.Fatal(err)

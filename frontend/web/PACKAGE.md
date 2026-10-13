@@ -227,8 +227,9 @@ the Apple meta tags, safe-area insets).
   reaches a front with no door is served as 3.0.4 served it, at the
   outside floor, and the front forwards the mint nowhere: the upstream is
   a child or a provider, never rig. With the setting on the front binds
-  the setting's listen host at the serve port beside loopback, the wire
-  paths only, and the dashboard and its token gate stay loopback. The wait ends
+  the setting's listen host at the serve port beside loopback, the model
+  paths only (`/v1/models`, `/v1/chat/completions`): `/running`,
+  `/unload`, the dashboard and its token gate stay loopback. The wait ends
   five ways: the mirror holds, the caller's context ends, the mint's
   machine leaves the mesh's machines (silent past `rounds` periods), the
   mesh's fold shows the claim under a key no door carries (a remote row
