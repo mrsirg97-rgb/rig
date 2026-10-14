@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"math"
 	"os"
 	"sort"
 	"strings"
@@ -12,12 +11,6 @@ import (
 	"github.com/mrsirg97-rgb/rig/v3/decision"
 	"github.com/mrsirg97-rgb/rig/v3/store"
 	"github.com/mrsirg97-rgb/rig/v3/store/fts"
-)
-
-const (
-	reciprocalRankK     = 60
-	fuzzyMinOverlap     = 3
-	fuzzyMinContainment = 0.5
 )
 
 type Scorer interface {
@@ -51,7 +44,7 @@ func (q *Queue) packTask(ctx context.Context, db store.DB, root, task string) (s
 			q.say("%v", err)
 			continue
 		}
-		if len(items) > 0 && total+len(item) >= q.itemCap {
+		if len(items) > 0 && total+len(item) > q.itemCap {
 			break
 		}
 		total += len(item)
@@ -88,6 +81,9 @@ func (q *Queue) packTask(ctx context.Context, db store.DB, root, task string) (s
 		verdicts, err := q.scorer.Score(ctx, task, texts)
 		if err != nil {
 			return "", err
+		}
+		if len(verdicts) != len(ask) {
+			return "", fmt.Errorf("graph: the decision server answered %d verdicts for %d candidates; refusing the pack", len(verdicts), len(ask))
 		}
 		for i, v := range verdicts {
 			if v.Yes {
@@ -137,7 +133,10 @@ func (q *Queue) packTask(ctx context.Context, db store.DB, root, task string) (s
 			fmt.Fprintf(&b, "  %s\n", n)
 		}
 	}
-	coverage(ctx, db, root, &b)
+	coverageErr := coverage(ctx, db, root, &b)
+	if coverageErr != nil {
+		return "", coverageErr
+	}
 	if q.scorer != nil {
 		fmt.Fprintf(&b, "scored %d candidates\n", scored)
 	}
@@ -198,10 +197,7 @@ func ftsArm(ctx context.Context, db store.DB, match string, limit int) ([]armHit
 }
 
 func gramArm(ctx context.Context, db store.DB, grams []string, limit int) ([]armHit, error) {
-	minOverlap := fuzzyMinOverlap
-	if want := int(math.Ceil(fuzzyMinContainment * float64(len(grams)))); want > minOverlap {
-		minOverlap = want
-	}
+	minOverlap := fts.MinOverlap(len(grams))
 	places := make([]string, len(grams))
 	args := make([]any, 0, len(grams)+2)
 	for i, g := range grams {
@@ -237,7 +233,7 @@ func fuseArms(arms [][]armHit) []symRow {
 	for _, arm := range arms {
 		for _, hit := range arm {
 			key := hit.row.Package + "\x00" + hit.row.Name
-			scores[key] += 1.0 / (float64(reciprocalRankK) + float64(hit.rank))
+			scores[key] += fts.RankWeight(hit.rank)
 			rows[key] = hit.row
 		}
 	}

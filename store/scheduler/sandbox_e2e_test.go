@@ -226,7 +226,7 @@ func jailFixture(t *testing.T, replies []string, binds []string, py string) (str
 		t.Fatalf("the worker's model calls must ride the socket (requests = %d)", s.count())
 	}
 
-	if _, err := os.Stat(filepath.Join(cwd, ".rig-job.sock")); !os.IsNotExist(err) {
+	if _, err := os.Stat(filepath.Join(cwd, ".rig-job", "j1.sock")); !os.IsNotExist(err) {
 		t.Fatalf("the run's socket must be gone after the run (stat: %v)", err)
 	}
 

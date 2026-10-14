@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"os/exec"
@@ -12,6 +13,8 @@ import (
 	"syscall"
 	"time"
 )
+
+const fetchBodyCap = 64 * 1024
 
 func RealFetch(timeout time.Duration) Fetch {
 	if timeout <= 0 {
@@ -27,8 +30,18 @@ func RealFetch(timeout time.Duration) Fetch {
 			return nil, err
 		}
 		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			return nil, fmt.Errorf("fetch %s: status %s", url, resp.Status)
+		}
+		body, err := io.ReadAll(io.LimitReader(resp.Body, fetchBodyCap+1))
+		if err != nil {
+			return nil, err
+		}
+		if len(body) > fetchBodyCap {
+			return nil, fmt.Errorf("fetch %s: body over %d bytes", url, fetchBodyCap)
+		}
 		var raw json.RawMessage
-		if err := json.NewDecoder(resp.Body).Decode(&raw); err != nil {
+		if err := json.Unmarshal(body, &raw); err != nil {
 			return nil, err
 		}
 		return raw, nil
@@ -78,6 +91,9 @@ func RealSpawn(ctx context.Context, argv []string, cwd string, env []string, obs
 	cmd.Stdout = out
 	cmd.Stderr = errBuf
 	runErr := cmd.Run()
+	if errors.Is(runErr, exec.ErrWaitDelay) && cmd.ProcessState != nil && cmd.ProcessState.Success() {
+		runErr = nil
+	}
 	res := SpawnResult{Stdout: out.String(), Stderr: errBuf.String()}
 	switch {
 	case runErr == nil:

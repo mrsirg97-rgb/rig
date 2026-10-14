@@ -56,11 +56,11 @@ func Prune(ctx context.Context, db store.DB, cwd string, in PruneInput) (string,
 		return res.reply, res.count, nil
 	case "reduce":
 		res, err := transact(ctx, db, func(bound context.Context, tx *sql.Tx) (pruneResult, error) {
-			n, err := reduceImportance(bound, in, cwd)
+			n, target, err := reduceImportance(bound, in, cwd)
 			if err != nil {
 				return pruneResult{}, err
 			}
-			return pruneResult{reply: fmt.Sprintf("reduced %d to %g", n, *in.Importance), count: n}, nil
+			return pruneResult{reply: fmt.Sprintf("reduced %d to %g", n, target), count: n}, nil
 		})
 		if err != nil {
 			return "", 0, err
@@ -243,28 +243,29 @@ func removeMemories(bound context.Context, in PruneInput, cwd string) (int, erro
 	return removed, nil
 }
 
-func reduceImportance(bound context.Context, in PruneInput, cwd string) (int, error) {
+func reduceImportance(bound context.Context, in PruneInput, cwd string) (int, float64, error) {
 	ids, err := candidatesOf(bound, in, cwd, false)
 	if err != nil {
-		return 0, err
+		return 0, 0, err
 	}
 	if in.Importance == nil {
-		return 0, fmt.Errorf("rem: reduce needs an importance to lower to")
+		return 0, 0, fmt.Errorf("rem: reduce needs an importance to lower to")
 	}
+	target := clamp01(*in.Importance)
 	reduced := 0
 	for _, id := range ids {
 		row, err := remdom.NewMemoryDomain().GetMemory(bound, id).Row()
 		if err != nil {
-			return reduced, fmt.Errorf("rem: reduce: %w", err)
+			return reduced, target, fmt.Errorf("rem: reduce: %w", err)
 		}
 		if row == nil {
 			continue
 		}
-		row.Importance = *in.Importance
+		row.Importance = target
 		if _, err := remdom.NewMemoryDomain().UpdateMemory(bound, *row); err != nil {
-			return reduced, fmt.Errorf("rem: reduce: %w", err)
+			return reduced, target, fmt.Errorf("rem: reduce: %w", err)
 		}
 		reduced++
 	}
-	return reduced, nil
+	return reduced, target, nil
 }

@@ -27,8 +27,11 @@ itself, and `Outcome` writes the one fact that arrives later.
   state — newest id first; a row whose question JSON does not parse or
   whose question id differs is skipped, never thrown; the denied
   answer is its correction), `Outcome` (refuses by name when the id is
-  unknown). Ids are minted max+1 inside the caller's transaction; the
-  state column is bounded at 4096 bytes at the boundary.
+  unknown). Ids are minted max+1 inside the caller's transaction — one
+  mint shape shared by `decisions` and `trainings`; the state column is
+  bounded at 4096 bytes at the boundary, and `Settled` normalizes the
+  caller's state through that same cap before matching, so a state the
+  insert truncated still finds its row.
 - `recorder.go`: the `decision.Recorder` adapter — the gates' seam. It
   fills the scope from the root when the row carries none, names the
   ctx session, bounds nothing else, and swallows store errors (said in

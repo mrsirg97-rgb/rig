@@ -25,7 +25,7 @@ type LiveMemory struct {
 
 func List(ctx context.Context, db store.DB, cwd string, k int) ([]LiveMemory, error) {
 	if k <= 0 {
-		k = 50
+		k = recallKMax
 	}
 	proj := scopeKey(cwd)
 	out, err := transact(ctx, db, func(bound context.Context, _ *sql.Tx) ([]LiveMemory, error) {

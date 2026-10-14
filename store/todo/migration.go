@@ -99,6 +99,8 @@ func ReviewMigration(tx *sql.Tx, from, to int) (string, error) {
 
 var legacyStoreRe = regexp.MustCompile(`^([0-9a-f]{24})\.sqlite$`)
 
+var migratedStoreRe = regexp.MustCompile(`^([0-9a-f]{24})\.sqlite\.migrated$`)
+
 func LegacyScope(cwd string) string {
 	sum := sha1.Sum([]byte(cwd))
 	return hex.EncodeToString(sum[:12])
@@ -150,27 +152,37 @@ func foldLegacy(tx *sql.Tx, dir string) (int, int, error) {
 		}
 		return 0, 0, fmt.Errorf("todo: migration: %w", err)
 	}
-	var files []string
+	var names []string
 	for _, e := range entries {
 		if e.IsDir() {
 			continue
 		}
-		if legacyStoreRe.MatchString(e.Name()) {
-			files = append(files, e.Name())
+		if legacyStoreRe.MatchString(e.Name()) || migratedStoreRe.MatchString(e.Name()) {
+			names = append(names, e.Name())
 		}
 	}
-	if len(files) == 0 {
+	if len(names) == 0 {
 		return 0, 0, nil
 	}
-	sort.Strings(files)
+	sort.Strings(names)
 
 	var seq int64
 	if err := tx.QueryRow(`SELECT COALESCE(MAX(seq), 0) FROM events`).Scan(&seq); err != nil {
 		return 0, 0, fmt.Errorf("todo: migration: %w", err)
 	}
-	folded := 0
-	for _, name := range files {
-		hash := strings.TrimSuffix(name, ".sqlite")
+	folded, files := 0, 0
+	for _, name := range names {
+		hash := strings.TrimSuffix(strings.TrimSuffix(name, ".migrated"), ".sqlite")
+		aside := migratedStoreRe.MatchString(name)
+		if aside {
+			settled, err := foldedAlready(tx, hash)
+			if err != nil {
+				return 0, 0, err
+			}
+			if settled {
+				continue
+			}
+		}
 		path := filepath.Join(dir, name)
 		cdb, _, _, err := store.Open(path, legacyStatements(), legacySchemaVersion)
 		if err != nil {
@@ -220,7 +232,11 @@ func foldLegacy(tx *sql.Tx, dir string) (int, int, error) {
 		rows.Close()
 		cTx.Rollback()
 		cdb.DB.Close()
+		files++
 
+		if aside {
+			continue
+		}
 		for _, suffix := range []string{"", "-wal", "-shm"} {
 			src := filepath.Join(dir, name+suffix)
 			if _, err := os.Stat(src); err != nil {
@@ -231,7 +247,31 @@ func foldLegacy(tx *sql.Tx, dir string) (int, int, error) {
 			}
 		}
 	}
-	return folded, len(files), nil
+	return folded, files, nil
+}
+
+func foldedAlready(tx *sql.Tx, hash string) (bool, error) {
+	var have bool
+	err := tx.QueryRow(`SELECT 1 FROM events WHERE scope = ? LIMIT 1`, hash).Scan(&have)
+	if err == nil {
+		return true, nil
+	}
+	if err != sql.ErrNoRows {
+		return false, fmt.Errorf("todo: migration: %w", err)
+	}
+	var rescoped string
+	if err := tx.QueryRow(`SELECT value FROM meta WHERE key = ?`, "migrated:"+hash).Scan(&rescoped); err != nil {
+		if err == sql.ErrNoRows {
+			return false, nil
+		}
+		return false, fmt.Errorf("todo: migration: %w", err)
+	}
+	if err := tx.QueryRow(`SELECT 1 FROM events WHERE scope = ? LIMIT 1`, rescoped).Scan(&have); err == nil {
+		return true, nil
+	} else if err != sql.ErrNoRows {
+		return false, fmt.Errorf("todo: migration: %w", err)
+	}
+	return false, nil
 }
 
 func rescopeEvents(tx *sql.Tx, oldScope, newScope string) (int, error) {

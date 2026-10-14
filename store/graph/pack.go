@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/mrsirg97-rgb/rig/v3/store"
 )
@@ -92,7 +93,9 @@ func (q *Queue) packFile(ctx context.Context, db store.DB, root, cwd, target str
 	for _, s := range rows {
 		fmt.Fprintf(&b, "  %s %s — %s:%d\n", s.Kind, s.Name, s.File, s.Line)
 	}
-	coverage(ctx, db, root, &b)
+	if err := coverage(ctx, db, root, &b); err != nil {
+		return "", err
+	}
 	return b.String(), nil
 }
 
@@ -189,12 +192,25 @@ func (q *Queue) packSymbol(ctx context.Context, db store.DB, root, module, targe
 	}
 	var b strings.Builder
 	b.WriteString(block)
-	coverage(ctx, db, root, &b)
+	if err := coverage(ctx, db, root, &b); err != nil {
+		return "", err
+	}
 	out := b.String()
 	if len(out) > ReadCap {
-		out = out[:ReadCap] + "\n[truncated at the read ceiling]"
+		out = truncateAt(out, ReadCap) + "\n[truncated at the read ceiling]"
 	}
 	return out, nil
+}
+
+func truncateAt(s string, ceiling int) string {
+	if ceiling >= len(s) {
+		return s
+	}
+	cut := ceiling
+	for cut > 0 && !utf8.RuneStart(s[cut]) {
+		cut--
+	}
+	return s[:cut]
 }
 
 func (q *Queue) packOne(ctx context.Context, db store.DB, root string, sym symRow) (string, error) {

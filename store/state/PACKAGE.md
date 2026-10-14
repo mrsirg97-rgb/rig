@@ -22,10 +22,16 @@ loop already emits; the read side rebuilds a session from the log.
   reply the interrupt cut as its own assistant row, without the calls
   that never ran; at any other `TurnEnd` an unlanded partial is discarded.
 - `resume.go`: the read-side projection: rebuild a `core.Session` from
-  the log (SPEC_HARDENING decision 5).
+  the log (SPEC_HARDENING decision 5). The resume truncates at the last
+  user row whose content starts with `compact.SummaryMarker` — the
+  compaction summary rides the user role, so a literal prompt typed with
+  that prefix truncates the resume the same way: the boundary is the
+  prefix, not who wrote it.
 - `sessions.go`: the sessions list rows (`ErrNoSuchSession`,
-  `SessionRow`) and `ListSessions(ctx, db, limit)` (the named limit,
-  `ListCap` the default and the maximum).
+  `SessionRow`) and `ListSessions(ctx, db, limit)` — the named limit,
+  refused loudly outside 1..`ListCap` (50), the ceiling, never silently
+  clamped; equal `started_at` rows tie-break on the id, descending, so
+  the list order is deterministic.
 - `faults.go`: `SessionFaults(ctx, db, sessionId)`, the typed read of
   one session's fault rows, newest first.
 - `path.go`: `StorePath(home, cwd)`, the workspace state file: one
@@ -97,7 +103,11 @@ the sanity check that the invocation is right.
 - The files upsert rides the wired `Snapshot` seam (the file tool's
   snapshot, set by the root): the recorder persists the session's
   recorded file states without racing the tools' concurrent records.
-  Without the seam the upsert is skipped.
+  Without the seam the upsert is skipped. `Snapshot` is the recorder's
+  one post-construction seam, kept deliberately: the constructor's
+  positional list is already at its ceiling and the root chains
+  `.Snapshot(file.SnapshotFiles)` once at the wiring site; a rebuild
+  moves it into the constructor, it does not grow a second setter.
 - A turn starts with a user message: the defined turns count comes from
   the row's lifecycle. `SessionRow` carries the model and version (so the
   list and the summary build from the same slice) and the fault count;

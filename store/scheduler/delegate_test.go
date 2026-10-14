@@ -3,6 +3,7 @@ package scheduler_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"slices"
@@ -11,6 +12,7 @@ import (
 	"syscall"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"github.com/mrsirg97-rgb/evt"
 	"github.com/mrsirg97-rgb/evt/broadcast"
@@ -105,6 +107,43 @@ func delegateInput(t *testing.T, fetch sched.Fetch, spawn sched.Spawn, mutate fu
 		mutate(&in)
 	}
 	return in
+}
+
+func TestAJailedDelegateCarriesTheFleetEnvAndItsMemberId(t *testing.T) {
+	engine := evt.NewEngine()
+	go engine.Start(context.Background())
+	defer engine.Stop()
+	room := broadcast.NewRoom("fleet", func(origin int64) broadcast.Transport {
+		return broadcast.NewLoopTransport(origin, engine, rig.PriorityFleet)
+	})
+	rigHome := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(rigHome, "kernel"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	shimDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(shimDir, "bwrap"), []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", shimDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	spawn := &delegateSpawn{result: sched.SpawnResult{Exit: 0}}
+	in := delegateInput(t, delegateFetch(t, false, ""), spawn.spawn, func(in *sched.DelegateInput) {
+		in.Sandbox = "jailed"
+		in.RigHome = rigHome
+		in.Member = room.Add(7)
+	})
+	if _, err := sched.Delegate(in); err != nil {
+		t.Fatalf("delegate: %v", err)
+	}
+	if spawn.count() != 1 {
+		t.Fatalf("spawn calls = %d, want 1", spawn.count())
+	}
+	argv := spawn.calls[0].Argv
+	if !carriesSetenv(argv, sched.FleetEnv, "7") {
+		t.Fatalf("the jailed delegate worker must learn its member id inside the jail (%s=7 as a --setenv pair), got %v", sched.FleetEnv, argv)
+	}
+	if !carriesSetenv(argv, sched.DelegateEnv, "1") {
+		t.Fatalf("the jailed delegate worker must carry the recursion marker, got %v", argv)
+	}
 }
 
 func TestDelegateHolderSkipStillRefuses(t *testing.T) {
@@ -208,6 +247,52 @@ func TestDelegateSpawnCtxCancelsTheWorker(t *testing.T) {
 	}
 	if err := <-done; err != nil {
 		t.Fatalf("delegate: %v", err)
+	}
+}
+
+func TestADelegateWhoseSpawnErrorsRecordsTheFailedRun(t *testing.T) {
+	spawn := &delegateSpawn{err: errors.New("exec: no such file or directory")}
+	in := delegateInput(t, delegateFetch(t, false, ""), spawn.spawn, nil)
+	if _, err := sched.Delegate(in); err == nil {
+		t.Fatal("a spawn error must fault the delegation")
+	}
+	var state string
+	if err := in.DB.DB.QueryRow(`SELECT state FROM jobs WHERE id = ?`, "j1").Scan(&state); err != nil {
+		t.Fatalf("the ad-hoc job row: %v", err)
+	}
+	if state != "done" {
+		t.Fatalf("a spawn error must settle the ad-hoc once-job (no drift, no repair misfire), got state %q", state)
+	}
+	var status, reason string
+	if err := in.DB.DB.QueryRow(`SELECT status, reason FROM runs WHERE job_id = ?`, "j1").Scan(&status, &reason); err != nil {
+		t.Fatalf("the failed run must be recorded: %v", err)
+	}
+	if status != "fail" {
+		t.Fatalf("run status = %q, want fail", status)
+	}
+	if !strings.Contains(reason, "spawn") {
+		t.Fatalf("the run must name the spawn failure, got %q", reason)
+	}
+}
+
+func TestADelegateNameCutsOnRunesNotBytes(t *testing.T) {
+	task := strings.Repeat("a", 59) + "é" + strings.Repeat("b", 10)
+	spawn := &delegateSpawn{result: sched.SpawnResult{Exit: 0, Stdout: "done\n"}}
+	in := delegateInput(t, delegateFetch(t, false, ""), spawn.spawn, func(in *sched.DelegateInput) {
+		in.Task = task
+	})
+	if _, err := sched.Delegate(in); err != nil {
+		t.Fatalf("delegate: %v", err)
+	}
+	var name string
+	if err := in.DB.DB.QueryRow(`SELECT name FROM jobs WHERE id = ?`, "j1").Scan(&name); err != nil {
+		t.Fatal(err)
+	}
+	if !utf8.ValidString(name) {
+		t.Fatalf("the stored name must stay valid UTF-8, got %q", name)
+	}
+	if want := "delegate:" + strings.Repeat("a", 59) + "é" + "…"; name != want {
+		t.Fatalf("name = %q, want the 60-rune cut %q", name, want)
 	}
 }
 

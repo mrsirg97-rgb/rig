@@ -112,7 +112,7 @@ func (f *folded) applyRejectEvent(e eventRow) {
 	ts.status = statusPending
 	ts.owner = ""
 	if payload.Note != "" {
-		ts.notes = append(ts.notes, noteState{text: payload.Note, session: attrOf(e)})
+		ts.notes = append(ts.notes, noteState{text: payload.Note, session: attrOf(e), ts: e.ts})
 	}
 	ts.updatedSeq = e.seq
 	ts.updatedTs = e.ts

@@ -2,6 +2,8 @@ package scheduler
 
 import (
 	"bytes"
+	"context"
+	"os"
 	"strings"
 	"testing"
 )
@@ -55,5 +57,30 @@ func TestCaptureAcceptsEveryByteOfAWriteThatCrossesTheHead(t *testing.T) {
 		if err != nil || got != n {
 			t.Fatalf("Write(%d bytes) = %d, %v; an io.Writer that keeps less still accepts all of it", n, got, err)
 		}
+	}
+}
+
+func TestAWaitDelayAfterASuccessfulExitIsNotAFault(t *testing.T) {
+	dir := t.TempDir()
+	res, err := RealSpawn(context.Background(), []string{"sh", "-c", "printf done; sleep 5 &"}, dir, os.Environ(), nil)
+	if err != nil {
+		t.Fatalf("a worker that exited cleanly must not fault on the pipes its grandchild still holds, got %v", err)
+	}
+	if res.Exit != 0 {
+		t.Fatalf("exit = %d, want 0", res.Exit)
+	}
+	if res.Stdout != "done" {
+		t.Fatalf("stdout = %q, want the captured output", res.Stdout)
+	}
+}
+
+func TestAWaitDelayAfterAFailedExitKeepsTheExitCode(t *testing.T) {
+	dir := t.TempDir()
+	res, err := RealSpawn(context.Background(), []string{"sh", "-c", "printf bye; sleep 5 & exit 3"}, dir, os.Environ(), nil)
+	if err != nil {
+		t.Fatalf("got %v", err)
+	}
+	if res.Exit != 3 {
+		t.Fatalf("exit = %d, want 3", res.Exit)
 	}
 }

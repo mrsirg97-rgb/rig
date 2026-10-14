@@ -30,6 +30,9 @@ func TestReleaseOfAReviewClaimSurvivesReplay(t *testing.T) {
 	}
 	rawExec(t, db, "DELETE FROM tasks WHERE scope = 'ws'")
 	rawExec(t, db, "DELETE FROM task_deps WHERE scope = 'ws'")
+	if err := todostore.Rebuild(ctx, db, p); err != nil {
+		t.Fatalf("rebuild after tamper: %v", err)
+	}
 	peek, err := todostore.Read(ctx, db, p, sessA)
 	if err != nil {
 		t.Fatalf("read after tamper: %v", err)
@@ -71,6 +74,9 @@ func TestFailOfAReviewClaimSurvivesReplay(t *testing.T) {
 	}
 	rawExec(t, db, "DELETE FROM tasks WHERE scope = 'ws'")
 	rawExec(t, db, "DELETE FROM task_deps WHERE scope = 'ws'")
+	if err := todostore.Rebuild(ctx, db, p); err != nil {
+		t.Fatalf("rebuild after tamper: %v", err)
+	}
 	peek, err := todostore.Read(ctx, db, p, sessA)
 	if err != nil {
 		t.Fatalf("read after tamper: %v", err)

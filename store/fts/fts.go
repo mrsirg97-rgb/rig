@@ -2,9 +2,29 @@ package fts
 
 import (
 	"fmt"
+	"math"
 	"regexp"
 	"strings"
 )
+
+const (
+	ReciprocalRankK = 60
+
+	FuzzyMinOverlap = 3
+
+	FuzzyMinContainment = 0.5
+)
+
+func RankWeight(rank int) float64 {
+	return 1.0 / (float64(ReciprocalRankK) + float64(rank))
+}
+
+func MinOverlap(grams int) int {
+	if want := int(math.Ceil(FuzzyMinContainment * float64(grams))); want > FuzzyMinOverlap {
+		return want
+	}
+	return FuzzyMinOverlap
+}
 
 var wordSplit = regexp.MustCompile(`[^a-z0-9]+`)
 

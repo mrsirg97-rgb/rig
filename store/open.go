@@ -15,16 +15,10 @@ import (
 
 type DB = sqlx.DB
 
-var pragmas = []string{
-	"PRAGMA journal_mode=WAL",
-	"PRAGMA busy_timeout=5000",
-	"PRAGMA foreign_keys=ON",
-}
-
 func Open(path string, statements []string, wantVersion int, migrate ...func(*sql.Tx, int, int) (string, error)) (sqlx.DB, string, string, error) {
 	existing, _ := fileSize(path)
 	var quarantined string
-	for attempt := 0; attempt < 2; attempt++ {
+	for attempt := 0; ; attempt++ {
 		raw, err := sql.Open("sqlite", path+"?_txlock=immediate&_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)&_pragma=foreign_keys(ON)")
 		if err != nil {
 			return sqlx.DB{}, quarantined, "", err
@@ -36,7 +30,7 @@ func Open(path string, statements []string, wantVersion int, migrate ...func(*sq
 			}
 
 			aside := fmt.Sprintf("%s.corrupt-%d", path, time.Now().UnixNano())
-			if err := os.Rename(path, aside); err != nil {
+			if err := quarantine(path, aside); err != nil {
 				return sqlx.DB{}, quarantined, "", fmt.Errorf("quarantine: %w", err)
 			}
 			quarantined = aside
@@ -67,7 +61,19 @@ func Open(path string, statements []string, wantVersion int, migrate ...func(*sq
 		}
 		return sqlx.DB{DB: raw}, quarantined, report, nil
 	}
-	return sqlx.DB{}, quarantined, "", fmt.Errorf("unreachable")
+}
+
+func quarantine(path, aside string) error {
+	for _, suffix := range []string{"", "-wal", "-shm"} {
+		src := path + suffix
+		if _, err := os.Stat(src); err != nil {
+			continue
+		}
+		if err := os.Rename(src, aside+suffix); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func migrateNow(raw *sql.DB, from, to int, migrate []func(*sql.Tx, int, int) (string, error)) (string, error) {
@@ -105,14 +111,22 @@ func migrateNow(raw *sql.DB, from, to int, migrate []func(*sql.Tx, int, int) (st
 }
 
 func integrity(raw *sql.DB) error {
-	for _, p := range pragmas {
-		if _, err := raw.Exec(p); err != nil {
-			return fmt.Errorf("pragma %s: %w", p, err)
+	rows, err := raw.Query("PRAGMA quick_check")
+	if err != nil {
+		return fmt.Errorf("integrity: quick_check: %w", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var msg string
+		if err := rows.Scan(&msg); err != nil {
+			return fmt.Errorf("integrity: quick_check: %w", err)
+		}
+		if msg != "ok" {
+			return fmt.Errorf("integrity: quick_check: %s", msg)
 		}
 	}
-
-	if _, err := raw.Exec("SELECT count(*) FROM sqlite_master"); err != nil {
-		return fmt.Errorf("integrity: %w", err)
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("integrity: quick_check: %w", err)
 	}
 	return nil
 }

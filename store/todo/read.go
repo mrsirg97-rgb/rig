@@ -30,10 +30,7 @@ func read(ctx context.Context, db store.DB, p Project, session string, mode read
 	if session == "" {
 		session = anon
 	}
-	return mutate(ctx, db, p, func(bound context.Context, tx *sql.Tx, f *folded) (string, error) {
-		if e := rewrite(tx, f, p.Key); e != nil {
-			return "", e
-		}
+	return readFold(ctx, db, p, func(f *folded) (string, error) {
 		return replyText(f, session, "", mode, n, p.Label), nil
 	})
 }
@@ -42,10 +39,7 @@ func ReadOne(ctx context.Context, db store.DB, p Project, id, session string) (s
 	if session == "" {
 		session = anon
 	}
-	return mutate(ctx, db, p, func(bound context.Context, tx *sql.Tx, f *folded) (string, error) {
-		if e := rewrite(tx, f, p.Key); e != nil {
-			return "", e
-		}
+	return readFold(ctx, db, p, func(f *folded) (string, error) {
 		ts, ok := f.tasks[id]
 		if !ok {
 			return "", unknownTask(p, id)
@@ -60,31 +54,33 @@ func ReadOne(ctx context.Context, db store.DB, p Project, id, session string) (s
 	})
 }
 
+func Rebuild(ctx context.Context, db store.DB, p Project) error {
+	_, err := mutate(ctx, db, p, func(_ context.Context, tx *sql.Tx, f *folded) (string, error) {
+		if e := rewrite(tx, f, p.Key); e != nil {
+			return "", e
+		}
+		return "", nil
+	})
+	return err
+}
+
 func Notes(ctx context.Context, db store.DB, p Project, id, session string) (string, error) {
 	if session == "" {
 		session = anon
 	}
-	_, tx, err := db.TxReadOnly(ctx)
-	if err != nil {
-		return "", err
-	}
-	defer tx.Rollback()
-	f, err := eventsOf(tx, p.Key)
-	if err != nil {
-		return "", err
-	}
-	f.label = p.Label
-	ts, ok := f.tasks[id]
-	if !ok {
-		return "", unknownTask(p, id)
-	}
-	if len(ts.notes) == 0 {
-		return "no notes on " + id, nil
-	}
-	var b strings.Builder
-	b.WriteString(lineOf(f, ts, session))
-	for _, n := range ts.notes {
-		fmt.Fprintf(&b, "\n\u00b7 %s (by %s, %s)", n.text, n.session, n.ts)
-	}
-	return b.String(), nil
+	return readFold(ctx, db, p, func(f *folded) (string, error) {
+		ts, ok := f.tasks[id]
+		if !ok {
+			return "", unknownTask(p, id)
+		}
+		if len(ts.notes) == 0 {
+			return "no notes on " + id, nil
+		}
+		var b strings.Builder
+		b.WriteString(lineOf(f, ts, session))
+		for _, n := range ts.notes {
+			fmt.Fprintf(&b, "\n\u00b7 %s (by %s, %s)", n.text, n.session, n.ts)
+		}
+		return b.String(), nil
+	})
 }

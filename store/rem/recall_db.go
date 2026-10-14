@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"math"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -30,7 +29,7 @@ type Hit struct {
 	CreatedAt          string
 	LastAccessedAt     *string
 	LastConsolidatedAt string
-	ContentMd5         string
+	ContentSha256      string
 	EffectiveStrength  float64
 	Match              string
 }
@@ -233,7 +232,7 @@ func hitOf(r remdom.Memory, eff float64, match string) Hit {
 		CreatedAt:          r.CreatedAt,
 		LastAccessedAt:     r.LastAccessedAt,
 		LastConsolidatedAt: r.LastConsolidatedAt,
-		ContentMd5:         r.ContentSha256,
+		ContentSha256:      r.ContentSha256,
 		EffectiveStrength:  eff,
 		Match:              match,
 	}
@@ -295,10 +294,7 @@ func fuzzyArm(bound context.Context, grams []string, scopes []string, kind strin
 	if err != nil {
 		return nil, err
 	}
-	minOverlap := fuzzyMinOverlap
-	if want := int(math.Ceil(fuzzyMinContainment * float64(len(grams)))); want > minOverlap {
-		minOverlap = want
-	}
+	minOverlap := fts.MinOverlap(len(grams))
 	var kindArg any
 	if kind != "" {
 		kindArg = kind
@@ -371,11 +367,15 @@ func browse(bound context.Context, cwd string, in RecallInput, k int) ([]Hit, er
 		p++
 	}
 	kind1, kind2 := fmt.Sprintf("$%d", p), fmt.Sprintf("$%d", p+1)
+	live := ""
+	if !in.IncludeSuperseded {
+		live = " AND superseded_by IS NULL"
+	}
 	sql := fmt.Sprintf(`SELECT * FROM memories
 		WHERE scope IN (%s)
-		  AND (%s IS NULL OR kind = %s)
+		  AND (%s IS NULL OR kind = %s)%s
 		ORDER BY created_at DESC LIMIT %d`,
-		strings.Join(scopePh, ", "), kind1, kind2, k*armCapFactor)
+		strings.Join(scopePh, ", "), kind1, kind2, live, k*armCapFactor)
 	args := make([]any, 0, len(scopes)+2)
 	for _, s := range scopes {
 		args = append(args, s)
@@ -387,6 +387,7 @@ func browse(bound context.Context, cwd string, in RecallInput, k int) ([]Hit, er
 	}
 	defer rows.Close()
 	var hits []Hit
+	byID := map[int64]remdom.Memory{}
 	for rows.Next() {
 		m, err := remdom.ScanMemory(rows)
 		if err != nil {
@@ -397,10 +398,24 @@ func browse(bound context.Context, cwd string, in RecallInput, k int) ([]Hit, er
 			return nil, fmt.Errorf("rem: m%d has an unreadable last_consolidated_at; prune it by id", m.Id)
 		}
 		hits = append(hits, hitOf(m, eff, "browse"))
+		byID[m.Id] = m
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("rem: browse: %w", err)
 	}
 	sort.SliceStable(hits, func(i, j int) bool { return hits[i].EffectiveStrength > hits[j].EffectiveStrength })
-	return hits[:minInt(k, len(hits))], nil
+	top := hits[:minInt(k, len(hits))]
+	if len(top) > 0 {
+		nowStr := now.Format(time.RFC3339)
+		for _, h := range top {
+			row := byID[h.ID]
+			row.AccessCount++
+			s := nowStr
+			row.LastAccessedAt = &s
+			if _, err := remdom.NewMemoryDomain().UpdateMemory(bound, row); err != nil {
+				return nil, fmt.Errorf("rem: recall: %w", err)
+			}
+		}
+	}
+	return top, nil
 }

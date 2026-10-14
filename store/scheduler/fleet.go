@@ -151,6 +151,13 @@ func (p *fleetPipe) env() string {
 	return FleetEnv + "=" + strconv.FormatInt(p.id, 10)
 }
 
+func fleetEnv(p *fleetPipe) []string {
+	if p == nil {
+		return nil
+	}
+	return []string{p.env()}
+}
+
 func (p *fleetPipe) close() {
 	p.w.Close()
 	<-p.done

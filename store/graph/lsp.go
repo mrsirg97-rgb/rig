@@ -13,6 +13,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"github.com/mrsirg97-rgb/evt"
 	"github.com/mrsirg97-rgb/evt/broadcast"
@@ -20,27 +21,9 @@ import (
 
 const lspRequestTimeout = 30 * time.Second
 
-var serversMu sync.Mutex
+const lspKillBound = 2 * time.Second
 
-var servers = map[string][]string{
-	"typescript": {"typescript-language-server", "--stdio"},
-}
-
-func SetServer(language string, argv ...string) {
-	serversMu.Lock()
-	defer serversMu.Unlock()
-	if len(argv) == 0 {
-		delete(servers, language)
-		return
-	}
-	servers[language] = argv
-}
-
-func ServerOf(language string) []string {
-	serversMu.Lock()
-	defer serversMu.Unlock()
-	return servers[language]
-}
+const lspStderrTail = 4096
 
 type lspClient struct {
 	cmd     *exec.Cmd
@@ -51,6 +34,8 @@ type lspClient struct {
 	nextID  int64
 	pending map[int64]chan json.RawMessage
 	dead    bool
+	waited  bool
+	stderr  *boundedTail
 }
 
 func (q *Queue) lspFor(ctx context.Context, lang string) (*lspClient, error) {
@@ -63,7 +48,7 @@ func (q *Queue) lspFor(ctx context.Context, lang string) (*lspClient, error) {
 		q.lsp.stop()
 		q.lsp = nil
 	}
-	argv := ServerOf(lang)
+	argv := q.servers[lang]
 	if argv == nil || q.lspGone[lang] {
 		return nil, nil
 	}
@@ -96,16 +81,17 @@ func startServer(ctx context.Context, lang string, argv []string, voice broadcas
 	if err != nil {
 		return nil, fmt.Errorf("graph: lsp %s: %w", lang, err)
 	}
-	cmd.Stderr = io.Discard
-	if err := cmd.Start(); err != nil {
-		return nil, fmt.Errorf("graph: lsp %s: %w", lang, err)
-	}
 	c := &lspClient{
 		cmd:     cmd,
 		stdin:   stdin,
 		lang:    lang,
 		voice:   voice,
 		pending: map[int64]chan json.RawMessage{},
+		stderr:  newBoundedTail(lspStderrTail),
+	}
+	cmd.Stderr = c.stderr
+	if err := cmd.Start(); err != nil {
+		return nil, fmt.Errorf("graph: lsp %s: %w", lang, err)
 	}
 	c.mu.Lock()
 	c.nextID = 1
@@ -135,17 +121,27 @@ func (c *lspClient) alive() bool {
 
 func (c *lspClient) stop() {
 	c.mu.Lock()
-	if c.dead {
-		c.mu.Unlock()
-		return
-	}
-	c.dead = true
+	already := c.waited
+	c.waited = true
 	cmd := c.cmd
 	stdin := c.stdin
-	pending := c.pending
-	c.pending = map[int64]chan json.RawMessage{}
+	var pending map[int64]chan json.RawMessage
+	if !c.dead {
+		c.dead = true
+		pending = c.pending
+		c.pending = map[int64]chan json.RawMessage{}
+	}
 	c.mu.Unlock()
 	_ = stdin.Close()
+	if !already {
+		waitBound(cmd)
+	}
+	for _, ch := range pending {
+		close(ch)
+	}
+}
+
+func waitBound(cmd *exec.Cmd) {
 	done := make(chan struct{})
 	go func() {
 		_ = cmd.Wait()
@@ -153,12 +149,9 @@ func (c *lspClient) stop() {
 	}()
 	select {
 	case <-done:
-	case <-time.After(2 * time.Second):
+	case <-time.After(lspKillBound):
 		_ = cmd.Process.Kill()
 		<-done
-	}
-	for _, ch := range pending {
-		close(ch)
 	}
 }
 
@@ -174,6 +167,10 @@ func (c *lspClient) readLoop(stdout io.Reader) {
 		n, err := readHeaders(r)
 		if err != nil {
 			c.die(err)
+			return
+		}
+		if n < 0 || n > ReadCap {
+			c.die(fmt.Errorf("Content-Length %d over the %d read ceiling", n, ReadCap))
 			return
 		}
 		body := make([]byte, n)
@@ -237,13 +234,18 @@ func (c *lspClient) die(err error) {
 		return
 	}
 	c.dead = true
+	already := c.waited
+	c.waited = true
 	pending := c.pending
 	c.pending = map[int64]chan json.RawMessage{}
 	c.mu.Unlock()
-	c.say("the %s language server stopped: %v", c.lang, err)
 	for _, ch := range pending {
 		close(ch)
 	}
+	if !already {
+		waitBound(c.cmd)
+	}
+	c.say("the %s language server stopped: %v: %s", c.lang, err, c.stderr.tail())
 }
 
 func (c *lspClient) request(ctx context.Context, method string, params any) (json.RawMessage, error) {
@@ -323,7 +325,37 @@ func (c *lspClient) writeLocked(req map[string]any) error {
 }
 
 func lspURI(abs string) string {
-	return "file://" + abs
+	u := url.URL{Scheme: "file", Path: abs}
+	return u.String()
+}
+
+type boundedTail struct {
+	mu  sync.Mutex
+	buf []byte
+	cap int
+}
+
+func newBoundedTail(capacity int) *boundedTail {
+	return &boundedTail{cap: capacity}
+}
+
+func (t *boundedTail) Write(p []byte) (int, error) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.buf = append(t.buf, p...)
+	if over := len(t.buf) - t.cap; over > 0 {
+		t.buf = t.buf[over:]
+		for len(t.buf) > 0 && !utf8.RuneStart(t.buf[0]) {
+			t.buf = t.buf[1:]
+		}
+	}
+	return len(p), nil
+}
+
+func (t *boundedTail) tail() string {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return strings.TrimSpace(string(t.buf))
 }
 
 func lspPath(uri string) (string, error) {

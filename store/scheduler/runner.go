@@ -208,81 +208,8 @@ func RunJob(key string, opts RunOpts) error {
 		spawnEnv      []string
 		workerSession string
 		workerModel   string
+		pipe          *fleetPipe
 	)
-	if command != "" {
-		argv = []string{"sh", "-c", command}
-		spawnEnv = os.Environ()
-	} else {
-		model := job.Model
-		gateModel := model
-		if model == "" {
-			table := models.Table{}
-			if opts.Models != nil {
-				table = opts.Models()
-			}
-			fireModel, canonical, err := resolveFireModel(opts.Fetch, opts.SwapURL, table, opts.DefaultModel)
-			if err != nil {
-				if e := recordSkip(db, opts, id, err.Error(), job.Cwd); e != nil {
-					return e
-				}
-				return nil
-			}
-			model = fireModel
-			gateModel = canonical
-		}
-		workerModel = model
-		row, rowOK := opts.modelRow(model)
-		if !(rowOK && row.Remote) {
-			if err := gateOnce(opts.Fetch, opts.SwapURL, gateModel); err != nil {
-				if e := recordSkip(db, opts, id, err.Error(), job.Cwd); e != nil {
-					return e
-				}
-				return nil
-			}
-		}
-
-		workerCmd := opts.WorkerCmd
-		if len(workerCmd) == 0 {
-			exe, err := os.Executable()
-			if err != nil {
-				return fmt.Errorf("run-job: worker command: %w", err)
-			}
-			workerCmd = []string{exe}
-		}
-		prompt = job.Prompt + ReportBack(job.Cwd)
-		workerSession = core.NewSession().ID
-
-		profile, err := SandboxProfile(opts.Sandbox)
-		if err != nil {
-			return fmt.Errorf("run-job: sandbox: %w", err)
-		}
-		if profile == "off" {
-
-			fmt.Fprintln(os.Stderr, "run-job: sandbox off: the worker runs unjailed (the operator's choice)")
-
-			argv = append(append([]string{}, workerCmd...),
-				"-p", PromptStdin,
-				"-session-id", workerSession,
-				"-base-url", opts.SwapURL+"/v1",
-				"-model", model)
-			spawnEnv = os.Environ()
-		} else {
-			var refuse string
-			var err error
-			argv, proxy, spawnEnv, refuse, err = spawnJailed(opts, profile, job.Cwd, workerCmd, model, "", prompt, "", workerSession)
-			if err != nil {
-				return fmt.Errorf("run-job: jail: %w", err)
-			}
-			if refuse != "" {
-				if e := recordSkip(db, opts, id, refuse, job.Cwd); e != nil {
-					return e
-				}
-				return nil
-			}
-			defer proxy.Close()
-		}
-	}
-
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	startedTime := opts.Now().UTC()
@@ -296,19 +223,113 @@ func RunJob(key string, opts RunOpts) error {
 	if stall > 0 {
 		watch = newStallWatch(stall, cancel)
 	}
+	pipe, err = openFleet(ctx, runnerOrigin, func(...broadcast.Message) {
+		if watch != nil {
+			watch.touch()
+		}
+	})
+	if err != nil {
+		if watch != nil {
+			watch.stop()
+		}
+		return fmt.Errorf("run-job: fleet: %w", err)
+	}
+	abandon := func() {
+		pipe.close()
+		if watch != nil {
+			watch.stop()
+		}
+	}
+	if command != "" {
+		argv = []string{"sh", "-c", command}
+		spawnEnv = append(os.Environ(), fleetEnv(pipe)...)
+	} else {
+		model := job.Model
+		gateModel := model
+		if model == "" {
+			table := models.Table{}
+			if opts.Models != nil {
+				table = opts.Models()
+			}
+			fireModel, canonical, err := resolveFireModel(opts.Fetch, opts.SwapURL, table, opts.DefaultModel)
+			if err != nil {
+				abandon()
+				if e := recordSkip(db, opts, id, err.Error(), job.Cwd); e != nil {
+					return e
+				}
+				return nil
+			}
+			model = fireModel
+			gateModel = canonical
+		}
+		workerModel = model
+		row, rowOK := opts.modelRow(model)
+		if !(rowOK && row.Remote) {
+			if err := gateOnce(opts.Fetch, opts.SwapURL, gateModel); err != nil {
+				abandon()
+				if e := recordSkip(db, opts, id, err.Error(), job.Cwd); e != nil {
+					return e
+				}
+				return nil
+			}
+		}
+
+		workerCmd := opts.WorkerCmd
+		if len(workerCmd) == 0 {
+			exe, err := os.Executable()
+			if err != nil {
+				abandon()
+				return fmt.Errorf("run-job: worker command: %w", err)
+			}
+			workerCmd = []string{exe}
+		}
+		prompt = job.Prompt + ReportBack(job.Cwd)
+		workerSession = core.NewSession().ID
+
+		profile, err := SandboxProfile(opts.Sandbox)
+		if err != nil {
+			abandon()
+			return fmt.Errorf("run-job: sandbox: %w", err)
+		}
+		if profile == "off" {
+
+			fmt.Fprintln(os.Stderr, "run-job: sandbox off: the worker runs unjailed (the operator's choice)")
+
+			argv = append(append([]string{}, workerCmd...),
+				"-p", PromptStdin,
+				"-session-id", workerSession,
+				"-base-url", opts.SwapURL+"/v1",
+				"-model", model)
+			spawnEnv = append(os.Environ(), fleetEnv(pipe)...)
+		} else {
+			var refuse string
+			argv, proxy, spawnEnv, refuse, err = spawnJailed(opts, profile, job.Cwd, id, workerCmd, model, "", "", workerSession, fleetEnv(pipe)...)
+			if err != nil {
+				abandon()
+				return fmt.Errorf("run-job: jail: %w", err)
+			}
+			if refuse != "" {
+				abandon()
+				if e := recordSkip(db, opts, id, refuse, job.Cwd); e != nil {
+					return e
+				}
+				return nil
+			}
+			defer proxy.Close()
+		}
+	}
 
 	logName := strings.NewReplacer(":", "-", ".", "-").Replace(startedTime.Format("2006-01-02T15:04:05.000Z")) + ".log"
 	logRel := filepath.Join("runs", id, logName)
 	dir := filepath.Join(opts.Home, "runs", id)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
+		abandon()
 		return fmt.Errorf("run-job: log dir: %w", err)
 	}
 	streamPath := filepath.Join(dir, strings.TrimSuffix(logName, ".log")+".stream")
 	stream, err := os.Create(streamPath)
 	if err != nil {
-		if watch != nil {
-			watch.stop()
-		}
+		abandon()
 		return fmt.Errorf("run-job: stream: %w", err)
 	}
 	observe := func(p []byte) {
@@ -317,20 +338,7 @@ func RunJob(key string, opts RunOpts) error {
 		}
 		stream.Write(p)
 	}
-	pipe, err := openFleet(ctx, runnerOrigin, func(...broadcast.Message) {
-		if watch != nil {
-			watch.touch()
-		}
-	})
-	if err != nil {
-		stream.Close()
-		os.Remove(streamPath)
-		if watch != nil {
-			watch.stop()
-		}
-		return fmt.Errorf("run-job: fleet: %w", err)
-	}
-	res, err := opts.Spawn(WithPrompt(pipe.spawnCtx(), prompt), argv, job.Cwd, append(spawnEnv, pipe.env()), observe)
+	res, err := opts.Spawn(WithPrompt(pipe.spawnCtx(), prompt), argv, job.Cwd, spawnEnv, observe)
 	pipe.close()
 	stream.Close()
 	os.Remove(streamPath)
@@ -358,7 +366,7 @@ func RunJob(key string, opts RunOpts) error {
 	if err := os.WriteFile(filepath.Join(dir, logName), []byte(content), 0o644); err != nil {
 		return fmt.Errorf("run-job: log write: %w", err)
 	}
-	if err := pruneLogs(dir, 20); err != nil {
+	if err := pruneLogs(dir, logKeep); err != nil {
 		return fmt.Errorf("run-job: log prune: %w", err)
 	}
 
@@ -386,6 +394,9 @@ func RunJob(key string, opts RunOpts) error {
 		if err := installRemoved(opts.Crontab, text, key, opts.RigHome); err != nil {
 			return err
 		}
+	}
+	if err := Prune(context.Background(), db, opts.Home); err != nil {
+		return fmt.Errorf("run-job: prune: %w", err)
 	}
 	return nil
 }

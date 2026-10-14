@@ -400,19 +400,18 @@ func TestDanglingDependencyFromACorruptCreateEventDropsOnReplay(t *testing.T) {
 	}
 }
 
-func TestProjectionTamperingSelfHealsOnRead(t *testing.T) {
+func TestProjectionTamperingSelfHealsOnRebuild(t *testing.T) {
 	db := newDB(t)
 	ctx := context.Background()
 	if _, err := create(ctx, db, p, []item{{Text: "a"}}, "s1"); err != nil {
 		t.Fatal(err)
 	}
 	rawExec(t, db, "UPDATE tasks SET status='done' WHERE id='t1'")
-	reply, err := todostore.Read(ctx, db, p, "s1")
-	if err != nil {
+	if err := todostore.Rebuild(ctx, db, p); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(reply, "[ ]") {
-		t.Errorf("rebuilt from events:\n%s", reply)
+	if got := projStatus(t, db, "a"); got != "pending" {
+		t.Errorf("rebuilt from events: %v", got)
 	}
 }
 
@@ -738,8 +737,8 @@ func TestMovedOrderSurvivesProjectionTamper(t *testing.T) {
 		t.Fatalf("move: %v", err)
 	}
 	rawExec(t, db, "DELETE FROM tasks")
-	if _, err := todostore.Read(ctx, db, p, "s1"); err != nil {
-		t.Fatalf("read: %v", err)
+	if err := todostore.Rebuild(ctx, db, p); err != nil {
+		t.Fatalf("rebuild: %v", err)
 	}
 	if got := projTextOrder(t, db); !eqStrings(got, []string{"c", "a", "b"}) {
 		t.Errorf("rebuilt order = %v", got)
@@ -764,8 +763,8 @@ func TestSequentialMovesComposeDeterministically(t *testing.T) {
 		t.Fatalf("composed order = %v", got)
 	}
 	rawExec(t, db, "DELETE FROM tasks")
-	if _, err := todostore.Read(ctx, db, p, "s1"); err != nil {
-		t.Fatalf("read: %v", err)
+	if err := todostore.Rebuild(ctx, db, p); err != nil {
+		t.Fatalf("rebuild: %v", err)
 	}
 	if got := projTextOrder(t, db); !eqStrings(got, []string{"d", "b", "c", "a"}) {
 		t.Errorf("replay order = %v", got)
@@ -903,8 +902,8 @@ func TestOwnerIsDerivedFromLogNotProjection(t *testing.T) {
 		t.Fatalf("start: %v", err)
 	}
 	rawExec(t, db, "DELETE FROM tasks")
-	if _, err := todostore.Read(ctx, db, p, sessB); err != nil {
-		t.Fatalf("read rebuilds: %v", err)
+	if err := todostore.Rebuild(ctx, db, p); err != nil {
+		t.Fatalf("rebuild: %v", err)
 	}
 	if _, err := todostore.Complete(ctx, db, p, id, sessB, false); err == nil {
 		t.Fatal("foreign complete succeeded")
@@ -1129,8 +1128,8 @@ func TestReplayReproducesQueueAfterCompaction(t *testing.T) {
 	}
 	rawExec(t, db, "UPDATE tasks SET pos = 99 - pos")
 	rawExec(t, db, "DELETE FROM tasks WHERE text = 'beta'")
-	if _, err := todostore.Read(ctx, db, p, ""); err != nil {
-		t.Fatalf("read: %v", err)
+	if err := todostore.Rebuild(ctx, db, p); err != nil {
+		t.Fatalf("rebuild: %v", err)
 	}
 	if got := projTextOrder(t, db); !eqStrings(got, []string{"alpha", "beta"}) {
 		t.Errorf("tamper self-heal order = %v", got)

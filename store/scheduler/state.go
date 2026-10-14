@@ -118,16 +118,18 @@ func Repair(ctx context.Context, db DB, ct Crontab, id, runnerCmd, home string) 
 }
 
 func stateAction(ctx context.Context, db DB, ct Crontab, id, sessionCwd, session, action, home string) (string, error) {
-	_, rtx, err := db.TxReadOnly(ctx)
+	bound, tx, err := db.Tx(ctx)
 	if err != nil {
 		return "", err
 	}
-	f, err := eventsOf(rtx)
+	defer tx.Rollback()
+	f, err := eventsOf(tx)
 	if err != nil {
-		rtx.Rollback()
 		return "", err
 	}
-	rtx.Rollback()
+	if err := maybeCompact(bound, tx, f, session); err != nil {
+		return "", err
+	}
 	job, found := f.jobs[id]
 	if !found {
 		return "", schedErr("no job '%s'", id)
@@ -171,18 +173,6 @@ func stateAction(ctx context.Context, db DB, ct Crontab, id, sessionCwd, session
 		}
 	}
 
-	bound, tx, err := db.Tx(ctx)
-	if err != nil {
-		return "", err
-	}
-	defer tx.Rollback()
-	f, err = eventsOf(tx)
-	if err != nil {
-		return "", err
-	}
-	if err := maybeCompact(bound, tx, f, session); err != nil {
-		return "", err
-	}
 	argsJSON, _ := json.Marshal(map[string]any{"id": id})
 	seq, err := appendEvent(bound, f.maxSeq+1, action, string(argsJSON), session)
 	if err != nil {

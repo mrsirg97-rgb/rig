@@ -50,6 +50,7 @@ func Learn(ctx context.Context, db store.DB, cwd string, in LearnInput) (string,
 			importance:    in.Importance,
 			importanceSet: in.ImportanceSet,
 			source:        in.Source,
+			sourceSet:     in.Source != "",
 			scope:         in.Scope,
 			supersedes:    in.Supersedes,
 		}, cwd)
@@ -60,6 +61,9 @@ func Learn(ctx context.Context, db store.DB, cwd string, in LearnInput) (string,
 			note := fmt.Sprintf("already known m%d", mem.Id)
 			if in.ImportanceSet {
 				note += fmt.Sprintf(" · importance → %g", in.Importance)
+			}
+			if in.Source != "" {
+				note += " · source updated"
 			}
 			return writeResult{reply: note, mem: mem, existing: true}, nil
 		}

@@ -100,7 +100,7 @@ func TestLandlockRunCarriesTheNamedEnvAndTheOneSocket(t *testing.T) {
 		}
 	}
 	scratch := filepath.Join(cwd, ".rig-job")
-	if baseIdx < 0 || argv[baseIdx+1] != "unix:"+filepath.Join(cwd, ".rig-job.sock") {
+	if baseIdx < 0 || argv[baseIdx+1] != "unix:"+filepath.Join(cwd, ".rig-job", key+".sock") {
 		t.Fatalf("the worker must dial the one socket, got %v", argv)
 	}
 	for _, a := range argv {
@@ -142,7 +142,7 @@ func TestLandlockRunCarriesTheNamedEnvAndTheOneSocket(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(scratch, "tmp")); err != nil {
 		t.Fatalf("the scratch tmp must exist before the worker runs: %v", err)
 	}
-	if _, err := os.Stat(filepath.Join(cwd, ".rig-job.sock")); !os.IsNotExist(err) {
+	if _, err := os.Stat(filepath.Join(cwd, ".rig-job", key+".sock")); !os.IsNotExist(err) {
 		t.Fatalf("the run's socket must be gone after the run (stat: %v)", err)
 	}
 	if got := os.Getenv("RIG_HOME"); got == scratch {

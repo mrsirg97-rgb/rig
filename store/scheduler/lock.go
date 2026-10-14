@@ -77,6 +77,8 @@ func hasLine(text, key, home string) bool {
 	return false
 }
 
+const logKeep = 20
+
 func pruneLogs(dir string, keep int) error {
 	entries, err := os.ReadDir(dir)
 	if err != nil {

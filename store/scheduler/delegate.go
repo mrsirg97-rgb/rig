@@ -235,6 +235,10 @@ func DelegateStart(in DelegateInput) (Delegation, error) {
 	if err != nil {
 		return Delegation{}, fmt.Errorf("delegate: sandbox: %w", err)
 	}
+	base := in.SpawnCtx
+	if base == nil {
+		base = context.Background()
+	}
 	var (
 		argv     []string
 		proxy    *SocketProxy
@@ -251,15 +255,24 @@ func DelegateStart(in DelegateInput) (Delegation, error) {
 			proxy.Close()
 		}
 	}
+	if in.Member != nil {
+		pipe, err = openFleet(base, in.Member.Id(), func(messages ...broadcast.Message) {
+			in.Member.Publish(base, func(error) {}, messages...)
+		})
+		if err != nil {
+			return Delegation{}, fmt.Errorf("delegate: fleet: %w", err)
+		}
+	}
 	if in.Command != "" {
 		if profile != "off" {
+			release()
 			return Delegation{}, fmt.Errorf("delegate: a command worker runs unjailed (the jail binds the model worker's homes)")
 		}
 		note = "sandbox off: the worker ran unjailed (the operator's choice)"
 		argv = execwrap.Args([]string{"bash", "-c", in.Command})
-		spawnEnv = append(os.Environ(), DelegateEnv+"=1")
+		spawnEnv = append(append(os.Environ(), DelegateEnv+"=1"), fleetEnv(pipe)...)
 	} else if in.Work != nil {
-		spawnEnv = append(os.Environ(), DelegateEnv+"=1")
+		spawnEnv = append(append(os.Environ(), DelegateEnv+"=1"), fleetEnv(pipe)...)
 	} else if profile == "off" {
 		note = "sandbox off: the worker ran unjailed (the operator's choice)"
 		argv = append(append([]string{}, workerCmd...),
@@ -273,9 +286,10 @@ func DelegateStart(in DelegateInput) (Delegation, error) {
 		if allow != "" {
 			argv = append(argv, "-allow", allow)
 		}
-		spawnEnv = append(os.Environ(), DelegateEnv+"=1")
+		spawnEnv = append(append(os.Environ(), DelegateEnv+"=1"), fleetEnv(pipe)...)
 	} else {
-		argv, proxy, spawnEnv, refuse, err = spawnJailed(in.toRunOpts(), profile, in.Cwd, workerCmd, in.Model, in.Effort, prompt, allow, in.WorkerSession, DelegateEnv+"=1")
+		extra := append([]string{DelegateEnv + "=1"}, fleetEnv(pipe)...)
+		argv, proxy, spawnEnv, refuse, err = spawnJailed(in.toRunOpts(), profile, in.Cwd, id, workerCmd, in.Model, in.Effort, allow, in.WorkerSession, extra...)
 		if err != nil {
 			release()
 			return Delegation{}, fmt.Errorf("delegate: jail: %w", err)
@@ -286,25 +300,10 @@ func DelegateStart(in DelegateInput) (Delegation, error) {
 		}
 	}
 
-	base := in.SpawnCtx
-	if base == nil {
-		base = context.Background()
-	}
 	started := in.Now().UTC()
 	startedStr := started.Format(time.RFC3339)
 	logName := strings.NewReplacer(":", "-", ".", "-").Replace(started.Format("2006-01-02T15:04:05.000Z")) + ".log"
 	logRel := filepath.Join("runs", id, logName)
-
-	if in.Member != nil {
-		pipe, err = openFleet(base, in.Member.Id(), func(messages ...broadcast.Message) {
-			in.Member.Publish(base, func(error) {}, messages...)
-		})
-		if err != nil {
-			release()
-			return Delegation{}, fmt.Errorf("delegate: fleet: %w", err)
-		}
-		spawnEnv = append(spawnEnv, pipe.env())
-	}
 
 	limit := delegateTimeout(in.Timeout)
 	done := make(chan delegateOutcome, 1)
@@ -328,6 +327,9 @@ func DelegateStart(in DelegateInput) (Delegation, error) {
 		var outcome delegateOutcome
 		if err != nil {
 			outcome.err = fmt.Errorf("delegate: spawn: %w", err)
+			if rerr := recordSpawnFailure(in, id, started, startedStr, model, outcome.err); rerr != nil {
+				outcome.err = errors.Join(outcome.err, rerr)
+			}
 		} else {
 			ended := in.Now().UTC()
 			outcome.res, outcome.err = finishDelegate(in, id, started, startedStr, ended, logRel, model, note, res, ctx)
@@ -359,7 +361,7 @@ func finishDelegate(in DelegateInput, id string, started time.Time, startedStr s
 	if err := os.WriteFile(filepath.Join(dir, logName), []byte(content), 0o644); err != nil {
 		return DelegateResult{}, fmt.Errorf("delegate: log write: %w", err)
 	}
-	if err := pruneLogs(dir, 20); err != nil {
+	if err := pruneLogs(dir, logKeep); err != nil {
 		return DelegateResult{}, fmt.Errorf("delegate: log prune: %w", err)
 	}
 
@@ -382,6 +384,9 @@ func finishDelegate(in DelegateInput, id string, started time.Time, startedStr s
 	}); err != nil {
 		return DelegateResult{}, fmt.Errorf("delegate: record: %w", err)
 	}
+	if err := Prune(context.Background(), in.DB, in.Home); err != nil {
+		return DelegateResult{}, fmt.Errorf("delegate: prune: %w", err)
+	}
 
 	return DelegateResult{
 		Model: model,
@@ -390,6 +395,27 @@ func finishDelegate(in DelegateInput, id string, started time.Time, startedStr s
 		ID: id, LogRel: logRel, Started: startedStr, SessionID: in.WorkerSession, Note: note,
 		Reason: reason, Cost: cost,
 	}, nil
+}
+
+func recordSpawnFailure(in DelegateInput, id string, started time.Time, startedStr, model string, spawnErr error) error {
+	ended := in.Now().UTC()
+	if _, err := RecordRun(context.Background(), in.DB, RunRecordInput{
+		ID: id, Status: "fail",
+		Reason:  spawnErr.Error(),
+		Started: startedStr, Ended: ended.Format(time.RFC3339),
+		Duration: durationPtr(ended.Sub(started)), Model: model,
+	}); err != nil {
+		return fmt.Errorf("delegate: record: %w", err)
+	}
+	if err := Prune(context.Background(), in.DB, in.Home); err != nil {
+		return fmt.Errorf("delegate: prune: %w", err)
+	}
+	return nil
+}
+
+func durationPtr(d time.Duration) *int64 {
+	ms := d.Milliseconds()
+	return &ms
 }
 
 func (in DelegateInput) toRunOpts() RunOpts {
@@ -417,11 +443,13 @@ func joinAllow(allow []string) string {
 	return b.String()
 }
 
+const firstLineCap = 60
+
 func firstLine(s string) string {
 	l := strings.SplitN(strings.TrimSpace(s), "\n", 2)[0]
 	l = strings.TrimSpace(l)
-	if len(l) > 60 {
-		l = l[:60] + "…"
+	if runes := []rune(l); len(runes) > firstLineCap {
+		l = string(runes[:firstLineCap]) + "…"
 	}
 	return l
 }

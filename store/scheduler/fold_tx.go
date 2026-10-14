@@ -64,20 +64,8 @@ func maybeCompact(bound context.Context, tx *sql.Tx, f *fold, session string) er
 		return nil
 	}
 	var snapshot []any
-	for _, j := range f.jobs {
-		at := j.atPtr()
-		ls := j.lastStatusPtr()
-		lt := j.lastTsPtr()
-		le := j.lastExitPtr()
-		snapshot = append(snapshot, compactJob{
-			ID: j.ID, Name: j.Name, Prompt: j.Prompt, Command: j.commandPtr(),
-			Cron: j.Cron, At: at, Cwd: j.Cwd, Model: j.Model, Busy: j.Busy,
-			Timeout:    j.timeoutPtr(),
-			Stall:      j.stallPtr(),
-			Budget:     j.budgetPtr(),
-			State:      j.State,
-			LastStatus: ls, LastTs: lt, LastExit: le,
-		})
+	for _, id := range sortedJobIDs(f.jobs) {
+		snapshot = append(snapshot, compactJobOf(f.jobs[id]))
 	}
 	if snapshot == nil {
 		snapshot = []any{}
@@ -100,6 +88,22 @@ func maybeCompact(bound context.Context, tx *sql.Tx, f *fold, session string) er
 		return fmt.Errorf("scheduler: compact: %w", e)
 	}
 	return nil
+}
+
+func compactJobOf(j *jobState) compactJob {
+	at := j.atPtr()
+	ls := j.lastStatusPtr()
+	lt := j.lastTsPtr()
+	le := j.lastExitPtr()
+	return compactJob{
+		ID: j.ID, Name: j.Name, Prompt: j.Prompt, Command: j.commandPtr(),
+		Cron: j.Cron, At: at, Cwd: j.Cwd, Model: j.Model, Busy: j.Busy,
+		Timeout:    j.timeoutPtr(),
+		Stall:      j.stallPtr(),
+		Budget:     j.budgetPtr(),
+		State:      j.State,
+		LastStatus: ls, LastTs: lt, LastExit: le,
+	}
 }
 
 func rewrite(tx *sql.Tx, f *fold) error {

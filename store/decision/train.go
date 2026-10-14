@@ -70,9 +70,9 @@ func RecordTraining(ctx context.Context, db store.DB, in TrainingInput) (int64, 
 		return 0, err
 	}
 	defer tx.Rollback()
-	var id int64
-	if err := tx.QueryRowContext(ctx, `SELECT COALESCE(MAX("id"), 0) + 1 FROM "trainings"`).Scan(&id); err != nil {
-		return 0, fmt.Errorf("decision: training: mint id: %w", err)
+	id, err := mint(ctx, tx, "trainings")
+	if err != nil {
+		return 0, err
 	}
 	row, err := decisiondomain.NewTrainingDomain().InsertTraining(bound, decisiondomain.Training{
 		Id:         id,

@@ -1545,3 +1545,57 @@ func TestLearnRefusesOversizedContent(t *testing.T) {
 		t.Fatalf("oversized content must be refused naming the cap, got %v", err)
 	}
 }
+
+func TestReLearnUpdatesTheSource(t *testing.T) {
+	db := newDB(t)
+	learn(t, db, "/ws1", "sourced fact", map[string]any{"source": "log: one"})
+	reply, _, existing := learn(t, db, "/ws1", "sourced fact", map[string]any{"source": "log: two"})
+	if !existing {
+		t.Fatal("re-learn must hit the existing row")
+	}
+	if !strings.Contains(reply, "source updated") {
+		t.Fatalf("reply %q must name the source update like reflect does", reply)
+	}
+	if got := memRow(t, db, "sourced fact"); got.Source == nil || *got.Source != "log: two" {
+		t.Fatalf("source %v, want the re-learn's source", got.Source)
+	}
+}
+
+func TestReduceClampsTheTarget(t *testing.T) {
+	db := newDB(t)
+	_, mem, _ := learn(t, db, "/ws1", "hot memory", map[string]any{"importance": 0.9})
+	high := 2.5
+	reply, _, err := Prune(context.Background(), db, "/ws1",
+		PruneInput{Verb: "reduce", IDs: []int64{mem.Id}, Importance: &high})
+	if err != nil {
+		t.Fatalf("prune: %v", err)
+	}
+	if !strings.Contains(reply, "reduced 1 to 1") {
+		t.Fatalf("reply %q must name the clamped target", reply)
+	}
+	if got := memRow(t, db, "hot memory"); got.Importance != 1.0 {
+		t.Fatalf("importance %v, want the clamped ceiling", got.Importance)
+	}
+	low := -1.0
+	if _, _, err := Prune(context.Background(), db, "/ws1",
+		PruneInput{Verb: "reduce", IDs: []int64{mem.Id}, Importance: &low}); err != nil {
+		t.Fatalf("prune: %v", err)
+	}
+	if got := memRow(t, db, "hot memory"); got.Importance != 0.0 {
+		t.Fatalf("importance %v, want the clamped floor", got.Importance)
+	}
+}
+
+func TestListDefaultsToTheRecallCeiling(t *testing.T) {
+	db := newDB(t)
+	for i := 0; i < recallKMax+1; i++ {
+		learn(t, db, "/ws1", fmt.Sprintf("ceiling probe %d", i), we())
+	}
+	mems, err := List(context.Background(), db, "/ws1", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(mems) != recallKMax {
+		t.Fatalf("the unnamed default must be the recall ceiling (%d), got %d rows", recallKMax, len(mems))
+	}
+}
