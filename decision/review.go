@@ -86,7 +86,9 @@ func (r *Reviewer) receive(err error, messages ...broadcast.Message) {
 	for _, m := range messages {
 		switch ev := m.Signal().(type) {
 		case core.Verdict:
-			r.verdicts[ev.Row] = ev
+			if m.Origin() == r.speaking.Load() {
+				r.verdicts[ev.Row] = ev
+			}
 		case core.SwarmStatus:
 			if r.track(m.Origin(), ev) {
 				r.Wake()
@@ -191,18 +193,20 @@ func (r *Reviewer) Wake() {
 }
 
 func (r *Reviewer) bite() {
+	r.fireMu.Lock()
+	fireCtx, stop := context.WithCancel(r.ctx)
+	r.fireStop = stop
+	r.fireMu.Unlock()
 	rows, all, _, err := r.take(r.ctx)
 	if err != nil {
+		stop()
 		r.say("review: %v", err)
 		return
 	}
 	if len(rows) == 0 {
+		stop()
 		return
 	}
-	fireCtx, stop := context.WithCancel(r.ctx)
-	r.fireMu.Lock()
-	r.fireStop = stop
-	r.fireMu.Unlock()
 	go func() {
 		defer stop()
 		reviewer, err := r.speak(fireCtx, rows)
@@ -331,10 +335,7 @@ func (r *Reviewer) settle(ctx context.Context, rows, all []ReviewRow, reviewer s
 	settled := 0
 	for _, row := range answered {
 		v := verdicts[row.ID]
-		answer := v.Reason
-		if len(answer) > maxCorrection {
-			answer = answer[:maxCorrection]
-		}
+		answer := truncate(v.Reason, maxCorrection)
 		if err := r.reviews.Settle(ctx, row.ID, v.Accept, reviewer, answer); err != nil {
 			r.say("settle %d: %v", row.ID, err)
 			continue

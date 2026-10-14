@@ -610,3 +610,47 @@ func TestTheBlobIsReadFromTheMarkersAddress(t *testing.T) {
 		t.Fatalf("the fixture blob is not at the address the marker names: %v", err)
 	}
 }
+
+func TestTheInlineBoundMeasuresTheDecodedBytes(t *testing.T) {
+	cases := []struct {
+		name    string
+		payload string
+		rides   bool
+		note    string
+	}{
+		{name: "over", payload: strings.Repeat("a", (8<<20)+1), rides: false, note: "is 8388609 bytes, over the 8388608-byte inline bound"},
+		{name: "at", payload: strings.Repeat("a", 8<<20), rides: true},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			dir := t.TempDir()
+			e := captureEndpoint(t)
+			sha := writeBlob(t, dir, c.payload)
+			msgs := []core.Message{
+				{Role: core.RoleUser, Content: "look"},
+				{Role: core.RoleAssistant, ToolCalls: []core.ToolCall{{ID: "c1", Name: "view"}}},
+				{Role: core.RoleTool, ToolID: "c1", Content: marker(sha, "image/png", "/tmp/shot.png")},
+			}
+			if _, err := drain(t, context.Background(), openai.NewWithVision(e.url, "vision-model", dir), core.Request{Messages: msgs, MaxTokens: 1024}); err != nil {
+				t.Fatalf("stream: %v", err)
+			}
+			body := e.last(t)
+			if c.rides {
+				if n := len(body.Messages[3].parts(t)); n != 2 {
+					t.Fatalf("a blob at the bound rides: %d parts, want the label and the image", n)
+				}
+				return
+			}
+			if got := roles(body); got != "user,assistant,tool,user" {
+				t.Fatalf("roles = %s", got)
+			}
+			parts := body.Messages[3].parts(t)
+			if len(parts) != 1 {
+				t.Fatalf("a blob over the bound rides the note alone: %d parts", len(parts))
+			}
+			if !strings.Contains(parts[0].Text, c.note) {
+				t.Fatalf("note = %q, want %q", parts[0].Text, c.note)
+			}
+		})
+	}
+}

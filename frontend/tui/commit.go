@@ -47,13 +47,13 @@ func RenderPhaseEnd(t Theme, p core.Phase) string {
 	}
 	line := t.Paint(slot, glyph) + " " + t.Paint(SlotDim, p.Name)
 	if p.Note != "" {
-		line += t.Paint(SlotDim, " \u00b7 "+p.Note)
+		line += t.Paint(SlotDim, " \u00b7 "+printable(p.Note))
 	}
 	return line
 }
 
 func RenderFault(t Theme, err error) string {
-	return t.Paint(SlotError, t.Glyph(GlyphFail)+" fault: "+err.Error())
+	return t.Paint(SlotError, t.Glyph(GlyphFail)+" fault: "+printable(err.Error()))
 }
 
 func RenderEmptyTurn(t Theme, ev core.EmptyTurn) string {

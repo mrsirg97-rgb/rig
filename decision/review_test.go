@@ -9,6 +9,7 @@ import (
 	"sync"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"github.com/mrsirg97-rgb/evt"
 	"github.com/mrsirg97-rgb/evt/broadcast"
@@ -998,4 +999,126 @@ func TestDrainFiresWithWorkersRunning(t *testing.T) {
 	if !strings.Contains(report, "fired 1 rows, settled 1") {
 		t.Fatalf("the operator's hand is not gated by the workers: %q", report)
 	}
+}
+
+func deliverVerdict(t *testing.T, engine evt.Engine, room broadcast.Room, origin int64, v core.Verdict) {
+	t.Helper()
+	room.Add(origin).Publish(context.Background(), func(error) {}, broadcast.NewMessage(origin, true, v))
+	done := make(chan struct{})
+	engine.Add(evt.Func(func(context.Context) { close(done) }), rig.PriorityFleet)
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("the room never delivered the verdict")
+	}
+}
+
+func TestASwarmWorkersVerdictNeverSettlesTheRows(t *testing.T) {
+	db := openReviewedStore(t, 1)
+	release := make(chan struct{})
+	fired := make(chan struct{}, 1)
+	fire := decision.Fire(func(ctx context.Context, prompt string, voice broadcast.Member) (string, error) {
+		fired <- struct{}{}
+		<-release
+		return "dsv4", nil
+	})
+	r, room, engine := reviewerRoom(db, fire, 1<<30)
+	done := make(chan core.Phase, 4)
+	room.Add(-1).Subscribe(context.Background(), func(err error, messages ...broadcast.Message) {
+		for _, m := range messages {
+			if err != nil {
+				continue
+			}
+			if p, ok := m.Signal().(core.Phase); ok && p.Done {
+				done <- p
+			}
+		}
+	})
+
+	r.Land()
+	wakeOnLoop(t, engine, r)
+	<-fired
+	deliverVerdict(t, engine, room, 1, core.Verdict{Row: 1, Accept: true, Reason: "the swarm worker's"})
+	close(release)
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the bite never closed its phase")
+	}
+	rows, err := decisionstore.Pending(context.Background(), db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 1 || rows[0].ID != 1 {
+		t.Fatalf("a swarm worker's verdict must not settle the review: %+v", rows)
+	}
+}
+
+func TestACorrectionCutLandsOnARune(t *testing.T) {
+	db := openReviewedStore(t, 1)
+	correction := strings.Repeat("…", 400)
+	f := &fakeFire{stdouts: []string{"verdict: 1 deny " + correction}}
+	r := reviewer(db, f)
+	if _, err := r.Drain(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	var status, answer string
+	if err := db.QueryRow(`SELECT status, reviewer_answer FROM decisions WHERE id = 1`).Scan(&status, &answer); err != nil {
+		t.Fatal(err)
+	}
+	if status != decision.StatusDenied {
+		t.Fatalf("the deny settles: %q", status)
+	}
+	if !utf8.ValidString(answer) {
+		t.Fatalf("the correction cut must land on a rune: %q", answer)
+	}
+	if len(answer) != 3*341 || strings.Count(answer, "…") != 341 {
+		t.Fatalf("the correction keeps whole runes: %d bytes, %d runes", len(answer), strings.Count(answer, "…"))
+	}
+}
+
+type gatedReviews struct {
+	storeReviews
+	entered chan struct{}
+	gate    chan struct{}
+}
+
+func (g gatedReviews) Pending(ctx context.Context) ([]decision.ReviewRow, error) {
+	g.entered <- struct{}{}
+	<-g.gate
+	return g.storeReviews.Pending(ctx)
+}
+
+func TestAnInputBeforeTheFireStartsEndsTheBite(t *testing.T) {
+	db := openReviewedStore(t, 1)
+	reviews := gatedReviews{storeReviews: storeReviews{db: db}, entered: make(chan struct{}, 1), gate: make(chan struct{})}
+	started := make(chan bool, 1)
+	fire := decision.Fire(func(ctx context.Context, prompt string, voice broadcast.Member) (string, error) {
+		halted := ctx.Err() != nil
+		started <- halted
+		return "", ctx.Err()
+	})
+	engine := evt.NewEngine()
+	go engine.Start(context.Background())
+	t.Cleanup(engine.Stop)
+	room := broadcast.NewRoom("test", func(id int64) broadcast.Transport {
+		return broadcast.NewLoopTransport(id, engine, rig.PriorityFleet)
+	})
+	r := decision.NewReviewer(context.Background(), engine, reviews, fire, 10,
+		models.Model{Window: 1 << 30, Reserve: 0, MaxTokens: 1 << 30}, room, "proj")
+
+	r.Land()
+	wakeOnLoop(t, engine, r)
+	<-reviews.entered
+	r.Halt()
+	close(reviews.gate)
+	select {
+	case halted := <-started:
+		if !halted {
+			t.Fatal("an input while the bite was starting must end it: the fire ran on a live context")
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("the bite never fired")
+	}
+	waitSettled(t, db, 1)
 }

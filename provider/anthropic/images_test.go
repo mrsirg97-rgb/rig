@@ -159,9 +159,7 @@ func TestTheInlineBoundMeasuresTheEncodedBytes(t *testing.T) {
 		rides   bool
 		note    string
 	}{
-		// a 3,932,161-byte file encodes to 5,242,884 base64 bytes: over the api's 5 MiB
 		{name: "over", payload: strings.Repeat("a", 3932161), rides: false, note: "is 5242884 bytes encoded, over the 5242880-byte inline bound"},
-		// one byte shorter encodes to exactly 5,242,880: the bound, so it rides
 		{name: "at", payload: strings.Repeat("a", 3932160), rides: true},
 	}
 	for _, c := range cases {

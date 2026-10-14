@@ -180,6 +180,42 @@ func TestLengthFinishedTruncatedToolCallArgsMarked(t *testing.T) {
 	}
 }
 
+func TestLengthFinishedNoArgsCallIsMarked(t *testing.T) {
+	body := strings.Join([]string{
+		`data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"c1","function":{"name":"ping"}}]}}]}`,
+		`data: {"choices":[{"delta":{},"finish_reason":"length"}]}`,
+		`data: [DONE]`,
+		"",
+	}, "\n")
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		io.WriteString(w, body)
+	}))
+	defer srv.Close()
+	p := openai.New(srv.URL, "local")
+	events, err := drain(t, context.Background(), p, userReq())
+	if err != nil {
+		t.Fatalf("stream: %v", err)
+	}
+	if got := kinds(events); got != "call,done" {
+		t.Fatalf("a length-cut call with no args at all must still ride marked before Done, got %s", got)
+	}
+	var call core.ToolCall
+	for _, ev := range events {
+		if c, ok := ev.(core.ToolCallEvent); ok {
+			call = c.Call
+		}
+	}
+	if call.ID != "c1" || call.Name != "ping" {
+		t.Fatalf("marked call identity wrong: %+v", call)
+	}
+	if call.Cut != "length" {
+		t.Fatalf("a length cut with no args is still a cut: Cut = %q, want length", call.Cut)
+	}
+	if got := string(call.Args); got != "" {
+		t.Fatalf("the call never received args, got %q", got)
+	}
+}
+
 func TestStopFinishedMalformedToolCallArgsMarked(t *testing.T) {
 
 	body := strings.Join([]string{

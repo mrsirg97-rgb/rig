@@ -148,7 +148,7 @@ func todoArgs(args string) (json.RawMessage, error) {
 	case fields[0] == "accept" && len(fields) == 2:
 		return json.Marshal(map[string]any{"action": "accept", "id": fields[1]})
 	case (fields[0] == "note" || fields[0] == "reject") && len(fields) >= 3:
-		m := map[string]any{"action": fields[0], "id": fields[1], "note": strings.TrimSpace(args[len(fields[0])+1+len(fields[1]):])}
+		m := map[string]any{"action": fields[0], "id": fields[1], "note": strings.Join(fields[2:], " ")}
 		return json.Marshal(m)
 	case (fields[0] == "complete" || fields[0] == "done" || fields[0] == "fail" || fields[0] == "release" || fields[0] == "retry") && len(fields) == 2:
 		action := fields[0]

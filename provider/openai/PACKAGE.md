@@ -109,6 +109,18 @@ adapter's problem; the loop sees `evt.Signal` only.
 - The view contract is one line and nothing else: only a view result
   that is exactly the marker it wrote is honored as an image, so a path
   that smuggled a marker line stays text.
+- The blob loader (`images.go`) carries its own inline bound: 8 MiB
+  measured on the decoded bytes (the anthropic twin measures the base64,
+  which is what that API checks; this wire names no per-image refusal,
+  so the bound is the request's own). The image rides the request body
+  as a base64 data URL — 4/3 over the decoded bytes, so 8 MiB decoded is
+  11,184,812 bytes on the wire — and the body is marshaled whole into
+  memory and re-marshaled on every 429/5xx retry, with every image
+  already in the transcript re-riding each later request until
+  compaction drops its marker. 8 MiB (2^23) is the last power of two
+  under `view`'s own worst re-encode at the 1568-px tiling (an
+  uncompressible 1568×1568 RGBA PNG is 9,834,496 decoded bytes), so that
+  pathological blob rides the note instead of the wire.
 - The scanner buffer is bounded (64 KiB initial, 4 MiB max).
 - The wire is pinned by tests (`wire_test.go`): the same request
   marshaled twice is byte-identical, and a later turn's message array

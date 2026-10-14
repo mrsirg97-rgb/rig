@@ -231,6 +231,7 @@ func (c *Controller) Start(ctx context.Context, in StartOpts) (string, error) {
 		c.proj = proj
 		c.architect = session
 		c.budget = in.Budget
+		c.spent, c.budgetSaid = 0, false
 		base := len(c.workers)
 		for i := 1; i <= in.Count; i++ {
 			w := &worker{

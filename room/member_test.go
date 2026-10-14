@@ -2,8 +2,11 @@ package room
 
 import (
 	"fmt"
+	"net"
 	"os"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -280,4 +283,66 @@ func waitFor(t *testing.T, what string, f func() bool) {
 		time.Sleep(25 * time.Millisecond)
 	}
 	t.Fatalf("%s never happened", what)
+}
+
+func holdCandidate(t *testing.T, home, seed string, i int) {
+	t.Helper()
+	id := broadcast.MemberOf([]byte(seed + " " + strconv.Itoa(i)))
+	path := filepath.Join(home, "room", fmt.Sprintf("%s-%d.sock", broadcast.EncodeID(id), os.Getpid()))
+	listener, err := net.ListenUnix("unix", &net.UnixAddr{Name: path, Net: "unix"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { listener.Close() })
+}
+
+func TestAJoinWalksPastItsOwnTakenIds(t *testing.T) {
+	seed, err := identity()
+	if err != nil {
+		t.Fatal(err)
+	}
+	home := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(home, "room"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < joinAttempts-1; i++ {
+		holdCandidate(t, home, seed, i)
+	}
+	m, err := New(home, func(int64) int { return 1 }, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(m.Close)
+	want := broadcast.MemberOf([]byte(seed + " " + strconv.Itoa(joinAttempts-1)))
+	if m.Id() != want {
+		t.Fatalf("the join walks to the first free id: %d, want %d", m.Id(), want)
+	}
+}
+
+func TestAJoinPastTheBoundRefusesLoud(t *testing.T) {
+	seed, err := identity()
+	if err != nil {
+		t.Fatal(err)
+	}
+	home := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(home, "room"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < joinAttempts; i++ {
+		holdCandidate(t, home, seed, i)
+	}
+	if _, err := New(home, func(int64) int { return 1 }, nil, nil); err == nil {
+		t.Fatal("a join past the bound must refuse loud")
+	} else if !strings.Contains(err.Error(), strconv.Itoa(joinAttempts)) {
+		t.Fatalf("the refusal names the bound: %v", err)
+	}
+}
+
+func TestAStatReadFailureFailsTheIdentity(t *testing.T) {
+	old := procStat
+	procStat = filepath.Join(t.TempDir(), "absent")
+	t.Cleanup(func() { procStat = old })
+	if _, err := startTime(); err == nil {
+		t.Fatal("an unreadable stat must fail the identity")
+	}
 }

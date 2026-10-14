@@ -26,6 +26,10 @@ const (
 	PriorityTurn    = 90
 )
 
+const joinAttempts = 64
+
+var procStat = "/proc/self/stat"
+
 type Member interface {
 	Id() int64
 	Seated() bool
@@ -68,7 +72,8 @@ func New(home string, places func(int64) int, effects func(self int64) broadcast
 	var listener net.Listener
 	var members []int64
 	var id int64
-	for i := 0; ; i++ {
+	joined := false
+	for i := 0; i < joinAttempts; i++ {
 		id = broadcast.MemberOf([]byte(seed + " " + strconv.Itoa(i)))
 		listener, err = broadcast.Listen(dir, id)
 		if err != nil {
@@ -85,9 +90,14 @@ func New(home string, places func(int64) int, effects func(self int64) broadcast
 			return nil, err
 		}
 		if mine(id, members) == 1 {
+			joined = true
 			break
 		}
 		listener.Close()
+	}
+	if !joined {
+		cancel()
+		return nil, fmt.Errorf("room: no free id in %s after %d attempts", dir, joinAttempts)
 	}
 	var extra broadcast.Effects
 	if effects != nil {
@@ -238,9 +248,9 @@ func bootID() (string, error) {
 }
 
 func startTime() (int64, error) {
-	stat, err := os.ReadFile("/proc/self/stat")
+	stat, err := os.ReadFile(procStat)
 	if err != nil {
-		return 0, nil
+		return 0, fmt.Errorf("room: %s: %w", procStat, err)
 	}
 	end := strings.LastIndex(string(stat), ") ")
 	if end < 0 {

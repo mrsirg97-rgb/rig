@@ -19,11 +19,12 @@ func (t *tui) dispatch(ctx context.Context, line string) {
 		return
 	}
 	out, err := cmd.Run(ctx, args, t.env)
+	out = printable(out)
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	switch {
 	case err != nil:
-		t.live.draw(t.commandOpeningLocked(name, args)+"\n"+t.theme.Paint(SlotError, err.Error()), t.liveLinesLocked(), t.statusLineLocked())
+		t.live.draw(t.commandOpeningLocked(name, args)+"\n"+t.theme.Paint(SlotError, printable(err.Error())), t.liveLinesLocked(), t.statusLineLocked())
 		return
 	case name == "todo" || name == "scheduler":
 		if out != "" {

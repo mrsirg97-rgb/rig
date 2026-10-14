@@ -72,6 +72,7 @@ func (p *provider) Stream(ctx context.Context, req core.Request) (<-chan evt.Sig
 				resp.Body.Close()
 				select {
 				case <-ctx.Done():
+					emit(core.Done{Usage: usage, Model: model})
 					return
 				case <-time.After(p.backoff(attempts, resp.Header)):
 				}
@@ -294,7 +295,11 @@ func (p *provider) cost(u core.Usage) float64 {
 func (p *provider) backoff(attempts int, h http.Header) time.Duration {
 	if v := h.Get("Retry-After"); v != "" {
 		if n, err := strconv.ParseFloat(strings.TrimSpace(v), 64); err == nil && n >= 0 {
-			return time.Duration(n * float64(time.Second))
+			wait := time.Duration(n * float64(time.Second))
+			if wait > maxRetryAfterWait {
+				wait = maxRetryAfterWait
+			}
+			return wait
 		}
 	}
 	return time.Duration(float64(p.base*(1<<(attempts-1))) * (1 + p.jitter()))
