@@ -22,25 +22,27 @@ import (
 const (
 	childProbePause = 100 * time.Millisecond
 	childStopPoll   = 10 * time.Millisecond
+	childStartCeil  = 5 * time.Minute
 )
 
 type children struct {
-	home   string
-	owned  map[string]int
-	rows   models.Table
-	loop   evt.Engine
-	leave  func()
-	closed bool
-	engine evt.Engine
-	cancel context.CancelFunc
-	self   int64
+	home      string
+	owned     map[string]int
+	rows      models.Table
+	loop      evt.Engine
+	leave     func()
+	closed    bool
+	engine    evt.Engine
+	cancel    context.CancelFunc
+	self      int64
+	startCeil time.Duration
 }
 
 func newChildren(home string, rows models.Table, loop evt.Engine, leave func()) *children {
 	engine := evt.NewEngine()
 	ctx, cancel := context.WithCancel(context.Background())
 	go engine.Start(ctx)
-	return &children{home: home, owned: make(map[string]int), rows: rows, loop: loop, leave: leave, engine: engine, cancel: cancel}
+	return &children{home: home, owned: make(map[string]int), rows: rows, loop: loop, leave: leave, engine: engine, cancel: cancel, startCeil: childStartCeil}
 }
 
 func (c *children) close() { c.cancel() }
@@ -271,8 +273,17 @@ func (c *children) starting(model string, port int, command string, env []string
 			c.engine.Add(evt.Func(func(context.Context) { c.childGone(model, pid) }), room.PriorityChild)
 		}()
 	}
+	giveUp := time.Now().Add(c.startCeil)
 	for alive(pid) {
 		if !room.Answers(port) {
+			if time.Now().After(giveUp) {
+				if mine {
+					syscall.Kill(-pid, syscall.SIGTERM)
+					c.owned[model] = 0
+					c.note(model, fmt.Sprintf("the child lived %s without answering its port %d; the start gave up and signalled it", c.startCeil, port))
+				}
+				return false
+			}
 			time.Sleep(childProbePause)
 			continue
 		}
@@ -376,8 +387,7 @@ func (c *children) stopping(model string, grace int) {
 	if pid <= 0 {
 		return
 	}
-	sys, _ := os.FindProcess(pid)
-	if sys == nil {
+	if _, err := os.FindProcess(pid); err != nil {
 		return
 	}
 	syscall.Kill(-pid, syscall.SIGTERM)

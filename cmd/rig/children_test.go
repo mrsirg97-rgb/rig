@@ -157,7 +157,6 @@ func TestAJoinerReadsTheWorld(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { a.Close(); ka.close() })
-	// the winner's flow: the change is in the file before the act is published
 	if err := os.WriteFile(filepath.Join(home, "models.json"), table(rowOf("fake", port, 1), rowOf("other", port+7, 2)), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -180,7 +179,6 @@ func TestAJoinerReadsTheWorld(t *testing.T) {
 		_, err := os.Stat(filepath.Join(home, "logs", "fake.pid"))
 		return err == nil
 	})
-	// the joiner: its table comes from the models file, its residency from the port
 	kb := newChildren(home, loadRows(t, filepath.Join(home, "models.json")), nil, nil)
 	b, err = machineroom.New(home, kb.places, kb.effects, nil)
 	if err != nil {
@@ -355,5 +353,30 @@ func TestTheUpdateDrainsTheRoom(t *testing.T) {
 	}
 	if len(a.Live()) != 0 {
 		t.Fatalf("the room must drain: %d member(s) left", len(a.Live()))
+	}
+}
+
+func TestAChildThatLivesWithoutAnsweringFailsTheStartWithinTheBound(t *testing.T) {
+	home := t.TempDir()
+	port := freePort(t)
+	c := newChildren(home, models.Table{}, nil, nil)
+	t.Cleanup(c.close)
+	c.startCeil = 300 * time.Millisecond
+	done := make(chan bool, 1)
+	go func() { done <- c.start("slow", port, "sleep 30", nil, "") }()
+	select {
+	case ok := <-done:
+		if ok {
+			t.Fatal("a child that lives without answering its port must fail the start")
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("the start wait must end at its bound, not for as long as the child lives")
+	}
+	deadline := time.Now().Add(5 * time.Second)
+	for c.held("slow") != 0 && time.Now().Before(deadline) {
+		time.Sleep(20 * time.Millisecond)
+	}
+	if pid := c.held("slow"); pid != 0 {
+		t.Fatalf("the failed start must not leave the child as the row's holder, pid file carries %d", pid)
 	}
 }

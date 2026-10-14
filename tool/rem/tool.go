@@ -93,7 +93,7 @@ type given struct {
 
 func (a adapter) Exec(ctx context.Context, args json.RawMessage) (string, error) {
 	var g given
-	if err := json.Unmarshal(args, &g); err != nil {
+	if err := tool.StrictDecode(args, &g); err != nil {
 		return "", fmt.Errorf("rem: %v", err)
 	}
 	scope := text(g.Scope)
@@ -224,9 +224,6 @@ func (a adapter) Reflect(ctx context.Context, scope string, in ReflectInput) (st
 	weight, weightSet, err := importanceOf(in.Importance)
 	if err != nil {
 		return "", err
-	}
-	if !weightSet {
-		weight = 0.3
 	}
 	reply, _, _, err := remstore.Reflect(ctx, a.db, cwd, remstore.ReflectInput{
 		Content:       in.Content,

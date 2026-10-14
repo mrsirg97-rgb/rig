@@ -27,8 +27,9 @@ func Files(ctx context.Context, ref string, paths []string) (string, error) {
 		return "", fmt.Errorf("diff files: cwd: %v", err)
 	}
 	cmd := exec.CommandContext(ctx, "git", cmdArgs...)
-	var out, errb bytes.Buffer
-	cmd.Stdout = &out
+	capture := &lineCap{}
+	cmd.Stdout = capture
+	var errb bytes.Buffer
 	cmd.Stderr = &errb
 	cmd.WaitDelay = time.Second
 	if err := cmd.Run(); err != nil {
@@ -42,11 +43,7 @@ func Files(ctx context.Context, ref string, paths []string) (string, error) {
 		}
 		return "", fmt.Errorf("diff files: %s", first)
 	}
-	body := strings.TrimSuffix(out.String(), "\n")
-	if body == "" {
-		return "no changes", nil
-	}
-	return capBody(body), nil
+	return capture.reply(), nil
 }
 
 func firstLine(s string) string {
@@ -58,11 +55,49 @@ func firstLine(s string) string {
 	return ""
 }
 
-func capBody(body string) string {
-	ln := strings.Split(body, "\n")
-	if len(ln) <= capLines {
-		return body
+type lineCap struct {
+	kept  bytes.Buffer
+	lines int
+	tail  bool
+}
+
+func (c *lineCap) Write(p []byte) (int, error) {
+	n := len(p)
+	for len(p) > 0 {
+		i := bytes.IndexByte(p, '\n')
+		line := p
+		if i >= 0 {
+			line = p[:i+1]
+		}
+		if c.lines < capLines {
+			c.kept.Write(line)
+		}
+		if i < 0 {
+			c.tail = true
+			break
+		}
+		c.lines++
+		c.tail = false
+		p = p[i+1:]
 	}
-	k := len(ln) - (capLines - 1)
-	return strings.Join(ln[:capLines-1], "\n") + "\n… " + strconv.Itoa(k) + " more lines"
+	return n, nil
+}
+
+func (c *lineCap) reply() string {
+	total := c.lines
+	if c.tail {
+		total++
+	}
+	if total == 0 || (total == 1 && c.kept.Len() == 1 && c.kept.Bytes()[0] == '\n') {
+		return "no changes"
+	}
+	kept := c.kept.String()
+	if total <= capLines {
+		return strings.TrimSuffix(kept, "\n")
+	}
+	cut := -1
+	for n := 0; n < capLines-1; n++ {
+		cut += strings.IndexByte(kept[cut+1:], '\n') + 1
+	}
+	return kept[:cut] + "\n… " + strconv.Itoa(total-(capLines-1)) + " more lines"
 }

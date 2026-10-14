@@ -345,3 +345,10 @@ func TestPluginDoorVerbsAndExecShareTheirChecks(t *testing.T) {
 		t.Fatalf("one contract replies the same bytes through either door: contract %q exec %q", fromContract, fromSchema)
 	}
 }
+
+func TestTheDoorRefusesAnUnknownField(t *testing.T) {
+	d := NewDoor(nil, nil, nil)
+	if _, err := d.Exec(context.Background(), json.RawMessage(`{"action":"list","bogus":1}`)); err == nil || !strings.Contains(err.Error(), "unknown field") {
+		t.Fatalf("an unknown field must refuse: %v", err)
+	}
+}

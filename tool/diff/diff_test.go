@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"testing"
@@ -426,4 +427,35 @@ func lineOr(lines []string, i int) string {
 		return lines[i]
 	}
 	return "<eof>"
+}
+
+func TestFilesStreamsABigDiffWithoutBufferingItWhole(t *testing.T) {
+	dir := t.TempDir()
+	chdir(t, dir)
+	initRepo(t, dir)
+	var base, dirty strings.Builder
+	for i := 0; i < 400000; i++ {
+		fmt.Fprintf(&base, "line %06d\n", i)
+		fmt.Fprintf(&dirty, "CHNG %06d\n", i)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "big.txt"), []byte(base.String()), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	commitAll(t, dir, "base")
+	if err := os.WriteFile(filepath.Join(dir, "big.txt"), []byte(dirty.String()), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	var before, after runtime.MemStats
+	runtime.ReadMemStats(&before)
+	reply, err := difftool.Files(context.Background(), "", nil)
+	runtime.ReadMemStats(&after)
+	if err != nil {
+		t.Fatalf("a big diff must succeed: %v", err)
+	}
+	if !strings.Contains(reply, "more lines") {
+		t.Fatalf("the fixture must exceed the cap, got %d bytes", len(reply))
+	}
+	if allocated := after.TotalAlloc - before.TotalAlloc; allocated > 8<<20 {
+		t.Fatalf("Files allocated %d bytes for a ~9 MB diff; git's stdout must stream through a bounded capture, not buffer whole", allocated)
+	}
 }

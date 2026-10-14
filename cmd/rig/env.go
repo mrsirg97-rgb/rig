@@ -41,26 +41,40 @@ func (r *root) newSession(ctx context.Context, dir string) (string, error) {
 		}
 		workspace = dir
 	}
-	if err := r.rec.Close("ok"); err != nil {
-		return "", fmt.Errorf("new: %v", err)
-	}
+	saved := ""
 	if dir != "" {
+		if wd, err := os.Getwd(); err == nil {
+			saved = wd
+		}
 		if err := os.Chdir(workspace); err != nil {
 			return "", fmt.Errorf("project: chdir %s: %v", workspace, err)
 		}
+	}
+
+	s2 := core.NewSession()
+	rec2 := state.NewRecorder(r.fe, r.sdb, workspace, r.activeID, Version, s2.ID, s2).Snapshot(file.SnapshotFiles)
+	if err := rec2.Ensure(); err != nil {
+		stayPut(saved)
+		return "", fmt.Errorf("new: %v", err)
+	}
+	if err := r.rec.Close("ok"); err != nil {
+		stayPut(saved)
+		return "", fmt.Errorf("new: %v", err)
 	}
 
 	r.effort = ""
 	r.role = ""
 	r.approve = r.approveDefault
 	r.cwd = workspace
-	s2 := core.NewSession()
-	rec2 := state.NewRecorder(r.fe, r.sdb, workspace, r.activeID, Version, s2.ID, s2).Snapshot(file.SnapshotFiles)
-	if err := rec2.Ensure(); err != nil {
-		return "", fmt.Errorf("new: %v", err)
-	}
 	r.swapIn(s2, rec2)
 	return s2.ID, nil
+}
+
+func stayPut(saved string) {
+	if saved == "" {
+		return
+	}
+	os.Chdir(saved)
 }
 
 func (r *root) sessionList(ctx context.Context) ([]command.SessionRow, error) {
@@ -122,7 +136,7 @@ func (r *root) switchModel(ctx context.Context, id string) (string, error) {
 	r.row = row
 	r.activeID = id
 	r.applyVision()
-	r.live.Swap(append(r.nativeTools(), r.pluginTools...), r.pluginNames()...)
+	r.live.Swap(append(r.tableTools(), r.pluginTools...), r.pluginNames()...)
 	provider, pol := r.buildPair()
 	r.k.Provider = provider
 	r.k.Policy = pol

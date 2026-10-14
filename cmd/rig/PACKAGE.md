@@ -29,24 +29,42 @@ sees core and models and nothing else.
   its old inode. A missing key, an unsigned release, and a bad signature
   each refuse loud before the old binary is touched; a directory you
   cannot write names itself and the sudo line; a platform with no asset
-  and a build with no release tag each say so.
+  and a build with no release tag each say so. Before the rename the
+  update drains the room (`drainRoom`): the members are told to leave at
+  their turn boundaries and the wait polls `Live()` every
+  `drainRoomPoll` (a tenth of a second — the poll is one membership
+  read, and the poll cadence only bounds how long a finished drain
+  waits to be noticed) for at most `drainRoomBound` (thirty seconds —
+  an operator's turn ends long before it, and the update must not be
+  held hostage by a wedged member: past the bound the install proceeds
+  and prints how many members stayed).
 - The minisign wire format is pinned by the decode/verify code and its
   tests (minisign 0.11): every blob carries a 2-byte algorithm tag, then
   the 8-byte key id, then the payload. The public key is `Ed` + key id
   + 32-byte ed25519 key (42 bytes); the signature is `Ed` (legacy,
   covers the file bytes) or `ED` (the default, covers the BLAKE2b-512
   digest) + key id + 64-byte ed25519 signature (74 bytes).
-- **runJob**: the scheduler verb's cold-shell path: opens the one
+- **runJob** (`runjob.go`): the scheduler verb's cold-shell path, its own
+  lifecycle in its own file (own stores, own record — it must not touch
+  the REPL's closure order): opens the one
   `global.sqlite`, parses the crontab key `jN` only, its own record, the
-  busy policy, the worker jail (SPEC_SANDBOX 1, 5).
+  busy policy, the worker jail (SPEC_SANDBOX 1, 5). The session's five
+  stores (rem, scheduler, state, todo, decision) open through one
+  `openStore` helper: the MkdirAll, the loud open refusal, the
+  quarantine line, and the migration report print once, in one shape.
 - **root**: the process's mutable wiring state (SPEC_COMMANDS 2): the
   active model, the row, the recorder, the session, the dials; the
   state the command's closures read and rewrite at call time, so a swap
   (new, a resume, a model switch) is visible to every closure with no
   re-wiring.
 - **children** (`children.go`): the child operations' effects, the act's
-  owner's on its own engine: a start waits the row's port for as long as
-  the child lives, lands the log at `~/.rig/logs/<model id>.log` and
+  owner's on its own engine: a start waits the row's port for at most
+  `childStartCeil` — five minutes, the longest a cold model load is
+  expected to need before its health port answers; past the bound the
+  start fails loud, signals the child it spawned, and the log names the
+  never-answered port, so a child that lives without serving cannot
+  wedge the room's engine's child slot forever —, lands the log at
+  `~/.rig/logs/<model id>.log` and
   writes the pid file at the spawn with the process's start time, so two
   starts converge on one child and a stale file names nobody; `ready`
   is the path a claim takes when its row's port is silent (the start,
@@ -95,8 +113,10 @@ sees core and models and nothing else.
   openai, or anthropic when the row says so), `swapIn`, `compactNow`,
   `newSession`,
   `sessionList/Show/Resume`, `switchModel` (the recorder's row write
-  happens before the switch applies: a refused write refuses the
-  switch), `switchEffort`, `switchRole`,
+  happens before the switch applies: a refused write refuses the switch;
+  the switch re-swaps the whole live table through `tableTools`, so
+  `decide` and `verdict` ride every switch the way the wire and a plugin
+  reload do), `switchEffort`, `switchRole`,
   `switchApprove`, `reloadPlugins` / `swapPlugins`, `nativeTools`,
   `runtimeTable`, and the `/rem` command's closures
   (`RemList`/`RemShow`/`RemForget` over `store/rem`).
@@ -195,11 +215,15 @@ into a `Phase`. A notice with no recorder yet goes to stderr.
 - `run-job` lands before state/session wiring: it is its own lifecycle
   (own stores, own record) and must not touch the REPL's closure order.
 - The queue the startup reap sweeps is `sessionQueue`: the session's
-  recorded binding when it has one, else the launch directory's. A resume
-  from another folder therefore frees claims in the queue the session was
+  recorded binding when it has one, else the launch directory's. The
+  binding is the session row's recorded workspace (the newest
+  `state.ListCap` rows this cwd's store carries — a resumed session
+  older than that falls back to the launch directory); a row read that
+  fails falls back to the launch directory and returns the error, so the
+  startup says so on stderr and the reap still runs. A resume from
+  another folder therefore frees claims in the queue the session was
   actually working, not in whatever bucket the resume happened to start
-  in. A binding read that fails falls back to the launch directory and
-  says so on stderr: the reap must still run.
+  in.
 - The startup reap releases todo claims owned by sessions whose rows
   have ended, so a dead session's in-progress tasks return to the shared
   pool at the next open instead of blocking every live session that
@@ -208,7 +232,11 @@ into a `Phase`. A notice with no recorder yet goes to stderr.
   the todo store's Reap staleness arm. The note names what was freed;
   an idle reap returns "".
 - The `-p`/`-resume` conflict is refused loud before any store is
-  opened (`ErrResumeWithPrompt`: one-shot stays one-shot). A piped
+  opened (`ErrResumeWithPrompt`: one-shot stays one-shot). `-p -` reads
+  stdin under the read tool's own ceiling (`file.ReadCap`, 1 MiB): a
+  longer prompt refuses loud and names the ceiling — a prompt that long
+  belongs in a file, and an unbounded read is a wedge an operator's pipe
+  can hold the worker on. A piped
   session answers one prompt and exits — there is no next turn to
   carry a delegated worker's return — so the delegate keeps its
   synchronous shape there (`Await` on the piped flag), while the worker
@@ -233,7 +261,25 @@ into a `Phase`. A notice with no recorder yet goes to stderr.
   before the stores. A broken file is a loud skip; a name colliding
   with a native tool refuses loud.
 - The TUI's status and news reads are the root's (the stores it already
-  opens), at the refresh points only, never per repaint.
+  opens), at the refresh points only, never per repaint. The TUI's
+  status tick runs on the loop goroutine and reads the root's dials
+  directly; the dashboard's status poll arrives on a web handler
+  goroutine, so `webStatus` takes the dials through a snapshot closure
+  on the loop's own engine at the read priority — the same ordering the
+  command handlers that mutate the dials run under — and falls back to
+  an empty status when the loop is down.
+- `runtimeTable` bakes the launch environment's `RIG_MODEL_*` overlay
+  into the active row only: a later `/models` switch serves the base row
+  from the table, the overlay is the launch environment, not a dial
+  (pinned by `TestTheRuntimeTableServesTheBaseRowOnASwitch`).
+- `newSession` constructs before it swaps: the chdir and the new
+  recorder's `Ensure` run before the old recorder closes, so a chdir or
+  Ensure failure leaves the prior session open and active (pinned by
+  `TestANewSessionWhoseChdirFailsLeavesTheOldSessionOpen`); the close is
+  the last gate and a failure there puts the process back where the call
+  found it (`TestProjectRefusesToMoveWhenTheOldSessionCannotClose`); a
+  `Close` failure after the `Ensure` can leave the new session's row open
+  beside the live one, the retry mints a fresh id.
 - The approval dial (SPEC_MODES 4): manual is refused at the command
   when the frontend cannot ask (no ask door); `isMutating` names the
   native pause set plus every plugin (arbitrary python is mutating by

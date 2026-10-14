@@ -18,9 +18,12 @@ wire's observation vocabulary folded into read and edit).
 - `Files(ctx, ref, paths)`: the working tree against HEAD (or `ref`;
   an empty `ref` is HEAD), via
   `git diff --no-color --no-ext-diff -U3` in the process's cwd, capped
-  at 100 lines with the loud elision marker; `no changes` on a clean
-  tree, a loud refusal on a non-git workspace or a git failure. The diff is
-  HEAD vs the working tree, never the index: a staged edit still shows.
+  at 100 lines with the loud elision marker (the append is teaching
+  context, not the artifact: 100 lines show the hunk's shape, the marker
+  names the rest, and a longer diff is what a read is for); `no changes`
+  on a clean tree, a loud refusal on a non-git workspace or a git failure.
+  The diff is HEAD vs the working tree, never the index: a staged edit
+  still shows.
 
 ## How it is consumed
 
@@ -36,3 +39,8 @@ wire's observation vocabulary folded into read and edit).
   refuses like any other git failure. `--no-ext-diff` is deliberate: a
   repository's `diff.external` is not a program rig should run for the
   model's chosen path.
+- git's stdout streams through a line-bounded capture, not a whole-output
+  buffer: the first 100 lines are kept — the only ones a capped reply can
+  carry — the rest are counted for the elision marker and dropped, so a
+  huge diff costs the reply's size in memory, not the diff's. The reply is
+  byte-identical to buffering whole and capping after.

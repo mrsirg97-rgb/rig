@@ -22,7 +22,8 @@ nothing else: the leaf discovers and wraps; the root (cmd/rig) wires.
   through the kernel and reports each, in file order; the contract's
   checks are generated into the discovery cell. `DiscoverChecked`
   preflights filename validity and native collisions before any
-  top-level code executes. `Contract` names what one file of a zone
+  top-level code executes, and a file the kernel's report omits comes
+  back as a skipped report naming the omission, never a silent drop. `Contract` names what one file of a zone
   must expose: `PluginContract` (DESCRIPTION str, SCHEMA dict, run
   callable) and `TrainerContract` (`train(rows_path, out_dir)` and
   `evaluate(checkpoint, rows_path)` callable); the registry a cell
@@ -54,7 +55,9 @@ nothing else: the leaf discovers and wraps; the root (cmd/rig) wires.
   refusals, the mkdir + rename; never an unlink.
 - `WritePending(home, dir, natives, name, source, contract)`: the one
   pending-write shared with the web forge's save: the `PluginNameRe`
-  filename-stem rule, the native collision, the contract's attrs read
+  filename-stem rule, the native collision, the source ceiling (64 KiB —
+  the guard's tool-result cap: a plugin's source is model output,
+  bounded like any result), the contract's attrs read
   off the source text (`def <name>(` for a callable, the bare name
   otherwise), `created` from a prior stat. Each surface keeps its own
   reply voice.
@@ -112,7 +115,10 @@ nothing else: the leaf discovers and wraps; the root (cmd/rig) wires.
   never the error; a broken plugin must not brick the harness.
 - The discovery cell keeps modules in the user namespace
   (`__rig_plugins__`) and `sys.modules` under the stem, so the python
-  tool's imports reach the loaded plugins (the shared namespace). Reload
+  tool's imports reach the loaded plugins (the shared namespace). A stem
+  in `sys.stdlib_module_names` refuses before the file executes — a
+  plugin named `json` or `os` would shadow the stdlib for every later
+  kernel cell — and the report names the collision. Reload
   replaces both tables together and removes modules no longer live.
 - `compactJSON` re-marshals args compactly so the embedded literal is
   total (`pyLiteral`); the args must parse as JSON.
@@ -124,7 +130,9 @@ nothing else: the leaf discovers and wraps; the root (cmd/rig) wires.
 - The door's schema keeps `name` a plain string when no plugins are
   live: llama-server rejects `"enum": []` ("enum must be a non-empty
   array"), and a name the server does not know still refuses loudly at
-  Exec.
+  Exec. The door decodes strictly — the schema's four fields
+  (`action`/`name`/`args`/`source`) are the whole call, one decode, and
+  an unknown field refuses.
 - The doors' redo runs at most once per call and never on a known name;
   a failing redo is named in the refusal (`re-discovery failed: ...`).
   The named cost is one full discovery on the failure path (the retry

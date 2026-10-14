@@ -15,7 +15,10 @@ func runtimeTable(t models.Table, active string, resolved models.Model) models.T
 		if id == active {
 			continue
 		}
-		m, _ := t.Get(id)
+		m, ok := t.Get(id)
+		if !ok {
+			panic("rig: runtime table: " + id + ": known without a readable row")
+		}
 		rows = append(rows, m)
 	}
 	rows = append(rows, resolved)

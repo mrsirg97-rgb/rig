@@ -84,14 +84,11 @@ func (k *kernel) start() (*proc, error) {
 }
 
 func (p *proc) readLoop(r io.Reader) {
-	sc := bufio.NewReader(r)
-	for {
-		line, err := sc.ReadString('\n')
-		if line != "" {
+	sc := bufio.NewScanner(r)
+	sc.Buffer(make([]byte, 0, 4096), maxLine)
+	for sc.Scan() {
+		if line := sc.Text(); strings.TrimSpace(line) != "" {
 			p.deliver(line)
-		}
-		if err != nil {
-			break
 		}
 	}
 	close(p.readDone)

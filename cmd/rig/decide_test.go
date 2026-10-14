@@ -11,6 +11,7 @@ import (
 
 	"github.com/mrsirg97-rgb/rig/v3/core"
 	"github.com/mrsirg97-rgb/rig/v3/decision"
+	"github.com/mrsirg97-rgb/rig/v3/models"
 	"github.com/mrsirg97-rgb/rig/v3/plugins"
 	"github.com/mrsirg97-rgb/rig/v3/store"
 	decisionstore "github.com/mrsirg97-rgb/rig/v3/store/decision"
@@ -196,5 +197,41 @@ func TestTheFanOutStaysBoundedAtOne(t *testing.T) {
 	}
 	if o.max != 1 {
 		t.Fatalf("parallel one bounds the fan-out, got %d in flight", o.max)
+	}
+}
+
+type namedStub struct{ name string }
+
+func (s namedStub) Name() string                                              { return s.name }
+func (s namedStub) Description() string                                       { return s.name }
+func (s namedStub) Schema() json.RawMessage                                   { return json.RawMessage(`{"type":"object"}`) }
+func (s namedStub) Exec(_ context.Context, _ json.RawMessage) (string, error) { return s.name, nil }
+
+func TestAModelSwitchKeepsTheDecideAndVerdictTools(t *testing.T) {
+	r := testRoot(nullFrontend{})
+	storeRoot(t, r)
+	r.decide = wiredDecide(t, nil, nil)
+	r.tools["verdict"] = namedStub{name: "verdict"}
+	table, err := models.New(
+		defaultRow(),
+		models.Model{Role: models.RoleInteractive, ID: "other", Window: 65536, MaxTokens: 8192, Reserve: 8192, KeepRecent: 16384},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r.runtime = table
+	wire(r)
+	for _, name := range []string{"decide", "verdict"} {
+		if _, ok := r.live.Tool(name); !ok {
+			t.Fatalf("%s sits in the live table before the switch", name)
+		}
+	}
+	if _, err := r.switchModel(context.Background(), "other"); err != nil {
+		t.Fatalf("switchModel: %v", err)
+	}
+	for _, name := range []string{"decide", "verdict"} {
+		if _, ok := r.live.Tool(name); !ok {
+			t.Fatalf("a model switch must keep %s in the live table", name)
+		}
 	}
 }

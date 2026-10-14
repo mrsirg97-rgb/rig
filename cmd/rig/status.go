@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 
+	"github.com/mrsirg97-rgb/evt"
+	"github.com/mrsirg97-rgb/rig/v3"
 	"github.com/mrsirg97-rgb/rig/v3/core"
 	"github.com/mrsirg97-rgb/rig/v3/frontend/tui"
 	"github.com/mrsirg97-rgb/rig/v3/frontend/web"
@@ -11,30 +13,47 @@ import (
 )
 
 func tuiStatusIn(r *root, db store.DB) func(context.Context) tui.StatusIn {
-	return func(ctx context.Context) tui.StatusIn {
-		eff := r.effort
-		if eff == "" {
-			eff = r.row.Effort
-		}
-		b := tui.StatusIn{Model: r.activeID, Effort: eff, Window: r.row.Window, Role: r.role, Approve: r.approve, Workers: "resident"}
-		if r.session == nil {
-			return b
-		}
-		b.Session = r.session.ID
-		if err := db.QueryRowContext(ctx,
-			`SELECT COALESCE(SUM(u.prompt), 0), COALESCE(SUM(u.completion), 0), COALESCE(SUM(u.cache_read), 0), COALESCE(SUM(u.cost), 0)
-			 FROM usage u JOIN messages m ON m.seq = u.message_seq
-			 WHERE m.session_id = ?`, r.session.ID).Scan(&b.Up, &b.Down, &b.CacheRead, &b.Cost); err != nil {
-			return b
-		}
+	return func(context.Context) tui.StatusIn {
+		return r.statusNow(db)
+	}
+}
+
+func (r *root) statusNow(db store.DB) tui.StatusIn {
+	eff := r.effort
+	if eff == "" {
+		eff = r.row.Effort
+	}
+	b := tui.StatusIn{Model: r.activeID, Effort: eff, Window: r.row.Window, Role: r.role, Approve: r.approve, Workers: "resident"}
+	if r.session == nil {
 		return b
+	}
+	b.Session = r.session.ID
+	if err := db.QueryRowContext(context.Background(),
+		`SELECT COALESCE(SUM(u.prompt), 0), COALESCE(SUM(u.completion), 0), COALESCE(SUM(u.cache_read), 0), COALESCE(SUM(u.cost), 0)
+		 FROM usage u JOIN messages m ON m.seq = u.message_seq
+		 WHERE m.session_id = ?`, r.session.ID).Scan(&b.Up, &b.Down, &b.CacheRead, &b.Cost); err != nil {
+		return b
+	}
+	return b
+}
+
+func (r *root) statusSnapshot(ctx context.Context, db store.DB) (tui.StatusIn, bool) {
+	done := make(chan tui.StatusIn, 1)
+	r.engine.Add(evt.Func(func(context.Context) { done <- r.statusNow(db) }), rig.PriorityRead)
+	select {
+	case s := <-done:
+		return s, true
+	case <-ctx.Done():
+		return tui.StatusIn{}, false
 	}
 }
 
 func webStatus(r *root, db store.DB) func(context.Context) web.Status {
-	in := tuiStatusIn(r, db)
 	return func(ctx context.Context) web.Status {
-		s := in(ctx)
+		s, ok := r.statusSnapshot(ctx, db)
+		if !ok {
+			return web.Status{}
+		}
 		return web.Status{
 			Model: s.Model, Effort: s.Effort, Window: s.Window, Role: s.Role, Approve: s.Approve,
 			Workers: s.Workers, Session: s.Session, Up: s.Up, Down: s.Down, CacheRead: s.CacheRead,

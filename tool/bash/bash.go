@@ -1,7 +1,6 @@
 package bash
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -46,7 +45,7 @@ type args struct {
 
 func (t bashTool) Exec(ctx context.Context, data json.RawMessage) (string, error) {
 	var a args
-	if err := strictDecode(data, &a); err != nil {
+	if err := tool.StrictDecode(data, &a); err != nil {
 		return "", fmt.Errorf("bash: args: %w", err)
 	}
 	if strings.TrimSpace(a.Command) == "" {
@@ -82,14 +81,21 @@ func (bashTool) Run(ctx context.Context, command, workspace string) (string, err
 		return "", errors.New("bash: empty command")
 	}
 
+	dir := workspace
+	if dir == "" {
+		if wd, err := os.Getwd(); err == nil {
+			dir = wd
+		} else {
+			dir = "."
+		}
+	}
+	if err := checkCwd(dir); err != nil {
+		return "", fmt.Errorf("bash: workspace %s: %v", dir, err)
+	}
+
 	argv := execwrap.Args([]string{"bash", "-c", command})
 	cmd := exec.CommandContext(ctx, argv[0], argv[1:]...)
-	if workspace != "" {
-		if err := checkCwd(workspace); err != nil {
-			return "", fmt.Errorf("bash: workspace %s: %v", workspace, err)
-		}
-		cmd.Dir = workspace
-	}
+	cmd.Dir = dir
 
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	cmd.WaitDelay = time.Second
@@ -106,12 +112,6 @@ func (bashTool) Run(ctx context.Context, command, workspace string) (string, err
 
 	content := out.String()
 	if err != nil {
-		dir := workspace
-		if dir == "" {
-			if d, werr := os.Getwd(); werr == nil {
-				dir = d
-			}
-		}
 		withCwd := content
 		switch {
 		case withCwd == "":
@@ -132,12 +132,6 @@ func (bashTool) Run(ctx context.Context, command, workspace string) (string, err
 		return withCwd, fmt.Errorf("bash: %w", err)
 	}
 	return content, nil
-}
-
-func strictDecode(data json.RawMessage, out any) error {
-	dec := json.NewDecoder(bytes.NewReader(data))
-	dec.DisallowUnknownFields()
-	return dec.Decode(out)
 }
 
 func checkCwd(dir string) error {

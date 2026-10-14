@@ -20,7 +20,9 @@ slightly misspelled line counted as a dead worker.
   refused by the same words. One `core.Verdict{Row, Accept, Reason}` goes
   out on the transport as the transport's id; the reply is `recorded`.
   `New(fleet broadcast.Transport)` returns the interface; the struct is
-  unexported.
+  unexported. The send's ack is guarded: the mesh transport invokes the
+  callback once per peer concurrently, so the first refusal is the error
+  and a clean receipt from one peer cannot race another's.
 
 ## How it is consumed
 

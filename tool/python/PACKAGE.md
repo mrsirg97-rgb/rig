@@ -10,7 +10,8 @@ The shared kernel is also the plugin discovery/execution surface
 ## What it includes
 
 - `Python`: the tool as its interface (2.12.6): `tool.Definition`, `Exec`
-  as the one JSON door — decode `action`/`code`/`timeoutMs`, apply the
+  as the one JSON door — decode `action`/`code`/`timeoutMs` strictly (an
+  unknown field refuses, matching the bash/delegate doors), apply the
   absent-field default, route, and refuse an unknown action with the words
   that name the actions — and one method per verb: `Code(ctx, code,
   timeoutMs)`, `Vars(ctx, timeoutMs)`, `Reset(ctx, timeoutMs)`. The
@@ -22,6 +23,11 @@ The shared kernel is also the plugin discovery/execution surface
   unexported.
 - `kernel_host.py`: embedded host script (`//go:embed`).
 - The JSON-lines wire protocol reader/writer over the subprocess stdio.
+  The reply line is bounded: the host clips `out`/`result`/`error` at
+  16000 chars each and JSON escaping inflates to six bytes a character at
+  worst, so 512 KiB holds three maxed streams with headroom — a line over
+  the ceiling is not a host reply, and the read loop tears down like any
+  kernel death (the pending cells fail with the exit note).
 
 ## How it is consumed
 

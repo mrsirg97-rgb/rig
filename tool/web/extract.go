@@ -104,11 +104,11 @@ func runTrafilatura(ctx context.Context, bin, html string) (string, error) {
 }
 
 func ExtractReadable(ctx context.Context, html string, trafilatura *string) (string, string) {
-	bin := DefaultTrafilatura()
-	explicit := trafilatura != nil
-	if explicit {
-		bin = *trafilatura
+	if trafilatura == nil {
+		resolved := DefaultTrafilatura()
+		trafilatura = &resolved
 	}
+	bin := *trafilatura
 	if bin == "" {
 		return HtmlToText(html), "[trafilatura unavailable; stdlib text pass used]"
 	}

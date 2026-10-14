@@ -1,12 +1,12 @@
 package verdict
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 
 	"github.com/mrsirg97-rgb/evt/broadcast"
 	"github.com/mrsirg97-rgb/rig/v3/core"
@@ -40,9 +40,7 @@ type args struct {
 
 func (a *adapter) Exec(ctx context.Context, data json.RawMessage) (string, error) {
 	var g args
-	dec := json.NewDecoder(bytes.NewReader(data))
-	dec.DisallowUnknownFields()
-	if err := dec.Decode(&g); err != nil {
+	if err := tool.StrictDecode(data, &g); err != nil {
 		return "", fmt.Errorf("verdict: args: %w", err)
 	}
 	return a.Deliver(ctx, g.Row, g.Accept, g.Reason)
@@ -53,10 +51,20 @@ func (a *adapter) Deliver(ctx context.Context, row int64, accept bool, reason st
 	if !accept && reason == "" {
 		return "", errors.New("verdict: a reject needs the reason (what the author must fix, or the corrected answer)")
 	}
+	var mu sync.Mutex
 	var ack error
-	a.fleet.Send(ctx, func(err error) { ack = err }, broadcast.NewMessage(a.fleet.Id(), true, core.Verdict{Row: row, Accept: accept, Reason: reason}))
-	if ack != nil {
-		return "", fmt.Errorf("verdict: %w", ack)
+	a.fleet.Send(ctx, func(err error) {
+		mu.Lock()
+		defer mu.Unlock()
+		if err != nil && ack == nil {
+			ack = err
+		}
+	}, broadcast.NewMessage(a.fleet.Id(), true, core.Verdict{Row: row, Accept: accept, Reason: reason}))
+	mu.Lock()
+	sent := ack
+	mu.Unlock()
+	if sent != nil {
+		return "", fmt.Errorf("verdict: %w", sent)
 	}
 	return "recorded", nil
 }

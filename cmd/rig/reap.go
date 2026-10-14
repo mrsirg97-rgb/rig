@@ -2,13 +2,25 @@ package main
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/mrsirg97-rgb/rig/v3/store"
 	"github.com/mrsirg97-rgb/rig/v3/store/state"
 	todostore "github.com/mrsirg97-rgb/rig/v3/store/todo"
 )
 
-func sessionQueue(ctx context.Context, tdb store.DB, cwd, session string) (todostore.Project, error) {
+func sessionQueue(ctx context.Context, sdb store.DB, cwd, session string) (todostore.Project, error) {
+	if session != "" {
+		rows, err := state.ListSessions(ctx, sdb, state.ListCap)
+		if err != nil {
+			return todostore.ProjectOf(cwd), fmt.Errorf("the session's recorded queue binding: %w", err)
+		}
+		for _, row := range rows {
+			if row.ID == session && row.Cwd != "" {
+				return todostore.ProjectOf(row.Cwd), nil
+			}
+		}
+	}
 	return todostore.ProjectOf(cwd), nil
 }
 

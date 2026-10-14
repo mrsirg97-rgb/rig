@@ -31,7 +31,8 @@ nothing scheduled) and a resumable transcript in the state store.
   the session's default model) and `New` returns the interface; the
   adapter struct is unexported. Beside the verb:
   the output cap (bash's 256 KiB shape, the loud `[TRUNCATED: N bytes]`
-  marker) and the trailer line (exit, duration, session id, log path);
+  marker, cut on a rune boundary so a multi-byte tail never splits), and
+  the trailer line (exit, duration, session id, log path);
   the explicit worker session id threaded through the spawn.
 - `delegate.go`: the return is an event, not a wait (2.14.0). When the
   worker ends, `settle` clears the band row, and publishes
@@ -84,6 +85,17 @@ nothing scheduled) and a resumable transcript in the state store.
   silence window is the runner's per-job `stall` setting, not this
   tool's, and a silent worker is shown (the swarm row's heartbeat age),
   never killed for it.
+- `delegate.go`: the submission's hand-off to the work closure is a
+  set-once cell (`hand`), stored under the worker number before `Submit`
+  can start anything and offered the moment `Submit` returns: a queued
+  submission that the cap starts while the caller is still between
+  `Submit` and its bookkeeping blocks at `claim` until the offer lands,
+  so the work's `watch.Release()` never sees a missing submission and
+  the cap's place releases exactly once. `StopAll`'s queued-stop rides
+  the same cell (a started submission no-ops on `Stop`).
+- `band.go`: the swarm-band tracker — `workerState` and the
+  receive/running/track/emit/snapshot surface — one file beside the door
+  and the engine, the names and the behavior unchanged.
 - `delegate.go`: `Room` (optional, nil = silent): the tool is a member
   of the session's `broadcast` room (`MemberID`) and publishes
   `SwarmStatus` snapshots there (SPEC_SWARM 7, 2.11.0); each running
@@ -96,7 +108,8 @@ nothing scheduled) and a resumable transcript in the state store.
   and on exit, one worker row, zero queue counts, throttled to a few
   per second with the exit's last frame always landing.
 - `delegate_test.go`, `turn_test.go`, `async_test.go`,
-  `status_test.go`: the failing-first named cases over a fake `Spawn`
+  `status_test.go`, `handrace_test.go`, `cap_test.go`: the failing-first
+  named cases over a fake `Spawn`
   and `Fetch` (happy path, cwd refusal, busy refusal, the fan-out
   overlap and the one-slot sequence, no-recursion, the cap), the
   no-clock cases (no deadline on the spawn so a long worker returns,
@@ -105,7 +118,11 @@ nothing scheduled) and a resumable transcript in the state store.
   ruling the worker while the session's does, `StopAll` ending every
   worker, a failed worker's return naming its exit, the snapshot
   carrying each worker's last call), and over the real `RealSpawn` the
-  idle interrupt killing the worker's whole process tree. Beside the
+  idle interrupt killing the worker's whole process tree. `handrace_test`
+  parks the cap and the room's publishes to pin the interleaving: a
+  queued worker the cap starts before the caller's bookkeeping still
+  claims its submission and releases its place exactly once.
+  `cap_test` pins the rune-safe cut. Beside the
   cases, the harness: `newTool` is the synchronous shape (a session
   with no next turn to carry a return — a piped run — waits for its
   worker and gets its message as the tool result), `asyncTool` the

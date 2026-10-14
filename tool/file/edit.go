@@ -37,7 +37,7 @@ type editArgs struct {
 
 func (t editTool) Exec(ctx context.Context, data json.RawMessage) (string, error) {
 	var a editArgs
-	if err := strictDecode(data, &a); err != nil {
+	if err := tool.StrictDecode(data, &a); err != nil {
 		return "", fmt.Errorf("edit: args: %w", err)
 	}
 	return t.Edit(ctx, a.Path, a.Old, a.New)
@@ -113,11 +113,22 @@ func mtimeOf(path string) int64 {
 func driftRefusal(ctx context.Context, path, onDisk string) string {
 	const header = "edit: the file changed since the read:"
 	s, _ := core.SessionFrom(ctx)
-	remembered, ok := forgottenContent(s, path)
-	if !ok || remembered == onDisk {
+	obs, ok := observationOf(s, path)
+	if !ok {
 		return header
 	}
-	d := difftool.Diff(remembered, onDisk, "as read", "on disk")
+	now := onDisk
+	if obs.at != fullSpan {
+		content, _, _, err := readWindow(path, obs.at.offset, obs.at.limit)
+		if err != nil {
+			return header
+		}
+		now = content
+	}
+	if obs.content == now {
+		return header + "\nthe bytes you read are unchanged; the change is elsewhere, or only the file's timestamp moved"
+	}
+	d := difftool.Diff(obs.content, now, "as read", "on disk")
 	lines := strings.Split(d, "\n")
 	if len(lines) > driftCap {
 		lines = append(lines[:driftCap], "… "+strconv.Itoa(len(lines)-driftCap)+" more lines")

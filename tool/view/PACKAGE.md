@@ -51,7 +51,13 @@ its reference. The tool is registered only for a model row with `vision`
   cannot be re-pointed at new pixels.
 - A lossy source that stays opaque leaves as JPEG; anything with alpha
   leaves as PNG. The decision is per image, from the decoded pixels, so the
-  same file always yields the same blob.
+  same file always yields the same blob. The re-encode quality is 90:
+  high enough that screenshot text survives legibly, low enough that the
+  blob stays a fraction of the source's bytes — the blob rides the prompt,
+  so its size is prompt cost.
+- The resampler polls the context every 32 output rows: at the 1568-row
+  bound that is 49 polls on a full resample, so an interrupt lands within
+  32 rows of work while the per-pixel loop pays nothing for the check.
 - The bound (1568 px on the longest side) is the vision encoder's tiling,
   not a preference. Inside it nothing resamples, but the re-encode still
   happens: the blob is a function of the pixels, not of the source file's

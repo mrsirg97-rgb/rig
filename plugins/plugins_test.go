@@ -4,6 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -281,5 +284,65 @@ func TestStaticDescriptionReadsEveryForm(t *testing.T) {
 		if got := StaticDescription(src); got != want {
 			t.Errorf("%q -> %q, want %q", src, got, want)
 		}
+	}
+}
+
+func TestTheDiscoveryCellRefusesAStdlibShadowBeforeItExecutes(t *testing.T) {
+	cell := discoveryCell([]string{"/h/plugins/json.py"}, PluginContract)
+	check := strings.Index(cell, "stdlib_module_names")
+	if check < 0 {
+		t.Fatalf("the cell must refuse a stdlib-shadowing stem:\n%s", cell)
+	}
+	if exec := strings.Index(cell, "exec_module"); exec >= 0 && check > exec {
+		t.Fatalf("the shadow refusal must run before the module executes:\n%s", cell)
+	}
+}
+
+func TestAJsonNamedPluginRefusesAndANormalOneLoads(t *testing.T) {
+	py, err := exec.LookPath("python3")
+	if err != nil {
+		t.Skip("no python3 on PATH; the discovery cell needs one")
+	}
+	dir := t.TempDir()
+	shadow := filepath.Join(dir, "json.py")
+	normal := filepath.Join(dir, "echo.py")
+	src := "DESCRIPTION = 'x'\nSCHEMA = {}\ndef run(args):\n    return 'x'\n"
+	if err := os.WriteFile(shadow, []byte(src), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(normal, []byte(src), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	out, err := exec.Command(py, "-c", discoveryCell([]string{shadow, normal}, PluginContract)).Output()
+	if err != nil {
+		t.Fatalf("the cell must run: %v (%s)", err, strings.TrimSpace(string(out)))
+	}
+	var reports []wireReport
+	if err := json.Unmarshal([]byte(strings.TrimSpace(string(out))), &reports); err != nil {
+		t.Fatalf("the report = %q, want the JSON list: %v", string(out), err)
+	}
+	if len(reports) != 2 {
+		t.Fatalf("two files, two reports: %+v", reports)
+	}
+	if reports[0].Name != "json" || reports[0].OK || !strings.Contains(reports[0].Error, "shadows a stdlib module") {
+		t.Fatalf("the json-named plugin must refuse with the collision named: %+v", reports[0])
+	}
+	if reports[1].Name != "echo" || !reports[1].OK {
+		t.Fatalf("a normal plugin must load beside it: %+v", reports[1])
+	}
+}
+
+func TestAKernelReportThatOmitsAFileSkipsItLoud(t *testing.T) {
+	report := `[{"name":"echo","file":"/h/plugins/echo.py","ok":true,"description":"echoes","schema":{"type":"object"}}]`
+	k := &fakeKernel{replies: []pythontool.Reply{okReply(report)}}
+	reports, err := DiscoverChecked(context.Background(), k, []string{"/h/plugins/echo.py", "/h/plugins/ghost.py"}, nil, PluginContract)
+	if err != nil {
+		t.Fatalf("DiscoverChecked: %v", err)
+	}
+	if len(reports) != 2 {
+		t.Fatalf("every file must surface, got %d: %+v", len(reports), reports)
+	}
+	if ghost := reports[1]; !ghost.Skipped || !strings.Contains(ghost.Reason, "omitted") {
+		t.Fatalf("the omitted file must skip loud: %+v", ghost)
 	}
 }

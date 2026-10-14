@@ -88,6 +88,52 @@ func TestReapAtOpenReleasesClaimsOwnedByEndedSessions(t *testing.T) {
 	}
 }
 
+func TestTheReapQueueTakesTheSessionRecordedBinding(t *testing.T) {
+	sdb, _ := reapStores(t)
+	ctx := context.Background()
+	launch := t.TempDir()
+	bound := t.TempDir()
+	id := "bound-session-9012"
+	if err := state.RecordSession(ctx, sdb, id, bound, "local", "0.25.0"); err != nil {
+		t.Fatalf("record bound session: %v", err)
+	}
+	proj, err := sessionQueue(ctx, sdb, launch, id)
+	if err != nil {
+		t.Fatalf("sessionQueue: %v", err)
+	}
+	if proj.Key != todostore.ProjectOf(bound).Key {
+		t.Fatalf("a recorded binding names the queue the session actually worked: got %q, want %q", proj.Key, todostore.ProjectOf(bound).Key)
+	}
+}
+
+func TestTheReapQueueFallsBackToTheLaunchDirectoryWithoutABinding(t *testing.T) {
+	sdb, _ := reapStores(t)
+	ctx := context.Background()
+	launch := t.TempDir()
+	proj, err := sessionQueue(ctx, sdb, launch, "no-such-session-404")
+	if err != nil {
+		t.Fatalf("an unknown session is no binding, not an error: %v", err)
+	}
+	if proj.Key != todostore.ProjectOf(launch).Key {
+		t.Fatalf("without a recorded binding the launch directory names the queue: got %q, want %q", proj.Key, todostore.ProjectOf(launch).Key)
+	}
+}
+
+func TestAReapQueueReadFailureFallsBackLoud(t *testing.T) {
+	sdb, _ := reapStores(t)
+	launch := t.TempDir()
+	if err := sdb.Close(); err != nil {
+		t.Fatal(err)
+	}
+	proj, err := sessionQueue(context.Background(), sdb, launch, "bound-session-9012")
+	if err == nil {
+		t.Fatal("a binding read that fails must say so")
+	}
+	if proj.Key != todostore.ProjectOf(launch).Key {
+		t.Fatalf("the failed read still falls back to the launch directory: got %q", proj.Key)
+	}
+}
+
 func TestReapAtOpenIsIdleWhenNoSessionsHaveEnded(t *testing.T) {
 	sdb, tdb := reapStores(t)
 	ctx := context.Background()

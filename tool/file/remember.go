@@ -6,45 +6,60 @@ import (
 	"github.com/mrsirg97-rgb/rig/v3/core"
 )
 
-var rememberedBytesCap = 16 << 20
+const rememberedBytesCap = 16 << 20
+
+type span struct {
+	offset, limit int
+}
+
+var fullSpan = span{offset: 0, limit: -1}
+
+type observation struct {
+	content string
+	at      span
+}
 
 var lastRead = struct {
 	sync.Mutex
-	m     map[string]string
+	m     map[string]observation
 	order []string
 	bytes int
-}{m: map[string]string{}}
+}{m: map[string]observation{}}
 
 func rememberedKey(s *core.Session, path string) string { return s.ID + "\x00" + path }
 
-func rememberContent(s *core.Session, path, content string) {
+func rememberContent(s *core.Session, path, content string, at ...span) {
 	if s == nil {
 		return
+	}
+	obs := observation{content: content, at: fullSpan}
+	if len(at) > 0 {
+		obs.at = at[0]
 	}
 	key := rememberedKey(s, path)
 	lastRead.Lock()
 	defer lastRead.Unlock()
 	if prev, exists := lastRead.m[key]; exists {
-		lastRead.bytes += len(content) - len(prev)
+		lastRead.bytes += len(content) - len(prev.content)
 	} else {
 		lastRead.order = append(lastRead.order, key)
 		lastRead.bytes += len(content)
 	}
-	lastRead.m[key] = content
+	lastRead.m[key] = obs
 	for lastRead.bytes > rememberedBytesCap {
 		oldest := lastRead.order[0]
 		lastRead.order = lastRead.order[1:]
-		lastRead.bytes -= len(lastRead.m[oldest])
+		lastRead.bytes -= len(lastRead.m[oldest].content)
 		delete(lastRead.m, oldest)
 	}
 }
 
-func forgottenContent(s *core.Session, path string) (string, bool) {
+func observationOf(s *core.Session, path string) (observation, bool) {
 	if s == nil {
-		return "", false
+		return observation{}, false
 	}
 	lastRead.Lock()
 	defer lastRead.Unlock()
-	c, ok := lastRead.m[rememberedKey(s, path)]
-	return c, ok
+	o, ok := lastRead.m[rememberedKey(s, path)]
+	return o, ok
 }

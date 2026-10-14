@@ -388,3 +388,11 @@ func TestZonesAreDirectoriesAndListSkipsThem(t *testing.T) {
 		t.Fatalf("an absent zone is empty, not an error: %v, %v", none, err)
 	}
 }
+
+func TestWritePendingRefusesASourceOverTheCeiling(t *testing.T) {
+	src := "DESCRIPTION = \"x\"\nSCHEMA = {}\ndef run(args): return \"x\"\n" + strings.Repeat("# filler\n", 12000)
+	_, _, err := WritePending(t.TempDir(), "plugins", nil, "echo", src, PluginContract)
+	if err == nil || !strings.Contains(err.Error(), "ceiling") {
+		t.Fatalf("an oversized source must refuse with the ceiling named: %v", err)
+	}
+}

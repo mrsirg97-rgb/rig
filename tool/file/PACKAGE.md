@@ -71,8 +71,13 @@ it acts on it.
   than the 1 MiB cap; slice it with bash]` — because a read can never
   make progress on it: bash owns that line.
 - `normalizePath`: canonicalizes at the boundary so `a.go` and `./a.go`
-  are the same key (without it the drift check can be silently bypassed by
-  path spelling).
+  are the same key, and resolves symlinks (`EvalSymlinks`) so every
+  spelling of one file is one provenance key — `dir/link/f.txt` and
+  `dir/real/f.txt` share the drift license, and `link/../x` lands where
+  the OS resolves it, not where a lexical clean puts it. A file that does
+  not exist yet has nothing to resolve: the directory part is resolved,
+  the final component kept as spelled, so a write through an alias creates
+  and keys the file where the OS would put it.
 - `recordState` / `stateOf`: the `FileState` provenance maintained on the
   threaded session; `SnapshotFiles` returns a copy under the package
   lock, so a persister that upserts the states cannot race the tools'
@@ -87,15 +92,19 @@ it acts on it.
 
 ## Gotchas
 
-- `normalizePath` canonicalizes (absolute + clean): a symlinked path that
-  bypasses the spelling still keys on the canonical string.
+- `normalizePath` keys the license on the resolved path: a symlinked
+  spelling and its target are one entry, in both directions, so
+  edit-after-external-change cannot be bypassed by spelling an alias.
+  The tool's reply names the resolved path.
 - The teaching reply is read's bytes by construction (`readWindow` plus
   `capReply`), never a second renderer; the zero-width `old` refusal and
   the missing-file error stand ahead of it, because both are about the
   call, not the observation.
 - The drift check refuses when the file's hash or mtime differs from the
   recorded `FileState`; edit-after-external-change never silently
-  clobbers. The stale-observation fixture makes its second write itself
+  clobbers. The refusal's teaching diff is capped at 20 lines
+  (`driftCap`): it teaches the shape of the change, it does not reprint
+  the file — a bigger drift is what a re-read is for. The stale-observation fixture makes its second write itself
   (`os.WriteFile`, no session call): a change no tool recorded is what
   makes the observation stale.
 - One call is one change; the order of several changes to one file is
@@ -108,6 +117,11 @@ it acts on it.
   sessions sharing one process each diff against their own observation,
   never each other's, and no session or file's bytes are pinned beyond
   the cap (an evicted observation degrades to the header-only refusal).
+  A windowed read remembers the window and the span it came from, so the
+  refusal diffs those remembered lines against the same lines of the file
+  as it stands now — never against the whole file — and when the bytes
+  the model read are unchanged the refusal says so (the change is
+  elsewhere, or only the timestamp moved) instead of diffing.
 - The cache never holds a session object, only its ID: a finished
   session's transcript is released with it.
 - A standalone exec (no threaded session) skips provenance maintenance.

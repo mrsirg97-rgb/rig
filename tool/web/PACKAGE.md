@@ -11,17 +11,21 @@ client, no new venv.
 
 - `Web`: the tool as its interface (2.12.6): `tool.Definition`, `Exec` as
   the one JSON door — it decodes `action`/`target` and the per-action
-  optionals, applies the absent-field defaults, and routes, refusing an
-  unknown action — and two verbs, `Search(ctx, query, maxResults)` and
-  `Fetch(ctx, url, maxChars, timeoutMs)`. The no-query and no-url
-  refusals and the `maxResults`/`maxChars`/`timeoutMs` bounds live in the
-  verb they belong to, so a Go caller and the model hit the same checks.
-  `New(Config)` and `NewDefault()` return the interface; the struct is
-  unexported.
+  optionals strictly (an unknown field refuses, matching the
+  bash/delegate doors), applies the absent-field defaults, and routes,
+  refusing an unknown action — and two verbs, `Search(ctx, query,
+  maxResults)` and `Fetch(ctx, url, maxChars, timeoutMs)`. The no-query
+  and no-url refusals and the `maxResults`/`maxChars`/`timeoutMs` bounds
+  live in the verb they belong to, so a Go caller and the model hit the
+  same checks. `New(Config)` and `NewDefault()` return the interface; the
+  struct is unexported.
 - The engines behind it: the SearXNG `/search` JSON call, and the
   guarded reader — resolves the host, refuses private addresses (SSRF
   guard), follows redirects with re-checks and a hop cap, extracts via
-  trafilatura or the stdlib text pass.
+  trafilatura or the stdlib text pass. The default trafilatura resolves
+  once at construction (the shared-venv probe, then `PATH`); an explicit
+  config pointer is honored verbatim, empty included, with no probe per
+  extraction.
 
 ## How it is consumed
 

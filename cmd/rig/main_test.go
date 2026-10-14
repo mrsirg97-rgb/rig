@@ -547,6 +547,28 @@ func TestModelSwitchResetsAForeignEffort(t *testing.T) {
 	}
 }
 
+func TestANewSessionWhoseChdirFailsLeavesTheOldSessionOpen(t *testing.T) {
+	r := testRoot(nullFrontend{})
+	db := storeRoot(t, r)
+	if err := r.rec.Ensure(); err != nil {
+		t.Fatalf("ensure the session row: %v", err)
+	}
+	shut := t.TempDir()
+	if err := os.Chmod(shut, 0o444); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Chmod(shut, 0o755) })
+	if _, err := r.newSession(context.Background(), shut); err == nil || !strings.Contains(err.Error(), "chdir") {
+		t.Fatalf("an unreachable workspace must refuse at the chdir: %v", err)
+	}
+	if s := mustReadSession(t, db, r.session.ID); s.Exit != "open" {
+		t.Fatalf("a failed new session must leave the old session open, got exit %q", s.Exit)
+	}
+	if r.rec == nil || r.session == nil {
+		t.Fatal("the failed new session must not disturb the live session")
+	}
+}
+
 func TestApproveDialDoorRule(t *testing.T) {
 	r := testRoot(nullFrontend{})
 	if err := r.switchApprove(context.Background(), "manual"); err == nil ||

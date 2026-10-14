@@ -22,6 +22,8 @@ const (
 	maxTimeoutMs     = 600_000
 	stderrTailLen    = 4096
 	waitDelay        = 2 * time.Second
+
+	maxLine = 512 * 1024
 )
 
 const MaxCellMs = maxTimeoutMs
@@ -93,7 +95,7 @@ func (t *pyTool) Host() string { return t.k.host }
 
 func (t *pyTool) Exec(ctx context.Context, data json.RawMessage) (string, error) {
 	var a given
-	if err := json.Unmarshal(data, &a); err != nil {
+	if err := tool.StrictDecode(data, &a); err != nil {
 		return "", fmt.Errorf("python: %v", err)
 	}
 	if a.Defer {

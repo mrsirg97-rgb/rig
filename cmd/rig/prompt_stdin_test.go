@@ -4,6 +4,8 @@ import (
 	"os/exec"
 	"strings"
 	"testing"
+
+	"github.com/mrsirg97-rgb/rig/v3/tool/file"
 )
 
 func TestPromptDashReadsStdinWhole(t *testing.T) {
@@ -46,5 +48,23 @@ func TestPromptDashWithNothingOnStdinRefuses(t *testing.T) {
 	}
 	if !strings.Contains(string(out), "rig: -p -: nothing on stdin") {
 		t.Fatalf("the refusal must name the carrier, got:\n%s", out)
+	}
+}
+
+func TestPromptDashOverTheCeilingRefuses(t *testing.T) {
+	bin := buildBin(t, t.TempDir())
+	cmd := exec.Command(bin, "-p", "-", "-base-url", "http://127.0.0.1:1/v1")
+	cmd.Dir = t.TempDir()
+	cmd.Env = rigEnv(t, shortTemp(t), "")
+	cmd.Stdin = strings.NewReader(strings.Repeat("x", file.ReadCap+1))
+	out, err := cmd.CombinedOutput()
+	if err == nil {
+		t.Fatalf("a prompt over the read ceiling must refuse, got:\n%s", out)
+	}
+	if ee, ok := err.(*exec.ExitError); !ok || ee.ExitCode() != 2 {
+		t.Fatalf("the ceiling refusal exits 2 like the other flag refusals, got %v", err)
+	}
+	if !strings.Contains(string(out), "rig: -p -:") || !strings.Contains(string(out), "ceiling") {
+		t.Fatalf("the refusal must name the carrier and the ceiling, got:\n%s", out)
 	}
 }

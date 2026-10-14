@@ -653,3 +653,10 @@ func TestPythonCodeVarsResetAndExecShareTheirChecks(t *testing.T) {
 		t.Fatalf("one cell replies the same bytes through either door: code %q exec %q", fromVerb, fromDoor)
 	}
 }
+
+func TestPythonRefusesAnUnknownField(t *testing.T) {
+	kt := NewWith("/nonexistent/python", "/nonexistent/host.py", nil)
+	if _, err := kt.Exec(context.Background(), json.RawMessage(`{"action":"vars","bogus":1}`)); err == nil || !strings.Contains(err.Error(), "unknown field") {
+		t.Fatalf("an unknown field must refuse before the kernel: %v", err)
+	}
+}

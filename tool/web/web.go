@@ -61,7 +61,7 @@ func (w *web) Exec(ctx context.Context, args json.RawMessage) (string, error) {
 		TimeoutMs  *int   `json:"timeoutMs"`
 		Defer      bool   `json:"defer"`
 	}
-	if err := json.Unmarshal(args, &p); err != nil {
+	if err := tool.StrictDecode(args, &p); err != nil {
 		return "", fmt.Errorf("web: bad args: %v", err)
 	}
 	switch p.Action {
