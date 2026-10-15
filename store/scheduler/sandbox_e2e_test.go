@@ -179,7 +179,6 @@ func jailFixture(t *testing.T, replies []string, binds []string, py string) (str
 	requireJailBox(t)
 	bin := sharedRigBin(t)
 	cwd := t.TempDir()
-	h, key := setupJob(t, cwd, nil)
 
 	opHome := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(opHome, "kernel"), 0o755); err != nil {
@@ -192,6 +191,11 @@ func jailFixture(t *testing.T, replies []string, binds []string, py string) (str
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	// the job's crontab line carries the rig home's tag, and the runner
+	// checks the line against its own rig home: the job is created under
+	// opHome, the home the jailed run is pointed at
+	h, key := setupJobHome(t, cwd, opHome, nil)
 
 	t.Setenv("HOME", "/home/fixture")
 	if py != "" {
