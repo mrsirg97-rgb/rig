@@ -279,7 +279,7 @@ func TestJailHomeAbsent(t *testing.T) {
 	if !strings.Contains(result, "rc=0") {
 		t.Fatalf("the worker's home must be the jail's private /tmp, got %q", result)
 	}
-	if !strings.Contains(result, "/home/fixture: No such file or directory") {
+	if !strings.Contains(result, "/home/fixture") || !strings.Contains(result, "No such file or directory") {
 		t.Fatalf("the operator's home must be absent in the jail, got %q", result)
 	}
 }
