@@ -24,16 +24,12 @@ type JailProfile struct {
 	StateDir  string
 	Allow     string
 	Env       []string
-	ExtraFDs  int
 }
 
 func JailArgv(p JailProfile) ([]string, error) {
 	argv := []string{
 		p.Bwrap,
 		"--unshare-all", "--die-with-parent", "--clearenv",
-	}
-	if p.ExtraFDs > 0 {
-		argv = append(argv, "--preserve-fds", strconv.Itoa(p.ExtraFDs))
 	}
 	for _, e := range p.Env {
 		k, v, ok := strings.Cut(e, "=")
@@ -160,13 +156,6 @@ func modelEnv(opts RunOpts, model string) []string {
 	return env
 }
 
-func fleetFDs(fleet *fleetPipe) int {
-	if fleet == nil {
-		return 0
-	}
-	return 1
-}
-
 func jailSpawn(opts RunOpts, cwd, sockID string, workerCmd []string, model, effort, allow, sessionID string, fleet *fleetPipe, extraEnv ...string) ([]string, *SocketProxy, []string, string, error) {
 	if runtime.GOOS != "linux" {
 		return nil, nil, nil, PlatformRefusal(runtime.GOOS), nil
@@ -223,7 +212,6 @@ func jailSpawn(opts RunOpts, cwd, sockID string, workerCmd []string, model, effo
 		StateDir:  opts.StateDir,
 		Allow:     allow,
 		Env:       env,
-		ExtraFDs:  fleetFDs(fleet),
 	})
 	if err != nil {
 		proxy.Close()

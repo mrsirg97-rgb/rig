@@ -211,7 +211,7 @@ the core is frozen.
 <!-- measured:begin (scripts/readme-measured; do not hand-edit) -->
 Numbers, not adjectives — and each one names its mechanism. The block is computed: `scripts/readme-measured` reads the stores and the tree, CI refuses drift, so it cannot go stale on you. One SQL read of the state store: the store is the receipt.
 
-**98.3% of 6.4 billion prompt tokens served from cache**, across 2,809 sessions and 57,106 recorded turns — the earliest on v0.2.0. The ratio is `cache_read / prompt`, the arithmetic `sessions summary` runs; the byte-stable prefix is why the provider can reuse so much of it. Cost per turn, era by era:
+**98.3% of 6.4 billion prompt tokens served from cache**, across 2,809 sessions and 57,130 recorded turns — the earliest on v0.2.0. The ratio is `cache_read / prompt`, the arithmetic `sessions summary` runs; the byte-stable prefix is why the provider can reuse so much of it. Cost per turn, era by era:
 
 | era | turns | new tokens / turn | completion / turn | cache |
 |---------|--------|------|------|--------|
@@ -225,7 +225,7 @@ The 2.1.x consolidation rethought the system prompt and the toolset and kept the
 
 **A few thousand bytes of preamble.** The system prompt and the tool schemas are lean, byte-stable, and carefully chosen, and the tests say so: `TestSystemPromptIsByteStableAcrossBuilds`, `TestWireMarshalingIsDeterministic`, `TestWireMessagesAreAppendOnly`. A stray timestamp cannot quietly kill the cache.
 
-**448 lines is the loop** — `loop.go` plus `batch.go`, stdlib only. **684 lines is the whole swarm** — claim, spawn, complete, verdict, reap, and the status throttle. **49,587 lines of Go, 82,377 of tests.** The one store dependency is pure-Go SQLite.
+**448 lines is the loop** — `loop.go` plus `batch.go`, stdlib only. **684 lines is the whole swarm** — claim, spawn, complete, verdict, reap, and the status throttle. **49,575 lines of Go, 82,337 of tests.** The one store dependency is pure-Go SQLite.
 
 <!-- measured:end -->
 
