@@ -217,7 +217,7 @@ func newHarness(t *testing.T, sessionCwd string) *harness {
 		t.Fatalf("open scheduler store: %v", err)
 	}
 	eng := evt.NewEngine()
-	go eng.Start(context.Background())
+	startEngine(t, eng)
 	t.Cleanup(eng.Stop)
 	return &harness{home: home, rigHome: rigHome, db: db, engine: eng}
 }

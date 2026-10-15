@@ -44,11 +44,26 @@ func foldFleet(t *testing.T, room broadcast.Room, fe *recordFrontend) {
 	})
 }
 
+// startEngine runs the engine on its own goroutine and returns only
+// once the consumer is up: the canary event closing proves Start is
+// inside its loop, so a test's stop can never overtake the start.
+func startEngine(t *testing.T, engine evt.Engine) {
+	t.Helper()
+	up := make(chan struct{})
+	engine.Add(evt.Func(func(context.Context) { close(up) }), 0)
+	go engine.Start(context.Background())
+	select {
+	case <-up:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the engine never started")
+	}
+}
+
 func newFleetRoom(t *testing.T) (broadcast.Room, *recordFrontend) {
 	t.Helper()
 	fe := &recordFrontend{}
 	engine := evt.NewEngine()
-	go engine.Start(context.Background())
+	startEngine(t, engine)
 	t.Cleanup(engine.Stop)
 	room := broadcast.NewRoom("fleet", func(origin int64) broadcast.Transport {
 		return broadcast.NewLoopTransport(origin, engine, rig.PriorityFleet)
@@ -134,7 +149,7 @@ func TestDelegateEmitsSwarmStatus(t *testing.T) {
 	if n := len(engine.Pending()); n != 5 {
 		t.Fatalf("before the loop runs: the claim, the exit and the return are one pending frame per other member (the frontend, the minted worker), the thirty heartbeats one per listener (the frontend, the tool), got %d", n)
 	}
-	go engine.Start(context.Background())
+	startEngine(t, engine)
 	defer engine.Stop()
 	deadline := time.Now().Add(2 * time.Second)
 	for len(fe.statuses()) < 1 && time.Now().Before(deadline) {
@@ -157,7 +172,7 @@ func TestDelegateFramesRunningThenCleared(t *testing.T) {
 	h := newHarness(t, "/tmp/wt")
 	fe := &recordFrontend{}
 	engine := evt.NewEngine()
-	go engine.Start(context.Background())
+	startEngine(t, engine)
 	defer engine.Stop()
 	room := broadcast.NewRoom("fleet", func(origin int64) broadcast.Transport {
 		return broadcast.NewLoopTransport(origin, engine, rig.PriorityFleet)

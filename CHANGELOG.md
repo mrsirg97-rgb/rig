@@ -1,4 +1,20 @@
 # Changelog
+## [3.1.2]: the engine runs once
+
+evt moves to v0.4.4. Its engine refused nothing on a second `Start`: a
+stopped engine's next `Start` blocked in `cond.Wait` with nothing left
+to wake it, because an add after a stop refuses without signalling.
+This loop builds raw engines — the kernel's, the children's, the
+decision train's, the job runner's — and never walks the scheduler's
+`ErrStarted` door, so the silent hang sat one wiring mistake away. The
+refusal now lives in the engine itself, and the scheduler's stop is a
+cancel and a join. No rig code changes with it: every engine here
+starts once per process. The suite did catch two test helpers in
+`tool/delegate` racing their own start — spawn, then stop before the
+consumer ever ran — which the old engine silently swallowed and the
+new one refuses; both now wait for the engine to be up before the
+test's stop can exist.
+
 ## [3.1.1]: the audit's fixes across the tree
 
 An audit read every package against its contract after 3.1.0 and this
