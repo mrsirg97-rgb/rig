@@ -33,10 +33,13 @@ func (c *cap) Wrap(next core.ToolExec) core.ToolExec {
 func truncate(content string, cap int) string {
 	n := len(content)
 	marker := fmt.Sprintf("[TRUNCATED] full %d bytes, kept the head and the tail, the middle elided\nre-read a narrower range (read offset/limit)\n", n)
-	avail := cap - len(marker)
-	if avail < 0 {
-		avail = 0
+	if len(marker) > cap {
+		for cap > 0 && !utf8.RuneStart(marker[cap]) {
+			cap--
+		}
+		return marker[:cap]
 	}
+	avail := cap - len(marker)
 	head := avail / 2
 	tail := avail - head
 	for head > 0 && !utf8.RuneStart(content[head]) {

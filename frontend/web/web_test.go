@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -178,6 +179,53 @@ func bearer(tok string) http.Header {
 	h := http.Header{}
 	h.Set("Authorization", "Bearer "+tok)
 	return h
+}
+
+func TestTheTokenMintsOnceUnderConcurrency(t *testing.T) {
+	home := seedHome(t)
+	srv, err := New(Options{Home: home, CWD: testCWD, Models: modelsTable(t), Crontab: &fakeCrontab{}, Natives: []string{"bash", "read"}, Root: home})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { srv.Close() })
+	const callers = 32
+	toks := make([]string, callers)
+	minted := make([]bool, callers)
+	errs := make([]error, callers)
+	var wg sync.WaitGroup
+	for i := 0; i < callers; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			toks[i], minted[i], errs[i] = srv.Token()
+		}(i)
+	}
+	wg.Wait()
+	for i := range toks {
+		if errs[i] != nil {
+			t.Fatalf("caller %d: %v", i, errs[i])
+		}
+		if toks[i] != toks[0] {
+			t.Fatalf("the token minted twice: caller %d holds another token", i)
+		}
+	}
+	mints := 0
+	for _, once := range minted {
+		if once {
+			mints++
+		}
+	}
+	if mints != 1 {
+		t.Fatalf("the token must mint exactly once, got %d mints across %d callers", mints, callers)
+	}
+}
+
+func TestANewWithoutRootOrHomeRefuses(t *testing.T) {
+	t.Setenv("HOME", "")
+	_, err := New(Options{Home: seedHome(t), CWD: testCWD, Models: modelsTable(t), Crontab: &fakeCrontab{}, Natives: []string{"bash", "read"}})
+	if err == nil {
+		t.Fatal("a New with no Root and no HOME must refuse, not hand the folder browser an empty root")
+	}
 }
 
 func TestTokenGate(t *testing.T) {

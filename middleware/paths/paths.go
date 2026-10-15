@@ -12,7 +12,7 @@ import (
 	"github.com/mrsirg97-rgb/rig/v3/decision"
 )
 
-var Fields = []string{"path", "root", "project", "scope", "dir", "directory", "file", "target", "dest", "destination", "workspace"}
+var fields = []string{"path", "root", "project", "scope", "dir", "directory", "file", "target", "dest", "destination", "workspace"}
 
 func Expand(p string) string {
 	if p == "" || p[0] != '~' {
@@ -64,17 +64,13 @@ func Middleware(rec ...decision.Recorder) core.ToolMiddleware {
 	})
 }
 
-func Rewrite(args json.RawMessage) (json.RawMessage, bool) {
-	return rewrite(args, nil)
-}
-
 func rewrite(args json.RawMessage, onExpand func(field, raw, expanded string)) (json.RawMessage, bool) {
 	var m map[string]json.RawMessage
 	if err := json.Unmarshal(args, &m); err != nil || m == nil {
 		return args, false
 	}
 	changed := false
-	for _, f := range Fields {
+	for _, f := range fields {
 		raw, ok := m[f]
 		if !ok {
 			continue

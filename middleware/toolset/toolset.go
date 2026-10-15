@@ -48,16 +48,6 @@ func (t *Table) List() []core.Tool {
 	return cp
 }
 
-func (t *Table) Specs() []core.ToolSpec {
-	t.mu.RLock()
-	defer t.mu.RUnlock()
-	out := make([]core.ToolSpec, 0, len(t.tools))
-	for _, tool := range t.tools {
-		out = append(out, core.ToolSpec{Name: tool.Name(), Description: tool.Description(), Schema: tool.Schema()})
-	}
-	return out
-}
-
 func (t *Table) NativeSpecs() []core.ToolSpec {
 	t.mu.RLock()
 	defer t.mu.RUnlock()

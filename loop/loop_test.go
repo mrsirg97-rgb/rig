@@ -896,6 +896,69 @@ func TestLoopAccumulatesReasoningDetailsIntoTheMessage(t *testing.T) {
 	}
 }
 
+func TestReasoningDetailsThatAreNotAnArrayLandWholeInTheMessage(t *testing.T) {
+	p := &scriptedProvider{turns: []scriptedTurn{{
+		events: []evt.Signal{
+			core.ReasoningDelta{Text: "think", Details: json.RawMessage(`{"model":"o3","id":"r1"}`)},
+			textEv("answer"),
+			doneEv(),
+		},
+	}}}
+	f := &recorderFrontend{inputs: make(chan string, 8)}
+	session := core.NewSession()
+	k := rig.New(rig.WithProvider(p), rig.WithFrontend(f), rig.WithPolicy(&transcriptPolicy{}))
+	k.Session = session
+	f.inputs <- "hi"
+	close(f.inputs)
+	if err := loop.Run(context.Background(), k); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	last := session.Messages[len(session.Messages)-1]
+	if string(last.ReasoningDetails) != `[{"model":"o3","id":"r1"}]` {
+		t.Fatalf("a details blob that is no array must land whole as one item, got %s", last.ReasoningDetails)
+	}
+}
+
+func TestReasoningDetailsThatAreNotJSONDropLoud(t *testing.T) {
+	p := &scriptedProvider{turns: []scriptedTurn{{
+		events: []evt.Signal{
+			core.ReasoningDelta{Text: "think", Details: json.RawMessage(`{"model":`)},
+			textEv("answer"),
+			doneEv(),
+		},
+	}}}
+	f := &recorderFrontend{inputs: make(chan string, 8)}
+	session := core.NewSession()
+	k := rig.New(rig.WithProvider(p), rig.WithFrontend(f), rig.WithPolicy(&transcriptPolicy{}))
+	k.Session = session
+	f.inputs <- "hi"
+	close(f.inputs)
+	if err := loop.Run(context.Background(), k); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	last := session.Messages[len(session.Messages)-1]
+	if len(last.ReasoningDetails) != 0 {
+		t.Fatalf("details that are not JSON must drop, got %s", last.ReasoningDetails)
+	}
+	var said bool
+	for _, ev := range f.events {
+		n, ok := ev.(evt.Notice)
+		if !ok {
+			continue
+		}
+		if !strings.Contains(n.Text, "not JSON") {
+			continue
+		}
+		said = true
+		if n.Source != "loop" || n.Level != evt.LevelError {
+			t.Fatalf("the drop must speak as the loop's error voice: %+v", n)
+		}
+	}
+	if !said {
+		t.Fatalf("the drop must emit a notice, got %+v", f.events)
+	}
+}
+
 func TestTheKernelsEngineIsTheLoopsAndTheFleetRunsBelowTheTurn(t *testing.T) {
 	p := &scriptedProvider{turns: []scriptedTurn{{
 		events: []evt.Signal{textEv("hello"), doneEv()},

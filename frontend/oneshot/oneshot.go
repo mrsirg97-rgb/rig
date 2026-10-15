@@ -100,31 +100,31 @@ func (o *OneShot) Notify(ev evt.Signal) {
 		if o.Fleet != nil {
 			o.Fleet.Send(context.Background(), func(error) {}, broadcast.NewMessage(o.Fleet.Id(), true, boundedStart(e)))
 		}
+		o.mu.Lock()
+		if o.toolNames == nil {
+			o.toolNames = map[string]string{}
+		}
+		o.toolNames[e.Call.ID] = e.Call.Name
+		o.inflight++
+		if o.inflight == 1 {
+			o.startHeartbeat()
+		}
+		o.mu.Unlock()
 		if o.Err != nil {
-			o.mu.Lock()
-			if o.toolNames == nil {
-				o.toolNames = map[string]string{}
-			}
-			o.toolNames[e.Call.ID] = e.Call.Name
-			o.inflight++
-			if o.inflight == 1 {
-				o.startHeartbeat()
-			}
-			o.mu.Unlock()
 			io.WriteString(o.Err, "\nrig: tool "+e.Call.Name+" start\n")
 		}
 	case core.ToolResult:
+		o.mu.Lock()
+		if o.inflight > 0 {
+			o.inflight--
+		}
+		name := o.toolNames[e.ID]
+		delete(o.toolNames, e.ID)
+		if o.inflight == 0 {
+			o.stopHeartbeat()
+		}
+		o.mu.Unlock()
 		if o.Err != nil {
-			o.mu.Lock()
-			if o.inflight > 0 {
-				o.inflight--
-			}
-			name := o.toolNames[e.ID]
-			delete(o.toolNames, e.ID)
-			if o.inflight == 0 {
-				o.stopHeartbeat()
-			}
-			o.mu.Unlock()
 			io.WriteString(o.Err, "rig: tool "+name+" end\n")
 		}
 	case core.Done:

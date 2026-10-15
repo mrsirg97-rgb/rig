@@ -44,7 +44,13 @@ the session at the boundary, clean.
   function mints one priority per call — a write at 60 runs its exec
   inline and chains its own completion through the engine, so the
   writes serialize in the drain in index order; a read at 50 hands its
-  exec to a semaphore-bounded goroutine (at most `Parallel`, default 8)
+  exec to a semaphore-bounded goroutine (at most `Parallel`, default 8 —
+  the ceiling on the reads' concurrent goroutines while the writes run
+  inline, so a long read run cannot fork execs without bound; the 8 came
+  with the batch itself as SPEC_EVT 2a's construction default, never
+  measured against a workload, and the kernel's const is the shared
+  spelling since the decide fan-out and the pack scorer took the same
+  bound)
   and posts its completion at its own priority, so the reads overlap.
   The results emit in call order and the transcript does not move
   (SPEC_WRITES 6).

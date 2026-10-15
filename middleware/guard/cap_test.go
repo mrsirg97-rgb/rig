@@ -3,6 +3,7 @@ package guard_test
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
 	"unicode/utf8"
@@ -64,7 +65,10 @@ func TestCapBoundsTheRefusalContent(t *testing.T) {
 	if strings.Contains(content, "eee") {
 		t.Fatalf("a tiny cap must elide the content whole, got %q", content)
 	}
-	for _, want := range []string{"[TRUNCATED]", "2000", "re-read a narrower range"} {
+	if len(content) > 32 {
+		t.Fatalf("a tiny cap must stay under the wall, got %d bytes: %q", len(content), content)
+	}
+	for _, want := range []string{"[TRUNCATED]", "2000"} {
 		if !strings.Contains(content, want) {
 			t.Fatalf("the marker must survive a tiny cap and name the size, got %q", content)
 		}
@@ -80,5 +84,25 @@ func TestCapCutsOnRuneBoundaries(t *testing.T) {
 	}
 	if !strings.Contains(out, "[TRUNCATED]") {
 		t.Fatal("the marker is missing")
+	}
+}
+
+func TestACapBelowItsMarkerStaysUnderTheWall(t *testing.T) {
+	full := strings.Repeat("m", 1000)
+	marker := fmt.Sprintf("[TRUNCATED] full %d bytes, kept the head and the tail, the middle elided\nre-read a narrower range (read offset/limit)\n", len(full))
+	var exec core.ToolExec = func(ctx context.Context, call core.ToolCall) (string, error) {
+		return full, nil
+	}
+	for _, wall := range []int{1, len(marker) - 1} {
+		out, err := guard.Cap(wall).Wrap(exec)(context.Background(), core.ToolCall{ID: "c", Name: "read", Args: json.RawMessage(`{}`)})
+		if err != nil {
+			t.Fatalf("a cap below its marker must not fail the turn: %v", err)
+		}
+		if len(out) > wall {
+			t.Fatalf("a cap below its marker must stay under the wall (%d bytes), got %d: %q", wall, len(out), out)
+		}
+		if !utf8.ValidString(out) {
+			t.Fatalf("a cap below its marker must stay valid UTF-8, got %q", out)
+		}
 	}
 }

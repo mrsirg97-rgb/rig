@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/mrsirg97-rgb/rig/v3/core"
 	"github.com/mrsirg97-rgb/rig/v3/decision"
@@ -79,7 +80,7 @@ func delegatePrompt(call core.ToolCall) string {
 	}
 	const cap = 120
 	if len(line) > cap {
-		line = line[:cap] + "…"
+		line = truncate(line, cap) + "…"
 	}
 	return "delegate · " + line
 }
@@ -88,10 +89,20 @@ func PromptGeneric(call core.ToolCall) string {
 	args := strings.Join(strings.Fields(string(call.Args)), " ")
 	const cap = 120
 	if len(args) > cap {
-		args = args[:cap] + "…"
+		args = truncate(args, cap) + "…"
 	}
 	if args == "" || args == "{}" {
 		return call.Name
 	}
 	return call.Name + " " + args
+}
+
+func truncate(s string, cap int) string {
+	if len(s) <= cap {
+		return s
+	}
+	for cap > 0 && !utf8.RuneStart(s[cap]) {
+		cap--
+	}
+	return s[:cap]
 }

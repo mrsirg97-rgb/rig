@@ -37,7 +37,8 @@ the Apple meta tags, safe-area insets).
   turn it starts together.
 
 
-- **The chat** (`chat.go`, SPEC_SERVE 17): the frontend seam over HTTP.
+- **The chat** (`chat.go`, `hub.go`, `handlers.go`, SPEC_SERVE 17): the
+  frontend seam over HTTP.
   `Input` blocks on the prompt channel the way the CLI blocks on stdin;
   `POST /api/chat {text}` feeds it: a `/command` dispatches at once
   through the root's command set (the same `command.All()` and `Env`
@@ -49,9 +50,12 @@ the Apple meta tags, safe-area insets).
   `reasoning`, `tool_start`, `tool_result` capped at 16 KB by name,
   `done`, `empty_turn`, `compacting`, `compacted`, `fault`, `turn_end`,
   `swarm_status`, `swarm_notice`, `ask`, `ask_done`, `steer`,
-  `command`) with a sequence number, coalesces consecutive text and
-  reasoning deltas up to 4 KB, keeps a ring of the last 4096 frames,
-  and fans out to every open stream. `GET /api/chat/events?since=N` is
+  `command`) with a sequence number — one per published frame, minted
+  at publish; the ring's coalesced frame is stamped with the newest seq
+  it swallowed, so a replay after `since` skips only what was seen —
+  coalesces consecutive text and reasoning deltas up to 4 KB in the
+  ring while every delta still crosses the live streams, keeps a ring
+  of the last 4096 frames, and fans out to every open stream. `GET /api/chat/events?since=N` is
   the server-sent stream: a `hello` (the live flag, the replay count),
   the ring after `since`, then live frames, a keep-alive comment every
   15 s, the connection's write deadline cleared so the server's write
@@ -325,6 +329,17 @@ reads it back through the same listing.
   replay count makes visible. `LiveTurn` is the truth the page paints
   the composer by; a turn's usage line is summed on the page from the
   `done` frames between `prompt` and `turn_end`.
+- The named bounds: `gatePoll` 50 ms — a construction value, not a
+  derivation: it bounds how long a gated request waits between door
+  checks (one `Holding` check, then a wait); the mesh's clock is
+  `mesh.period` (250 ms by default — the tailnet's ping measured 96 ms
+  and the period holds a gossip round comfortably, `config.DefaultMeshPeriod`),
+  the fold's answer to `Holding` moves when gossip crosses, not when
+  the poll runs, so the poll rides finer than the default tick and
+  adds at most one poll of staleness to a mint the fold already holds;
+  the wait's far ends are the mesh's own (the window's law for a
+  refused mint), and a canceled request stops the poll
+  (`TestACanceledGateStopsPolling` pins it).
 - The homage's parsers mirror `frontend/tui/tools_render.go` line for
   line (decision 10): the todo head/task/footer rules, the scheduler
   section/job/detail rules, the bar's fill, the glyph and slot mapping.

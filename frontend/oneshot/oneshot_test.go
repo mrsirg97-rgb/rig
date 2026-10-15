@@ -137,6 +137,32 @@ func TestOneShotHeartbeatsOnTheFleetWhileAToolRuns(t *testing.T) {
 	}
 }
 
+func TestOneShotHeartbeatsWithoutAStderrWriter(t *testing.T) {
+	var out syncBuffer
+	fleet := &wire{}
+	o := &oneshot.OneShot{Out: &out, Heartbeat: 5 * time.Millisecond, Fleet: fleet}
+	if o.Err != nil {
+		t.Fatal("the run has no stderr writer")
+	}
+	o.Notify(core.ToolStart{Call: core.ToolCall{ID: "c1", Name: "bash"}})
+	deadline := time.Now().Add(2 * time.Second)
+	for fleet.count() == 0 {
+		if time.Now().After(deadline) {
+			t.Fatal("no heartbeat while the tool ran")
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	o.Notify(core.ToolResult{ID: "c1", Content: "out"})
+	after := fleet.count()
+	time.Sleep(50 * time.Millisecond)
+	if fleet.count() != after {
+		t.Fatal("heartbeats must stop with the tool")
+	}
+	if out.String() != "" {
+		t.Fatalf("a silent tool run must not touch stdout, got %q", out.String())
+	}
+}
+
 func TestOneShotWithoutAFleetNeverHeartbeats(t *testing.T) {
 	var out, errB syncBuffer
 	o := &oneshot.OneShot{Out: &out, Err: &errB, Heartbeat: time.Millisecond}
