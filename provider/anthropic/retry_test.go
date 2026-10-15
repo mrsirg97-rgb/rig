@@ -156,3 +156,24 @@ func TestNoRetryOnceTheStreamStarted(t *testing.T) {
 		t.Fatalf("fault = %v", f.Err)
 	}
 }
+
+func TestCancellationDuringTheRetryWaitEndsInDone(t *testing.T) {
+	srv, _ := scriptedStreamServer(t, func(w http.ResponseWriter, r *http.Request, attempt int) bool {
+		w.Header().Set("Retry-After", "60")
+		w.WriteHeader(http.StatusTooManyRequests)
+		io.WriteString(w, `{"type":"error","error":{"type":"rate_limit_error","message":"slow down"}}`)
+		return true
+	})
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() {
+		time.Sleep(50 * time.Millisecond)
+		cancel()
+	}()
+	events, err := drain(t, ctx, retryProvider(srv.URL, 3), userReq())
+	if err != nil {
+		t.Fatalf("stream: %v", err)
+	}
+	if got := kinds(events); got != "done" {
+		t.Fatalf("events = %q, want the done the openai twin emits when the wait dies with the ctx", got)
+	}
+}

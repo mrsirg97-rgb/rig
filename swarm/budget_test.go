@@ -143,3 +143,42 @@ func TestSwarmRemoteRowNeverConsultsTheSwap(t *testing.T) {
 		t.Fatalf("spawn calls = %d, want 1", got)
 	}
 }
+
+func TestARestartedSwarmSpendsFresh(t *testing.T) {
+	h := newHarness(t)
+	h.create(t, "first", "second")
+	h.spawn.onCall = func(context.Context) {
+		session := workerSessionFromArgv(h.spawn.argv(h.spawn.count() - 1))
+		if session == "" {
+			t.Fatalf("the spawn argv must carry the worker session id: %s", h.spawn.argv(h.spawn.count()-1))
+		}
+		recordWorkerCost(t, h.rigHome, h.cwd, session, 6)
+	}
+	h.start(t, swarm.StartOpts{Count: 1, Role: "worker", Budget: 5})
+	h.waitFor(t, "the budget notice", func() bool {
+		for _, n := range h.fe.notices() {
+			if strings.Contains(n.Text, "budget reached") {
+				return true
+			}
+		}
+		return false
+	})
+	h.waitFor(t, "the swarm to stop claiming", func() bool {
+		rows, err := h.todoDB.DB.Query(`SELECT count(*) FROM tasks WHERE scope = ? AND status = 'pending'`, h.proj.Key)
+		if err != nil {
+			return false
+		}
+		defer rows.Close()
+		rows.Next()
+		var n int
+		rows.Scan(&n)
+		return n == 1
+	})
+	if _, err := h.ctl.Stop(); err != nil {
+		t.Fatal(err)
+	}
+	h.start(t, swarm.StartOpts{Count: 1, Role: "worker", Budget: 5})
+	h.waitFor(t, "the restarted swarm to claim with a fresh spend", func() bool {
+		return h.spawn.count() == 2
+	})
+}

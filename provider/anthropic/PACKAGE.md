@@ -107,7 +107,13 @@ the wire dialect is this package's problem.
   up to `Retries`, honouring `retry-after` (seconds; a decimal parses)
   over the backoff `base * 2^attempt * (1 + jitter)`. The retry lives
   at the status gate: once a byte has streamed a failure is never
-  retried.
+  retried. The `retry-after` wait is capped at `maxRetryAfterWait` —
+  the header bound's own default (5 minutes): the wait schedules the
+  next attempt's first byte, the same wait the transport's
+  time-to-headers bound governs, so an endpoint may not ask to out-wait
+  an attempt and a hostile `Retry-After: 999999` waits the cap, not
+  days. A cancel during the wait ends in `Done`, the shape
+  `provider/openai` emits when the ctx dies mid-backoff.
 - The SSE `event:` name lines, comments and blank lines are skipped —
   the real API sends `event:` lines beside every `data:`; the data
   line is the only payload carrier, so a folded payload (multiple

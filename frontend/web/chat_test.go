@@ -7,6 +7,7 @@ import (
 	"errors"
 	"net/http"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -147,7 +148,7 @@ func TestChatEventsReplayCoalesceAndLive(t *testing.T) {
 		time.Sleep(100 * time.Millisecond)
 		srv.Notify(core.Fault{Err: errors.New("boom")})
 	}()
-	live := frames(t, ts.URL, tok, "4", 3, 3*time.Second)
+	live := frames(t, ts.URL, tok, "5", 3, 3*time.Second)
 	if k := kinds(live); k != "hello,turn_end,fault" {
 		t.Fatalf("since=4 replays only what follows, then the live frame: %s", k)
 	}
@@ -353,6 +354,132 @@ func TestSwarmAndDelegateStatusesSitSideBySide(t *testing.T) {
 	rec = doReq(t, h, "GET", "/api/swarm", nil, bearer(tok))
 	if !strings.Contains(rec.Body.String(), `"delegate":[{"`) || !strings.Contains(rec.Body.String(), `"task":"t1"`) {
 		t.Fatalf("the swarm's drained status took the delegate's rows: %s", rec.Body.String())
+	}
+}
+
+func TestALiveSubscriberSeesEveryDelta(t *testing.T) {
+	srv, _ := newChatServer(t)
+	one, _, _ := srv.chat.subscribe(0)
+	two, _, _ := srv.chat.subscribe(0)
+	deltas := []string{"hel", "lo", "wor", "ld"}
+	for _, d := range deltas {
+		srv.Notify(core.TextDelta{Text: d})
+	}
+	for _, ch := range []chan []byte{one, two} {
+		var got []string
+		for range deltas {
+			select {
+			case raw := <-ch:
+				var f map[string]any
+				if err := json.Unmarshal(raw, &f); err != nil {
+					t.Fatal(err)
+				}
+				text, ok := f["text"].(string)
+				if f["kind"] != "text" || !ok {
+					t.Fatalf("the subscriber must see the delta frames whole: %v", f)
+				}
+				got = append(got, text)
+			case <-time.After(2 * time.Second):
+				t.Fatalf("the subscriber stopped after %d of %d deltas: %q", len(got), len(deltas), got)
+			}
+		}
+		if strings.Join(got, "") != "helloworld" {
+			t.Fatalf("the subscriber must see every delta in order: %q", got)
+		}
+	}
+}
+
+func TestTheReplayAfterACoalesceSkipsOnlyWhatWasSeen(t *testing.T) {
+	srv, _ := newChatServer(t)
+	ch, _, _ := srv.chat.subscribe(0)
+	for _, d := range []string{"hel", "lo", "wor", "ld"} {
+		srv.Notify(core.TextDelta{Text: d})
+	}
+	var first int64
+	select {
+	case raw := <-ch:
+		var f map[string]any
+		if err := json.Unmarshal(raw, &f); err != nil {
+			t.Fatal(err)
+		}
+		if f["kind"] != "text" {
+			t.Fatalf("the run's first delta must cross as its own frame: %v", f)
+		}
+		first = int64(f["seq"].(float64))
+	case <-time.After(2 * time.Second):
+		t.Fatal("the first delta never crossed")
+	}
+	_, run, _ := srv.chat.subscribe(first - 1)
+	if len(run) != 1 || !strings.Contains(string(run[0]), "helloworld") {
+		t.Fatalf("a client one behind the run must receive it whole: %v", run)
+	}
+	_, again, _ := srv.chat.subscribe(first)
+	if len(again) != 1 || !strings.Contains(string(again[0]), `"text":"loworld"`) {
+		t.Fatalf("a client holding the first delta's seq receives only what coalesced after it: %v", again)
+	}
+	_, tail, _ := srv.chat.subscribe(first + 2)
+	if len(tail) != 1 || !strings.Contains(string(tail[0]), `"text":"ld"`) {
+		t.Fatalf("a client holding a mid-run seq receives only the deltas past it: %v", tail)
+	}
+	_, _, hi := srv.chat.subscribe(first)
+	if _, seen, _ := srv.chat.subscribe(hi); len(seen) != 0 {
+		t.Fatalf("a client that saw the whole run must not replay it: %v", seen)
+	}
+}
+
+type parkingCmd struct {
+	mu      sync.Mutex
+	entered chan struct{}
+	done    chan struct{}
+	live    int
+	peak    int
+}
+
+func (p *parkingCmd) Name() string        { return "park" }
+func (p *parkingCmd) Description() string { return "parks Run until released" }
+func (p *parkingCmd) Run(_ context.Context, _ string, _ any) (string, error) {
+	p.mu.Lock()
+	p.live++
+	if p.live > p.peak {
+		p.peak = p.live
+	}
+	p.mu.Unlock()
+	select {
+	case p.entered <- struct{}{}:
+	default:
+	}
+	<-p.done
+	p.mu.Lock()
+	p.live--
+	p.mu.Unlock()
+	return "parked", nil
+}
+
+func TestTwoDispatchesNeverOverlap(t *testing.T) {
+	srv, _ := newChatServer(t)
+	park := &parkingCmd{entered: make(chan struct{}, 2), done: make(chan struct{})}
+	srv.chat.commands["park"] = park
+	srv.chat.known = append(srv.chat.known, "park")
+	var wg sync.WaitGroup
+	wg.Add(2)
+	for _, args := range []string{"one", "two"} {
+		go func(args string) {
+			defer wg.Done()
+			srv.chat.dispatch(context.Background(), "/park "+args)
+		}(args)
+	}
+	<-park.entered
+	select {
+	case <-park.entered:
+		close(park.done)
+		wg.Wait()
+		t.Fatalf("a second Run entered while the first was parked: peak %d", park.peak)
+	case <-time.After(250 * time.Millisecond):
+	}
+	close(park.done)
+	wg.Wait()
+	if park.peak != 1 {
+		t.Fatalf("dispatch must serialize its command runs: peak concurrent Run = %d", park.peak)
 	}
 }
 

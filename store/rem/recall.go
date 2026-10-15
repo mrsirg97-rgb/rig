@@ -2,6 +2,8 @@ package rem
 
 import (
 	"math"
+
+	"github.com/mrsirg97-rgb/rig/v3/store/fts"
 )
 
 const (
@@ -12,17 +14,11 @@ const (
 	rankStrengthFloor = 0.4
 	rankStrengthGain  = 0.6
 
-	reciprocalRankK = 60
-
-	fuzzyMinOverlap     = 3
-	fuzzyMinContainment = 0.5
-
 	armCapFactor = 2
 
 	recallKMax = 50
 
-	importanceDefault    = 0.5
-	reflectionImportance = 0.3
+	importanceDefault = 0.5
 
 	kindReflection = "reflection"
 )
@@ -68,7 +64,7 @@ func fuse(arms [][]armHit) map[int64]fusedHit {
 	for _, arm := range arms {
 		for _, hit := range arm {
 			prev, ok := out[hit.memoryID]
-			contribution := 1.0 / (float64(reciprocalRankK) + float64(hit.rank))
+			contribution := fts.RankWeight(hit.rank)
 			if ok {
 				out[hit.memoryID] = fusedHit{score: prev.score + contribution, match: "both"}
 			} else {

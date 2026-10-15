@@ -152,15 +152,8 @@ func (t *decideTool) run(ctx context.Context, kind string, q Question, labels, i
 	if total >= file.ReadCap {
 		return "", fmt.Errorf("decide: the items total %d bytes, the read ceiling is %d; split the call", total, file.ReadCap)
 	}
-	states := make([]string, len(items))
-	for i, item := range items {
-		b, mErr := json.Marshal(decideState{Item: item})
-		if mErr != nil {
-			return "", fmt.Errorf("decide: item %d: %w", i+1, mErr)
-		}
-		states[i] = string(b)
-	}
-	answers, errs := FanOut(ctx, t.dec, t.parallel, q, items)
+	states := items
+	answers, errs := FanOut(ctx, t.dec, t.parallel, q, states)
 	for i, err := range errs {
 		if err != nil {
 			return "", fmt.Errorf("decide: item %d: %w; nothing was sorted and no row was written", i+1, err)
@@ -232,10 +225,6 @@ type decideArgs struct {
 type Label struct {
 	Label       string `json:"label"`
 	Description string `json:"description"`
-}
-
-type decideState struct {
-	Item string `json:"item"`
 }
 
 func parseDecideArgs(data json.RawMessage) (decideArgs, error) {

@@ -377,7 +377,7 @@ func (t *tui) statusViewportRowsLocked() int {
 }
 
 func (t *tui) askLineLocked() string {
-	return t.theme.Paint(SlotWarn, "approve "+t.askText+"?") +
+	return t.theme.Paint(SlotWarn, "approve "+printable(t.askText)+"?") +
 		t.theme.Paint(SlotDim, "  [y run · n decline · esc interrupts]")
 }
 

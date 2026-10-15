@@ -1,4 +1,4 @@
-package paths_test
+package paths
 
 import (
 	"context"
@@ -10,7 +10,6 @@ import (
 
 	"github.com/mrsirg97-rgb/rig/v3/core"
 	"github.com/mrsirg97-rgb/rig/v3/decision"
-	"github.com/mrsirg97-rgb/rig/v3/middleware/paths"
 	"github.com/mrsirg97-rgb/rig/v3/store"
 	decisionstore "github.com/mrsirg97-rgb/rig/v3/store/decision"
 )
@@ -36,7 +35,7 @@ func TestAnExpansionRecordsAFinalRow(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	rec := &capture{}
-	exec := paths.Middleware(rec).Wrap(func(ctx context.Context, call core.ToolCall) (string, error) {
+	exec := Middleware(rec).Wrap(func(ctx context.Context, call core.ToolCall) (string, error) {
 		return "ok", nil
 	})
 	if _, err := exec(context.Background(), core.ToolCall{Name: "read", Args: json.RawMessage(`{"path":"~/a.txt"}`)}); err != nil {
@@ -59,7 +58,7 @@ func TestAnExpansionRecordsAFinalRow(t *testing.T) {
 
 func TestAPassThroughRecordsNothing(t *testing.T) {
 	rec := &capture{}
-	exec := paths.Middleware(rec).Wrap(func(ctx context.Context, call core.ToolCall) (string, error) {
+	exec := Middleware(rec).Wrap(func(ctx context.Context, call core.ToolCall) (string, error) {
 		return "ok", nil
 	})
 	if _, err := exec(context.Background(), core.ToolCall{Name: "read", Args: json.RawMessage(`{"path":"/tmp/a.txt"}`)}); err != nil {
@@ -90,9 +89,9 @@ func TestAStoreThatCannotBeWrittenLeavesTheRewriteUnchanged(t *testing.T) {
 		}
 		return "", nil
 	}
-	want, _ := paths.Middleware().Wrap(inner)(context.Background(), core.ToolCall{Name: "read", Args: json.RawMessage(`{"path":"~/a.txt"}`)})
+	want, _ := Middleware().Wrap(inner)(context.Background(), core.ToolCall{Name: "read", Args: json.RawMessage(`{"path":"~/a.txt"}`)})
 	seenWanted = want
-	got, err := paths.Middleware(decisionstore.Recorder{DB: db}).Wrap(inner)(context.Background(), core.ToolCall{Name: "read", Args: json.RawMessage(`{"path":"~/a.txt"}`)})
+	got, err := Middleware(decisionstore.Recorder{DB: db}).Wrap(inner)(context.Background(), core.ToolCall{Name: "read", Args: json.RawMessage(`{"path":"~/a.txt"}`)})
 	seenGot = got
 	if err != nil || seenGot != seenWanted {
 		t.Fatalf("the rewrite must be identical with a dead store: (%q, %v) want %q", seenGot, err, seenWanted)

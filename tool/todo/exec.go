@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	todostore "github.com/mrsirg97-rgb/rig/v3/store/todo"
+	"github.com/mrsirg97-rgb/rig/v3/tool"
 )
 
 type given struct {
@@ -24,7 +25,7 @@ type given struct {
 
 func (a todo) Exec(ctx context.Context, args json.RawMessage) (string, error) {
 	var g given
-	if err := json.Unmarshal(args, &g); err != nil {
+	if err := tool.StrictDecode(args, &g); err != nil {
 		return "", fmt.Errorf("todo: %v", err)
 	}
 	switch g.Action {

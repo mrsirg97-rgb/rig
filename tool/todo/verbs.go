@@ -86,7 +86,12 @@ func (a todo) Fail(ctx context.Context, scope, id string) (string, error) {
 	if err := withID("fail", id); err != nil {
 		return "", err
 	}
-	return todostore.Fail(ctx, a.db, p, id, sessionOf(ctx), bool(a.mode))
+	reply, err := todostore.Fail(ctx, a.db, p, id, sessionOf(ctx), bool(a.mode))
+	if err != nil {
+		return reply, err
+	}
+	a.wakeRouter()
+	return reply, nil
 }
 
 func (a todo) Release(ctx context.Context, scope, id string) (string, error) {

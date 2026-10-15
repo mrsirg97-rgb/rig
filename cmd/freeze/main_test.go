@@ -2,6 +2,7 @@ package main
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -49,13 +50,13 @@ func TestTheFreezeFileCarriesTheGateSet(t *testing.T) {
 	allowed := []string{
 		"frontend/tui/a.go", "frontend/cli", "frontend/web/x.go", "frontend/oneshot/x.go",
 		"cmd/rig/main.go", "cmd/rig/testdata/golden_020/oneshot.json", "cmd/freeze/main.go",
-		"command/x.go", "broadcast/x.go", "swarm/x.go",
+		"command/x.go", "swarm/x.go",
 		"middleware/perm/x.go", "middleware/toolset/x.go", "middleware/approve/x.go",
 		"middleware/cutoff/x.go", "middleware/guard/x.go", "middleware/paths/x.go", "middleware/index/x.go",
-		"evt/x.go", "plugins/x.go", "testenv/x.go", "testenv/x/y.go",
+		"plugins/x.go", "testenv/x.go", "testenv/x/y.go",
 		"store/x.go", "store/state/x.go", "store/todo/x.go", "store/scheduler/x.go",
 		"store/scope/x.go", "store/decision/x.go", "store/rem/PACKAGE.md",
-		"tool/diff/x.go", "tool/python/x.go", "tool/bash/x.go", "tool/fs/x.go", "tool/web/x.go",
+		"tool/diff/x.go", "tool/python/x.go", "tool/bash/x.go", "tool/web/x.go",
 		"tool/file/x.go", "tool/rem/x.go", "tool/todo/x.go", "tool/sessions/x.go",
 		"tool/scheduler/x.go", "tool/delegate/x.go", "tool/verdict/x.go", "tool/view/x.go",
 		"tool/execwrap/x.go", "tool/registry.go", "tool/registry.json", "tool/registry_test.go",
@@ -64,7 +65,7 @@ func TestTheFreezeFileCarriesTheGateSet(t *testing.T) {
 		"core", "core/x.go", "core/x/PACKAGE.md",
 		"docs/x.md", "specs/SPEC_X.md", "AGENTS.md", "Makefile", ".gitignore",
 		"README.md", "SECURITY.md", "CONTRIBUTING.md", ".github/workflows/ci.yml",
-		"install.sh", "site/index.html", "CHANGELOG.md", "ROADMAP.md",
+		"install.sh", "site/index.html", "CHANGELOG.md",
 		"PACKAGE.md", "tool/PACKAGE.md", "loop/PACKAGE.md",
 		"go.mod", "go.sum", "scripts/wire-check",
 	}
@@ -163,5 +164,50 @@ func TestImpureRefusesANonGoFileAndAGainedFileOnTheFrozenSurface(t *testing.T) {
 	outsides := g.impure([]string{"core/gained.go"})
 	if len(outsides) != 1 || !strings.Contains(outsides[0], "gained") {
 		t.Fatalf("a gained file must refuse: %v", outsides)
+	}
+}
+
+func TestChangedPathsKeepsASpacedPathOnePath(t *testing.T) {
+	dir := t.TempDir()
+	run := func(args ...string) {
+		t.Helper()
+		cmd := exec.Command("git", args...)
+		cmd.Dir = dir
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+	run("init", "-q", ".")
+	run("config", "user.email", "t@rig.test")
+	run("config", "user.name", "t")
+	if err := os.WriteFile(filepath.Join(dir, "old.txt"), []byte("one\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	run("add", ".")
+	run("commit", "-q", "-m", "init")
+	run("mv", "old.txt", "with space.txt")
+	wd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chdir(dir); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Chdir(wd) })
+	changed, err := changedPaths("HEAD")
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, p := range changed {
+		if p == "with space.txt" {
+			found = true
+		}
+		if p == "with" || p == "space.txt" {
+			t.Fatalf("a path containing a space must stay one path, got %v", changed)
+		}
+	}
+	if !found {
+		t.Fatalf("the renamed path must appear whole: %v", changed)
 	}
 }

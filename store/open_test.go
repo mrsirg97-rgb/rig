@@ -76,6 +76,117 @@ func TestOpenQuarantinesCorruptFile(t *testing.T) {
 	}
 }
 
+func TestOpenQuickCheckSeesCorruptionTheSchemaReadMisses(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "probe.sqlite")
+	db, _, _, err := Open(path, probeDDL, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 500; i++ {
+		if _, err := db.Exec("INSERT INTO probe (x) VALUES (?)", i); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := db.DB.Close(); err != nil {
+		t.Fatal(err)
+	}
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(raw) < 8192 {
+		t.Fatalf("fixture too small to carry a second page: %d bytes", len(raw))
+	}
+	corrupt := append([]byte{}, raw...)
+	for i := 4096; i < 4200; i++ {
+		corrupt[i] = 0xAB
+	}
+	if err := os.WriteFile(path, corrupt, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	_, quarantined, _, err := Open(path, probeDDL, 1)
+	if err != nil {
+		t.Fatalf("open over page-level corruption: %v", err)
+	}
+	if quarantined == "" {
+		t.Fatal("page-level corruption must quarantine (the schema-page read alone does not see it)")
+	}
+}
+
+func TestOpenQuarantineMovesTheWalSidecarsToo(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "corrupt.sqlite")
+	if err := os.WriteFile(path, []byte("definitely not a sqlite file"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path+"-wal", []byte("stale wal frames"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path+"-shm", []byte("stale shm"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	db, quarantined, _, err := Open(path, probeDDL, 1)
+	if err != nil {
+		t.Fatalf("open over quarantined corrupt file: %v", err)
+	}
+	defer db.DB.Close()
+	if quarantined == "" {
+		t.Fatal("corrupt file not quarantined and named")
+	}
+	if _, err := db.Exec("INSERT INTO probe (x) VALUES (1)"); err != nil {
+		t.Fatalf("fresh file unusable: %v", err)
+	}
+}
+
+func TestQuarantineMovesTheSidecarsBesideTheDatabase(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "corrupt.sqlite")
+	if err := os.WriteFile(path, []byte("main"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path+"-wal", []byte("stale wal frames"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path+"-shm", []byte("stale shm"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	aside := path + ".corrupt-1"
+	if err := quarantine(path, aside); err != nil {
+		t.Fatalf("quarantine: %v", err)
+	}
+	for suffix, want := range map[string]string{"": "main", "-wal": "stale wal frames", "-shm": "stale shm"} {
+		got, err := os.ReadFile(aside + suffix)
+		if err != nil {
+			t.Fatalf("the aside must carry the %s file beside the database: %v", suffix, err)
+		}
+		if string(got) != want {
+			t.Fatalf("aside %s = %q, want %q", suffix, got, want)
+		}
+	}
+	for _, suffix := range []string{"", "-wal", "-shm"} {
+		if _, err := os.Stat(path + suffix); !os.IsNotExist(err) {
+			t.Fatalf("the %s file must not stay at the original path (stat: %v)", path+suffix, err)
+		}
+	}
+}
+
+func TestQuarantineToleratesMissingSidecars(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "corrupt.sqlite")
+	if err := os.WriteFile(path, []byte("main"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	aside := path + ".corrupt-1"
+	if err := quarantine(path, aside); err != nil {
+		t.Fatalf("quarantine: %v", err)
+	}
+	got, err := os.ReadFile(aside)
+	if err != nil || string(got) != "main" {
+		t.Fatalf("aside = %q, %v", got, err)
+	}
+}
+
 func TestTxFromFailsClosed(t *testing.T) {
 	if _, err := sqlx.TxFrom(context.Background()); err == nil {
 		t.Fatal("TxFrom without a transaction succeeded")

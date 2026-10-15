@@ -13,9 +13,10 @@ depends on core and models; the root depends on the leaf.
 
 - The prefix rule (`IsCommandLine`), the escape (`Unescape`), and the
   line splitter (`Parse`).
-- `All()`: the standard set of fifteen commands: `compact`, `new`,
+- `All()`: the standard set of sixteen commands: `compact`, `new`,
   `project`, `models`, `sessions`, `steer`, `todo`, `scheduler`,
-  `plugins`, `rem`, `effort`, `role`, `approve`, `swarm`, `theme`.
+  `plugins`, `decision`, `rem`, `effort`, `role`, `approve`, `swarm`,
+  `theme`.
 - `Env`: the command's world, built at the root: closures, not
   handles. `Env.Workers` carries the fleet (the model, the slots, the
   file, the configured fact) and is what a missing `scheduler` tool
@@ -108,6 +109,15 @@ depends on core and models; the root depends on the leaf.
   `disable <name>` move the file between `plugins/` and `plugins/disabled/`
   and reload (SPEC_GROWTH 9, amended); `disabled` lists that zone
   (SPEC_GROWTH 9, the hide/turn-off surface).
+- **decision**: the operator's hand on the decision model's training:
+  `decision train <trainer>` enqueues a one-shot job through the root's
+  `DecisionTrain` seam and returns its reply verbatim — the run lands on
+  the scheduler's crontab (`once`, a couple of minutes out) and executes
+  headless, so the verb queues and never trains in the turn; the nightly
+  schedule is the operator's own cron line, not a default. The trainer
+  name is validated at the seam (the plugin filename stem); anything else
+  on the line refuses with the usage, and a missing seam refuses with the
+  no-seam voice.
 - **theme**: the operator's dial over the three presets (2.3.2): bare
   shows the active one (`theme: warm (default)`, `theme: custom
   (theme.json)`), `theme warm|cool|custom` sets it through the env's

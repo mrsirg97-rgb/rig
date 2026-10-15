@@ -5,7 +5,10 @@ import (
 )
 
 func busyOf(b string) string {
-	return "skip"
+	if b == "" {
+		return "skip"
+	}
+	return b
 }
 
 func (f *fold) applyVerb(e eventRow) {

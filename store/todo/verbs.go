@@ -19,6 +19,9 @@ func Create(ctx context.Context, db store.DB, p Project, item CreateItem, sessio
 	if item.Text == "" {
 		return "", fmt.Errorf("todo: text required")
 	}
+	if len(item.Text) > MaxTaskLen {
+		return "", fmt.Errorf("todo: text is too long (%d bytes; max %d)", len(item.Text), MaxTaskLen)
+	}
 	return mutate(ctx, db, p, func(bound context.Context, tx *sql.Tx, f *folded) (string, error) {
 		foot, e := maybeCompact(bound, tx, f, session, p.Key)
 		if e != nil {
@@ -222,6 +225,8 @@ func Retry(ctx context.Context, db store.DB, p Project, id, session string) (str
 
 const MaxNoteLen = 1000
 
+const MaxTaskLen = MaxNoteLen
+
 func Claim(ctx context.Context, db store.DB, p Project, session, status string) (string, error) {
 	if session == "" {
 		session = anon
@@ -308,7 +313,7 @@ func cleanNote(text, verb string) (string, error) {
 		return "", fmt.Errorf("todo: note must not be empty")
 	}
 	if len(note) > MaxNoteLen {
-		return "", fmt.Errorf("todo: %s is too long (%d chars; max %d)", verb, len(note), MaxNoteLen)
+		return "", fmt.Errorf("todo: %s is too long (%d bytes; max %d)", verb, len(note), MaxNoteLen)
 	}
 	return note, nil
 }

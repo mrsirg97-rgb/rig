@@ -15,7 +15,8 @@ calls what).
 ## What it includes
 
 - `Rem`: the tool as its interface (2.12.6): `tool.Definition`, `Exec` as
-  the one JSON door — decode `action` and the fields, turn the wire's
+  the one JSON door — decode `action` and the fields strictly (an unknown
+  field refuses, matching the bash/delegate doors), turn the wire's
   shapes that Go cannot name (`supersedes`, `ids`) into ids, route — and
   one method per verb: `Index(ctx, scope)`, `Pack(ctx, scope, target)`,
   `Learn(ctx, scope, in LearnInput)`,
@@ -26,7 +27,9 @@ calls what).
   verb, the store's `CreateInput` shape, the scope staying on the verb
   because every verb carries it — an input with the scope left out must not
   read like a call, and a field is a pointer where absent and zero differ
-  (`Importance`: absent is the default weight, zero a weight of nothing;
+  (`Importance`: absent is the default weight — the store's one
+  `importanceDefault`, shared by learn and reflect, the tool carrying no
+  second default of its own; zero a weight of nothing;
   `K`; `OlderThanDays`; `PruneInput.Importance` is the weight a reduce
   leaves behind) — each
   over the rem store's operations and the graph store's map operations,

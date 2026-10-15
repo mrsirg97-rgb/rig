@@ -2,6 +2,8 @@ package command_test
 
 import (
 	"context"
+	"errors"
+	"strings"
 	"testing"
 
 	"github.com/mrsirg97-rgb/rig/v3/command"
@@ -112,5 +114,18 @@ func TestEffortSubCarriesLevelsInRowOrder(t *testing.T) {
 		if s.Desc == "" {
 			t.Fatalf("Sub() %d (%s) must carry a description", i, s.Name)
 		}
+	}
+}
+
+func TestEffortSetCarriesTheSeamError(t *testing.T) {
+	byName := allByName(t)
+	env := &command.Env{
+		Efforts:     func() []string { return []string{"low", "medium", "xhigh"} },
+		ActiveModel: func() string { return "huihui3.8" },
+		SetEffort:   func(ctx context.Context, level string) error { return errors.New("effort: the dial is stuck") },
+	}
+	_, err := byName["effort"].Run(context.Background(), "medium", env)
+	if err == nil || !strings.Contains(err.Error(), "the dial is stuck") {
+		t.Fatalf("the failing seam = %v, want the error carried instead of the (next turn) reply", err)
 	}
 }

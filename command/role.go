@@ -36,7 +36,9 @@ func (roleCmd) Run(ctx context.Context, args string, env any) (string, error) {
 		if e.SetRole == nil {
 			return "", errors.New("role: no set seam (the root did not wire one)")
 		}
-		e.SetRole(ctx, fields[0])
+		if err := e.SetRole(ctx, fields[0]); err != nil {
+			return "", err
+		}
 		return "role: " + fields[0] + " (next turn)", nil
 	}
 	label := e.Role()

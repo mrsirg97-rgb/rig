@@ -42,7 +42,11 @@ func (s *Session) Save(path string) error {
 	if err != nil {
 		return fmt.Errorf("session save: %w", err)
 	}
-	if err := os.WriteFile(path, data, 0o600); err != nil {
+	tmp := path + ".tmp"
+	if err := os.WriteFile(tmp, data, 0o600); err != nil {
+		return fmt.Errorf("session save: %w", err)
+	}
+	if err := os.Rename(tmp, path); err != nil {
 		return fmt.Errorf("session save: %w", err)
 	}
 	return nil

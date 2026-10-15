@@ -20,7 +20,9 @@ everything the supervisor says is a `broadcast` message.
   model M)`. `StartOpts.Budget` (dollars) caps the router's claims — the
   spend is summed from each delegate result's cost and at the cap the
   router stops claiming with the notice `swarm: budget reached — $X.XX /
-  $Y.YY — the swarm stops claiming`. `List()` reads a snapshot the loop
+  $Y.YY — the swarm stops claiming`. A start resets the spend and the
+  notice (a new start is a new run): a budget-exhausted swarm restarted
+  with the same budget claims again. `List()` reads a snapshot the loop
   refreshes after every change; `Stop()` cancels the context (the
   in-flight spawns die with it), waits for the workers, releases their
   claims through the todo store's Reap door, removes the members, and

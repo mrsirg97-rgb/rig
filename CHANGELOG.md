@@ -1,4 +1,98 @@
 # Changelog
+## [3.1.1]: the audit's fixes across the tree
+
+An audit read every package against its contract after 3.1.0 and this
+release lands what it found, wave by wave, each fix with the test that
+failed first.
+
+The stores and the scheduler: a worker inside the jail now carries the
+fleet env, so its heartbeats and its verdicts reach the room; the
+scheduler's list renders in creation order and its settled rows prune to
+the twenty newest per job; a delegate whose spawn errors records the
+failed run instead of vanishing; a reject note keeps its timestamp
+through the refold; `dropFile` takes the lexical rows; reads stop
+rewriting the todo's projection; `eventsOf` seeks one scope; the web
+fetch fails closed on a non-OK status; the crontab write joins its
+transaction; the LSP client reaps its dead server; `packTask` refuses a
+mismatched verdict count; the RRF contract lives once in fts; lazy
+gains its contract tests.
+
+The tools and the root: the edit tool's drift refusal keys the resolved
+path and teaches from the read span; the delegate's queued hand-off
+stores its place before it submits, so a worker that starts before the
+caller bookkeeps can no longer panic on a nil release; a verdict's ack
+takes two peers without racing; plugins refuse a name that shadows a
+stdlib module and turn a kernel-omitted file into a loud skip;
+`decide` and `verdict` survive a model switch; the reap queue takes the
+session's recorded binding; the web status reads through the loop's
+engine instead of racing its dials; the freeze gate keeps a spaced path
+one path; a model child's start is bounded; `-p -` is capped at the
+read tool's cap; and `runJob` lives in its own file.
+
+The governance, the surfaces and the TUI: a reviewer settles only its
+own voice's verdicts, so a swarm worker's late row cannot poison a
+decision; the correction cut lands on a rune; the reply's answers come
+back in row order; the wire and the recorded row carry the item
+verbatim; a stop halts a fire that has started; the swarm's restart
+spends fresh; a note keeps every word past the id; effort and role
+carry their seam's error; the anthropic retry wait ends in `Done` like
+openai's and a hostile Retry-After parks at the header bound; and the
+approval modal, the fault and phase-end lines, and every command reply
+print their text and not their controls.
+
+The foundations: the session's save replaces its transcript atomically
+(temp sibling, rename, 0600), so a crash mid-save can no longer turn a
+resumable conversation into a file the load refuses; testenv fails loud
+— with the step named and exit 1 — when the test home or the crontab
+shim cannot be built, instead of silently running the suite against the
+operator's machine.
+
+The engine and the middleware: the batch takes the kernel's effective
+parallel and drops its dead guard, so the concurrency default has one
+shape; reasoning details that are not an array land whole in the
+message and the ones that are not JSON drop loud, instead of silently
+vanishing; the approve prompt cuts on rune boundaries; a guard cap
+below its marker stays under the wall; the toolset loses its dead
+`Specs` export; the paths package keeps its vocabulary to itself and
+its doc names the fields the code actually expands, `scope` and
+`workspace` among them, bash's field the latter; and the parallel
+default's sentence says what it protects and that the 8 is a
+construction value, never measured.
+
+The dashboard: the chat's stream fans every delta out to a live
+subscriber and the ring's coalesced frame carries the newest seq, so a
+reconnect with `since` receives only the run's text past the delta it
+last drew, cut at that delta's end, so the page neither loses the tail
+nor draws the head twice — before, a coalesced run delivered its first
+delta and the rest only to a client that was not there; one dispatch owns the commands, so the
+fold and the HTTP handler can no longer run a command's work twice at
+once; the chat splits by job (the state machine, the SSE hub, the
+handlers); a canceled gate stops polling the door instead of leaking a
+goroutine per abandoned request; the serve token mints exactly once
+under concurrency; the browser's root refuses a home it cannot read
+instead of handing the folder browser an empty root; and the plugin
+name is refused in one voice.
+
+The one-shot worker: the liveness no longer depends on a stderr writer
+— a worker with a fleet and no `Err` heartbeats through its tool runs
+in both the start and the result arms — and its package describes the
+struct the caller builds, not a constructor that never existed.
+
+The jail and the children: the jailed worker's model row rides the
+jail env as `RIG_MODEL_*`, since its rig home is the job's scratch home
+and holds no settings file; the fleet pipe rides fd 3 through bwrap,
+which passes the caller's descriptors above 2 without a flag; the
+door's `Holding` hands the caller a copy read under the engine, not the
+live repost; and a stop signals every live child the pid file and the
+instance's own bookkeeping name, keeps reading the world under one
+grace, and returns only after two probe pauses of quiet, so a start
+race's loser can no longer take the stop while the holder keeps its
+port.
+
+The chore wave: the freeze list drops the paths that left the tree
+(broadcast, evt, tool/fs, the root ROADMAP), and CI installs bubblewrap
+and lifts the userns restriction so the worker-jail e2e stops skipping.
+
 ## [3.1.0]: the machines join one mesh, and a remote peer's request is ordered by it
 
 `settings.json` gains `mesh`. With the setting on, `rig serve` binds the

@@ -61,16 +61,27 @@ drops done only, and the summary counts review rows (`· N in review`).
 ## What it includes
 
 - `verbs.go`: the mutating operations (claim, note, notes, accept,
-  reject, the review state), `read.go`: the read verbs, `tx.go`: the
-  transaction machinery (the per-scope fold, compaction, the event
-  append), `types.go`: the fold's domain (tasks, positions, the event
+  reject, the review state), the text and note bounds (`MaxTaskLen`
+  takes the note's bound: both ride one event row and the compact
+  snapshot verbatim, and the refusals name bytes), `read.go`: the read
+  verbs, read-only — a read is a TxReadOnly fold of the log and never
+  touches the projection; `Rebuild` is the explicit dirty-projection
+  door (fold and rewrite in one write tx, nothing appended),
+  `tx.go`: the transaction machinery (the per-scope fold — the log is
+  read one scope in seq order through `events_scope_seq`, while the
+  id/seq mint's high-water is one MAX over the whole log — compaction,
+  the event append, and the shared `readFold` every read verb goes
+  through), `types.go`: the fold's domain (tasks, positions, the event
   row), `fold.go`: the event application, `create.go`: the
-  requires/blocks DAG validation and cyclePath (both relations),
-  `render.go`: the queue render; one shared event-log sequence.
+  requires/blocks DAG validation and cyclePath (both relations; the
+  DFS memoizes the subgraphs it proved cycle-free, so a diamond chain
+  costs its nodes, not its paths), `render.go`: the queue render; one
+  shared event-log sequence.
 - `task.go`: the structured reads beside the render: `Task` (one task's
   brief: text + notes with sessions) and `Counts` (the fold's
-  per-status counts, read-only) — the swarm's brief and status band
-  never parse the rendered reply.
+  per-status counts — pending, active, review, done, failed, so the
+  five statuses sum to the board — read-only) — the swarm's brief and
+  status band never parse the rendered reply.
 - `project.go`: which queue a call acts on. `ProjectOf(dir)` mints a
   `Project` from a directory (abs first: one workspace must not have two
   keys) and `Global()` mints the reserved word's own queue. Inside a
@@ -103,9 +114,25 @@ drops done only, and the summary counts review rows (`· N in review`).
 ## Gotchas
 
 - tasks/task_deps are a disposable projection: rebuilt from the log inside
-  every transaction, never trusted.
+  every writing transaction, never trusted. Reads never rewrite it — they
+  fold the log through a TxReadOnly tx — so a tampered projection heals at
+  the next write, and `Rebuild` is the explicit door that folds and
+  rewrites without appending an event (the projection-tamper tests' entry
+  point).
 - Replay is total: malformed or inapplicable rows are skipped, never
   thrown.
+- Bounds are economics, not numbers: `MaxNoteLen` and `MaxTaskLen` (the
+  same 1000) bound what one event row carries — a note and a task text
+  both cross the log and the compact snapshot verbatim, and a queue line
+  renders the text whole — so an unbounded note or text is an unbounded
+  log row and an unbounded line, refused naming the byte count.
+  `COMPACT_THRESHOLD_EVENTS` (1000) bounds the replay every operation
+  pays: each op re-folds the scope's log, so past 1000 events the compact
+  snapshot folds the tail into one row instead of growing the per-op
+  scan. `STALE_THRESHOLD_SEQ` (200) is how far behind the log's head an
+  unresolved task's last touch must fall before the stale footer names
+  it — enough churn that a recovered board is suspect, few enough that
+  the warning is still about this queue's own recent past.
 - Positions are minted, never mutated in place: moves are events.
 - Create is the only link-mutation point: the requires/blocks DAG is
   validated there at the boundary (SPEC_TODO_EDGES). `Create` takes one
@@ -198,3 +225,9 @@ drops done only, and the summary counts review rows (`· N in review`).
   re-scopes the launch cwd's hash to the repo scope once (the
   `migrated:<oldScope>` marker), one transaction, counted on stderr. The
   fold keys on the files existing and is a no-op on the second open.
+  The renames ride the same transaction, so a commit failure after a
+  rename leaves a `<hash>.sqlite.migrated` orphan whose events rolled
+  back; the next open re-folds any migrated store whose scope carries no
+  events — directly, or after the rescope marker names where they moved
+  — and is a no-op once the fold lands, so the renames survive a failed
+  commit instead of burying the pre-fold store.

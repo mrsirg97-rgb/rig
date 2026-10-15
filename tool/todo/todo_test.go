@@ -1042,3 +1042,41 @@ func createAll(t *testing.T, tool core.Tool, ctx context.Context, tasks []map[st
 	}
 	return read()
 }
+
+func TestTodoFailWakesTheRouterLikeCreateAndComplete(t *testing.T) {
+	var mu sync.Mutex
+	var calls []string
+	tool := todoapi.New(newDB(t), todoapi.Interactive, func() {
+		mu.Lock()
+		calls = append(calls, "wake")
+		mu.Unlock()
+	})
+	ctx := core.WithSession(context.Background(), core.NewSession())
+	if _, err := exec(t, tool, ctx, map[string]any{"action": "create", "text": "the work"}); err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	if _, err := exec(t, tool, ctx, map[string]any{"action": "claim"}); err != nil {
+		t.Fatalf("claim: %v", err)
+	}
+	mu.Lock()
+	if len(calls) != 1 {
+		t.Fatalf("a claim must not wake the router: %v", calls)
+	}
+	mu.Unlock()
+	if _, err := exec(t, tool, ctx, map[string]any{"action": "fail", "id": "t1"}); err != nil {
+		t.Fatalf("fail: %v", err)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if len(calls) != 2 {
+		t.Fatalf("a fail must wake the router like a create or a complete: %v", calls)
+	}
+}
+
+func TestTodoRefusesAnUnknownField(t *testing.T) {
+	tool := todoapi.New(newDB(t), todoapi.Interactive)
+	ctx := core.WithSession(context.Background(), core.NewSession())
+	if _, err := exec(t, tool, ctx, map[string]any{"action": "read", "bogus": 1}); err == nil || !strings.Contains(err.Error(), "unknown field") {
+		t.Fatalf("an unknown field must refuse: %v", err)
+	}
+}

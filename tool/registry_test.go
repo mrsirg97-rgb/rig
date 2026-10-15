@@ -5,6 +5,7 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+	"unicode/utf8"
 
 	"github.com/mrsirg97-rgb/rig/v3/tool"
 )
@@ -214,5 +215,25 @@ func TestMutatesAnswersTheTableByNameAndAction(t *testing.T) {
 		if got := tool.Mutates(c.name, c.action); got != c.want {
 			t.Fatalf("Mutates(%q, %q) = %v, want %v", c.name, c.action, got, c.want)
 		}
+	}
+}
+
+func TestFirstLineCapsASCIIAtSixtyBytesAndMarksTheElision(t *testing.T) {
+	if got, want := tool.FirstLine(strings.Repeat("a", 70)), strings.Repeat("a", 60)+"…"; got != want {
+		t.Fatalf("FirstLine = %q, want the 60-byte head plus the elision mark %q", got, want)
+	}
+	if got := tool.FirstLine(strings.Repeat("a", 60)); got != strings.Repeat("a", 60) {
+		t.Fatalf("a line at the cap is not elided, got %q", got)
+	}
+}
+
+func TestFirstLineCutsAtARuneBoundary(t *testing.T) {
+	s := strings.Repeat("a", 58) + strings.Repeat("€", 3) + " tail"
+	got := tool.FirstLine(s)
+	if !utf8.ValidString(got) {
+		t.Fatalf("the cap must never split a rune, got %q", got)
+	}
+	if want := strings.Repeat("a", 58) + "…"; got != want {
+		t.Fatalf("FirstLine = %q, want the head at the last whole rune plus the elision mark %q", got, want)
 	}
 }

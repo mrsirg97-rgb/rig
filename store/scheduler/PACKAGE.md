@@ -29,7 +29,12 @@ written before the store commit; drift is surfaced in list.
   the key.
 - `verbs.go`: `Create` over the one
   `global.sqlite`; `state.go`: the state verbs
-  (pause/resume/remove/repair), `update.go`: the update verb, `runs.go`:
+  (pause/resume/remove/repair) — the fold is read, the preconditions
+  checked and the crontab line installed inside the one immediate write
+  transaction, so concurrent pause/resume/remove cannot resurrect a
+  removed job's line (the second action re-folds after the first
+  commits and refuses on the new state); `update.go`: the update verb,
+  `runs.go`:
   the run record and the runs read, `show.go`: one job read. The
   crontab key is `jN` for every job, `name` unique
   store-wide, ids one sequence. `Create` takes the model from the
@@ -68,7 +73,15 @@ written before the store commit; drift is surfaced in list.
   (the worker spawn, bwrap jail, socket proxy);
   the spawn captures each stream to the first and last 128 KiB
   of a 256 KiB budget with a truncation marker, so a verbose worker
-  cannot OOM the runner; the stored cwd is revalidated at fire time (the
+  cannot OOM the runner; `RealFetch` fail-closes on the status —
+  anything but 200 refuses naming the status and the URL (a 500 with a
+  JSON error body is not a models table, and parsing it as one
+  fail-opens the gate to the default model) — and reads the body under
+  `fetchBodyCap`, 64 KiB: a models table of a thousand rows fits with
+  room, and a swap answering more than that is not answering; a
+  `WaitDelay` expiry after a clean exit is not a fault (the worker's
+  captured output stands, exit 0), only the timeout and the non-zero
+  exits do. the stored cwd is revalidated at fire time (the
   jail rw-binds it), a replaced, moved, or deleted cwd skipping the fire
   with a recorded reason. An unnamed job's model resolves at fire time —
   the resident model resolved to the models-table row whose id is the
@@ -131,10 +144,18 @@ A command job's fire skips the busy probe and
   `killed after timeout`, `canceled` (the spawn's base context ended),
   or `killed by signal N` (a signal the runner did not send) — and
   `RealSpawn` captures the signal from the wait status and carries
-  `Pdeathsig`, so a signal death is never a bare exit -1.
+  `Pdeathsig`, so a signal death is never a bare exit -1. A spawn that
+  errors before it runs (an exec failure, a vanished binary) records
+  the failed run too — status `fail`, the error as the reason — so the
+  ad-hoc once-job settles done at the same fold: the board keeps no
+  drift and a bare repair cannot install a past-due crontab line for
+  it.
 - `jail.go`: the bwrap jail argv composition: `--clearenv` and the named
   `--setenv` list (PATH, HOME, RIG_HOME; `RIG_DELEGATE=1` for a delegate
-  worker), each entry split into explicit VAR VALUE pairs (bwrap's
+  worker; `RIG_FLEET=<member id>` for every jailed worker — the runner's
+  origin or the worker's own member — so heartbeats, `tool_start` frames
+  and the verdict pipe reach the worker inside the jail), each entry
+  split into explicit VAR VALUE pairs (bwrap's
   `--setenv` takes two arguments; an entry without an `=` refuses), are
   the worker's whole environment, so the operator's exported
   secrets never reach a jailed worker.
@@ -145,7 +166,11 @@ A command job's fire skips the busy probe and
   worker's every thread inherits the wall.
 - `proxy.go`: the unix-socket proxy (the jail's one hole), the socket
   chmod'd 0600 after listen so no other local user reaches the model
-  endpoint through a running job.
+  endpoint through a running job. The socket is per fire:
+  `<cwd>/.rig-job/<job id>.sock` (the fire lock already serializes one
+  job's fires), so a scheduled fire and a live delegate in one cwd each
+  own a socket and a `Close` removes only its own; the remove before
+  listen sweeps the stale socket of a crashed fire.
 - **The dial seam** (`runner.go` `Transport`): the `http.RoundTripper`
   the busy check's `RealFetch` and the socket proxy's reverse proxy use;
   nil is the production default (`http.DefaultTransport`). The suite's
@@ -160,6 +185,20 @@ A command job's fire skips the busy probe and
   fire at the cap records a skip naming the spend, and each fire and
   delegate records its worker's cost (read from the state store's cost
   column, SPEC_HOSTED 5).
+- `prune.go`: the fire's housekeeping: `Prune` runs after every
+  recorded fire (`RunJob`, a delegate's finish and its spawn-failure
+  record) and keeps the store bounded. The policy is the fire log's
+  keep (`logKeep` 20, `pruneLogs`): one fire is one log file and one
+  run row, so the run rows keep the newest 20 per job, and the settled
+  jobs — done rows and removed tombstones — keep the newest 20 by their
+  last update, their run rows and their `runs/<id>/` log dirs going
+  with them. The highest minted id always survives as the mint
+  reservation: `mintID` re-mints `max(existing)+1`, so pruning the
+  highest tombstone would let a later create reuse an id. Active and
+  paused jobs are never touched. The job prune rides the compaction
+  machinery (one compact event over the survivors, the projection
+  rewritten, the older events dropped); the run-row prune is a plain
+  delete in the same transaction.
 - A job's detail line carries its command with the line breaks as
   spaces (3.0.3): every line of the list is a directory, a head or a
   detail, which is the shape the dashboard parses.
@@ -169,6 +208,9 @@ A command job's fire skips the busy probe and
   `cwd` (this directory first, then the rest by path), the empty store
   named (`scheduler: no jobs (global.sqlite)`), and tagged crontab
   lines with no job row listed as orphans with the removal instruction.
+  The jobs render in creation order — `created_seq`, then `name`, then
+  `id` (the tiebreak for the post-compaction ties) — the same list
+  every call, because the dashboard parses it.
 - `show.go`: `Show` reads one job by id — the same `jobLines` block the
   list prints for it (crontab line, drift, running lock and all) plus
   one `last <run>` line from the runs container — so an agent holding a
@@ -265,6 +307,16 @@ A command job's fire skips the busy probe and
   its stderr the reasoning deltas and the tool start/end lines, and
   heartbeats on the fleet pipe (`fleet.go`, 2.11.0) while a tool runs,
   so a worker deep in a silent tool stays alive.
+- The named bounds: `logKeep` 20 — the fire log files kept per job (a
+  month of daily fires at a glance), and the keep the run rows and the
+  settled jobs obey with it (`prune.go`); `runsDefault` 5 and `runsCap`
+  100 — the runs read is a board render, not an export: five is the
+  recent history one glances at, one hundred is the whole board;
+  `firstLineCap` 60 runes — a delegate's ad-hoc name fits one board
+  line, cut on runes so a multi-byte name never splits into invalid
+  UTF-8; `dayCap` 1462 — a leap cycle plus one: the longest gap between
+  two matches of a legal expression is Feb 29's 1461 days, and the cap
+  also ends the scan of an impossible expression (Feb 30) as `never`.
 - `fleet.go`: the fleet pipe, the one door a worker's typed messages
   cross. The parent (`Delegate`, `RunJob`) opens an `os.Pipe`, hands
   the write end through the spawn's context (`WithFleet`/`FleetFrom`,

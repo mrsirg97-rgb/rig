@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 )
 
@@ -132,42 +133,66 @@ func SocketRefusal(sock string, err error) string {
 
 const jailPath = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 
-func jailSpawn(opts RunOpts, cwd string, workerCmd []string, model, effort, prompt, allow, sessionID string, extraEnv ...string) ([]string, *SocketProxy, string, error) {
+func modelEnv(opts RunOpts, model string) []string {
+	row, ok := opts.modelRow(model)
+	if !ok {
+		return nil
+	}
+	env := []string{
+		"RIG_MODEL_WINDOW=" + strconv.Itoa(row.Window),
+		"RIG_MODEL_MAX_TOKENS=" + strconv.Itoa(row.MaxTokens),
+		"RIG_MODEL_RESERVE=" + strconv.Itoa(row.Reserve),
+		"RIG_MODEL_KEEP_RECENT=" + strconv.Itoa(row.KeepRecent),
+	}
+	if row.Retries != 0 {
+		env = append(env, "RIG_MODEL_RETRIES="+strconv.Itoa(row.Retries))
+	}
+	if row.Remote {
+		env = append(env, "RIG_MODEL_REMOTE=true")
+	}
+	return env
+}
+
+func jailSpawn(opts RunOpts, cwd, sockID string, workerCmd []string, model, effort, allow, sessionID string, fleet *fleetPipe, extraEnv ...string) ([]string, *SocketProxy, []string, string, error) {
 	if runtime.GOOS != "linux" {
-		return nil, nil, PlatformRefusal(runtime.GOOS), nil
+		return nil, nil, nil, PlatformRefusal(runtime.GOOS), nil
 	}
 	bwrap, err := exec.LookPath("bwrap")
 	if err != nil {
-		return nil, nil, BwrapRefusal(), nil
+		return nil, nil, nil, BwrapRefusal(), nil
 	}
 	kernelDir := ""
 	if opts.RigHome != "" {
 		kernelDir = filepath.Join(opts.RigHome, "kernel")
 		if _, err := os.Stat(kernelDir); err != nil {
-			return nil, nil, KernelRefusal(kernelDir), nil
+			return nil, nil, nil, KernelRefusal(kernelDir), nil
 		}
 	}
 
 	scratch := filepath.Join(cwd, ".rig-job")
 	if err := os.MkdirAll(scratch, 0o755); err != nil {
-		return nil, nil, ScratchRefusal(scratch, err), nil
+		return nil, nil, nil, ScratchRefusal(scratch, err), nil
 	}
 
 	if opts.StateDir != "" {
 		if err := os.MkdirAll(filepath.Join(scratch, "sessions"), 0o755); err != nil {
-			return nil, nil, ScratchRefusal(filepath.Join(scratch, "sessions"), err), nil
+			return nil, nil, nil, ScratchRefusal(filepath.Join(scratch, "sessions"), err), nil
 		}
 	}
 
-	sock := filepath.Join(cwd, ".rig-job.sock")
+	sock := filepath.Join(scratch, sockID+".sock")
 	proxy, err := NewSocketProxy(sock, opts.SwapURL)
 	if err != nil {
-		return nil, nil, SocketRefusal(sock, err), nil
+		return nil, nil, nil, SocketRefusal(sock, err), nil
 	}
 	env := []string{
 		"PATH=" + jailPath,
 		"HOME=/tmp",
 		"RIG_HOME=" + scratch,
+	}
+	env = append(env, modelEnv(opts, model)...)
+	if fleet != nil {
+		env = append(env, fleetEnv(fleet)...)
 	}
 	env = append(env, extraEnv...)
 	argv, err := JailArgv(JailProfile{
@@ -187,7 +212,7 @@ func jailSpawn(opts RunOpts, cwd string, workerCmd []string, model, effort, prom
 	})
 	if err != nil {
 		proxy.Close()
-		return nil, nil, "", err
+		return nil, nil, nil, "", err
 	}
-	return argv, proxy, "", nil
+	return argv, proxy, extraEnv, "", nil
 }

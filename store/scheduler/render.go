@@ -154,7 +154,21 @@ func list(ctx context.Context, db DB, ct Crontab, sessionCwd, home string, probe
 
 	finished := 0
 	groups := map[string][]jobLineSet{}
+	ids := make([]string, 0, len(f.jobs))
 	for id := range f.jobs {
+		ids = append(ids, id)
+	}
+	sort.Slice(ids, func(a, b int) bool {
+		fa, fb := f.jobs[ids[a]], f.jobs[ids[b]]
+		if fa.CreatedSeq != fb.CreatedSeq {
+			return fa.CreatedSeq < fb.CreatedSeq
+		}
+		if fa.Name != fb.Name {
+			return fa.Name < fb.Name
+		}
+		return fa.ID < fb.ID
+	})
+	for _, id := range ids {
 		j := f.jobs[id]
 		if j.State == "removed" {
 			continue

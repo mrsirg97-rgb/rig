@@ -52,11 +52,7 @@ func verb(
 		ts.updatedSeq = seq
 		ts.updatedTs = nowRFC3339()
 		if toStatus == statusActive {
-			if session == "" {
-				ts.owner = anon
-			} else {
-				ts.owner = session
-			}
+			ts.owner = session
 		} else {
 			ts.owner = ""
 		}
@@ -316,13 +312,36 @@ func mutate(ctx context.Context, db store.DB, p Project, act func(bound context.
 	return reply, nil
 }
 
+func readFold[T any](ctx context.Context, db store.DB, p Project, act func(f *folded) (T, error)) (T, error) {
+	_, tx, err := db.TxReadOnly(ctx)
+	if err != nil {
+		var zero T
+		return zero, err
+	}
+	defer tx.Rollback()
+	f, err := eventsOf(tx, p.Key)
+	if err != nil {
+		var zero T
+		return zero, err
+	}
+	f.label = p.Label
+	return act(f)
+}
+
+const eventsQuery = "SELECT seq, op, args, session, ts, scope FROM events WHERE scope = ? ORDER BY seq"
+
+const globalSeqQuery = "SELECT COALESCE(MAX(seq), 0) FROM events"
+
 func eventsOf(tx *sql.Tx, scope string) (*folded, error) {
-	rows, err := tx.Query("SELECT seq, op, args, session, ts, scope FROM events ORDER BY seq")
+	f := newFolded()
+	if err := tx.QueryRow(globalSeqQuery).Scan(&f.globalSeq); err != nil {
+		return nil, fmt.Errorf("todo: event log: %w", err)
+	}
+	rows, err := tx.Query(eventsQuery, scope)
 	if err != nil {
 		return nil, fmt.Errorf("todo: event log: %w", err)
 	}
 	defer rows.Close()
-	f := newFolded()
 	for rows.Next() {
 		var e eventRow
 		var session sql.NullString
@@ -330,10 +349,6 @@ func eventsOf(tx *sql.Tx, scope string) (*folded, error) {
 			return nil, fmt.Errorf("todo: event log: %w", err)
 		}
 		e.session = session.String
-		f.globalSeq = e.seq
-		if e.scope != scope {
-			continue
-		}
 		f.apply(e)
 	}
 	if err := rows.Err(); err != nil {

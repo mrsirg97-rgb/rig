@@ -1,20 +1,29 @@
 package file
 
 import (
-	"bytes"
-	"encoding/json"
 	"path/filepath"
 )
 
-func strictDecode(data json.RawMessage, out any) error {
-	dec := json.NewDecoder(bytes.NewReader(data))
-	dec.DisallowUnknownFields()
-	return dec.Decode(out)
-}
-
 func normalizePath(path string) string {
-	if abs, err := filepath.Abs(path); err == nil {
+	resolved, err := filepath.EvalSymlinks(path)
+	if err != nil {
+		dir, base := filepath.Split(path)
+		if dir == "" {
+			dir = "."
+		}
+		if resolvedDir, derr := filepath.EvalSymlinks(dir); derr == nil {
+			resolved = filepath.Join(resolvedDir, base)
+			err = nil
+		}
+	}
+	if err != nil {
+		if abs, aerr := filepath.Abs(path); aerr == nil {
+			return abs
+		}
+		return path
+	}
+	if abs, aerr := filepath.Abs(resolved); aerr == nil {
 		return abs
 	}
-	return path
+	return resolved
 }

@@ -27,6 +27,9 @@ import (
 const (
 	githubBase = "https://github.com"
 	updateRepo = "mrsirg97-rgb/rig"
+
+	drainRoomBound = 30 * time.Second
+	drainRoomPoll  = 100 * time.Millisecond
 )
 
 type updateCfg struct {
@@ -152,12 +155,12 @@ func drainRoom(ctx context.Context, home, version string) error {
 	}
 	defer machine.Close()
 	machine.Act(machineroom.Update{Version: version}, machineroom.TableKey(), machineroom.PriorityTurn, func(bool) {})
-	deadline := time.Now().Add(30 * time.Second)
+	deadline := time.Now().Add(drainRoomBound)
 	for time.Now().Before(deadline) {
 		if len(machine.Live()) == 0 {
 			return nil
 		}
-		time.Sleep(100 * time.Millisecond)
+		time.Sleep(drainRoomPoll)
 	}
 	return fmt.Errorf("%d member(s) still live", len(machine.Live()))
 }

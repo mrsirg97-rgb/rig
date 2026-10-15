@@ -22,7 +22,6 @@ cmd/rig/
 command/
 
 # the fleet and its message seams (SPEC_SWARM)
-broadcast/
 swarm/
 
 # the middleware chain (the approve gate, the live toolset, the provenance
@@ -36,7 +35,6 @@ middleware/paths/
 middleware/index/
 
 # the loop's edge and the plugin door
-evt/
 plugins/
 testenv/
 
@@ -52,7 +50,6 @@ store/decision/
 tool/diff/
 tool/python/
 tool/bash/
-tool/fs/
 tool/web/
 tool/file/
 tool/rem/
@@ -93,7 +90,6 @@ CONTRIBUTING.md
 install.sh
 site/
 CHANGELOG.md
-ROADMAP.md
 PACKAGE.md
 */PACKAGE.md
 go.mod
@@ -114,3 +110,5 @@ reopen core/provider.go 2.16.0
 reopen loop/ 2.17.0
 reopen kernel.go 2.17.0
 reopen core/frontend.go 2.18.0
+reopen loop/ 3.1.1
+reopen core/session.go 3.1.1

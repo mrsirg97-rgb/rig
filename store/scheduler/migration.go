@@ -22,32 +22,25 @@ const crontabTagMigratedKey = "migrated:pane-scheduler"
 
 func Migration(home, rigHome, runnerCmd string, ct Crontab) func(*sql.Tx, int, int) (string, error) {
 	return func(tx *sql.Tx, from, to int) (string, error) {
-		if from > 0 && from < 3 {
-			if err := addCommandColumn(tx); err != nil {
-				return "", err
-			}
-		}
-		if from > 0 && from < 4 {
-			if err := addTimeoutColumn(tx); err != nil {
-				return "", err
-			}
-		}
-		if from > 0 && from < 5 {
-			if err := addStallColumn(tx); err != nil {
-				return "", err
-			}
-		}
-		if from > 0 && from < 6 {
-			if err := addBudgetColumn(tx); err != nil {
-				return "", err
-			}
-			if err := addRunCostColumn(tx); err != nil {
-				return "", err
-			}
-		}
 		if from > 0 && from < 7 {
-			if err := addRunModelColumn(tx); err != nil {
-				return "", err
+			for _, c := range []struct {
+				at     int
+				table  string
+				column string
+				decl   string
+			}{
+				{3, "jobs", "command", "TEXT"},
+				{4, "jobs", "timeout", "INTEGER"},
+				{5, "jobs", "stall", "INTEGER"},
+				{6, "jobs", "budget", "REAL"},
+				{6, "runs", "cost", "REAL"},
+				{7, "runs", "model", "TEXT"},
+			} {
+				if from < c.at {
+					if err := addColumn(tx, c.table, c.column, c.decl); err != nil {
+						return "", err
+					}
+				}
 			}
 		}
 		entries, err := os.ReadDir(home)
@@ -256,43 +249,15 @@ func migrateCrontabTag(tx *sql.Tx, rigHome, runnerCmd string, ct Crontab) (int, 
 	return rewritten, nil
 }
 
-func addCommandColumn(tx *sql.Tx) error {
+func addColumn(tx *sql.Tx, table, column, decl string) error {
 	var n int64
-	if err := tx.QueryRow(`SELECT count(*) FROM pragma_table_info('jobs') WHERE name='command'`).Scan(&n); err != nil {
+	if err := tx.QueryRow(`SELECT count(*) FROM pragma_table_info(?) WHERE name = ?`, table, column).Scan(&n); err != nil {
 		return fmt.Errorf("scheduler: migration: %w", err)
 	}
 	if n > 0 {
 		return nil
 	}
-	if _, err := tx.Exec(`ALTER TABLE jobs ADD COLUMN command TEXT`); err != nil {
-		return fmt.Errorf("scheduler: migration: %w", err)
-	}
-	return nil
-}
-
-func addTimeoutColumn(tx *sql.Tx) error {
-	var n int64
-	if err := tx.QueryRow(`SELECT count(*) FROM pragma_table_info('jobs') WHERE name='timeout'`).Scan(&n); err != nil {
-		return fmt.Errorf("scheduler: migration: %w", err)
-	}
-	if n > 0 {
-		return nil
-	}
-	if _, err := tx.Exec(`ALTER TABLE jobs ADD COLUMN timeout INTEGER`); err != nil {
-		return fmt.Errorf("scheduler: migration: %w", err)
-	}
-	return nil
-}
-
-func addStallColumn(tx *sql.Tx) error {
-	var n int64
-	if err := tx.QueryRow(`SELECT count(*) FROM pragma_table_info('jobs') WHERE name='stall'`).Scan(&n); err != nil {
-		return fmt.Errorf("scheduler: migration: %w", err)
-	}
-	if n > 0 {
-		return nil
-	}
-	if _, err := tx.Exec(`ALTER TABLE jobs ADD COLUMN stall INTEGER`); err != nil {
+	if _, err := tx.Exec(`ALTER TABLE ` + table + ` ADD COLUMN ` + column + ` ` + decl); err != nil {
 		return fmt.Errorf("scheduler: migration: %w", err)
 	}
 	return nil
@@ -320,46 +285,4 @@ func jobNum(id string) int {
 		n = n*10 + int(c-'0')
 	}
 	return n
-}
-
-func addBudgetColumn(tx *sql.Tx) error {
-	var n int64
-	if err := tx.QueryRow(`SELECT count(*) FROM pragma_table_info('jobs') WHERE name='budget'`).Scan(&n); err != nil {
-		return fmt.Errorf("scheduler: migration: %w", err)
-	}
-	if n > 0 {
-		return nil
-	}
-	if _, err := tx.Exec(`ALTER TABLE jobs ADD COLUMN budget REAL`); err != nil {
-		return fmt.Errorf("scheduler: migration: %w", err)
-	}
-	return nil
-}
-
-func addRunCostColumn(tx *sql.Tx) error {
-	var n int64
-	if err := tx.QueryRow(`SELECT count(*) FROM pragma_table_info('runs') WHERE name='cost'`).Scan(&n); err != nil {
-		return fmt.Errorf("scheduler: migration: %w", err)
-	}
-	if n > 0 {
-		return nil
-	}
-	if _, err := tx.Exec(`ALTER TABLE runs ADD COLUMN cost REAL`); err != nil {
-		return fmt.Errorf("scheduler: migration: %w", err)
-	}
-	return nil
-}
-
-func addRunModelColumn(tx *sql.Tx) error {
-	var n int64
-	if err := tx.QueryRow(`SELECT count(*) FROM pragma_table_info('runs') WHERE name='model'`).Scan(&n); err != nil {
-		return fmt.Errorf("scheduler: migration: %w", err)
-	}
-	if n > 0 {
-		return nil
-	}
-	if _, err := tx.Exec(`ALTER TABLE runs ADD COLUMN model TEXT`); err != nil {
-		return fmt.Errorf("scheduler: migration: %w", err)
-	}
-	return nil
 }

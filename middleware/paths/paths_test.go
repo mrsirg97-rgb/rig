@@ -1,4 +1,4 @@
-package paths_test
+package paths
 
 import (
 	"bytes"
@@ -14,7 +14,6 @@ import (
 	"testing"
 
 	"github.com/mrsirg97-rgb/rig/v3/core"
-	"github.com/mrsirg97-rgb/rig/v3/middleware/paths"
 	"github.com/mrsirg97-rgb/rig/v3/tool/bash"
 	"github.com/mrsirg97-rgb/rig/v3/tool/file"
 	"github.com/mrsirg97-rgb/rig/v3/tool/view"
@@ -29,7 +28,7 @@ func TestExpandLeadingTildeIsTheHome(t *testing.T) {
 		"~/Projects/hedge": filepath.Join(home, "Projects", "hedge"),
 		"~/a/../b":         filepath.Join(home, "b"),
 	} {
-		if got := paths.Expand(in); got != want {
+		if got := Expand(in); got != want {
 			t.Fatalf("Expand(%q) = %q, want %q", in, got, want)
 		}
 	}
@@ -40,13 +39,13 @@ func TestExpandTildeUserIsThatUsersHome(t *testing.T) {
 	if err != nil || u.Username == "" || u.HomeDir == "" {
 		t.Skip("no current user to look up")
 	}
-	if got := paths.Expand("~" + u.Username + "/x"); got != filepath.Join(u.HomeDir, "x") {
+	if got := Expand("~" + u.Username + "/x"); got != filepath.Join(u.HomeDir, "x") {
 		t.Fatalf("~user/x = %q, want %q", got, filepath.Join(u.HomeDir, "x"))
 	}
-	if got := paths.Expand("~" + u.Username); got != u.HomeDir {
+	if got := Expand("~" + u.Username); got != u.HomeDir {
 		t.Fatalf("~user = %q, want %q", got, u.HomeDir)
 	}
-	if got := paths.Expand("~no-such-user-zz/x"); got != "~no-such-user-zz/x" {
+	if got := Expand("~no-such-user-zz/x"); got != "~no-such-user-zz/x" {
 		t.Fatalf("an unknown user stands as given, got %q", got)
 	}
 }
@@ -54,12 +53,12 @@ func TestExpandTildeUserIsThatUsersHome(t *testing.T) {
 func TestExpandLeavesEverythingElseAlone(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	for _, in := range []string{"", ".", "/abs/~/x", "a/~", "a/~/b", "rel/path"} {
-		if got := paths.Expand(in); got != in {
+		if got := Expand(in); got != in {
 			t.Fatalf("Expand(%q) = %q, want it untouched", in, got)
 		}
 	}
 	t.Setenv("HOME", "")
-	if got := paths.Expand("~/x"); got != "~/x" {
+	if got := Expand("~/x"); got != "~/x" {
 		t.Fatalf("with no home the path stands as given, got %q", got)
 	}
 }
@@ -84,7 +83,7 @@ func TestToolsExpandTheLeadingTildeAtTheBoundary(t *testing.T) {
 			return "", errors.New("unexpected tool: " + call.Name)
 		}
 	}
-	exec := paths.Middleware().Wrap(inner)
+	exec := Middleware().Wrap(inner)
 
 	got, err := exec(context.Background(), core.ToolCall{Name: "bash", Args: json.RawMessage(`{"command":"pwd","workspace":"~/proj"}`)})
 	if err != nil || got != proj+"\n" {
@@ -100,7 +99,7 @@ func TestMiddlewareRewritesOnlyThePathFieldsAtTheBoundary(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	var seen core.ToolCall
-	exec := paths.Middleware().Wrap(func(ctx context.Context, call core.ToolCall) (string, error) {
+	exec := Middleware().Wrap(func(ctx context.Context, call core.ToolCall) (string, error) {
 		seen = call
 		return "ok", nil
 	})
@@ -130,7 +129,7 @@ func TestMiddlewareLeavesBytesAloneWhenNothingExpands(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	for _, raw := range []string{`{"path":"/abs/x","workspace":"rel","z":"~/not-a-path"}`, `{"path":5}`, `[1,2]`, `null`, `not json`, `{}`} {
 		var seen core.ToolCall
-		exec := paths.Middleware().Wrap(func(ctx context.Context, call core.ToolCall) (string, error) {
+		exec := Middleware().Wrap(func(ctx context.Context, call core.ToolCall) (string, error) {
 			seen = call
 			return "ok", nil
 		})
@@ -146,12 +145,12 @@ func TestMiddlewareLeavesBytesAloneWhenNothingExpands(t *testing.T) {
 func TestRewriteCoversEveryVocabularyFieldName(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
-	for _, f := range paths.Fields {
+	for _, f := range fields {
 		raw, err := json.Marshal(map[string]string{f: "~/x"})
 		if err != nil {
 			t.Fatal(err)
 		}
-		got, changed := paths.Rewrite(raw)
+		got, changed := rewrite(raw, nil)
 		if !changed {
 			t.Fatalf("%s is in the vocabulary and must expand", f)
 		}
@@ -173,7 +172,7 @@ func TestRewriteLeavesUnlistedNamesAlone(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		got, changed := paths.Rewrite(raw)
+		got, changed := rewrite(raw, nil)
 		if changed {
 			t.Fatalf("%s is not in the vocabulary and must ride through untouched", f)
 		}
@@ -195,7 +194,7 @@ func TestViewExpandsTheLeadingTildeAtTheBoundary(t *testing.T) {
 	inner := func(ctx context.Context, call core.ToolCall) (string, error) {
 		return view.New(filepath.Join(t.TempDir(), "blobs")).Exec(ctx, call.Args)
 	}
-	exec := paths.Middleware().Wrap(inner)
+	exec := Middleware().Wrap(inner)
 
 	got, err := exec(context.Background(), core.ToolCall{Name: "view", Args: json.RawMessage(`{"path":"~/shots/a.png"}`)})
 	if err != nil {

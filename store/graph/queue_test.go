@@ -165,3 +165,83 @@ func TestIndexStopsAtTheFirstCancelledFile(t *testing.T) {
 		t.Fatalf("a cancelled walk says nothing per file, got %d lines", n)
 	}
 }
+
+func TestDropFileTakesTheLexicalRowsWithIt(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "go.mod"), []byte("module example.com/m\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "a.go"), []byte("package alpha\n\nfunc Target() int { return Helper() }\n\nfunc Helper() int { return 1 }\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	home := t.TempDir()
+	q := graph.NewQueue(home, nil)
+	defer q.Close()
+	ctx := context.Background()
+	if _, err := q.IndexProject(ctx, root); err != nil {
+		t.Fatal(err)
+	}
+	db, err := graph.Open(home, scope.Key(root), scope.Worktree(root))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	var ftsRows int
+	if err := db.QueryRow(`SELECT count(*) FROM symbol_fts WHERE file = 'a.go'`).Scan(&ftsRows); err != nil {
+		t.Fatal(err)
+	}
+	if ftsRows != 2 {
+		t.Fatalf("the fixture must map two symbols, got %d fts rows", ftsRows)
+	}
+	if err := os.Remove(filepath.Join(root, "a.go")); err != nil {
+		t.Fatal(err)
+	}
+	q.Touch(filepath.Join(root, "a.go"))
+	q.Drain(ctx)
+	for _, probe := range []struct{ table, column string }{
+		{"symbols", "file"}, {"symbol_fts", "file"}, {"symbol_grams", "file"}, {"files", "path"},
+	} {
+		var left int
+		if err := db.QueryRow(`SELECT count(*) FROM ` + probe.table + ` WHERE ` + probe.column + ` = 'a.go'`).Scan(&left); err != nil {
+			t.Fatal(err)
+		}
+		if left != 0 {
+			t.Fatalf("the dropped file must leave no %s rows, %d remain", probe.table, left)
+		}
+	}
+	if _, err := q.Pack(ctx, root, "find the target helper"); err == nil || !strings.Contains(err.Error(), "no symbol in the map matches") {
+		t.Fatalf("a dropped file must leave no zombie candidate, got %v", err)
+	}
+}
+
+func TestARepointedServerGivesTheGoneLanguageAnotherChance(t *testing.T) {
+	root, q := lspProject(t)
+	defer q.Close()
+	q.SetServer("typescript", filepath.Join(t.TempDir(), "no-such-language-server"), "--stdio")
+	ctx := context.Background()
+	q.Touch(filepath.Join(root, "src", "widget.ts"))
+	q.Drain(ctx)
+	db, err := graph.Open(q.Home(), scope.Key(root), scope.Worktree(root))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	var mapped int
+	if err := db.QueryRow(`SELECT count(*) FROM symbols`).Scan(&mapped); err != nil {
+		t.Fatal(err)
+	}
+	if mapped != 0 {
+		t.Fatalf("the missing server maps nothing, got %d rows", mapped)
+	}
+	syms := filepath.Join(t.TempDir(), "syms.json")
+	writeFake(t, syms, widgetSymbols)
+	q.SetServer("typescript", fakeServer(t, "typescript", fakeLog(t), syms, "")...)
+	q.Touch(filepath.Join(root, "src", "widget.ts"))
+	q.Drain(ctx)
+	if err := db.QueryRow(`SELECT count(*) FROM symbols WHERE name = 'Widget'`).Scan(&mapped); err != nil {
+		t.Fatal(err)
+	}
+	if mapped == 0 {
+		t.Fatalf("a re-pointed server must restart the gone language")
+	}
+}

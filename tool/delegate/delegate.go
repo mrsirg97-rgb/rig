@@ -1,16 +1,15 @@
 package delegate
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
-	"sort"
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"github.com/mrsirg97-rgb/evt"
 	"github.com/mrsirg97-rgb/evt/broadcast"
@@ -52,15 +51,6 @@ type holding struct {
 	stop func()
 }
 
-type workerState struct {
-	n         int
-	task      string
-	heartbeat time.Time
-	state     string
-	tool      string
-	toolAt    time.Time
-}
-
 type Delegate interface {
 	tool.Definition
 	Exec(ctx context.Context, args json.RawMessage) (string, error)
@@ -78,7 +68,7 @@ func New(o Opts) Delegate {
 	if o.Cap == nil {
 		o.Cap = evt.NewCap(nil, 0)
 	}
-	a := &adapter{Definition: tool.Def("delegate"), Opts: o, workers: map[int64]workerState{}, stops: map[int]holding{}, subs: map[int]evt.Submission{}}
+	a := &adapter{Definition: tool.Def("delegate"), Opts: o, workers: map[int64]workerState{}, stops: map[int]holding{}, subs: map[int]*hand{}}
 	if o.Room != nil {
 		a.member = o.Room.Add(rig.MemberDelegate)
 		a.member.Subscribe(context.Background(), a.receive)
@@ -93,8 +83,36 @@ type adapter struct {
 	seq     int64
 	workers map[int64]workerState
 	stops   map[int]holding
-	subs    map[int]evt.Submission
+	subs    map[int]*hand
 	member  broadcast.Member
+}
+
+type hand struct {
+	sub  evt.Submission
+	wait chan struct{}
+}
+
+func newHand() *hand {
+	return &hand{wait: make(chan struct{})}
+}
+
+func (h *hand) offer(sub evt.Submission) {
+	h.sub = sub
+	close(h.wait)
+}
+
+func (h *hand) claim() evt.Submission {
+	<-h.wait
+	return h.sub
+}
+
+func (h *hand) drop() evt.Submission {
+	select {
+	case <-h.wait:
+		return h.sub
+	default:
+		return nil
+	}
 }
 
 type args struct {
@@ -115,7 +133,7 @@ type delegateCall struct {
 
 func (a *adapter) Exec(ctx context.Context, data json.RawMessage) (string, error) {
 	var g args
-	if err := strictDecode(data, &g); err != nil {
+	if err := tool.StrictDecode(data, &g); err != nil {
 		return "", fmt.Errorf("delegate: args: %w", err)
 	}
 	bound, err := tool.BoundMs("delegate", g.TimeoutMs)
@@ -232,6 +250,16 @@ func (a *adapter) run(ctx context.Context, c delegateCall) (string, error) {
 		name = c.command
 	}
 	member, n := a.mint(stop)
+	queued := newHand()
+	a.mu.Lock()
+	a.subs[n] = queued
+	a.stops[n] = holding{stop: func() {
+		stop()
+		if sub := queued.drop(); sub != nil && !sub.Started() {
+			sub.Stop()
+		}
+	}}
+	a.mu.Unlock()
 	in := sched.DelegateInput{
 		DB:            a.DB,
 		Home:          a.Home,
@@ -305,17 +333,12 @@ func (a *adapter) run(ctx context.Context, c delegateCall) (string, error) {
 		}()
 	})
 	sub := a.Cap.Submit(ctx, work, rig.PriorityFleet)
+	queued.offer(sub)
 	state := "running"
 	if !sub.Started() {
 		state = "queued"
 	}
 	a.track(member, n, name, state)
-	a.mu.Lock()
-	a.subs[n] = sub
-	if !sub.Started() {
-		a.stops[n] = holding{stop: func() { stop(); sub.Stop() }}
-	}
-	a.mu.Unlock()
 	if !sub.Started() {
 		if a.Await {
 			<-sub.Settled()
@@ -340,21 +363,6 @@ func (a *adapter) fail(member broadcast.Member, n int, task string, err error) {
 		done := core.WorkerDone{N: n, Task: tool.FirstLine(task), Content: err.Error(), Exit: -1}
 		a.member.Publish(context.Background(), func(error) {}, broadcast.NewMessage(rig.MemberDelegate, true, done))
 	}
-}
-
-func (a *adapter) running(member broadcast.Member, n int, task string) {
-	if member == nil {
-		return
-	}
-	a.mu.Lock()
-	w, ok := a.workers[member.Id()]
-	if !ok {
-		w = workerState{n: n, task: tool.FirstLine(task)}
-	}
-	w.state, w.heartbeat = "running", time.Now()
-	a.workers[member.Id()] = w
-	a.mu.Unlock()
-	a.emit()
 }
 
 func (a *adapter) session() context.Context {
@@ -428,13 +436,11 @@ func capOutput(s string) string {
 	if len(s) <= outputCap {
 		return s
 	}
-	return s[:outputCap] + "\n[TRUNCATED: " + fmt.Sprintf("%d", len(s)) + " bytes total]"
-}
-
-func strictDecode(data json.RawMessage, out any) error {
-	dec := json.NewDecoder(bytes.NewReader(data))
-	dec.DisallowUnknownFields()
-	return dec.Decode(out)
+	cut := outputCap
+	for cut > 0 && !utf8.RuneStart(s[cut]) {
+		cut--
+	}
+	return s[:cut] + "\n[TRUNCATED: " + fmt.Sprintf("%d", len(s)) + " bytes total]"
 }
 
 func (a *adapter) mint(stop context.CancelFunc) (broadcast.Member, int) {
@@ -447,20 +453,6 @@ func (a *adapter) mint(stop context.CancelFunc) (broadcast.Member, int) {
 		return nil, n
 	}
 	return a.Room.Mint(), n
-}
-
-func (a *adapter) track(member broadcast.Member, n int, task, state string) {
-	if member == nil {
-		return
-	}
-	a.mu.Lock()
-	if _, ok := a.workers[member.Id()]; ok {
-		a.mu.Unlock()
-		return
-	}
-	a.workers[member.Id()] = workerState{n: n, task: tool.FirstLine(task), heartbeat: time.Now(), state: state}
-	a.mu.Unlock()
-	a.emit()
 }
 
 func (a *adapter) end(member broadcast.Member, n int) {
@@ -484,10 +476,13 @@ func (a *adapter) end(member broadcast.Member, n int) {
 
 func (a *adapter) claim(n int) evt.Submission {
 	a.mu.Lock()
-	sub := a.subs[n]
+	h := a.subs[n]
 	delete(a.subs, n)
 	a.mu.Unlock()
-	return sub
+	if h == nil {
+		return nil
+	}
+	return h.claim()
 }
 
 func (a *adapter) release(n int) {
@@ -509,50 +504,4 @@ func (a *adapter) StopAll() {
 			stop()
 		}
 	}
-}
-
-func (a *adapter) receive(err error, messages ...broadcast.Message) {
-	if err != nil {
-		return
-	}
-	changed := false
-	a.mu.Lock()
-	for _, m := range messages {
-		w, ok := a.workers[m.Origin()]
-		if !ok {
-			continue
-		}
-		switch ev := m.Signal().(type) {
-		case nil:
-			w.heartbeat = time.Now()
-		case core.ToolStart:
-			w.heartbeat, w.tool, w.toolAt = time.Now(), ev.BoundedCall(), time.Now()
-		default:
-			continue
-		}
-		a.workers[m.Origin()] = w
-		changed = true
-	}
-	a.mu.Unlock()
-	if changed {
-		a.emit()
-	}
-}
-
-func (a *adapter) emit() {
-	a.member.Publish(context.Background(), func(error) {}, broadcast.NewMessage(rig.MemberDelegate, true, a.snapshot()))
-}
-
-func (a *adapter) snapshot() core.SwarmStatus {
-	a.mu.Lock()
-	ws := make([]core.SwarmWorker, 0, len(a.workers))
-	for _, w := range a.workers {
-		ws = append(ws, core.SwarmWorker{
-			ID: w.n, Role: "delegate", Task: w.task, Heartbeat: w.heartbeat,
-			State: w.state, Tool: w.tool, ToolAt: w.toolAt,
-		})
-	}
-	a.mu.Unlock()
-	sort.Slice(ws, func(i, j int) bool { return ws[i].ID < ws[j].ID })
-	return core.SwarmStatus{Workers: ws}
 }

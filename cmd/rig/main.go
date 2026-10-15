@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"flag"
 	"fmt"
 	"io"
@@ -53,7 +54,7 @@ import (
 	webtool "github.com/mrsirg97-rgb/rig/v3/tool/web"
 )
 
-const Version = "3.1.0"
+const Version = "3.1.1"
 
 func claimPriority(prompt string, served bool) int {
 	if v := os.Getenv("RIG_PRIORITY"); v != "" {
@@ -69,6 +70,25 @@ func claimPriority(prompt string, served bool) int {
 		return machineroom.PriorityFleet
 	}
 	return machineroom.PriorityTurn
+}
+
+func openStore(label, path string, statements []string, version int, migrate ...func(*sql.Tx, int, int) (string, error)) (store.DB, error) {
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		fmt.Fprintln(os.Stderr, "rig:", err)
+		return store.DB{}, err
+	}
+	db, quarantined, report, err := store.Open(path, statements, version, migrate...)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "rig: %s store: %v\n", label, err)
+		return store.DB{}, err
+	}
+	if quarantined != "" {
+		fmt.Fprintf(os.Stderr, "rig: quarantined corrupt %s file: %s\n", label, quarantined)
+	}
+	if report != "" {
+		fmt.Fprintf(os.Stderr, "rig: %s\n", report)
+	}
+	return db, nil
 }
 
 func main() {
@@ -160,9 +180,13 @@ func main() {
 	}
 
 	if *prompt == sched.PromptStdin {
-		text, err := io.ReadAll(os.Stdin)
+		text, err := io.ReadAll(io.LimitReader(os.Stdin, file.ReadCap+1))
 		if err != nil {
 			fmt.Fprintln(os.Stderr, "rig: -p -:", err)
+			os.Exit(2)
+		}
+		if int64(len(text)) > file.ReadCap {
+			fmt.Fprintf(os.Stderr, "rig: -p -: the prompt on stdin is %d bytes, over the %d ceiling (the read tool's own cap): put it in a file and pass the path\n", len(text), file.ReadCap)
 			os.Exit(2)
 		}
 		if strings.TrimSpace(string(text)) == "" {
@@ -300,44 +324,21 @@ func main() {
 		}
 	}
 
-	remPath := remstore.FilePath(cfgDir)
-	if err := os.MkdirAll(filepath.Dir(remPath), 0o755); err != nil {
-		fmt.Fprintln(os.Stderr, "rig:", err)
+	rdb, err := openStore("rem", remstore.FilePath(cfgDir), remstore.Statements(), remstore.SchemaVersion, remstore.Migration(cwd))
+	if err != nil {
 		os.Exit(1)
-	}
-	rdb, remQuarantined, remReport, remErr := store.Open(remPath, remstore.Statements(), remstore.SchemaVersion, remstore.Migration(cwd))
-	if remErr != nil {
-		fmt.Fprintln(os.Stderr, "rig: rem store:", remErr)
-		os.Exit(1)
-	}
-	if remQuarantined != "" {
-		fmt.Fprintf(os.Stderr, "rig: quarantined corrupt rem file: %s\n", remQuarantined)
-	}
-	if remReport != "" {
-		fmt.Fprintf(os.Stderr, "rig: %s\n", remReport)
 	}
 	defer rdb.DB.Close()
 
 	schedHome := filepath.Join(cfgDir, "scheduler")
-	if err := os.MkdirAll(schedHome, 0o755); err != nil {
-		fmt.Fprintln(os.Stderr, "rig:", err)
-		os.Exit(1)
-	}
 	self, err := os.Executable()
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "rig:", err)
 		os.Exit(1)
 	}
-	scdb, sQuarantined, sReport, sErr := store.Open(filepath.Join(schedHome, "global.sqlite"), sched.Statements(), sched.SchemaVersion, sched.Migration(schedHome, cfgDir, self+" run-job", sched.RealCrontab("")))
-	if sErr != nil {
-		fmt.Fprintln(os.Stderr, "rig: scheduler store:", sErr)
+	scdb, err := openStore("scheduler", filepath.Join(schedHome, "global.sqlite"), sched.Statements(), sched.SchemaVersion, sched.Migration(schedHome, cfgDir, self+" run-job", sched.RealCrontab("")))
+	if err != nil {
 		os.Exit(1)
-	}
-	if sQuarantined != "" {
-		fmt.Fprintf(os.Stderr, "rig: quarantined corrupt scheduler file: %s\n", sQuarantined)
-	}
-	if sReport != "" {
-		fmt.Fprintf(os.Stderr, "rig: %s\n", sReport)
 	}
 	defer scdb.DB.Close()
 
@@ -454,57 +455,22 @@ func main() {
 		os.Exit(1)
 	}
 
-	sessionsPath := state.StorePath(cfgDir, cwd)
-	if err := os.MkdirAll(filepath.Dir(sessionsPath), 0o755); err != nil {
-		fmt.Fprintln(os.Stderr, "rig:", err)
-		os.Exit(1)
-	}
-	sdb, quarantined, sReport, err := store.Open(sessionsPath, state.Statements(), state.SchemaVersion, state.Migration())
+	sdb, err := openStore("state", state.StorePath(cfgDir, cwd), state.Statements(), state.SchemaVersion, state.Migration())
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "rig: state store:", err)
 		os.Exit(1)
-	}
-	if quarantined != "" {
-		fmt.Fprintf(os.Stderr, "rig: quarantined corrupt state file: %s\n", quarantined)
-	}
-	if sReport != "" {
-		fmt.Fprintln(os.Stderr, "rig:", sReport)
 	}
 	defer sdb.DB.Close()
 
 	todoPath := todostore.FilePath(cfgDir)
-	if err := os.MkdirAll(filepath.Dir(todoPath), 0o755); err != nil {
-		fmt.Fprintln(os.Stderr, "rig:", err)
+	tdb, err := openStore("todo", todoPath, todostore.Statements(), todostore.SchemaVersion, todostore.Migration(cwd, filepath.Dir(todoPath)), todostore.ReviewMigration, todostore.EdgeMigration)
+	if err != nil {
 		os.Exit(1)
-	}
-	tdb, todoQuarantined, todoReport, todoErr := store.Open(todoPath, todostore.Statements(), todostore.SchemaVersion, todostore.Migration(cwd, filepath.Dir(todoPath)), todostore.ReviewMigration, todostore.EdgeMigration)
-	if todoErr != nil {
-		fmt.Fprintln(os.Stderr, "rig: todo store:", todoErr)
-		os.Exit(1)
-	}
-	if todoQuarantined != "" {
-		fmt.Fprintf(os.Stderr, "rig: quarantined corrupt todo file: %s\n", todoQuarantined)
-	}
-	if todoReport != "" {
-		fmt.Fprintf(os.Stderr, "rig: %s\n", todoReport)
 	}
 	defer tdb.DB.Close()
 
-	decisionPath := decisionstore.FilePath(cfgDir)
-	if err := os.MkdirAll(filepath.Dir(decisionPath), 0o755); err != nil {
-		fmt.Fprintln(os.Stderr, "rig:", err)
+	decdb, err := openStore("decision", decisionstore.FilePath(cfgDir), decisionstore.Statements(), decisionstore.SchemaVersion, decisionstore.Migration())
+	if err != nil {
 		os.Exit(1)
-	}
-	decdb, dQuarantined, dReport, dErr := store.Open(decisionPath, decisionstore.Statements(), decisionstore.SchemaVersion, decisionstore.Migration())
-	if dErr != nil {
-		fmt.Fprintln(os.Stderr, "rig: decision store:", dErr)
-		os.Exit(1)
-	}
-	if dQuarantined != "" {
-		fmt.Fprintf(os.Stderr, "rig: quarantined corrupt decision file: %s\n", dQuarantined)
-	}
-	if dReport != "" {
-		fmt.Fprintln(os.Stderr, "rig:", dReport)
 	}
 	defer decdb.DB.Close()
 
@@ -570,7 +536,7 @@ func main() {
 			SchedDB: scdb,
 			Home:    schedHome,
 			Project: func(ctx context.Context, session string) (todostore.Project, error) {
-				return sessionQueue(ctx, tdb, cwd, session)
+				return sessionQueue(ctx, sdb, cwd, session)
 			},
 			Cwd:          cwd,
 			WorkerCmd:    []string{self},
@@ -752,7 +718,7 @@ func main() {
 	}); ok {
 		r.askDoor = a.Ask
 	}
-	proj, perr := sessionQueue(context.Background(), tdb, cwd, session.ID)
+	proj, perr := sessionQueue(context.Background(), sdb, cwd, session.ID)
 	if perr != nil {
 		fmt.Fprintln(os.Stderr, "rig: todo queue:", perr)
 	}
@@ -817,94 +783,4 @@ func main() {
 		closeFrontend()
 		os.Exit(1)
 	}
-}
-
-func runJob(args []string) int {
-	if len(args) < 1 {
-		fmt.Fprintln(os.Stderr, "rig: usage: run-job <key>")
-		return 2
-	}
-	cfgDir, err := rigHome()
-	if err != nil {
-		fmt.Fprintln(os.Stderr, "rig:", err)
-		return 1
-	}
-	cwd, err := os.Getwd()
-	if err != nil {
-		fmt.Fprintln(os.Stderr, "rig:", err)
-		return 1
-	}
-	cfg, err := config.Load(cfgDir, cwd)
-	if err != nil {
-		fmt.Fprintln(os.Stderr, "rig:", err)
-		return 1
-	}
-	for _, n := range cfg.Notices {
-		fmt.Fprintln(os.Stderr, "rig:", n)
-	}
-	swapURL := cfg.Settings.SwapURL
-	if v := os.Getenv("RIG_SWAP_URL"); v != "" {
-		swapURL = v
-	}
-	model := cfg.Settings.Model
-	if v := os.Getenv("RIG_MODEL"); v != "" {
-		model = v
-	}
-	self, err := os.Executable()
-	if err != nil {
-		fmt.Fprintln(os.Stderr, "rig:", err)
-		return 1
-	}
-	home := filepath.Join(cfgDir, "scheduler")
-	if err := os.MkdirAll(home, 0o755); err != nil {
-		fmt.Fprintln(os.Stderr, "rig:", err)
-		return 1
-	}
-	decPath := decisionstore.FilePath(cfgDir)
-	var jobDecisions decision.Recorder
-	if err := os.MkdirAll(filepath.Dir(decPath), 0o755); err != nil {
-		fmt.Fprintln(os.Stderr, "rig: decision store:", err)
-	} else if jdb, _, _, jerr := store.Open(decPath, decisionstore.Statements(), decisionstore.SchemaVersion, decisionstore.Migration()); jerr != nil {
-		fmt.Fprintln(os.Stderr, "rig: decision store:", jerr)
-	} else {
-		defer jdb.DB.Close()
-		engine, fleetroom := newFleet()
-		go engine.Start(context.Background())
-		defer engine.Stop()
-		kids := newChildren(cfgDir, cfg.Models, engine, nil)
-		machine, merr := machineroom.New(cfgDir, kids.places, kids.effects, nil)
-		if merr != nil {
-			fmt.Fprintln(os.Stderr, "rig:", merr)
-		} else {
-			defer machine.Close()
-		}
-		fleetroom.Add(rig.MemberFrontend).Subscribe(context.Background(), func(err error, messages ...broadcast.Message) {
-			for _, m := range messages {
-				if n, ok := m.Signal().(evt.Notice); err == nil && ok {
-					fmt.Fprintln(os.Stderr, "rig: "+n.Source+": "+n.Text)
-				}
-			}
-		})
-		jobDecisions = decisionstore.Recorder{DB: jdb, Voice: fleetroom.Add(rig.MemberDecision)}
-	}
-	if err := sched.RunJob(args[0], sched.RunOpts{
-		Home:      home,
-		Crontab:   sched.RealCrontab(""),
-		Fetch:     sched.RealFetch(0),
-		Spawn:     sched.RealSpawn,
-		WorkerCmd: []string{self},
-		SwapURL:   swapURL,
-
-		Sandbox:      cfg.Settings.Sandbox,
-		SandboxBinds: cfg.Settings.SandboxBinds,
-		RigHome:      cfgDir,
-		StateDir:     filepath.Join(cfgDir, "sessions"),
-		Models:       func() models.Table { return cfg.Models },
-		DefaultModel: model,
-		Decisions:    jobDecisions,
-	}); err != nil {
-		fmt.Fprintln(os.Stderr, "rig:", err)
-		return 1
-	}
-	return 0
 }

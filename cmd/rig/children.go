@@ -22,25 +22,28 @@ import (
 const (
 	childProbePause = 100 * time.Millisecond
 	childStopPoll   = 10 * time.Millisecond
+	childStartCeil  = 5 * time.Minute
+	childStopSettle = 2 * childProbePause
 )
 
 type children struct {
-	home   string
-	owned  map[string]int
-	rows   models.Table
-	loop   evt.Engine
-	leave  func()
-	closed bool
-	engine evt.Engine
-	cancel context.CancelFunc
-	self   int64
+	home      string
+	owned     map[string]int
+	rows      models.Table
+	loop      evt.Engine
+	leave     func()
+	closed    bool
+	engine    evt.Engine
+	cancel    context.CancelFunc
+	self      int64
+	startCeil time.Duration
 }
 
 func newChildren(home string, rows models.Table, loop evt.Engine, leave func()) *children {
 	engine := evt.NewEngine()
 	ctx, cancel := context.WithCancel(context.Background())
 	go engine.Start(ctx)
-	return &children{home: home, owned: make(map[string]int), rows: rows, loop: loop, leave: leave, engine: engine, cancel: cancel}
+	return &children{home: home, owned: make(map[string]int), rows: rows, loop: loop, leave: leave, engine: engine, cancel: cancel, startCeil: childStartCeil}
 }
 
 func (c *children) close() { c.cancel() }
@@ -271,8 +274,17 @@ func (c *children) starting(model string, port int, command string, env []string
 			c.engine.Add(evt.Func(func(context.Context) { c.childGone(model, pid) }), room.PriorityChild)
 		}()
 	}
+	giveUp := time.Now().Add(c.startCeil)
 	for alive(pid) {
 		if !room.Answers(port) {
+			if time.Now().After(giveUp) {
+				if mine {
+					syscall.Kill(-pid, syscall.SIGTERM)
+					c.owned[model] = 0
+					c.note(model, fmt.Sprintf("the child lived %s without answering its port %d; the start gave up and signalled it", c.startCeil, port))
+				}
+				return false
+			}
 			time.Sleep(childProbePause)
 			continue
 		}
@@ -372,39 +384,79 @@ func (c *children) stop(model string, grace int) {
 }
 
 func (c *children) stopping(model string, grace int) {
-	pid := c.pidOf(model)
-	if pid <= 0 {
-		return
+	deadline := time.Now().Add(time.Duration(grace) * time.Second)
+	signalled := make(map[int]bool)
+	signal := func(pids []int) {
+		for _, pid := range pids {
+			syscall.Kill(-pid, syscall.SIGTERM)
+			signalled[pid] = true
+		}
 	}
-	sys, _ := os.FindProcess(pid)
-	if sys == nil {
-		return
+	signal(c.pidsOf(model))
+	settled := time.Time{}
+	for {
+		pids := c.pidsOf(model)
+		if len(pids) == 0 {
+			if !settled.IsZero() && time.Since(settled) >= childStopSettle {
+				break
+			}
+			if settled.IsZero() {
+				settled = time.Now()
+			}
+		} else {
+			settled = time.Time{}
+			signal(pids)
+		}
+		if time.Now().After(deadline) {
+			break
+		}
+		time.Sleep(childStopPoll)
 	}
-	syscall.Kill(-pid, syscall.SIGTERM)
-	deadline := time.Duration(grace) * time.Second
-	if !c.waitGone(pid, deadline) {
-		syscall.Kill(-pid, syscall.SIGKILL)
-		c.waitGone(pid, deadline)
+	var survivors []int
+	for pid := range signalled {
+		if alive(pid) {
+			survivors = append(survivors, pid)
+		}
+	}
+	if len(survivors) > 0 {
+		for _, pid := range survivors {
+			syscall.Kill(-pid, syscall.SIGKILL)
+		}
+		c.waitGone(survivors, time.Duration(grace)*time.Second)
 	}
 	c.owned[model] = 0
 }
 
-func (c *children) pidOf(model string) int {
-	if pid := c.owned[model]; pid > 0 && alive(pid) {
-		return pid
+func (c *children) pidsOf(model string) []int {
+	candidates := []int{c.owned[model], c.held(model)}
+	pids := make([]int, 0, len(candidates))
+	seen := make(map[int]bool, len(candidates))
+	for _, pid := range candidates {
+		if pid <= 0 || !alive(pid) || seen[pid] {
+			continue
+		}
+		seen[pid] = true
+		pids = append(pids, pid)
 	}
-	return c.held(model)
+	return pids
 }
 
-func (c *children) waitGone(pid int, within time.Duration) bool {
+func (c *children) waitGone(pids []int, within time.Duration) bool {
 	deadline := time.Now().Add(within)
 	for time.Now().Before(deadline) {
-		if !alive(pid) {
+		gone := true
+		for _, pid := range pids {
+			if alive(pid) {
+				gone = false
+				break
+			}
+		}
+		if gone {
 			return true
 		}
 		time.Sleep(childStopPoll)
 	}
-	return !alive(pid)
+	return false
 }
 
 func alive(pid int) bool {

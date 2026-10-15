@@ -27,6 +27,24 @@ const (
 	meshTestWindow = 4
 )
 
+type stubDoor struct {
+	holdings atomic.Int64
+}
+
+func (d *stubDoor) Id() int64          { return 1 }
+func (d *stubDoor) Close()             {}
+func (d *stubDoor) Machines() []string { return nil }
+func (d *stubDoor) Horizon() int64     { return 0 }
+
+func (d *stubDoor) Holding(int64, broadcast.Mint) (bool, string, int) {
+	d.holdings.Add(1)
+	return false, "", 0
+}
+
+func (d *stubDoor) Foreign(broadcast.Mint) bool               { return false }
+func (d *stubDoor) Refused(int64, broadcast.Mint, int64) bool { return false }
+func (d *stubDoor) Release(broadcast.Mint)                    {}
+
 func wireServer(t *testing.T) (*Server, string, *httptest.Server, room.Member) {
 	return wireServerDoor(t, nil, nil)
 }
@@ -482,6 +500,32 @@ func TestTheGateMakesTheChildReadyForARemoteRequest(t *testing.T) {
 	t.Logf("remote request: %d, ready calls: %d", rec.Code, readied.Load())
 	if readied.Load() == 0 {
 		t.Fatal("the gate served a remote request without the ready path: a cold child is never started")
+	}
+}
+
+func TestACanceledGateStopsPolling(t *testing.T) {
+	door := &stubDoor{}
+	srv, _, _, _ := wireServerDoor(t, nil, door)
+	encoded, err := json.Marshal(broadcast.Mint{Step: 5, Member: 9, Nonce: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	req := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", jsonBody(t, map[string]any{"model": "fake-child", "messages": []any{}}))
+	req.Header.Set(core.MintHeader, string(encoded))
+	req = req.WithContext(ctx)
+	done := make(chan struct{})
+	go func() {
+		srv.Handler().ServeHTTP(httptest.NewRecorder(), req)
+		close(done)
+	}()
+	cancel()
+	<-done
+	time.Sleep(4 * gatePoll)
+	before := door.holdings.Load()
+	time.Sleep(6 * gatePoll)
+	if after := door.holdings.Load(); after != before {
+		t.Fatalf("a canceled request must stop the door poll: %d checks became %d", before, after)
 	}
 }
 

@@ -3,6 +3,7 @@ package anthropic
 import (
 	"net/http"
 	"testing"
+	"time"
 )
 
 func TestHeaderTimeoutOffIsNoBoundAndZeroIsTheDefault(t *testing.T) {
@@ -32,5 +33,18 @@ func TestDefaults(t *testing.T) {
 	}
 	if p.idle != defaultIdleTimeout {
 		t.Fatalf("idle = %s, want the idle bound", p.idle)
+	}
+}
+
+func TestBackoffCapsAHostileRetryAfterAtTheHeaderBound(t *testing.T) {
+	p := New(Config{Model: "m", RetryBase: time.Millisecond}).(*provider)
+	h := http.Header{}
+	h.Set("Retry-After", "999999")
+	if wait := p.backoff(1, h); wait != defaultHeaderTimeout {
+		t.Fatalf("a hostile retry-after waits %s, want the header bound's cap %s", wait, defaultHeaderTimeout)
+	}
+	h.Set("Retry-After", "2")
+	if wait := p.backoff(1, h); wait != 2*time.Second {
+		t.Fatalf("an honourable retry-after waits %s, want the seconds asked for", wait)
 	}
 }

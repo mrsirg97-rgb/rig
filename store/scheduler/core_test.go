@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -210,6 +211,122 @@ func TestCreateExplicitCwdIsTheJobField(t *testing.T) {
 	}
 	list, _ := h.list()
 	contains(t, list, "j1")
+}
+
+func TestListRendersJobsInCreationOrderStably(t *testing.T) {
+	h := newHarness(t, "/ws/order")
+	const n = 8
+	for i := 0; i < n; i++ {
+		_, err := h.create(sched.CreateInput{Model: "w", Name: fmt.Sprintf("job-%02d", i), Prompt: "p", Cron: "0 */4 * * *"})
+		mustOK(t, err)
+	}
+	first, err := h.list()
+	mustOK(t, err)
+	for i := 0; i < 20; i++ {
+		again, err := h.list()
+		mustOK(t, err)
+		if again != first {
+			t.Fatalf("the list moved between calls:\n%s\n---\n%s", first, again)
+		}
+	}
+	last := -1
+	for i := 0; i < n; i++ {
+		at := strings.Index(first, fmt.Sprintf(" job-%02d ", i))
+		if at < 0 {
+			t.Fatalf("job-%02d missing from the list:\n%s", i, first)
+		}
+		if at <= last {
+			t.Fatalf("job-%02d renders before an older job (at %d, last %d):\n%s", i, at, last, first)
+		}
+		last = at
+	}
+}
+
+type gateCrontab struct {
+	mu    sync.Mutex
+	text  string
+	lists chan struct{}
+	gate  chan struct{}
+	once  *sync.Once
+}
+
+func (g *gateCrontab) List() (string, error) {
+	g.mu.Lock()
+	text := g.text
+	g.mu.Unlock()
+	g.lists <- struct{}{}
+	return text, nil
+}
+
+func (g *gateCrontab) Install(text string) error {
+	g.mu.Lock()
+	gated := strings.Contains(text, "rig-scheduler:")
+	g.mu.Unlock()
+	if gated {
+		<-g.gate
+	}
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	g.text = text
+	return nil
+}
+
+func TestRemoveCannotLeaveAResurrectedLineBehind(t *testing.T) {
+	h, key := setupJob(t, t.TempDir(), nil)
+	if _, err := sched.Pause(context.Background(), h.db, h.ct, key, h.sessCwd, "sess-core", h.rigHome); err != nil {
+		t.Fatal(err)
+	}
+	gate := make(chan struct{})
+	once := &sync.Once{}
+	gct := &gateCrontab{text: h.ct.text, lists: make(chan struct{}, 2), gate: gate, once: once}
+	time.AfterFunc(250*time.Millisecond, func() { once.Do(func() { close(gate) }) })
+	errs := make(chan error, 2)
+	go func() {
+		_, err := sched.Resume(context.Background(), h.db, gct, key, h.sessCwd, "sess-core", h.rigHome)
+		errs <- err
+	}()
+	<-gct.lists
+	go func() {
+		_, err := sched.Remove(context.Background(), h.db, gct, key, h.sessCwd, "sess-core", h.rigHome)
+		errs <- err
+	}()
+	for i := 0; i < 2; i++ {
+		if err := <-errs; err != nil && !strings.Contains(err.Error(), "not paused") {
+			t.Fatalf("state action: %v", err)
+		}
+	}
+	state := jobsRow(t, h, key)["state"]
+	present := false
+	for _, l := range sched.Scan(gct.text, h.rigHome) {
+		if l.Key == key {
+			present = true
+		}
+	}
+	if state == "removed" && present {
+		t.Fatalf("the removed job's line came back (resurrection): %q", gct.text)
+	}
+	if state == "active" && !present {
+		t.Fatalf("the resumed job lost its line: %q", gct.text)
+	}
+}
+
+func TestTheFoldCarriesTheBusyPolicyItIsGiven(t *testing.T) {
+	h, key := setupJob(t, t.TempDir(), nil)
+	var maxSeq int64
+	if err := h.db.DB.QueryRow(`SELECT COALESCE(max(seq), 0) FROM events`).Scan(&maxSeq); err != nil {
+		t.Fatal(err)
+	}
+	args := `{"id":"j2","name":"forced","prompt":"p","cron":"0 * * * *","cwd":"/ws/forced","model":"m","busy":"force"}`
+	if _, err := h.db.DB.Exec(`INSERT INTO events (seq, ts, op, args, session) VALUES (?, ?, 'create', ?, NULL)`, maxSeq+1, "2026-08-15T12:00:00.000Z", args); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := sched.Pause(context.Background(), h.db, h.ct, key, h.sessCwd, "sess-core", h.rigHome); err != nil {
+		t.Fatal(err)
+	}
+	row := jobsRow(t, h, "j2")
+	if row == nil || row["busy"] != "force" {
+		t.Fatalf("the fold must carry the busy policy the event names, got %v", row)
+	}
 }
 
 func TestRemovedJobsNameMayBeRecreatedIdsStillMintForward(t *testing.T) {

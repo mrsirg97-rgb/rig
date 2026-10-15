@@ -654,3 +654,10 @@ func TestExecShowReadsOneJobWithItsLastRun(t *testing.T) {
 		t.Fatalf("show of an unknown job: %v", err)
 	}
 }
+
+func TestSchedulerToleratesAnOffSchemaFieldTheConfigSuitePins(t *testing.T) {
+	h := newHarness(t, "/ws/sa")
+	if _, err := exec(t, h, map[string]any{"action": "list", "scope": "cwd"}); err != nil {
+		t.Fatalf("the scheduler door stays tolerant of off-schema fields (cmd/rig's config suite sends scope): %v", err)
+	}
+}

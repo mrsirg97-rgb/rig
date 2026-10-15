@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -104,8 +105,14 @@ func (d *httpDecider) Decide(ctx context.Context, state string, questions []Ques
 	if err != nil {
 		return nil, fmt.Errorf("decision: %s: %w", d.name, err)
 	}
+	ids := make([]string, 0, len(parsed.Answers))
+	for id := range parsed.Answers {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
 	var out []Answer
-	for id, a := range parsed.Answers {
+	for _, id := range ids {
+		a := parsed.Answers[id]
 		value, conf, ok := answerOf(a)
 		if !ok {
 			continue

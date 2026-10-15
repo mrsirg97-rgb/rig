@@ -425,3 +425,10 @@ func TestSessionsListSummaryAndExecShareTheirChecks(t *testing.T) {
 		t.Fatalf("the empty project reply names itself the same way on either door: list %q exec %q", fromMethod, fromExec)
 	}
 }
+
+func TestSessionsRefusesAnUnknownField(t *testing.T) {
+	tool := sessions.New(t.TempDir(), t.TempDir())
+	if _, err := tool.Exec(context.Background(), json.RawMessage(`{"action":"list","bogus":1}`)); err == nil || !strings.Contains(err.Error(), "unknown field") {
+		t.Fatalf("an unknown field must refuse: %v", err)
+	}
+}

@@ -4,9 +4,11 @@ import (
 	"encoding/json"
 	"net"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -157,7 +159,6 @@ func TestAJoinerReadsTheWorld(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { a.Close(); ka.close() })
-	// the winner's flow: the change is in the file before the act is published
 	if err := os.WriteFile(filepath.Join(home, "models.json"), table(rowOf("fake", port, 1), rowOf("other", port+7, 2)), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -180,7 +181,6 @@ func TestAJoinerReadsTheWorld(t *testing.T) {
 		_, err := os.Stat(filepath.Join(home, "logs", "fake.pid"))
 		return err == nil
 	})
-	// the joiner: its table comes from the models file, its residency from the port
 	kb := newChildren(home, loadRows(t, filepath.Join(home, "models.json")), nil, nil)
 	b, err = machineroom.New(home, kb.places, kb.effects, nil)
 	if err != nil {
@@ -241,7 +241,22 @@ func TestTwoInstancesRaceToStartAModelAndOneChildRuns(t *testing.T) {
 		return held != 0 && alive(held)
 	})
 	ka.stop("fake", 2)
-	await(t, "the child to be stopped", 10*time.Second, func() bool { return !machineroom.Answers(port) })
+	deadline := time.Now().Add(10 * time.Second)
+	for machineroom.Answers(port) && time.Now().Before(deadline) {
+		time.Sleep(25 * time.Millisecond)
+	}
+	if machineroom.Answers(port) {
+		world, _ := os.ReadFile(filepath.Join(home, "logs", "fake.pid"))
+		cline := func(pid int) string {
+			if pid <= 0 {
+				return "-"
+			}
+			b, _ := os.ReadFile("/proc/" + strconv.Itoa(pid) + "/cmdline")
+			return strconv.Quote(string(b))
+		}
+		t.Fatalf("the child to be stopped never happened within 10s: pid file %q, a's own %d (%s), b's own %d (%s)",
+			string(world), ka.owned["fake"], cline(ka.owned["fake"]), kb.owned["fake"], cline(kb.owned["fake"]))
+	}
 }
 
 func TestASwapWaitsForTheHoldsAndThenSwaps(t *testing.T) {
@@ -355,5 +370,65 @@ func TestTheUpdateDrainsTheRoom(t *testing.T) {
 	}
 	if len(a.Live()) != 0 {
 		t.Fatalf("the room must drain: %d member(s) left", len(a.Live()))
+	}
+}
+
+func TestAChildThatLivesWithoutAnsweringFailsTheStartWithinTheBound(t *testing.T) {
+	home := t.TempDir()
+	port := freePort(t)
+	c := newChildren(home, models.Table{}, nil, nil)
+	t.Cleanup(c.close)
+	c.startCeil = 300 * time.Millisecond
+	done := make(chan bool, 1)
+	go func() { done <- c.start("slow", port, "sleep 30", nil, "") }()
+	select {
+	case ok := <-done:
+		if ok {
+			t.Fatal("a child that lives without answering its port must fail the start")
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("the start wait must end at its bound, not for as long as the child lives")
+	}
+	deadline := time.Now().Add(5 * time.Second)
+	for c.held("slow") != 0 && time.Now().Before(deadline) {
+		time.Sleep(20 * time.Millisecond)
+	}
+	if pid := c.held("slow"); pid != 0 {
+		t.Fatalf("the failed start must not leave the child as the row's holder, pid file carries %d", pid)
+	}
+}
+
+func dummyChild(t *testing.T) int {
+	t.Helper()
+	cmd := exec.Command("sleep", "30")
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan struct{})
+	go func() { cmd.Wait(); close(done) }()
+	t.Cleanup(func() {
+		syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
+		<-done
+	})
+	return cmd.Process.Pid
+}
+
+func TestAStopSignalsTheWorldsChildAndItsOwn(t *testing.T) {
+	home := t.TempDir()
+	c := newChildren(home, models.Table{}, nil, nil)
+	t.Cleanup(c.close)
+	mine := dummyChild(t)
+	theirs := dummyChild(t)
+	if err := os.MkdirAll(filepath.Join(home, "logs"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	c.owned["fake"] = mine
+	if !c.hold("fake", theirs) {
+		t.Fatal("the world's pid file must carry its child")
+	}
+	c.stop("fake", 1)
+	if alive(mine) || alive(theirs) {
+		t.Fatalf("a stop must signal the instance's own child and the world's (mine %d alive %v, theirs %d alive %v)", mine, alive(mine), theirs, alive(theirs))
 	}
 }

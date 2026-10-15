@@ -42,7 +42,7 @@ type readArgs struct {
 
 func (t readTool) Exec(ctx context.Context, data json.RawMessage) (string, error) {
 	var a readArgs
-	if err := strictDecode(data, &a); err != nil {
+	if err := tool.StrictDecode(data, &a); err != nil {
 		return "", fmt.Errorf("read: args: %w", err)
 	}
 	return t.Read(ctx, a.Path, a.Offset, a.Limit, a.Diff)
@@ -79,7 +79,7 @@ func (readTool) Read(ctx context.Context, path string, offset, limit *int, diff 
 	}
 	recordDigest(ctx, path, sum)
 	s, _ := core.SessionFrom(ctx)
-	rememberContent(s, path, content)
+	rememberContent(s, path, content, span{offset: start, limit: window})
 	if len(content) > ReadCap {
 		content = capReply(content, total, start)
 	}

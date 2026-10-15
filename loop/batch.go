@@ -35,9 +35,6 @@ func newBatch(ctx context.Context, exec core.ToolExec, calls []core.ToolCall, pr
 		}
 		b.priorities[i] = p
 	}
-	if parallel <= 0 {
-		parallel = rig.DefaultParallel
-	}
 	b.sem = make(chan struct{}, parallel)
 	return b
 }
@@ -78,10 +75,8 @@ func (b *batch) call(x int) outcome {
 }
 
 func (b *batch) run(x int) {
-	if b.sem != nil {
-		b.sem <- struct{}{}
-		defer func() { <-b.sem }()
-	}
+	b.sem <- struct{}{}
+	defer func() { <-b.sem }()
 	out := b.call(x)
 	b.submit(b.priorities[x], func() { b.post(x, out) })
 }

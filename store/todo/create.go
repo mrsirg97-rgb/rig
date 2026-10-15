@@ -188,33 +188,30 @@ func (f *folded) applyVerb(e eventRow) {
 	}
 	switch e.op {
 	case "start":
-		if ts.status == "pending" {
-			ts.status = "in_progress"
+		if ts.status == statusPending {
+			ts.status = statusActive
 			ts.owner = attrOf(e)
 		}
 	case "complete":
-		if ts.status == "in_progress" {
-			ts.status = "review"
+		if ts.status == statusActive {
+			ts.status = statusReview
 			ts.owner = ""
 		}
 	case "fail":
-		if ts.status == "in_progress" {
-			ts.status = "failed"
-			ts.owner = ""
-		} else if ts.status == "review" {
-			ts.status = "failed"
+		if ts.status == statusActive || ts.status == statusReview {
+			ts.status = statusFailed
 			ts.owner = ""
 		}
 	case "release":
-		if ts.status == "in_progress" {
-			ts.status = "pending"
+		if ts.status == statusActive {
+			ts.status = statusPending
 			ts.owner = ""
-		} else if ts.status == "review" {
+		} else if ts.status == statusReview {
 			ts.owner = ""
 		}
 	case "retry":
-		if ts.status == "failed" {
-			ts.status = "pending"
+		if ts.status == statusFailed {
+			ts.status = statusPending
 		}
 	}
 	ts.updatedSeq = e.seq
@@ -290,6 +287,7 @@ func cyclePath(f *folded, planned map[string]*taskState) []string {
 	var cycle []string
 	var stack []string
 	onStack := map[string]bool{}
+	safe := map[string]bool{}
 	var dfs func(id string) bool
 	dfs = func(id string) bool {
 		onStack[id] = true
@@ -307,12 +305,16 @@ func cyclePath(f *folded, planned map[string]*taskState) []string {
 			if _, ok := f.tasks[dep]; !ok {
 				continue
 			}
+			if safe[dep] {
+				continue
+			}
 			if dfs(dep) {
 				return true
 			}
 		}
 		onStack[id] = false
 		stack = stack[:len(stack)-1]
+		safe[id] = true
 		return false
 	}
 	var ids []string

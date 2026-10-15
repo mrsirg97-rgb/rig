@@ -28,7 +28,9 @@ it). Stdlib-only leaf; no imports of the stores; its one leaf import is
   a choice's is its label's entry in `probabilities`, a noul's is the
   mass on the side its probability names (yes at 0.5, no below), a
   score's is the top entry; `answer_confidence` is not read. The
-  decider recorded is the configured name, else the URL's host. An
+  decider recorded is the configured name, else the URL's host. The
+  answers come back in row-id order, whatever order the reply's map
+  carried. An
   answer whose confidence is not a probability, whose value or its
   mass is missing, or whose type is unknown drops; the reply body is
   capped at 1 MiB. The fixture pins Laya's reply in its full shape
@@ -90,7 +92,10 @@ it). Stdlib-only leaf; no imports of the stores; its one leaf import is
   one fire through the `Fire` seam, which takes the minted
   member the fire's worker speaks as; the worker's `verdict` tool calls
   arrive as `core.Verdict` messages on the reviewer's member and settle
-  on the loop after the fire ends, last naming wins, a reject without a
+  on the loop after the fire ends — heard only from the voice the fire
+  minted (the same origin check the reasoning deltas take), so a
+  concurrent swarm worker's verdict for the same row never lands —
+  last naming wins, a reject without a
   correction is not a verdict, unnamed rows stay pending. The reviewer
   takes the room in its constructor (2.11.0); nothing parses stdout. A
   bite is a `reviewing` phase (2.11.7): the reviewer opens it, turns the
@@ -139,7 +144,9 @@ it). Stdlib-only leaf; no imports of the stores; its one leaf import is
   label (the wire's `{label, description}`), where the question kinds
   themselves stay the package's `Choice`/`Score`/`Binary` constructors.
   One request per item through the `Decider` (the state on the wire is
-  the item), up to the tool's `Parallel` at once, and the reply grouped:
+  the item, and the recorded row keeps the same state verbatim — one
+  shape for the item, not a wire item beside a JSON-wrapped row),
+  up to the tool's `Parallel` at once, and the reply grouped:
   for each label the items that got it (numbered from 1, first line), then
   the unsure items in full for the model to judge itself. A choice is
   unsure when its confidence is under one half; a yes/no and a score are
@@ -198,6 +205,20 @@ it). Stdlib-only leaf; no imports of the stores; its one leaf import is
 
 ## Gotchas
 
+- The named bounds: `QueueCap` 256 — an order above the proposals one
+  turn can produce (each tool call proposes at most one row), and the
+  safety is the loud drop, not the number (`TestAFullQueueDropsLoudlyWithoutBlocking`
+  pins it); `httpTimeout` two minutes — a ceiling on a hung decision
+  server, not a budget: the queue decides off the turn's path, a local
+  model's answer is seconds, and past two minutes the one goroutine says
+  so and takes the next proposal; `siteStateCap` 4096 bytes — one bash
+  call's normalized state (command, workspace, how it ended) fits
+  several times over, and the cap bounds the row the store and the
+  review prompt carry (`truncate` cuts on runes so a multi-byte command
+  never splits into invalid UTF-8); `maxCorrection` 1024 bytes — a
+  deny's correction is the fix, a paragraph not an essay, the same
+  length `VerdictCost` budgets the worst verdict call at, cut on runes
+  so a multi-byte correction never splits into invalid UTF-8.
 - `Recorder.Record` returns nothing on purpose: a store error never fails
   a call, and the swallow is loud only where the root wired a voice (a
   `broadcast.Member`; the notice carries source `decision`).

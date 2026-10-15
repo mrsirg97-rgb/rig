@@ -94,6 +94,13 @@ func DiscoverChecked(ctx context.Context, k Kernel, files []string, natives map[
 			out = append(out, report)
 		} else if report, ok := loaded[file]; ok {
 			out = append(out, report)
+		} else {
+			out = append(out, Report{
+				Name:    strings.TrimSuffix(filepath.Base(file), filepath.Ext(file)),
+				File:    file,
+				Skipped: true,
+				Reason:  "the kernel's report omitted this file",
+			})
 		}
 	}
 	return out, nil
@@ -129,6 +136,8 @@ for _rig_p in _rig_j.loads('` + pyLiteral(string(paths)) + `'):
     try:
         if not _rig_n:
             raise ValueError("empty name (the filename stem)")
+        if _rig_n in _rig_sys.stdlib_module_names:
+            raise ValueError("the name shadows a stdlib module: " + _rig_n)
         _rig_s = _rig_iu.spec_from_file_location(_rig_n, _rig_p)
         _rig_m = _rig_iu.module_from_spec(_rig_s)
         _rig_s.loader.exec_module(_rig_m)

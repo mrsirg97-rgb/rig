@@ -122,8 +122,8 @@ func TestTheModelSwitchMovesViewWithTheRow(t *testing.T) {
 
 func liveNames(r *root) string {
 	var out []string
-	for _, spec := range r.live.Specs() {
-		out = append(out, spec.Name)
+	for _, tl := range r.live.List() {
+		out = append(out, tl.Name())
 	}
 	sort.Strings(out)
 	return strings.Join(out, ",")

@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/mrsirg97-rgb/rig/v3/core"
@@ -59,6 +60,7 @@ type Server struct {
 
 	origins []string
 	token   string
+	tokenMu sync.Mutex
 	stores  *storeCache
 	static  fs.FS
 	chat    *chat
@@ -92,7 +94,11 @@ func New(opts Options) (*Server, error) {
 	}
 	root := opts.Root
 	if root == "" {
-		root, _ = os.UserHomeDir()
+		dir, err := os.UserHomeDir()
+		if err != nil {
+			return nil, fmt.Errorf("web: the folder browser's root: %v", err)
+		}
+		root = dir
 	}
 	return &Server{
 		home:      opts.Home,
@@ -116,6 +122,8 @@ func New(opts Options) (*Server, error) {
 }
 
 func (s *Server) Token() (string, bool, error) {
+	s.tokenMu.Lock()
+	defer s.tokenMu.Unlock()
 	if s.token != "" {
 		return s.token, false, nil
 	}

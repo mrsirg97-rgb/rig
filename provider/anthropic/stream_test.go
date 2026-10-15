@@ -460,9 +460,7 @@ func TestCacheReadsArriveFromBothUsageShapes(t *testing.T) {
 		read   int
 		prompt int
 	}{
-		// the api reports the cache fields on message_start
 		{name: "from message_start", start: `"input_tokens":100,"cache_read_input_tokens":7`, delta: `"output_tokens":9`, read: 7, prompt: 107},
-		// compat servers report them only on the final message_delta
 		{name: "from message_delta", start: `"input_tokens":100`, delta: `"output_tokens":9,"cache_read_input_tokens":7`, read: 7, prompt: 107},
 	}
 	for _, c := range cases {

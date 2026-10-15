@@ -10,7 +10,9 @@ seams).
 ## What it includes
 
 - `Scheduler`: the tool as its interface (2.12.6): `tool.Definition`,
-  `Exec` as the one JSON door — decode `action` and the fields, keep the
+  `Exec` as the one JSON door — decode `action` and the fields (the one
+  tolerant door: cmd/rig's config suite pins an off-schema `scope` field,
+  so unknown fields ride instead of refusing), keep the
   wire's three-state `model` (absent / `null` / a name, read from the raw
   args because Go cannot say it otherwise), route — and one method per
   verb over the scheduler store: `Create(ctx, in CreateInput)` and

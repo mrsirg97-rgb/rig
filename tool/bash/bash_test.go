@@ -433,3 +433,38 @@ func TestADeferredCommandWithoutAWorkerRefuses(t *testing.T) {
 		t.Fatalf("the refusal must name the missing worker: %v", err)
 	}
 }
+
+func TestBashMissingWorkspaceIsCheckedLikeANamedOne(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root bypasses permission checks")
+	}
+	dir := t.TempDir()
+	wd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chdir(dir); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Chdir(wd) })
+	if err := os.Chmod(dir, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Chmod(dir, 0o755) })
+	tool := bash.New(nil)
+	got, err := tool.Exec(context.Background(), argsJSON(t, map[string]any{"command": "pwd"}))
+	if err == nil || !strings.Contains(err.Error(), "bash: workspace ") || !strings.Contains(err.Error(), "permission denied") {
+		t.Fatalf("a missing workspace arg must fail closed on the same check as a named one, got %q, %v", got, err)
+	}
+	if got != "" {
+		t.Fatalf("a refused workspace carries no content, got %q", got)
+	}
+}
+
+func TestBashNilArgsRefuseAsArgs(t *testing.T) {
+	tool := bash.New(nil)
+	_, err := tool.Exec(context.Background(), nil)
+	if err == nil || !strings.Contains(err.Error(), "bash: args") {
+		t.Fatalf("nil args are an args refusal on the strict door, got %v", err)
+	}
+}

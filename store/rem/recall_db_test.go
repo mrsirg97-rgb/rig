@@ -178,3 +178,30 @@ func refuseMustName(t *testing.T, err error) {
 		}
 	}
 }
+
+func TestBrowseFiltersSupersededAndReinforces(t *testing.T) {
+	db := newDB(t)
+	_, old, _ := learn(t, db, "/ws1", "old browse approach", nil)
+	_, fresh, _ := learn(t, db, "/ws1", "new browse approach", map[string]any{"supersedes": old.Id})
+	_, hits, err := Recall(context.Background(), db, "/ws1", RecallInput{K: 10})
+	if err != nil {
+		t.Fatalf("browse: %v", err)
+	}
+	if len(hits) != 1 || hits[0].Content != "new browse approach" {
+		t.Fatalf("the browse arm must drop superseded rows like the recall arms: %+v", hits)
+	}
+	row := memByID(t, db, fresh.Id)
+	if row == nil || row.AccessCount != 1 || row.LastAccessedAt == nil {
+		t.Fatalf("the browse arm must reinforce what it returns: %+v", row)
+	}
+	if got := memByID(t, db, old.Id); got == nil || got.AccessCount != 0 {
+		t.Fatalf("the filtered row must not reinforce: %+v", got)
+	}
+	_, hits2, err := Recall(context.Background(), db, "/ws1", RecallInput{K: 10, IncludeSuperseded: true})
+	if err != nil {
+		t.Fatalf("browse with superseded: %v", err)
+	}
+	if len(hits2) != 2 {
+		t.Fatalf("include_superseded must ride the browse arm too: %+v", hits2)
+	}
+}

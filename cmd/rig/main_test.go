@@ -30,8 +30,8 @@ import (
 
 func TestVersionIsTheFreeze(t *testing.T) {
 
-	if Version != "3.1.0" {
-		t.Fatalf("Version = %q, want 3.1.0", Version)
+	if Version != "3.1.1" {
+		t.Fatalf("Version = %q, want 3.1.1", Version)
 	}
 
 	if !regexp.MustCompile(`^\d+\.\d+\.\d+$`).MatchString(Version) {
@@ -544,6 +544,28 @@ func TestModelSwitchResetsAForeignEffort(t *testing.T) {
 	}
 	if r.effort != "max" || note != "" {
 		t.Fatalf("a level the row names must survive the switch silently, got (%q, %q)", r.effort, note)
+	}
+}
+
+func TestANewSessionWhoseChdirFailsLeavesTheOldSessionOpen(t *testing.T) {
+	r := testRoot(nullFrontend{})
+	db := storeRoot(t, r)
+	if err := r.rec.Ensure(); err != nil {
+		t.Fatalf("ensure the session row: %v", err)
+	}
+	shut := t.TempDir()
+	if err := os.Chmod(shut, 0o444); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Chmod(shut, 0o755) })
+	if _, err := r.newSession(context.Background(), shut); err == nil || !strings.Contains(err.Error(), "chdir") {
+		t.Fatalf("an unreachable workspace must refuse at the chdir: %v", err)
+	}
+	if s := mustReadSession(t, db, r.session.ID); s.Exit != "open" {
+		t.Fatalf("a failed new session must leave the old session open, got exit %q", s.Exit)
+	}
+	if r.rec == nil || r.session == nil {
+		t.Fatal("the failed new session must not disturb the live session")
 	}
 }
 

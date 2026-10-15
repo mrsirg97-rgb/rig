@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+	"unicode/utf8"
 
 	"github.com/mrsirg97-rgb/rig/v3/core"
 	"github.com/mrsirg97-rgb/rig/v3/middleware/approve"
@@ -130,6 +131,25 @@ func TestPromptPreviewTruncates(t *testing.T) {
 	}
 	if p := approve.Prompt(call("todo", `{}`)); p != "todo" {
 		t.Fatalf("empty args drop the preview: %q", p)
+	}
+}
+
+func TestTheApprovePromptCutsOnRuneBoundaries(t *testing.T) {
+	args := `{"cmd":"` + strings.Repeat("a", 111) + strings.Repeat("日", 10) + `"}`
+	p := approve.Prompt(call("bash", args))
+	if !utf8.ValidString(p) {
+		t.Fatalf("the preview must stay valid UTF-8: %q", p)
+	}
+	if !strings.HasSuffix(p, "…") {
+		t.Fatalf("the preview must end with the ellipsis after a whole rune: %q", p)
+	}
+	task := `{"task":"` + strings.Repeat("a", 119) + strings.Repeat("日", 10) + `"}`
+	d := approve.Prompt(call("delegate", task))
+	if !utf8.ValidString(d) {
+		t.Fatalf("the delegate preview must stay valid UTF-8: %q", d)
+	}
+	if !strings.HasSuffix(d, "…") {
+		t.Fatalf("the delegate preview must end with the ellipsis after a whole rune: %q", d)
 	}
 }
 

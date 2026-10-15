@@ -9,18 +9,26 @@ prompt, the process's stdout is the response.
 
 ## What it includes
 
-- `New(prompt, out)`: refuses an empty prompt at construction
-  (`ErrOneShot`): a one-shot with no prompt is a construction error, not
-  an empty turn (the loop's blank-line skip would otherwise swallow it).
-- `Input`: the prompt once, then EOF.
+- `OneShot` is an exported struct the caller builds literally —
+  `Prompt`, `Out`, `Err`, `Heartbeat`, `Fleet` (cmd/rig's one-shot path
+  constructs it straight from the flags): there is no `New`. The
+  empty-prompt refusal lives at the caller: `ErrPrompt(prompt)` returns
+  the `ErrOneShot` sentinel and cmd/rig exits before constructing — a
+  one-shot with no prompt is a construction error, not an empty turn
+  (the loop's blank-line skip would otherwise swallow it).
+- `Input`: the prompt once, then EOF; a literally built one-shot whose
+  `Prompt` is empty yields the EOF at once.
 - `Notify`: assistant text straight through, faults loud. Tool events
   stay out of the worker's stdout: their results are the turn's
   substance, not its report. `Err` carries the reasoning deltas as they
-  stream and one line at tool start and end. `Fleet` (a `broadcast`
-  transport, nil when nobody listens) carries the liveness: a heartbeat
-  message while a tool runs, so a worker silent during a long tool run
-  never looks hung to the supervisor, the delegate tool or the runner's
-  stall watch; `Heartbeat` (default 30s) sets the cadence. Each tool
+  stream, any `evt.Notice` as `rig: <source>: <text>`, and one line at
+  tool start and end. `Fleet` (a `broadcast` transport, nil when nobody
+  listens) carries the liveness: a heartbeat message while a tool runs,
+  so a worker silent during a long tool run never looks hung to the
+  supervisor, the delegate tool or the runner's stall watch; `Heartbeat`
+  (default 30s) sets the cadence. The liveness does not depend on `Err`:
+  a worker with a fleet but no stderr writer still heartbeats, and stops
+  when its last tool ends. Each tool
   call the worker makes crosses too, as a bounded `core.ToolStart`
   (`preview.go`, 2.14.0): the tool's name and one short argument — the
   first value among `path`, `command`, `pattern`, `query`, `url`, `task`,

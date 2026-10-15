@@ -13,6 +13,8 @@ import (
 
 var PluginNameRe = regexp.MustCompile(`^[a-z][a-z0-9_]{0,63}$`)
 
+const maxSourceBytes = 64 * 1024
+
 type nameCollisionError struct {
 	name string
 	file string
@@ -124,6 +126,9 @@ func WritePending(home, dir string, natives map[string]bool, name, source string
 	}
 	if strings.TrimSpace(source) == "" {
 		return "", false, fmt.Errorf("the source is required")
+	}
+	if len(source) > maxSourceBytes {
+		return "", false, fmt.Errorf("the source is %d bytes; the ceiling is %d bytes (the tool-result cap)", len(source), maxSourceBytes)
 	}
 	if err := contractRefusal(c, source); err != nil {
 		return "", false, err

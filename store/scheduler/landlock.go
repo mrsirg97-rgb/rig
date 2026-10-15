@@ -47,7 +47,7 @@ func LandlockABI() (int, error) {
 	return landlockABIFn()
 }
 
-func landlockSpawn(opts RunOpts, cwd string, workerCmd []string, model, effort, prompt, allow, sessionID string, extraEnv ...string) ([]string, *SocketProxy, []string, string, error) {
+func landlockSpawn(opts RunOpts, cwd, sockID string, workerCmd []string, model, effort, allow, sessionID string, extraEnv ...string) ([]string, *SocketProxy, []string, string, error) {
 	if runtime.GOOS != "linux" {
 		return nil, nil, nil, LandlockPlatformRefusal(runtime.GOOS), nil
 	}
@@ -89,7 +89,7 @@ func landlockSpawn(opts RunOpts, cwd string, workerCmd []string, model, effort, 
 			return nil, nil, nil, LandlockBindRefusal(i, src, err), nil
 		}
 	}
-	sock := filepath.Join(cwd, ".rig-job.sock")
+	sock := filepath.Join(filepath.Join(cwd, ".rig-job"), sockID+".sock")
 	proxy, err := NewSocketProxy(sock, opts.SwapURL)
 	if err != nil {
 		return nil, nil, nil, SocketRefusal(sock, err), nil
@@ -128,16 +128,13 @@ func landlockSpawn(opts RunOpts, cwd string, workerCmd []string, model, effort, 
 	return argv, proxy, env, "", nil
 }
 
-func spawnJailed(opts RunOpts, profile, cwd string, workerCmd []string, model, effort, prompt, allow, sessionID string, extraEnv ...string) ([]string, *SocketProxy, []string, string, error) {
+func spawnJailed(opts RunOpts, profile, cwd, sockID string, workerCmd []string, model, effort, allow, sessionID string, fleet *fleetPipe, extraEnv ...string) ([]string, *SocketProxy, []string, string, error) {
 	if profile == "landlock" {
-		argv, proxy, env, refuse, err := landlockSpawn(opts, cwd, workerCmd, model, effort, prompt, allow, sessionID, extraEnv...)
-		return argv, proxy, env, refuse, err
+		shared := append(modelEnv(opts, model), fleetEnv(fleet)...)
+		return landlockSpawn(opts, cwd, sockID, workerCmd, model, effort, allow, sessionID, append(shared, extraEnv...)...)
 	}
-	argv, proxy, refuse, err := jailSpawn(opts, cwd, workerCmd, model, effort, prompt, allow, sessionID, extraEnv...)
-	if err != nil || refuse != "" {
-		return argv, proxy, nil, refuse, err
-	}
-	return argv, proxy, nil, "", nil
+	argv, proxy, env, refuse, err := jailSpawn(opts, cwd, sockID, workerCmd, model, effort, allow, sessionID, fleet, extraEnv...)
+	return argv, proxy, env, refuse, err
 }
 
 func ApplyLandlock(spec string) error {

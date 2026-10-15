@@ -3,8 +3,10 @@ package state
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
+	"github.com/mrsirg97-rgb/rig/v3/policy/compact"
 	"github.com/mrsirg97-rgb/rig/v3/store"
 )
 
@@ -27,11 +29,11 @@ type SessionRow struct {
 }
 
 func ListSessions(ctx context.Context, db store.DB, n int) ([]SessionRow, error) {
-	if n <= 0 || n > ListCap {
-		n = ListCap
+	if n < 1 || n > ListCap {
+		return nil, fmt.Errorf("state: limit must be an integer 1-%d, got %d", ListCap, n)
 	}
 	rows, err := db.DB.QueryContext(ctx, `
-		WITH s AS (SELECT * FROM "sessions" ORDER BY "started_at" DESC LIMIT $1)
+		WITH s AS (SELECT * FROM "sessions" ORDER BY "started_at" DESC, "id" DESC LIMIT $1)
 		SELECT s."id", s."cwd", s."started_at",
 			CASE WHEN s."ended_at" IS NULL THEN 'open' ELSE s."exit" END,
 			s."model", s."version",
@@ -42,7 +44,7 @@ func ListSessions(ctx context.Context, db store.DB, n int) ([]SessionRow, error)
 				         SELECT MAX(m2."seq") FROM "messages" m2
 				         WHERE m2."session_id" = s."id"
 				           AND m2."role" = 'user'
-				           AND m2."content" LIKE '[compaction] %'
+				           AND m2."content" LIKE $2
 				       ), 0)),
 			(SELECT count(*) FROM "faults" f WHERE f."session_id" = s."id"),
 			COALESCE((SELECT SUM(u."prompt" + u."completion") FROM "usage" u
@@ -53,7 +55,7 @@ func ListSessions(ctx context.Context, db store.DB, n int) ([]SessionRow, error)
 				  WHERE m."session_id" = s."id"), 0),
 			COALESCE(s."label", '')
 		FROM s
-		ORDER BY s."started_at" DESC`, n)
+		ORDER BY s."started_at" DESC, s."id" DESC`, n, compact.SummaryMarker+"%")
 	if err != nil {
 		return nil, err
 	}
@@ -91,10 +93,10 @@ func RecentToolCalls(ctx context.Context, db store.DB, sessionID, name, args str
 		        SELECT MAX(m2."seq") FROM "messages" m2
 		        WHERE m2."session_id" = $1
 		          AND m2."role" = 'user'
-		          AND m2."content" LIKE '[compaction] %'
+		          AND m2."content" LIKE $4
 		      ), 0)
 		ORDER BY tc."started_at" DESC, tc."message_seq" DESC, tc."id" DESC
-		LIMIT $4`, sessionID, name, args, n+1)
+		LIMIT $5`, sessionID, name, args, compact.SummaryMarker+"%", n+1)
 	if err != nil {
 		return nil, err
 	}

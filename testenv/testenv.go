@@ -26,7 +26,13 @@ var (
 var testHome string
 
 func Main(m *testing.M) {
-	isolate()
+	if err := isolate(); err != nil {
+		if testHome != "" {
+			os.RemoveAll(testHome)
+		}
+		fmt.Fprintf(os.Stderr, "testenv: %v\n", err)
+		os.Exit(1)
+	}
 	code := m.Run()
 	if testHome != "" {
 		os.RemoveAll(testHome)
@@ -34,7 +40,7 @@ func Main(m *testing.M) {
 	os.Exit(code)
 }
 
-func isolate() {
+func isolate() error {
 	realHome := os.Getenv("HOME")
 	gopath := os.Getenv("GOPATH")
 	if gopath == "" {
@@ -48,29 +54,46 @@ func isolate() {
 	if gocache == "" {
 		gocache = filepath.Join(realHome, ".cache", "go-build")
 	}
-	testHome, _ = os.MkdirTemp("", "rig-test-home-*")
+	home, err := mkTestHome("")
+	if err != nil {
+		return err
+	}
+	testHome = home
 	os.Setenv("HOME", testHome)
 	os.Setenv("XDG_CONFIG_HOME", filepath.Join(testHome, ".config"))
 	os.Setenv("RIG_HOME", "")
 	os.Setenv("RIG_SWAP_URL", ClosedSwapURL)
 	os.Unsetenv(sched.DelegateEnv)
 	os.Unsetenv(sched.FleetEnv)
-	wallCrontab(testHome)
+	if err := wallCrontab(testHome); err != nil {
+		return err
+	}
 	os.Setenv("GOPATH", gopath)
 	os.Setenv("GOMODCACHE", gomod)
 	os.Setenv("GOCACHE", gocache)
+	return nil
 }
 
-func wallCrontab(home string) {
+func mkTestHome(dir string) (string, error) {
+	home, err := os.MkdirTemp(dir, "rig-test-home-*")
+	if err != nil {
+		return "", fmt.Errorf("build the test home: %v", err)
+	}
+	return home, nil
+}
+
+func wallCrontab(home string) error {
 	bin := filepath.Join(home, "bin")
 	if err := os.MkdirAll(bin, 0o755); err != nil {
-		return
+		return fmt.Errorf("crontab shim: mkdir %s: %v", bin, err)
 	}
+	path := filepath.Join(bin, "crontab")
 	script := "#!/bin/sh\necho 'testenv: a test reached the operator crontab' >&2\nexit 3\n"
-	if err := os.WriteFile(filepath.Join(bin, "crontab"), []byte(script), 0o755); err != nil {
-		return
+	if err := os.WriteFile(path, []byte(script), 0o755); err != nil {
+		return fmt.Errorf("crontab shim: write %s: %v", path, err)
 	}
 	os.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+	return nil
 }
 
 type transport struct{}

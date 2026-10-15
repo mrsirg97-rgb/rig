@@ -23,10 +23,11 @@ row's details, so the reply names where the work lives.
 - `Todo`: the tool as its interface (2.12.4), the template for every
   native tool. It embeds `tool.Definition` (the words), declares `Exec`
   (the one JSON door) and one typed method per verb: `Create(ctx, scope,
-  item)`, `Claim`, `Start`, `Complete`, `Fail`, `Release`, `Retry`,
+  item)`, `Claim`, `Complete`, `Fail`, `Release`, `Retry`,
   `Move`, `Prune`, `Read`, `ReadAll`, `ReadOne`, `Finished`, `Note`,
   `Notes`, `Accept`, `Reject`, each taking the scope and the verb's own
   fields and reading the session from the ctx. `Exec` decodes the call
+  strictly (an unknown field refuses, matching the bash/delegate doors)
   and routes it; it holds no logic of its own, so a Go caller and the
   model reach the same verb through the same checks. The struct is
   unexported and `New` returns the interface. `New` takes a `Mode` set
@@ -40,6 +41,8 @@ row's details, so the reply names where the work lives.
 
 ## Gotchas
 
+- The board mutations that change what work is claimable — `create`,
+  `complete` and `fail` — wake the swarm router; reads and notes do not.
 - Replies are the store's shapes, verbatim: the adapter does not
   re-voice; the store's teaching refusals carry the protocol.
 - `create` takes one task (2.12.4): `text`, and `requires` / `blocks`

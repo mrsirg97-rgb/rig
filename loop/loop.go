@@ -202,10 +202,7 @@ func (r *run) streamEvent(t *turn, ev evt.Signal) {
 		r.k.Frontend.Notify(ev)
 		t.reasoning.WriteString(e.Text)
 		if len(e.Details) > 0 {
-			var items []json.RawMessage
-			if json.Unmarshal(e.Details, &items) == nil {
-				t.reasoningDetails = append(t.reasoningDetails, items...)
-			}
+			r.keepReasoningDetails(t, e.Details)
 		}
 	case core.ToolCallEvent:
 		r.k.Frontend.Notify(ev)
@@ -225,6 +222,23 @@ func (r *run) streamEvent(t *turn, ev evt.Signal) {
 	default:
 		r.k.Frontend.Notify(ev)
 	}
+}
+
+func (r *run) keepReasoningDetails(t *turn, details json.RawMessage) {
+	var items []json.RawMessage
+	if err := json.Unmarshal(details, &items); err == nil && items != nil {
+		t.reasoningDetails = append(t.reasoningDetails, items...)
+		return
+	}
+	if !json.Valid(details) {
+		r.k.Frontend.Notify(evt.Notice{
+			Source: "loop",
+			Level:  evt.LevelError,
+			Text:   fmt.Sprintf("reasoning details are not JSON, dropping %d bytes", len(details)),
+		})
+		return
+	}
+	t.reasoningDetails = append(t.reasoningDetails, details)
 }
 
 func (r *run) streamEnd(t *turn) {
@@ -264,7 +278,7 @@ func (r *run) streamEnd(t *turn) {
 		r.end(t)
 	default:
 		session.Append(t.reply(t.calls))
-		t.batch = newBatch(core.WithSession(t.ctx, session), r.exec, t.calls, r.k.Priority, r.k.Parallel, func(x int, out outcome) {
+		t.batch = newBatch(core.WithSession(t.ctx, session), r.exec, t.calls, r.k.Priority, r.k.EffectiveParallel(), func(x int, out outcome) {
 			r.post(rig.PriorityTool, func() { r.toolDone(t, x, out) })
 		}, r.post)
 		t.results = make([]*outcome, len(t.calls))

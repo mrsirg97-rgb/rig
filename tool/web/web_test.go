@@ -1072,3 +1072,11 @@ func TestWebSearchFetchAndExecShareTheirChecks(t *testing.T) {
 		t.Fatalf("one search replies the same bytes through either door: search %q exec %q", fromSearch, fromExec)
 	}
 }
+
+func TestWebRefusesAnUnknownField(t *testing.T) {
+	w := webTool(Config{Fetch: FetchConfig{Lookup: publicLookup, Do: direct()}})
+	_, err := execArgs(t, w, `{"action":"fetch","target":"http://edge.test/one","bogus":1}`)
+	if err == nil || !strings.Contains(err.Error(), "unknown field") {
+		t.Fatalf("an unknown field must refuse: %v", err)
+	}
+}

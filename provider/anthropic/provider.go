@@ -63,6 +63,7 @@ const (
 	defaultHeaderTimeout               = 5 * time.Minute
 	defaultIdleTimeout                 = 10 * time.Minute
 	defaultRetryBase                   = 500 * time.Millisecond
+	maxRetryAfterWait                  = defaultHeaderTimeout
 	HeaderTimeoutOff     time.Duration = -1
 )
 

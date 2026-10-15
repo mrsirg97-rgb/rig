@@ -33,13 +33,18 @@ seams the generated stack executes through.
 ## Gotchas
 
 - The pragmas ride the DSN (`_pragma=…`), applied by the driver at
-  connection init; a pragma `Exec`'d against one pooled connection would
-  leave every other connection without it. The cross-process posture (a
+  connection init, and ride it alone — a pragma `Exec`'d against one
+  pooled connection would leave every other connection without it.
+  The cross-process posture (a
   runner writing while a session reads) is WAL + busy_timeout +
   `_txlock=immediate` (every transaction takes the RESERVED lock at begin).
 - An existing corrupt file is quarantined aside as `<path>.corrupt-<ts>`
   and a fresh one created; quarantined names the aside so callers surface
-  it. Never silently truncated. A schema/policy error surfaces and is
-  never quarantined.
+  it. The `-wal`/`-shm` sidecars move with the main file (a fresh store
+  must never adopt a stale WAL, and the quarantined pair is the
+  operator's evidence). Never silently truncated. The integrity probe
+  is `PRAGMA quick_check` — every btree, not just the schema page — so
+  page-level corruption quarantines too. A schema/policy error surfaces
+  and is never quarantined.
 - `readVersion` inserts `schema_version` on first open: a mismatch refuses
   loudly naming both, and an upgrade without a migration is a mismatch.

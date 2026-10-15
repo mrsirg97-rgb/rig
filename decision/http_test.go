@@ -279,3 +279,42 @@ func TestAnUnreachableServerIsAnError(t *testing.T) {
 		t.Fatal("an unreachable decider is an error, never a silent answer")
 	}
 }
+
+func TestTheReplyAnswersComeBackInRowOrder(t *testing.T) {
+	srv := testenv.Server(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"answers":{` +
+			`"delta":{"type":"noul","noul":0.9},` +
+			`"alpha":{"type":"noul","noul":0.8},` +
+			`"echo":{"type":"noul","noul":0.7},` +
+			`"bravo":{"type":"noul","noul":0.6}}}`))
+	}))
+	dec, err := decision.NewHTTP(decision.HTTPOptions{URL: srv.URL, Client: testClient()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var orders []string
+	for i := 0; i < 100; i++ {
+		answers, err := dec.Decide(context.Background(), `{"command":"ls"}`, []decision.Question{decision.Binary("ok", "ok?")})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(answers) != 4 {
+			t.Fatalf("every answer comes back: %d", len(answers))
+		}
+		var ids []string
+		for _, a := range answers {
+			ids = append(ids, a.Question)
+		}
+		orders = append(orders, strings.Join(ids, ","))
+	}
+	stable := orders[0]
+	for _, o := range orders {
+		if o != stable {
+			t.Fatalf("the answers must arrive in one order, got %q and %q", stable, o)
+		}
+	}
+	if stable != "alpha,bravo,delta,echo" {
+		t.Fatalf("the order is the row ids sorted: %q", stable)
+	}
+}

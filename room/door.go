@@ -41,6 +41,7 @@ type door struct {
 	mesh    broadcast.Mesh
 	engine  evt.Engine
 	cancel  context.CancelFunc
+	gone    <-chan struct{}
 	window  int64
 	remote  []int64
 	home    map[int64]bool
@@ -56,6 +57,7 @@ func NewDoor(member Member, cfg broadcast.MeshConfig, remote, home []int64) (Doo
 		member:  member,
 		engine:  engine,
 		cancel:  cancel,
+		gone:    ctx.Done(),
 		window:  cfg.Window,
 		remote:  remote,
 		home:    make(map[int64]bool, len(home)),
@@ -201,22 +203,26 @@ func mirrored(act broadcast.Act) broadcast.Mint {
 }
 
 func (d *door) Holding(key int64, mint broadcast.Mint) (bool, string, int) {
-	found := make(chan *repost, 1)
+	found := make(chan repost, 1)
 	d.engine.Add(evt.Func(func(context.Context) {
 		for _, r := range d.in[key] {
 			if r.remote != mint {
 				continue
 			}
-			found <- r
+			found <- *r
 			return
 		}
 		close(found)
 	}), PriorityFleet)
-	r, ok := <-found
-	if !ok {
+	select {
+	case r, ok := <-found:
+		if !ok {
+			return false, "", 0
+		}
+		return r.admitted, r.machine, r.priority
+	case <-d.gone:
 		return false, "", 0
 	}
-	return r.admitted, r.machine, r.priority
 }
 
 func (d *door) Foreign(mint broadcast.Mint) bool {
@@ -225,7 +231,12 @@ func (d *door) Foreign(mint broadcast.Mint) bool {
 		_, ok := d.foreign[mint]
 		seen <- ok
 	}), PriorityFleet)
-	return <-seen
+	select {
+	case ok := <-seen:
+		return ok
+	case <-d.gone:
+		return false
+	}
 }
 
 func (d *door) Refused(key int64, mint broadcast.Mint, since int64) bool {
@@ -239,7 +250,12 @@ func (d *door) Refused(key int64, mint broadcast.Mint, since int64) bool {
 		}
 		answer <- d.mesh.Horizon() >= since+d.window+2
 	}), PriorityFleet)
-	return <-answer
+	select {
+	case refused := <-answer:
+		return refused
+	case <-d.gone:
+		return false
+	}
 }
 
 func (d *door) sweep() {

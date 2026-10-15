@@ -2,6 +2,7 @@ package command_test
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 
@@ -73,5 +74,17 @@ func TestRoleSubCarriesTheThree(t *testing.T) {
 		if s.Desc == "" {
 			t.Fatalf("Sub() %d (%s) must carry a one-liner", i, s.Name)
 		}
+	}
+}
+
+func TestRoleSetCarriesTheSeamError(t *testing.T) {
+	byName := allByName(t)
+	env := &command.Env{
+		Role:    func() string { return "architect" },
+		SetRole: func(ctx context.Context, name string) error { return errors.New("role: the seam refused") },
+	}
+	_, err := byName["role"].Run(context.Background(), "reviewer", env)
+	if err == nil || !strings.Contains(err.Error(), "the seam refused") {
+		t.Fatalf("the failing seam = %v, want the error carried instead of the (next turn) reply", err)
 	}
 }

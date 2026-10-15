@@ -2,6 +2,7 @@ package decision
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"time"
@@ -92,6 +93,18 @@ type row struct {
 	decider    string
 }
 
+func normState(state string) string {
+	return truncate(state, stateCap)
+}
+
+func mint(ctx context.Context, tx *sql.Tx, table string) (int64, error) {
+	var id int64
+	if err := tx.QueryRowContext(ctx, `SELECT COALESCE(MAX("id"), 0) + 1 FROM "`+table+`"`).Scan(&id); err != nil {
+		return 0, fmt.Errorf("decision: mint id: %w", err)
+	}
+	return id, nil
+}
+
 func insert(ctx context.Context, db store.DB, r row) (int64, error) {
 	if r.scope == "" {
 		return 0, fmt.Errorf("decision: no scope")
@@ -106,17 +119,15 @@ func insert(ctx context.Context, db store.DB, r row) (int64, error) {
 	if err != nil {
 		return 0, fmt.Errorf("decision: question: %w", err)
 	}
-	if len(r.state) > stateCap {
-		r.state = truncate(r.state, stateCap)
-	}
+	r.state = normState(r.state)
 	bound, tx, err := db.Tx(ctx)
 	if err != nil {
 		return 0, err
 	}
 	defer tx.Rollback()
-	var id int64
-	if err := tx.QueryRowContext(ctx, `SELECT COALESCE(MAX("id"), 0) + 1 FROM "decisions"`).Scan(&id); err != nil {
-		return 0, fmt.Errorf("decision: mint id: %w", err)
+	id, err := mint(ctx, tx, "decisions")
+	if err != nil {
+		return 0, err
 	}
 	out, err := decisiondomain.NewDecisionDomain().InsertDecision(bound, decisiondomain.Decision{
 		Id:             id,
@@ -203,7 +214,7 @@ func Settled(ctx context.Context, db store.DB, site string, q decision.Question,
 	rows, err := tx.QueryContext(ctx,
 		`SELECT "status", "answer", "reviewer_answer", "question" FROM "decisions"
 		 WHERE "site" = ? AND "state" = ? AND ("status" = 'approved' OR ("status" = 'denied' AND "reviewer_answer" IS NOT NULL))
-		 ORDER BY "id" DESC`, site, state)
+		 ORDER BY "id" DESC`, site, normState(state))
 	if err != nil {
 		return "", false, fmt.Errorf("decision: settled: %w", err)
 	}

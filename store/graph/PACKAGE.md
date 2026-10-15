@@ -42,7 +42,9 @@ project-relative; each worktree's store maps its own tree.
 - `live.go` + `task.go`: a symbol whose file is gone is a stale row,
   not news. The live refresh and the task pack drop the file's rows the
   moment they find it missing and say nothing (2.11.5), the same as the
-  write path does for an index of a deleted file. The queue's `say`
+  write path does for an index of a deleted file — the file's lexical
+  rows (`symbol_fts`, `symbol_grams`) go with it, so the task pack is
+  never offered a candidate whose file is gone. The queue's `say`
   speaks any one sentence once for its life.
 - `extract_lsp.go` + `lsp.go`: every other language through a
   language server. A server that will not start (not on `PATH`, dies at
@@ -54,11 +56,19 @@ project-relative; each worktree's store maps its own tree.
   ignored, a 30s cap per request) and the one-at-a-time child: a server
   starts on the first read of a file in its language, touching another
   language replaces it (the old child's stdin closes, it is joined,
-  killed after 2s), and the queue's context close stops it. The default
+  killed after 2s), and the queue's context close stops it. A frame
+  whose `Content-Length` is negative or over the read ceiling dies the
+  client (the body is never allocated at the server's word), and the
+  death line carries the child's last stderr words (a bounded tail,
+  never discarded). The default
   command is `typescript-language-server --stdio` — TypeScript is the
   first real target; the operator installs the servers, rig spawns them,
-  and `SetServer` remaps a language (the tests use it to point at a fake
-  speaking the protocol over stdio). Symbols come from
+  and the queue's `SetServer` remaps a language (the tests use it to
+  point at a fake speaking the protocol over stdio) and clears the
+  language's gone flag, so a re-pointed server gets another chance —
+  the one restart that keeps "stay unmapped until the next start"
+  honest. `file://` URIs escape `#` and `?` (the URI grammar's
+  reserved bytes) so a path round-trips through the peer's parser. Symbols come from
   `textDocument/documentSymbol` at extraction; edges stay lazy:
   `pack` resolves them through `textDocument/references` at the symbol's
   position in the live file, writes the edge rows (each citation's
@@ -81,9 +91,11 @@ project-relative; each worktree's store maps its own tree.
 - `migrate.go`: the schema version 2 migration, the lexical containers
   rebuilt from `symbols` on open.
 - `task.go`: the pack by task (2.10.0): the two lexical arms recall uses
-  (FTS and trigram, fused as recall fuses them, reciprocal rank k=60)
+  (FTS and trigram, fused as recall fuses them — through `store/fts`'s
+  rank-fusion contract, the same k and 1-based ranks)
   over `symbol_fts`/`symbol_grams`, the candidate items (the live
-  signature at file:line) cut at the item ceiling before any request,
+  signature at file:line) cut at the item ceiling before any request
+  (an exact fit loads; the ceiling refuses only what does not fit),
   the scorer seam (`Scorer`, implemented by `decision.PackScorer`) —
   the blocks (definition, callers, callees — what spends the load cap)
   are built down the rank until the cap is spent and only that prefix
@@ -91,7 +103,10 @@ project-relative; each worktree's store maps its own tree.
   is the pack's spine: the yes set loads live in rank order, the wobbly answers list
   by name, the confident nos and the never-answered show nowhere and
   the lexical top fills the rest of the budget (the server's judgment
-  promotes within the rank, never re-orders it); without a scorer the
+  promotes within the rank, never re-orders it); a scorer reply whose
+  verdict count differs from the candidate count refuses the pack —
+  the reply is untrusted, and a mismatch would index past the
+  candidates; without a scorer the
   lexical candidates load in rank order and nothing is recorded. The
   queue carries the two ceilings (`WithPackCaps`, `PackCaps`): the
   candidate items keep the read ceiling and the composition root

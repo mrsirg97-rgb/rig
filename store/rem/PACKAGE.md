@@ -24,9 +24,12 @@ nothing is read into the prompt by a session start.
 - `path.go`: `FilePath(home)`, the store's file: `<home>/rem/rem.sqlite`.
 - `recall.go`: the pure core: consolidation arithmetic, the lexical
   shapes of the two arms (FTS OR-union and trigram), reciprocal rank
-  fusion (RRF, k=60). Zero I/O.
+  fusion over `store/fts`'s shared contract (`RankWeight`, the same
+  `k` and 1-based ranks the code map's task pack fuses with). Zero I/O.
 - `recall_db.go`: recall's DB-level path: the two named raw arms, fusion
-  over their rankings, browse, and the effective-strength blend.
+  over their rankings, browse, and the effective-strength blend. Browse
+  (the empty query) behaves like the recall arms: it drops superseded
+  rows unless `include_superseded` and reinforces what it returns.
 - `metadata/rem.go`: hand-written metadata for the rem store.
 
 ## How it is consumed
@@ -93,3 +96,8 @@ nothing is read into the prompt by a session start.
   in the store's prune.
 - `FilePath(home)`: one file under `<home>/rem`, scoped by a column inside
   (SPEC_STATE); the root and the dashboard share it (SPEC_SERVE 2).
+- `SetFtsAvailable` is the one deliberate package-level mutable seam in
+  the store: an atomic override for the fts-capability probe, read by
+  the write, remove and recall paths, and used by the tests to pin the
+  fts-less degradation. Production reads true; nothing else in the
+  package holds global state.

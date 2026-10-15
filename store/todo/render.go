@@ -108,8 +108,8 @@ func claimSuffix(ts *taskState, session string) string {
 		return ""
 	}
 	owner := ts.owner
-	if len(owner) > 8 {
-		owner = owner[:8]
+	if r := []rune(owner); len(r) > 8 {
+		owner = string(r[:8])
 	}
 	verb := "claimed by"
 	if ts.status == statusReview {

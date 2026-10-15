@@ -26,7 +26,8 @@ rows are touched.
 ## What it includes
 
 - `Sessions`: the tool as its interface (2.12.6): `tool.Definition`,
-  `Exec` as the one JSON door — decode `action`/`project`/`n`, apply the
+  `Exec` as the one JSON door — decode `action`/`project`/`n` strictly
+  (an unknown field refuses, matching the bash/delegate doors), apply the
   absent-field default, route, and refuse a missing or unknown action —
   and two verbs over the state store's read path, `List(ctx, project, n)`
   and `Summary(ctx, project, n)`. The `n` bound and the project

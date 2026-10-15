@@ -411,3 +411,28 @@ func TestServeDownMeansOutOfTheMesh(t *testing.T) {
 		return gone && len(mb.Holders(key)) == 0
 	})
 }
+
+func TestADoorGoneEndsItsCalls(t *testing.T) {
+	m := doorMember(t, t.TempDir())
+	defer m.Close()
+	d, err := NewDoor(m, doorConfig("a", doorPorts(t, 1)[0], nil), nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	d.Close()
+	deadline := time.Now().Add(250 * time.Millisecond)
+	for time.Now().Before(deadline) {
+		done := make(chan struct{})
+		go func() {
+			d.Holding(KeyOf("row"), broadcast.Mint{})
+			d.Foreign(broadcast.Mint{})
+			d.Refused(KeyOf("row"), broadcast.Mint{}, 0)
+			close(done)
+		}()
+		select {
+		case <-done:
+		case <-time.After(5 * time.Second):
+			t.Fatal("a call on a closed door must return")
+		}
+	}
+}

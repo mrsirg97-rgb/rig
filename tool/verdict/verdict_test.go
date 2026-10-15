@@ -3,6 +3,7 @@ package verdict_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"strings"
 	"sync"
 	"testing"
@@ -29,6 +30,47 @@ func (w *wire) Send(ctx context.Context, callback func(error), messages ...broad
 func (w *wire) Recv(context.Context, func(error, ...broadcast.Message)) {}
 
 func (w *wire) Close() {}
+
+type pairWire struct {
+	peerAck []error
+}
+
+func (w *pairWire) Id() int64 { return 9 }
+
+func (w *pairWire) Send(ctx context.Context, callback func(error), messages ...broadcast.Message) {
+	ready := make(chan struct{})
+	var once sync.Once
+	var wg sync.WaitGroup
+	for _, want := range w.peerAck {
+		wg.Add(1)
+		go func(want error) {
+			defer wg.Done()
+			once.Do(func() { close(ready) })
+			<-ready
+			callback(want)
+		}(want)
+	}
+	wg.Wait()
+}
+
+func (w *pairWire) Recv(context.Context, func(error, ...broadcast.Message)) {}
+
+func (w *pairWire) Close() {}
+
+func TestTwoPeersAckOneVerdictWithoutRacing(t *testing.T) {
+	tool := verdict.New(&pairWire{peerAck: []error{nil, nil}})
+	reply, err := tool.Exec(context.Background(), json.RawMessage(`{"row":2,"accept":true}`))
+	if err != nil || reply != "recorded" {
+		t.Fatalf("two peers ack the one send: (%q, %v)", reply, err)
+	}
+}
+
+func TestAPeerRefusalSurfacesAsTheSendError(t *testing.T) {
+	tool := verdict.New(&pairWire{peerAck: []error{nil, errors.New("peer refused")}})
+	if _, err := tool.Exec(context.Background(), json.RawMessage(`{"row":2,"accept":true}`)); err == nil || !strings.Contains(err.Error(), "peer refused") {
+		t.Fatalf("a refused peer must fail the send, got %v", err)
+	}
+}
 
 func TestAnAcceptAndARejectCrossTheFleetAsTheWorker(t *testing.T) {
 	fleet := &wire{}

@@ -33,6 +33,7 @@ type Queue struct {
 	lsp     *lspClient
 	lspLang string
 	lspGone map[string]bool
+	servers map[string][]string
 	scorer  Scorer
 	itemCap int
 	loadCap int
@@ -51,6 +52,12 @@ func WithScorer(s Scorer) Option {
 	return func(q *Queue) { q.scorer = s }
 }
 
+func defaultServers() map[string][]string {
+	return map[string][]string{
+		"typescript": {"typescript-language-server", "--stdio"},
+	}
+}
+
 func NewQueue(home string, voice broadcast.Member, opts ...Option) *Queue {
 	q := &Queue{
 		ch:      make(chan string, QueueCap),
@@ -60,6 +67,7 @@ func NewQueue(home string, voice broadcast.Member, opts ...Option) *Queue {
 		dbs:     map[string]store.DB{},
 		said:    map[string]bool{},
 		lspGone: map[string]bool{},
+		servers: defaultServers(),
 		itemCap: ReadCap,
 		loadCap: ReadCap,
 	}
@@ -67,6 +75,17 @@ func NewQueue(home string, voice broadcast.Member, opts ...Option) *Queue {
 		opt(q)
 	}
 	return q
+}
+
+func (q *Queue) SetServer(lang string, argv ...string) {
+	q.lspMu.Lock()
+	defer q.lspMu.Unlock()
+	if len(argv) == 0 {
+		delete(q.servers, lang)
+	} else {
+		q.servers[lang] = argv
+	}
+	delete(q.lspGone, lang)
 }
 
 func (q *Queue) PackCaps() (item, load int) { return q.itemCap, q.loadCap }
@@ -130,15 +149,10 @@ func (q *Queue) process(ctx context.Context, path string) {
 	if ctx.Err() != nil {
 		return
 	}
-	ext := q.extractor(lang)
-	if ext == nil {
+	if q.extractor(lang) == nil {
 		return
 	}
-	root, _, err := RootOf(filepath.Dir(path))
-	if err != nil {
-		q.say("project of %s: %v", path, err)
-		return
-	}
+	root, _, _ := RootOf(filepath.Dir(path))
 	db, err := q.open(root)
 	if err != nil {
 		q.say("%v", err)
@@ -155,8 +169,9 @@ func (q *Queue) extractor(lang string) Extractor {
 	}
 	q.lspMu.Lock()
 	gone := q.lspGone[lang]
+	argv := q.servers[lang]
 	q.lspMu.Unlock()
-	if ServerOf(lang) != nil && !gone {
+	if argv != nil && !gone {
 		return &lspExtract{q: q, lang: lang}
 	}
 	return nil
@@ -215,12 +230,14 @@ func dropFile(ctx context.Context, db store.DB, rel string) error {
 		return fmt.Errorf("tx for %s: %w", rel, err)
 	}
 	defer func() { _ = tx.Rollback() }()
-	for _, stmt := range []struct{ q string }{
-		{`DELETE FROM edges WHERE file = ?`},
-		{`DELETE FROM symbols WHERE file = ?`},
-		{`DELETE FROM files WHERE path = ?`},
+	for _, stmt := range []string{
+		`DELETE FROM edges WHERE file = ?`,
+		`DELETE FROM symbols WHERE file = ?`,
+		`DELETE FROM symbol_fts WHERE file = ?`,
+		`DELETE FROM symbol_grams WHERE file = ?`,
+		`DELETE FROM files WHERE path = ?`,
 	} {
-		if _, err := tx.ExecContext(ctx, stmt.q, rel); err != nil {
+		if _, err := tx.ExecContext(ctx, stmt, rel); err != nil {
 			return fmt.Errorf("drop %s: %w", rel, err)
 		}
 	}

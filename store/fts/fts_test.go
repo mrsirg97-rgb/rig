@@ -43,3 +43,23 @@ func TestQueryQuotesReservedOperators(t *testing.T) {
 		t.Errorf("ftsQuery = %q, want %q", got, want)
 	}
 }
+
+func TestRankWeightAndMinOverlapAreTheSharedFusionContract(t *testing.T) {
+	if ReciprocalRankK != 60 {
+		t.Fatalf("reciprocal rank k = %d, want the shared 60", ReciprocalRankK)
+	}
+	if got, want := RankWeight(1), 1.0/61.0; got != want {
+		t.Errorf("RankWeight(1) = %v, want %v (ranks are 1-based)", got, want)
+	}
+	if got, want := RankWeight(2), 1.0/62.0; got != want {
+		t.Errorf("RankWeight(2) = %v, want %v", got, want)
+	}
+	if !(RankWeight(1) > RankWeight(2) && RankWeight(2) > RankWeight(3)) {
+		t.Error("the weight must fall as the rank rises")
+	}
+	for grams, want := range map[int]int{0: 3, 1: 3, 3: 3, 6: 3, 7: 4, 100: 50, 200: 100} {
+		if got := MinOverlap(grams); got != want {
+			t.Errorf("MinOverlap(%d) = %d, want %d", grams, got, want)
+		}
+	}
+}

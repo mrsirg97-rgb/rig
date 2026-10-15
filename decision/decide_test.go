@@ -331,12 +331,8 @@ func TestEachItemWritesOneStoreRow(t *testing.T) {
 		if r.decider != host(srv) {
 			t.Fatalf("row %d: decider %q, want the server host %q", i, r.decider, host(srv))
 		}
-		wantState, err := json.Marshal(map[string]string{"item": items[i-1]})
-		if err != nil {
-			t.Fatal(err)
-		}
-		if r.state != string(wantState) {
-			t.Fatalf("row %d: state %q, want %q", i, r.state, wantState)
+		if r.state != items[i-1] {
+			t.Fatalf("row %d: state %q, want %q", i, r.state, items[i-1])
 		}
 	}
 }

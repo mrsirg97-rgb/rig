@@ -166,6 +166,8 @@ func (s *Server) handleWireChat(w http.ResponseWriter, r *http.Request) {
 		foreign := make(chan struct{}, 1)
 		since := s.door.Horizon()
 		go func() {
+			tick := time.NewTicker(gatePoll)
+			defer tick.Stop()
 			for {
 				holding, machine, priority := s.door.Holding(key, mint)
 				if holding {
@@ -190,7 +192,11 @@ func (s *Server) handleWireChat(w http.ResponseWriter, r *http.Request) {
 					refused <- struct{}{}
 					return
 				}
-				time.Sleep(gatePoll)
+				select {
+				case <-tick.C:
+				case <-r.Context().Done():
+					return
+				}
 			}
 		}()
 		select {

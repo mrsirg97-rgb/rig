@@ -12,21 +12,22 @@ so every tool inherits it and nothing drifts.
 
 ## What it includes
 
-- `Fields`: the path-shaped argument names: `path`, `root`, `cwd`,
-  `project`, `dir`, `directory`, `file`, `target`, `dest`,
-  `destination`. A new tool that names its path one of these inherits
-  the expansion; one that invents a name outside the list is a finding
-  for this list, not a per-tool fix. A name outside the list rides
-  through untouched even when its value begins with `~`, so a `pattern`
-  or a `command` is never mangled; the tests pin both directions.
+- `fields`: the path-shaped argument names: `path`, `root`, `project`,
+  `scope`, `dir`, `directory`, `file`, `target`, `dest`,
+  `destination`, `workspace`. A new tool that names its path one of
+  these inherits the expansion; one that invents a name outside the
+  list is a finding for this list, not a per-tool fix. A name outside
+  the list rides through untouched even when its value begins with `~`,
+  so a `pattern` or a `command` is never mangled; the tests pin both
+  directions.
 - `Expand(p)`: `~` and `~/…` are `os.UserHomeDir` (`$HOME`; the scratch
   home inside a jail, the home the session prompt names); `~user` and
   `~user/…` are that user's home (`os/user`). An unknown user, an
   unset home, or a `~` anywhere else leave the path as given.
-- `Rewrite(args)`: the top-level object's `Fields` that are strings and
+- `rewrite(args)`: the top-level object's `fields` that are strings and
   expand; bytes pass through untouched when nothing expands (the recorder
   and the approval prompt see what the model sent unless a `~` moved).
-- `Middleware(rec ...)`: the `core.ToolMiddleware` over `Rewrite`; the
+- `Middleware(rec ...)`: the `core.ToolMiddleware` over `rewrite`; the
   optional recorder (SPEC_DECISION) takes one final row per expansion
   it applied; a store error never changes the rewrite.
 
@@ -35,6 +36,6 @@ so every tool inherits it and nothing drifts.
 - Wired outermost in the root's chain (`cmd/rig`), so it runs before the
   allow-list, the gate and the bounds: every path is expanded before any
   validation sees it. Workers and delegated workers get the same chain.
-- `bash` is also wrapped (its `cwd`), and its command line is the shell's
+- `bash` is also wrapped (its `workspace`), and its command line is the shell's
   own to expand. A plugin's nested `args` are the plugin's (python's
   `expanduser` is one line).

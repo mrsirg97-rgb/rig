@@ -20,7 +20,7 @@ type envSpawn struct {
 }
 
 func (f *envSpawn) spawn(ctx context.Context, argv []string, cwd string, env []string, observe func([]byte)) (sched.SpawnResult, error) {
-	f.calls = append(f.calls, fakeCall{Argv: argv, Cwd: cwd})
+	f.calls = append(f.calls, fakeCall{Argv: argv, Cwd: cwd, Ctx: ctx})
 	f.envs = append(f.envs, env)
 	return f.result, f.err
 }
@@ -151,8 +151,89 @@ func TestJailedRunCarriesTheScratchHome(t *testing.T) {
 		t.Fatal("the scratch home must not leak into the runner's env after the run")
 	}
 
-	if _, err := os.Stat(filepath.Join(cwd, ".rig-job.sock")); !os.IsNotExist(err) {
+	if _, err := os.Stat(filepath.Join(cwd, ".rig-job", key+".sock")); !os.IsNotExist(err) {
 		t.Fatalf("the run's socket must be removed after the spawn (stat: %v)", err)
+	}
+}
+
+func TestJailedRunCarriesTheFleetEnvIntoTheJail(t *testing.T) {
+	cwd := t.TempDir()
+	h, key := setupJob(t, cwd, nil)
+
+	if err := os.MkdirAll(filepath.Join(h.home, "kernel"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	shimDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(shimDir, "bwrap"), []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", shimDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	spawn := &envSpawn{result: sched.SpawnResult{Exit: 0}}
+	mustOK(t, sched.RunJob(key, runSandboxOpts(h, spawn.spawn, "")))
+	if len(spawn.calls) != 1 {
+		t.Fatalf("spawn calls = %d, want 1", len(spawn.calls))
+	}
+	argv := spawn.calls[0].Argv
+	if !carriesSetenv(argv, sched.FleetEnv, "0") {
+		t.Fatalf("the jailed worker must learn the fleet door inside the jail (%s=0 as a --setenv pair), got %v", sched.FleetEnv, argv)
+	}
+	if _, w, ok := sched.FleetFrom(spawn.calls[0].Ctx); !ok || w == nil {
+		t.Fatalf("the jailed spawn must carry the fleet pipe as a file descriptor, not only as a name (fleet in ctx: %v)", ok)
+	}
+}
+
+func TestOverlappingFiresDoNotStompEachOthersSocket(t *testing.T) {
+	cwd := t.TempDir()
+	h, key1 := setupJob(t, cwd, nil)
+	if _, err := h.create(sched.CreateInput{
+		Name: "job-two", Prompt: "the second", Cron: "0 */4 * * *",
+		Model: "qwen3.8-workers", Busy: "skip",
+	}); err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Join(h.home, "kernel"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	shimDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(shimDir, "bwrap"), []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", shimDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	entered := make(chan string, 2)
+	release := make(chan struct{})
+	spawn := func(ctx context.Context, argv []string, c string, env []string, observe func([]byte)) (sched.SpawnResult, error) {
+		for i, a := range argv {
+			if a == "-base-url" {
+				entered <- argv[i+1]
+			}
+		}
+		<-release
+		return sched.SpawnResult{Exit: 0}, nil
+	}
+	done := make(chan error, 2)
+	for _, key := range []string{key1, "j2"} {
+		key := key
+		go func() {
+			done <- sched.RunJob(key, runSandboxOpts(h, spawn, ""))
+		}()
+	}
+	var socks []string
+	for i := 0; i < 2; i++ {
+		socks = append(socks, <-entered)
+	}
+	if socks[0] == socks[1] {
+		t.Fatalf("two overlapping fires must each own a socket, both got %s", socks[0])
+	}
+	for _, sock := range socks {
+		path := strings.TrimPrefix(sock, "unix:")
+		if _, err := os.Stat(path); err != nil {
+			t.Fatalf("each in-flight fire's socket must exist (%s): %v", path, err)
+		}
+	}
+	close(release)
+	for i := 0; i < 2; i++ {
+		mustOK(t, <-done)
 	}
 }
 

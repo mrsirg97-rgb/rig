@@ -81,18 +81,25 @@ func sigLines(root, rel string, start, end int64) ([]liveLine, error) {
 	return lines, nil
 }
 
-func coverage(ctx context.Context, db store.DB, root string, b *strings.Builder) {
+func coverage(ctx context.Context, db store.DB, root string, b *strings.Builder) error {
 	mapped := map[string]bool{}
 	rows, err := db.QueryContext(ctx, `SELECT path FROM files`)
-	if err == nil {
-		for rows.Next() {
-			var p string
-			if rows.Scan(&p) == nil {
-				mapped[path.Dir(p)] = true
-			}
-		}
-		rows.Close()
+	if err != nil {
+		return fmt.Errorf("graph: coverage: %w", err)
 	}
+	for rows.Next() {
+		var p string
+		if err := rows.Scan(&p); err != nil {
+			rows.Close()
+			return fmt.Errorf("graph: coverage: %w", err)
+		}
+		mapped[path.Dir(p)] = true
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return fmt.Errorf("graph: coverage: %w", err)
+	}
+	rows.Close()
 	present := map[string]bool{}
 	filepath.WalkDir(root, func(p string, d os.DirEntry, err error) error {
 		if err != nil {
@@ -113,4 +120,5 @@ func coverage(ctx context.Context, db store.DB, root string, b *strings.Builder)
 		return nil
 	})
 	fmt.Fprintf(b, "coverage: %d of %d packages mapped\n", len(mapped), len(present))
+	return nil
 }

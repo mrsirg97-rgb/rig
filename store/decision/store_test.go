@@ -464,3 +464,36 @@ func TestAStoredYesnoRowReadsAsABinary(t *testing.T) {
 		t.Fatalf("a row written as yesno reads as %q, want binary", rows[0].Question.Kind)
 	}
 }
+
+func TestSettledMatchesAnOversizedStateThroughTheCap(t *testing.T) {
+	db := open(t)
+	big := `{"command":"` + strings.Repeat("x", 4096) + `"}`
+	id, err := decisionstore.Propose(context.Background(), db, decisionstore.ProposeInput{
+		Scope: "proj", Site: decision.SiteBash, State: big,
+		Question:   decision.Choice("risk", "What risk does this bash call carry?", "safe", "changes", "dangerous"),
+		Answer:     "changes",
+		Confidence: 0.5,
+		Decider:    "laya",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := decisionstore.Settle(context.Background(), db, decisionstore.SettleInput{ID: id, Approved: true, Reviewer: "reviewer"}); err != nil {
+		t.Fatal(err)
+	}
+	var stored string
+	if err := db.QueryRow(`SELECT state FROM decisions WHERE id = $1`, id).Scan(&stored); err != nil {
+		t.Fatal(err)
+	}
+	if len(stored) > 4096 {
+		t.Fatalf("the row must carry the bounded state, got %d bytes", len(stored))
+	}
+	got, ok, err := decisionstore.Settled(context.Background(), db, decision.SiteBash,
+		decision.Choice("risk", "What risk does this bash call carry?", "safe", "changes", "dangerous"), big)
+	if err != nil || !ok {
+		t.Fatalf("the caller's oversized state must match through the same cap: ok=%v err=%v", ok, err)
+	}
+	if got != "changes" {
+		t.Fatalf("the settled twin answers: %q", got)
+	}
+}

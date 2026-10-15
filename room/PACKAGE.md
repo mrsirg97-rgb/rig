@@ -20,7 +20,13 @@ the five signals the instances exchange beside the protocol's own.
   before the directory is read, so two instances starting together end
   in one room; the candidate id is the hash of the boot id, the process
   id and the start time at 62 bits and re-derives with a counter on a
-  collision; the scan after the listen skips the peer whose dial refuses.
+  collision; the counter walk is bounded at `joinAttempts` 64 — the
+  socket's name carries the process's own pid, so an address-in-use is
+  almost always a listener this process leaked at that counter step,
+  and past the bound the join refuses loud (naming the bound) instead
+  of spinning. The start time's read fails loud too: a join whose
+  `/proc/self/stat` cannot be read has no identity to sit under. The
+  scan after the listen skips the peer whose dial refuses.
   Nothing mints until `Settle`, called after the last `Subscribe`.
 - `KeyOf(model string)` and `TableKey()`: the keys the claims and the
   child operations ride, hashed from the model's id and the table's
@@ -57,9 +63,19 @@ the five signals the instances exchange beside the protocol's own.
   mint's window (`since + window + 2`: an act folds while the horizon is
   at most its tick plus the window, and its tick is at most the request's
   arrival plus the door's sweep delay) — so the claim can no longer land
-  and the front answers 503 naming the clock. A door whose dial goes
+  and the front answers 503 naming the clock. `Holding`, `Foreign` and
+  `Refused` take the same escape `Ask` and the member's reads do: when
+  the door is gone they return at once (false, or nothing), so a `Close`
+  racing a caller cannot hang it. A door whose dial goes
   unanswered for `rounds` periods is dropped, and what it held leaves as
   acts.
+- The door's sweep is polled on a 100 ms ticker, DELIBERATE: the mesh's
+  horizon advances on its own tick clock, the `Mesh` interface exposes
+  no horizon-change event (only `Horizon()` reads and `Told` for acts
+  gone stale past the window), and the sweep's other two loops —
+  posting and releasing the mirrored holds as the local holders change —
+  surface only here; a horizon event would be a new `evt` release, not
+  a fix.
 
 ## How it is consumed
 

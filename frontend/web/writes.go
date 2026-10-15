@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"time"
 )
@@ -113,9 +112,7 @@ func (s *Server) handlePluginsCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	name := strings.TrimSpace(in.Name)
-	if !pluginNameRe.MatchString(name) {
-		writeErr(w, http.StatusBadRequest,
-			"the name is the filename stem: lowercase, digits and underscores, a leading letter (got "+strconv.Quote(name)+")")
+	if !pluginNameOK(w, name) {
 		return
 	}
 	code := strings.TrimRight(in.Code, " \t\r\n")

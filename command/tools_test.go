@@ -703,3 +703,31 @@ func TestSchedulerUpdatePromptKeepsKeyWords(t *testing.T) {
 		t.Fatalf("a short cron must refuse by name, got %v", err)
 	}
 }
+
+func TestTodoNoteKeepsEveryWordPastTheId(t *testing.T) {
+	var got map[string]any
+	capture := fakeExecFunc(func(ctx context.Context, args json.RawMessage) (string, error) {
+		got = map[string]any{}
+		if err := json.Unmarshal(args, &got); err != nil {
+			return "", err
+		}
+		return "ok", nil
+	})
+	env := &command.Env{Session: func() *core.Session { return core.NewSession() }, Tools: map[string]core.Tool{"todo": capture}}
+
+	if _, err := runCmd(t, "todo", "note  t1  hello world", env); err != nil {
+		t.Fatalf("todo note: %v", err)
+	}
+	if got["action"] != "note" || got["id"] != "t1" {
+		t.Fatalf("note parse: %v, want the action and the id", got)
+	}
+	if got["note"] != "hello world" {
+		t.Fatalf("note = %v, want the words past the id with the separators normalized", got)
+	}
+	if _, err := runCmd(t, "todo", "reject  t1  tests missing", env); err != nil {
+		t.Fatalf("todo reject: %v", err)
+	}
+	if got["note"] != "tests missing" {
+		t.Fatalf("reject note = %v, want the words past the id with the separators normalized", got)
+	}
+}

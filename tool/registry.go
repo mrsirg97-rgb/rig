@@ -1,11 +1,13 @@
 package tool
 
 import (
+	"bytes"
 	_ "embed"
 	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
+	"unicode/utf8"
 )
 
 //go:embed registry.json
@@ -130,9 +132,19 @@ func FirstLine(s string) string {
 	line := strings.SplitN(strings.TrimSpace(s), "\n", 2)[0]
 	line = strings.TrimSpace(line)
 	if len(line) > 60 {
-		line = line[:60] + "…"
+		cut := 60
+		for cut > 0 && !utf8.RuneStart(line[cut]) {
+			cut--
+		}
+		line = line[:cut] + "…"
 	}
 	return line
+}
+
+func StrictDecode(data json.RawMessage, out any) error {
+	dec := json.NewDecoder(bytes.NewReader(data))
+	dec.DisallowUnknownFields()
+	return dec.Decode(out)
 }
 
 func ExitTrailer(who string, exit int, dur time.Duration, id, log string, timedOut bool, bound time.Duration) string {

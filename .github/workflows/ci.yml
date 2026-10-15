@@ -15,6 +15,13 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
+      # the worker jail's e2e must not skip: bubblewrap installed, and the
+      # userns AppArmor restriction off so bwrap can run unprivileged
+      # (sandbox_e2e_test skips naming both when they are missing)
+      - name: the worker jail can run unprivileged
+        run: |
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          sudo apt-get -y install bubblewrap >/dev/null
       - name: test
         run: go vet ./... && go test -race -p 2 ./...
       - name: fmt-check

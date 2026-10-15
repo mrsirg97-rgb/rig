@@ -565,3 +565,11 @@ func TestRemVerbMethodsAndExecShareTheirChecks(t *testing.T) {
 		}
 	}
 }
+
+func TestRemRefusesAnUnknownField(t *testing.T) {
+	db := newDB(t)
+	tool := remTool(t, db)
+	if _, err := exec(t, tool, context.Background(), map[string]any{"action": "recall", "query": "x", "bogus": 1}); err == nil || !strings.Contains(err.Error(), "unknown field") {
+		t.Fatalf("an unknown field must refuse: %v", err)
+	}
+}

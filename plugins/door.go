@@ -71,8 +71,9 @@ func (d *door) Exec(ctx context.Context, args json.RawMessage) (string, error) {
 		Action string          `json:"action"`
 		Name   string          `json:"name"`
 		Args   json.RawMessage `json:"args"`
+		Source string          `json:"source"`
 	}
-	if err := json.Unmarshal(args, &in); err != nil {
+	if err := tool.StrictDecode(args, &in); err != nil {
 		return "", fmt.Errorf("plugin: bad call (want {action, name, args, source}): %v", err)
 	}
 	switch in.Action {
@@ -89,11 +90,7 @@ func (d *door) Exec(ctx context.Context, args json.RawMessage) (string, error) {
 	case "list":
 		return d.List(ctx)
 	case "create":
-		source, err := sourceArg(args)
-		if err != nil {
-			return "", err
-		}
-		return d.Create(ctx, in.Name, source)
+		return d.Create(ctx, in.Name, in.Source)
 	case "delete":
 		return d.Delete(ctx, in.Name)
 	case "reload":
@@ -101,16 +98,6 @@ func (d *door) Exec(ctx context.Context, args json.RawMessage) (string, error) {
 	default:
 		return "", fmt.Errorf("plugin: unknown action %q (want run, schema, list, create, delete or reload)", in.Action)
 	}
-}
-
-func sourceArg(args json.RawMessage) (string, error) {
-	var in struct {
-		Source string `json:"source"`
-	}
-	if err := json.Unmarshal(args, &in); err != nil {
-		return "", fmt.Errorf("plugin: bad call (want {action, name, source}): %v", err)
-	}
-	return in.Source, nil
 }
 
 func (d *door) Run(ctx context.Context, name string, args json.RawMessage) (string, error) {

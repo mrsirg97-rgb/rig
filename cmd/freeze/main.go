@@ -208,7 +208,7 @@ func changedPaths(base string) ([]string, error) {
 	if err != nil {
 		return nil, fmt.Errorf("git diff: %v", err)
 	}
-	changed := strings.Fields(string(out))
+	changed := diffLines(out)
 	st, err := gitOut("status", "--porcelain")
 	if err != nil {
 		return nil, fmt.Errorf("git status: %v", err)
@@ -219,6 +219,16 @@ func changedPaths(base string) ([]string, error) {
 		}
 	}
 	return changed, nil
+}
+
+func diffLines(out []byte) []string {
+	var lines []string
+	for _, line := range strings.Split(string(out), "\n") {
+		if line != "" {
+			lines = append(lines, line)
+		}
+	}
+	return lines
 }
 
 func main() {
@@ -282,7 +292,7 @@ func main() {
 
 	bad := g.outside(changed)
 	if frozenOut, err := gitOut("diff", "--name-only", base, "--", "core/", "loop/"); err == nil {
-		bad = append(bad, g.impure(strings.Fields(string(frozenOut)))...)
+		bad = append(bad, g.impure(diffLines(frozenOut))...)
 	}
 	if len(bad) > 0 {
 		for _, line := range bad {

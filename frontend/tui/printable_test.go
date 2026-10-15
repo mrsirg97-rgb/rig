@@ -1,7 +1,9 @@
 package tui
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -82,5 +84,122 @@ func TestAToolResultWithAnEditorsBytesLeavesTheTerminalsModesAlone(t *testing.T)
 		if strings.Contains(out, seq) {
 			t.Fatalf("the terminal was sent %q", seq)
 		}
+	}
+}
+
+func TestTheAskLineCarriesNoTerminalControlFromThePrompt(t *testing.T) {
+	th := oledTheme(t)
+	s := newScriptedSession(t, th, WithWidth(60),
+		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
+	)
+	go func() { _, _ = s.input() }()
+	s.await(promptMark(th))
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	res := make(chan bool, 1)
+	s.tail = len(s.out.Bytes())
+	go func() { res <- s.fe.Ask(ctx, "bash {\"cmd\":\"\x1b[?1049hgo test\u009b\"}") }()
+	s.await("approve bash")
+	out := s.since()
+	for _, seq := range []string{"\x1b[?1049h", "\u009b"} {
+		if strings.Contains(out, seq) {
+			t.Fatalf("the ask line lets %q through: %q", seq, out)
+		}
+	}
+	if !strings.Contains(out, "approve bash {\"cmd\":\"go test\"}?") {
+		t.Fatalf("the prompt's words stay, printed literal: %q", out)
+	}
+}
+
+func TestTheFaultLineCarriesNoTerminalControlFromTheError(t *testing.T) {
+	th := oledTheme(t)
+	got := RenderFault(th, errors.New("the provider said \x1b[?1049hno\u009b"))
+	for _, seq := range []string{"\x1b[?1049h", "\u009b"} {
+		if strings.Contains(got, seq) {
+			t.Fatalf("the fault line lets %q through: %q", seq, got)
+		}
+	}
+	if !strings.Contains(got, "fault: the provider said no") {
+		t.Fatalf("the error's words stay, printed literal: %q", got)
+	}
+}
+
+func TestACommandErrorPaintsItsMessageAndNotItsControls(t *testing.T) {
+	th := oledTheme(t)
+	boom := &fakeCmd{name: "boom", err: errors.New("the editor wrote \x1b[?1049h\u009bto the pipe")}
+	s := newScriptedSession(t, th, WithWidth(60),
+		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
+		WithCommands([]core.Command{boom}, nil),
+	)
+	in := make(chan string, 1)
+	go func() { l, _ := s.input(); in <- l }()
+	s.await(promptMark(th))
+	s.tail = len(s.out.Bytes())
+	s.si.feed("/boom\n")
+	s.await("the editor wrote")
+	out := s.since()
+	for _, seq := range []string{"\x1b[?1049h", "\u009b"} {
+		if strings.Contains(out, seq) {
+			t.Fatalf("the command error lets %q through: %q", seq, out)
+		}
+	}
+	if !strings.Contains(out, "the editor wrote to the pipe") {
+		t.Fatalf("the message's words stay, printed literal: %q", out)
+	}
+	s.si.feed("bye\n")
+	if l := <-in; l != "bye" {
+		t.Fatalf("input after the command = %q", l)
+	}
+}
+
+func TestCommandRepliesPaintTheirTextAndNotTheirControls(t *testing.T) {
+	th := oledTheme(t)
+	cases := []struct{ name, out, marker, want string }{
+		{"todo", "todo task \x1b[?1049hgo\u009b", "todo task", "todo task go"},
+		{"scheduler", "scheduler task \x1b[?1049hgo\u009b", "scheduler task", "scheduler task go"},
+		{"sessions", "2 things\n  a1 sessions task \x1b[?1049hgo\u009b", "2 things", "sessions task go"},
+		{"models", "models: active is \x1b[?1049hlocal\u009b now", "active is", "active is local now"},
+	}
+	var cmds []core.Command
+	for _, c := range cases {
+		cmds = append(cmds, &fakeCmd{name: c.name, out: c.out})
+	}
+	s := newScriptedSession(t, th, WithWidth(60),
+		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
+		WithCommands(cmds, nil),
+	)
+	in := make(chan string, 1)
+	go func() { l, _ := s.input(); in <- l }()
+	s.await(promptMark(th))
+	for _, c := range cases {
+		s.tail = len(s.out.Bytes())
+		s.si.feed("/" + c.name + "\n")
+		s.await(c.marker)
+		out := s.since()
+		for _, seq := range []string{"\x1b[?1049h", "\u009b"} {
+			if strings.Contains(out, seq) {
+				t.Fatalf("/%s lets %q through: %q", c.name, seq, out)
+			}
+		}
+		if !strings.Contains(out, c.want) {
+			t.Fatalf("/%s keeps the reply's words, printed literal: %q", c.name, out)
+		}
+	}
+	s.si.feed("bye\n")
+	if l := <-in; l != "bye" {
+		t.Fatalf("input after the commands = %q", l)
+	}
+}
+
+func TestThePhaseEndLineCarriesNoTerminalControlFromItsNote(t *testing.T) {
+	th := oledTheme(t)
+	got := RenderPhaseEnd(th, core.Phase{Name: "reviewing", Done: true, Note: "the reviewer said \x1b[?1049hno\u009b"})
+	for _, seq := range []string{"\x1b[?1049h", "\u009b"} {
+		if strings.Contains(got, seq) {
+			t.Fatalf("the phase-end line lets %q through: %q", seq, got)
+		}
+	}
+	if !strings.Contains(got, "the reviewer said no") {
+		t.Fatalf("the note's words stay, printed literal: %q", got)
 	}
 }

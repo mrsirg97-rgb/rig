@@ -86,7 +86,9 @@ func (effortCmd) Run(ctx context.Context, args string, env any) (string, error) 
 		if e.SetEffort == nil {
 			return "", errors.New("effort: no set seam (the root did not wire one)")
 		}
-		e.SetEffort(ctx, fields[0])
+		if err := e.SetEffort(ctx, fields[0]); err != nil {
+			return "", err
+		}
 		return "effort: " + fields[0] + " (next turn)", nil
 	}
 	if e.Effort == nil {

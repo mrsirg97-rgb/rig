@@ -4,6 +4,8 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -57,5 +59,40 @@ func TestIsolateUnsetsTheWorkerMarkers(t *testing.T) {
 	}
 	if got := os.Getenv(sched.FleetEnv); got != "" {
 		t.Fatalf("the suite met %s=%q", sched.FleetEnv, got)
+	}
+}
+
+func TestAMainFailsLoudWhenTheTestHomeCannotBeBuilt(t *testing.T) {
+	base := t.TempDir()
+	ro := filepath.Join(base, "ro")
+	if err := os.Mkdir(ro, 0o555); err != nil {
+		t.Fatal(err)
+	}
+	self, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	cmd := exec.Command(self, "-test.run=^$")
+	cmd.Dir = base
+	env := make([]string, 0, len(os.Environ())+1)
+	for _, kv := range os.Environ() {
+		if !strings.HasPrefix(kv, "TMPDIR=") {
+			env = append(env, kv)
+		}
+	}
+	cmd.Env = append(env, "TMPDIR="+filepath.Join(ro, "tmp"))
+	out, err := cmd.CombinedOutput()
+	if err == nil {
+		t.Fatalf("a test home that cannot be built must fail Main loud, it exited 0; output: %s", out)
+	}
+	var code int
+	if ee, ok := err.(*exec.ExitError); ok {
+		code = ee.ExitCode()
+	}
+	if code != 1 {
+		t.Fatalf("Main must exit 1 on a broken test home, got %d; output: %s", code, out)
+	}
+	if !strings.Contains(string(out), "build the test home") {
+		t.Fatalf("the refusal must name the step on stderr, got: %s", out)
 	}
 }

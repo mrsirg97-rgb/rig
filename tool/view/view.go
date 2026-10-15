@@ -53,8 +53,11 @@ func New(blobsDir string) View {
 }
 
 func (v *toolView) Exec(ctx context.Context, data json.RawMessage) (string, error) {
+	if len(bytes.TrimSpace(data)) == 0 {
+		data = json.RawMessage(`{}`)
+	}
 	var a viewArgs
-	if err := strictDecode(data, &a); err != nil {
+	if err := tool.StrictDecode(data, &a); err != nil {
 		return "", fmt.Errorf("view: %v", err)
 	}
 	return v.View(ctx, a.Path)
@@ -287,13 +290,4 @@ func humanBytes(n int64) string {
 	default:
 		return strconv.FormatInt(n, 10) + " B"
 	}
-}
-
-func strictDecode(data json.RawMessage, out any) error {
-	if len(bytes.TrimSpace(data)) == 0 {
-		data = json.RawMessage(`{}`)
-	}
-	dec := json.NewDecoder(bytes.NewReader(data))
-	dec.DisallowUnknownFields()
-	return dec.Decode(out)
 }

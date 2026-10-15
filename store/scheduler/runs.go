@@ -116,12 +116,17 @@ type runRecord struct {
 	Model      *string
 }
 
+const (
+	runsDefault = 5
+	runsCap     = 100
+)
+
 func Runs(ctx context.Context, db DB, id string, n int) (string, error) {
 	if n <= 0 {
-		n = 5
+		n = runsDefault
 	}
-	if n < 1 || n > 100 {
-		return "", schedErr("runs count must be an integer 1-100, got %d", n)
+	if n > runsCap {
+		return "", schedErr("runs count must be an integer 1-%d, got %d", runsCap, n)
 	}
 	_, tx, err := db.TxReadOnly(ctx)
 	if err != nil {

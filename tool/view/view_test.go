@@ -753,3 +753,11 @@ func TestViewViewAndExecShareTheirChecks(t *testing.T) {
 		t.Fatalf("one look replies the same bytes through either door: view %q exec %q", got, want)
 	}
 }
+
+func TestViewEmptyArgsDecodeAsTheEmptyObject(t *testing.T) {
+	tool := view.New(t.TempDir())
+	_, err := tool.Exec(context.Background(), nil)
+	if err == nil || !strings.Contains(err.Error(), "path required") {
+		t.Fatalf("empty args decode as {} and refuse on the missing path, got %v", err)
+	}
+}

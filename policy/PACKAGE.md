@@ -35,7 +35,10 @@ surfaces. Stdlib only; the summary prompt is one embedded file.
 - `empty.Decorator`: the empty-turn guard (SPEC_EMPTY): a `stop` turn with
   no content and no tool calls is discarded and resampled with the
   identical request, at most twice, then a fault with plain words; the
-  discarded reasoning never reaches the frontend or the transcript.
+  discarded attempt's reasoning streams live to the frontend (the deltas
+  are forwarded as they arrive) and the `EmptyTurn` event is the marker
+  the recorder drops the attempt on, so the store keeps only the good
+  turn's text and thinking.
 - `operator.Middleware` (2.14.1, SPEC_WORKERS 7): the operator verbs'
   enforcement, wired in a delegated worker's wire only (the root gates
   on `RIG_DELEGATE`, the no-recursion marker): a call whose tool and

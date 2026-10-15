@@ -47,7 +47,7 @@ type given struct {
 
 func (a adapter) Exec(ctx context.Context, args json.RawMessage) (string, error) {
 	var g given
-	if err := json.Unmarshal(args, &g); err != nil {
+	if err := tool.StrictDecode(args, &g); err != nil {
 		return "", fmt.Errorf("sessions: %v", err)
 	}
 	project := ""
