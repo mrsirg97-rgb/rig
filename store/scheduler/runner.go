@@ -9,6 +9,7 @@ import (
 	"github.com/mrsirg97-rgb/rig/v3/decision"
 	"github.com/mrsirg97-rgb/rig/v3/models"
 	"github.com/mrsirg97-rgb/rig/v3/pathguard"
+	"github.com/mrsirg97-rgb/rig/v3/room"
 	"github.com/mrsirg97-rgb/rig/v3/store"
 	scheddomain "github.com/mrsirg97-rgb/rig/v3/store/scheduler/domain"
 	"net/http"
@@ -49,6 +50,7 @@ type RunOpts struct {
 	Models       func() models.Table
 	DefaultModel string
 	Decisions    decision.Recorder
+	Tell         func(room.JobStatus)
 }
 
 const DefaultRunTimeout = 30 * time.Minute
@@ -96,6 +98,11 @@ func RunJob(key string, opts RunOpts) error {
 		opts.SwapURL = defaultSwapURL
 	}
 
+	tell := func(st room.JobStatus) {
+		if opts.Tell != nil {
+			opts.Tell(st)
+		}
+	}
 	id, err := ParseKey(key)
 	if err != nil {
 		if strings.HasPrefix(key, "cwd-") {
@@ -223,7 +230,20 @@ func RunJob(key string, opts RunOpts) error {
 	if stall > 0 {
 		watch = newStallWatch(stall, cancel)
 	}
-	pipe, err = openFleet(ctx, runnerOrigin, func(...broadcast.Message) {
+	workers := 0
+	if command == "" {
+		workers = 1
+	}
+	runStatus := func(call string, callAt time.Time) room.JobStatus {
+		return room.JobStatus{Job: id, Prompt: firstLine(job.Prompt), State: room.JobRunning,
+			Started: startedTime, Workers: workers, Call: call, CallAt: callAt}
+	}
+	pipe, err = openFleet(ctx, runnerOrigin, func(messages ...broadcast.Message) {
+		for _, m := range messages {
+			if ts, ok := m.Signal().(core.ToolStart); ok {
+				tell(runStatus(ts.BoundedCall(), opts.Now().UTC()))
+			}
+		}
 		if watch != nil {
 			watch.touch()
 		}
@@ -338,6 +358,7 @@ func RunJob(key string, opts RunOpts) error {
 		}
 		stream.Write(p)
 	}
+	tell(runStatus("", time.Time{}))
 	res, err := opts.Spawn(WithPrompt(pipe.spawnCtx(), prompt), argv, job.Cwd, spawnEnv, observe)
 	pipe.close()
 	stream.Close()
@@ -346,6 +367,9 @@ func RunJob(key string, opts RunOpts) error {
 		watch.stop()
 	}
 	if err != nil {
+		end := room.JobStatus{Job: id, Prompt: firstLine(job.Prompt), State: room.JobFailed,
+			Started: startedTime, Ended: opts.Now().UTC(), Reason: err.Error(), Workers: workers}
+		tell(end)
 		return fmt.Errorf("run-job: spawn: %w", err)
 	}
 	stalled := false
@@ -354,12 +378,19 @@ func RunJob(key string, opts RunOpts) error {
 		res.Stderr += "\n[runner: killed after stall]\n"
 		res.Exit = 1
 	}
-	ended := opts.Now().UTC().Format(time.RFC3339)
-	durationMs := opts.Now().UTC().Sub(startedTime).Milliseconds()
+	endedAt := opts.Now().UTC()
+	ended := endedAt.Format(time.RFC3339)
+	durationMs := endedAt.Sub(startedTime).Milliseconds()
 	modelLine := ""
 	if workerModel != "" {
 		modelLine = "model=" + workerModel + "\n"
 	}
+	endState, endReason := room.JobDone, ""
+	if res.Exit != 0 {
+		endState, endReason = room.JobFailed, fmt.Sprintf("exit %d", res.Exit)
+	}
+	tell(room.JobStatus{Job: id, Prompt: firstLine(job.Prompt), State: endState,
+		Started: startedTime, Ended: endedAt, Reason: endReason, Workers: workers})
 	content := fmt.Sprintf(
 		"# rig-scheduler run\nkey=%s\n%sstarted=%s\nexit=%d\nduration_ms=%d\n\n== stdout ==\n%s\n\n== stderr ==\n%s\n",
 		key, modelLine, started, res.Exit, durationMs, res.Stdout, res.Stderr)

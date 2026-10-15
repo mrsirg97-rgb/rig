@@ -66,7 +66,11 @@ sees core and models and nothing else.
   wedge the room's engine's child slot forever —, lands the log at
   `~/.rig/logs/<model id>.log` and
   writes the pid file at the spawn with the process's start time, so two
-  starts converge on one child and a stale file names nobody; `ready`
+  starts converge on one child and a stale file names nobody; the
+  job-status acts (3.2.0) track their job by the act's origin member
+  and publish each one into the instance's local fleet, where
+  `root.deliver` hands it to the frontends and the TUI's band row
+  breathes it; `ready`
   is the path a claim takes when its row's port is silent (the start,
   or the swap on the resident row's key, then the wait while `/health`
   says 503); a stop signals the child's

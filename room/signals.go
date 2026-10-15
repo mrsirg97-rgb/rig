@@ -103,5 +103,8 @@ func Registry() (broadcast.Registry, error) {
 	if reg, err = jsonDeclare[TableChange](reg, "room/table-change"); err != nil {
 		return nil, err
 	}
+	if reg, err = jsonDeclare[JobStatus](reg, "room/job-status"); err != nil {
+		return nil, err
+	}
 	return jsonDeclare[Update](reg, "room/update")
 }

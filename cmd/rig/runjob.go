@@ -61,30 +61,38 @@ func runJob(args []string) int {
 	}
 	decPath := decisionstore.FilePath(cfgDir)
 	var jobDecisions decision.Recorder
+	engine, fleetroom := newFleet()
+	go engine.Start(context.Background())
+	defer engine.Stop()
+	voice := fleetroom.Add(rig.MemberDecision)
+	kids := newChildren(cfgDir, cfg.Models, engine, nil, voice)
+	var machine machineroom.Member
+	if m, merr := machineroom.New(cfgDir, kids.places, kids.effects, nil); merr != nil {
+		fmt.Fprintln(os.Stderr, "rig:", merr)
+	} else {
+		machine = m
+		defer machine.Close()
+	}
+	fleetroom.Add(rig.MemberFrontend).Subscribe(context.Background(), func(err error, messages ...broadcast.Message) {
+		for _, m := range messages {
+			if n, ok := m.Signal().(evt.Notice); err == nil && ok {
+				fmt.Fprintln(os.Stderr, "rig: "+n.Source+": "+n.Text)
+			}
+		}
+	})
+	tell := func(status machineroom.JobStatus) {
+		if machine == nil {
+			return
+		}
+		machine.Act(status, machineroom.KeyOf("job/"+status.Job), machineroom.PriorityFleet, func(bool) {})
+	}
 	if err := os.MkdirAll(filepath.Dir(decPath), 0o755); err != nil {
 		fmt.Fprintln(os.Stderr, "rig: decision store:", err)
 	} else if jdb, _, _, jerr := store.Open(decPath, decisionstore.Statements(), decisionstore.SchemaVersion, decisionstore.Migration()); jerr != nil {
 		fmt.Fprintln(os.Stderr, "rig: decision store:", jerr)
 	} else {
 		defer jdb.DB.Close()
-		engine, fleetroom := newFleet()
-		go engine.Start(context.Background())
-		defer engine.Stop()
-		kids := newChildren(cfgDir, cfg.Models, engine, nil)
-		machine, merr := machineroom.New(cfgDir, kids.places, kids.effects, nil)
-		if merr != nil {
-			fmt.Fprintln(os.Stderr, "rig:", merr)
-		} else {
-			defer machine.Close()
-		}
-		fleetroom.Add(rig.MemberFrontend).Subscribe(context.Background(), func(err error, messages ...broadcast.Message) {
-			for _, m := range messages {
-				if n, ok := m.Signal().(evt.Notice); err == nil && ok {
-					fmt.Fprintln(os.Stderr, "rig: "+n.Source+": "+n.Text)
-				}
-			}
-		})
-		jobDecisions = decisionstore.Recorder{DB: jdb, Voice: fleetroom.Add(rig.MemberDecision)}
+		jobDecisions = decisionstore.Recorder{DB: jdb, Voice: voice}
 	}
 	if err := sched.RunJob(args[0], sched.RunOpts{
 		Home:      home,
@@ -101,6 +109,7 @@ func runJob(args []string) int {
 		Models:       func() models.Table { return cfg.Models },
 		DefaultModel: model,
 		Decisions:    jobDecisions,
+		Tell:         tell,
 	}); err != nil {
 		fmt.Fprintln(os.Stderr, "rig:", err)
 		return 1

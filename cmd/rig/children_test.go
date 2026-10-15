@@ -32,8 +32,8 @@ func TestAnActEffectRunsOnceOnItsOwner(t *testing.T) {
 	home := t.TempDir()
 	port := freePort(t)
 	marker := filepath.Join(home, "starts")
-	ka := newChildren(home, models.Table{}, nil, nil)
-	kb := newChildren(home, models.Table{}, nil, nil)
+	ka := newChildren(home, models.Table{}, nil, nil, nil)
+	kb := newChildren(home, models.Table{}, nil, nil, nil)
 	var a, b machineroom.Member
 	a, err := machineroom.New(home, ka.places, ka.effects, nil)
 	if err != nil {
@@ -64,8 +64,8 @@ func TestAnActEffectRunsOnceOnItsOwner(t *testing.T) {
 func TestTheRoomEngineStaysFreeWhileAChildStarts(t *testing.T) {
 	home := t.TempDir()
 	port := freePort(t)
-	ka := newChildren(home, models.Table{}, nil, nil)
-	kb := newChildren(home, models.Table{}, nil, nil)
+	ka := newChildren(home, models.Table{}, nil, nil, nil)
+	kb := newChildren(home, models.Table{}, nil, nil, nil)
 	var a, b machineroom.Member
 	a, err := machineroom.New(home, ka.places, ka.effects, nil)
 	if err != nil {
@@ -152,7 +152,7 @@ func TestAJoinerReadsTheWorld(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(home, "models.json"), table(rowOf("fake", port, 1), rowOf("other", port+7, 1)), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	ka := newChildren(home, loadRows(t, filepath.Join(home, "models.json")), nil, nil)
+	ka := newChildren(home, loadRows(t, filepath.Join(home, "models.json")), nil, nil, nil)
 	var a, b machineroom.Member
 	a, err := machineroom.New(home, ka.places, ka.effects, nil)
 	if err != nil {
@@ -181,7 +181,7 @@ func TestAJoinerReadsTheWorld(t *testing.T) {
 		_, err := os.Stat(filepath.Join(home, "logs", "fake.pid"))
 		return err == nil
 	})
-	kb := newChildren(home, loadRows(t, filepath.Join(home, "models.json")), nil, nil)
+	kb := newChildren(home, loadRows(t, filepath.Join(home, "models.json")), nil, nil, nil)
 	b, err = machineroom.New(home, kb.places, kb.effects, nil)
 	if err != nil {
 		t.Fatal(err)
@@ -219,8 +219,8 @@ func TestAJoinerReadsTheWorld(t *testing.T) {
 func TestTwoInstancesRaceToStartAModelAndOneChildRuns(t *testing.T) {
 	home := t.TempDir()
 	port := freePort(t)
-	ka := newChildren(home, models.Table{}, nil, nil)
-	kb := newChildren(home, models.Table{}, nil, nil)
+	ka := newChildren(home, models.Table{}, nil, nil, nil)
+	kb := newChildren(home, models.Table{}, nil, nil, nil)
 	var a, b machineroom.Member
 	a, err := machineroom.New(home, ka.places, ka.effects, nil)
 	if err != nil {
@@ -262,8 +262,8 @@ func TestTwoInstancesRaceToStartAModelAndOneChildRuns(t *testing.T) {
 func TestASwapWaitsForTheHoldsAndThenSwaps(t *testing.T) {
 	home := t.TempDir()
 	oldPort, newPort := freePort(t), freePort(t)
-	ka := newChildren(home, models.Table{}, nil, nil)
-	kb := newChildren(home, models.Table{}, nil, nil)
+	ka := newChildren(home, models.Table{}, nil, nil, nil)
+	kb := newChildren(home, models.Table{}, nil, nil, nil)
 	var a, b machineroom.Member
 	a, err := machineroom.New(home, ka.places, ka.effects, nil)
 	if err != nil {
@@ -309,7 +309,7 @@ func TestASwapWaitsForTheHoldsAndThenSwaps(t *testing.T) {
 func TestStartChildWaitsForThePortThenStops(t *testing.T) {
 	home := t.TempDir()
 	port := freePort(t)
-	kids := newChildren(home, models.Table{}, nil, nil)
+	kids := newChildren(home, models.Table{}, nil, nil, nil)
 	if !kids.start("fake", port, "python3 -m http.server ${PORT}", nil, "") {
 		t.Fatal("the child's port never answered")
 	}
@@ -332,11 +332,11 @@ func TestStartChildWaitsForThePortThenStops(t *testing.T) {
 func TestASecondInstanceStopsTheChild(t *testing.T) {
 	home := t.TempDir()
 	port := freePort(t)
-	first := newChildren(home, models.Table{}, nil, nil)
+	first := newChildren(home, models.Table{}, nil, nil, nil)
 	if !first.start("fake", port, "python3 -m http.server ${PORT}", nil, "") {
 		t.Fatal("the child's port never answered")
 	}
-	second := newChildren(home, models.Table{}, nil, nil)
+	second := newChildren(home, models.Table{}, nil, nil, nil)
 	second.stop("fake", 2)
 	if machineroom.Answers(port) {
 		t.Fatal("the second instance's stop must reach the child through the pid file")
@@ -346,12 +346,12 @@ func TestASecondInstanceStopsTheChild(t *testing.T) {
 func TestTheUpdateDrainsTheRoom(t *testing.T) {
 	home := t.TempDir()
 	var a, b machineroom.Member
-	ka := newChildren(home, models.Table{}, nil, nil)
+	ka := newChildren(home, models.Table{}, nil, nil, nil)
 	a, err := machineroom.New(home, ka.places, ka.effects, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	kb := newChildren(home, models.Table{}, nil, func() { b.Close() })
+	kb := newChildren(home, models.Table{}, nil, func() { b.Close() }, nil)
 	b, err = machineroom.New(home, kb.places, kb.effects, nil)
 	if err != nil {
 		t.Fatal(err)
@@ -376,7 +376,7 @@ func TestTheUpdateDrainsTheRoom(t *testing.T) {
 func TestAChildThatLivesWithoutAnsweringFailsTheStartWithinTheBound(t *testing.T) {
 	home := t.TempDir()
 	port := freePort(t)
-	c := newChildren(home, models.Table{}, nil, nil)
+	c := newChildren(home, models.Table{}, nil, nil, nil)
 	t.Cleanup(c.close)
 	c.startCeil = 300 * time.Millisecond
 	done := make(chan bool, 1)
@@ -416,7 +416,7 @@ func dummyChild(t *testing.T) int {
 
 func TestAStopSignalsTheWorldsChildAndItsOwn(t *testing.T) {
 	home := t.TempDir()
-	c := newChildren(home, models.Table{}, nil, nil)
+	c := newChildren(home, models.Table{}, nil, nil, nil)
 	t.Cleanup(c.close)
 	mine := dummyChild(t)
 	theirs := dummyChild(t)
