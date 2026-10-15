@@ -4,9 +4,11 @@ import (
 	"encoding/json"
 	"net"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -378,5 +380,43 @@ func TestAChildThatLivesWithoutAnsweringFailsTheStartWithinTheBound(t *testing.T
 	}
 	if pid := c.held("slow"); pid != 0 {
 		t.Fatalf("the failed start must not leave the child as the row's holder, pid file carries %d", pid)
+	}
+}
+
+// dummyChild is a live process in its own session, the shape a real child
+// carries, with a reaper so its exit is not a zombie the signal-0 probe
+// still counts as alive.
+func dummyChild(t *testing.T) int {
+	t.Helper()
+	cmd := exec.Command("sleep", "30")
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan struct{})
+	go func() { cmd.Wait(); close(done) }()
+	t.Cleanup(func() {
+		syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
+		<-done
+	})
+	return cmd.Process.Pid
+}
+
+func TestAStopSignalsTheWorldsChildAndItsOwn(t *testing.T) {
+	home := t.TempDir()
+	c := newChildren(home, models.Table{}, nil, nil)
+	t.Cleanup(c.close)
+	mine := dummyChild(t)
+	theirs := dummyChild(t)
+	if err := os.MkdirAll(filepath.Join(home, "logs"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	c.owned["fake"] = mine
+	if !c.hold("fake", theirs) {
+		t.Fatal("the world's pid file must carry its child")
+	}
+	c.stop("fake", 1)
+	if alive(mine) || alive(theirs) {
+		t.Fatalf("a stop must signal the instance's own child and the world's (mine %d alive %v, theirs %d alive %v)", mine, alive(mine), theirs, alive(theirs))
 	}
 }

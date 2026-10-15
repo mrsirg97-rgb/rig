@@ -383,38 +383,59 @@ func (c *children) stop(model string, grace int) {
 }
 
 func (c *children) stopping(model string, grace int) {
-	pid := c.pidOf(model)
-	if pid <= 0 {
+	pids := c.pidsOf(model)
+	if len(pids) == 0 {
 		return
 	}
-	if _, err := os.FindProcess(pid); err != nil {
-		return
+	for _, pid := range pids {
+		if _, err := os.FindProcess(pid); err != nil {
+			continue
+		}
+		syscall.Kill(-pid, syscall.SIGTERM)
 	}
-	syscall.Kill(-pid, syscall.SIGTERM)
 	deadline := time.Duration(grace) * time.Second
-	if !c.waitGone(pid, deadline) {
-		syscall.Kill(-pid, syscall.SIGKILL)
-		c.waitGone(pid, deadline)
+	if !c.waitGone(pids, deadline) {
+		for _, pid := range pids {
+			syscall.Kill(-pid, syscall.SIGKILL)
+		}
+		c.waitGone(pids, deadline)
 	}
 	c.owned[model] = 0
 }
 
-func (c *children) pidOf(model string) int {
-	if pid := c.owned[model]; pid > 0 && alive(pid) {
-		return pid
+// pidsOf names every child the model may still be running in: the world's
+// pid file, which a start writes before its act publishes, and the instance's
+// own last-started child, which a lost race leaves alive while it dies.
+func (c *children) pidsOf(model string) []int {
+	candidates := []int{c.owned[model], c.held(model)}
+	pids := make([]int, 0, len(candidates))
+	seen := make(map[int]bool, len(candidates))
+	for _, pid := range candidates {
+		if pid <= 0 || !alive(pid) || seen[pid] {
+			continue
+		}
+		seen[pid] = true
+		pids = append(pids, pid)
 	}
-	return c.held(model)
+	return pids
 }
 
-func (c *children) waitGone(pid int, within time.Duration) bool {
+func (c *children) waitGone(pids []int, within time.Duration) bool {
 	deadline := time.Now().Add(within)
 	for time.Now().Before(deadline) {
-		if !alive(pid) {
+		gone := true
+		for _, pid := range pids {
+			if alive(pid) {
+				gone = false
+				break
+			}
+		}
+		if gone {
 			return true
 		}
 		time.Sleep(childStopPoll)
 	}
-	return !alive(pid)
+	return false
 }
 
 func alive(pid int) bool {
