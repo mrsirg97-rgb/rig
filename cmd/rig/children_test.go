@@ -398,9 +398,6 @@ func TestAChildThatLivesWithoutAnsweringFailsTheStartWithinTheBound(t *testing.T
 	}
 }
 
-// dummyChild is a live process in its own session, the shape a real child
-// carries, with a reaper so its exit is not a zombie the signal-0 probe
-// still counts as alive.
 func dummyChild(t *testing.T) int {
 	t.Helper()
 	cmd := exec.Command("sleep", "30")

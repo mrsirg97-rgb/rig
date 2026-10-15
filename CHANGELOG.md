@@ -61,9 +61,10 @@ construction value, never measured.
 
 The dashboard: the chat's stream fans every delta out to a live
 subscriber and the ring's coalesced frame carries the newest seq, so a
-reconnect with `since` skips only what the page has already drawn —
-before, a coalesced run delivered its first delta and the rest only to
-a client that was not there; one dispatch owns the commands, so the
+reconnect with `since` receives only the run's text past the delta it
+last drew, cut at that delta's end, so the page neither loses the tail
+nor draws the head twice — before, a coalesced run delivered its first
+delta and the rest only to a client that was not there; one dispatch owns the commands, so the
 fold and the HTTP handler can no longer run a command's work twice at
 once; the chat splits by job (the state machine, the SSE hub, the
 handlers); a canceled gate stops polling the door instead of leaking a
@@ -76,6 +77,17 @@ The one-shot worker: the liveness no longer depends on a stderr writer
 — a worker with a fleet and no `Err` heartbeats through its tool runs
 in both the start and the result arms — and its package describes the
 struct the caller builds, not a constructor that never existed.
+
+The jail and the children: the jailed worker's model row rides the
+jail env as `RIG_MODEL_*`, since its rig home is the job's scratch home
+and holds no settings file; the fleet pipe rides fd 3 through bwrap,
+which passes the caller's descriptors above 2 without a flag; the
+door's `Holding` hands the caller a copy read under the engine, not the
+live repost; and a stop signals every live child the pid file and the
+instance's own bookkeeping name, keeps reading the world under one
+grace, and returns only after two probe pauses of quiet, so a start
+race's loser can no longer take the stop while the holder keeps its
+port.
 
 The chore wave: the freeze list drops the paths that left the tree
 (broadcast, evt, tool/fs, the root ROADMAP), and CI installs bubblewrap

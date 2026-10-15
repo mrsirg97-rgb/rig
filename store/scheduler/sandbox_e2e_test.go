@@ -193,9 +193,6 @@ func jailFixture(t *testing.T, replies []string, binds []string, py string) (str
 		t.Fatal(err)
 	}
 
-	// the job's crontab line carries the rig home's tag, and the runner
-	// checks the line against its own rig home: the job is created under
-	// opHome, the home the jailed run is pointed at
 	h, key := setupJobHome(t, cwd, opHome, nil)
 
 	t.Setenv("HOME", "/home/fixture")
@@ -206,8 +203,6 @@ func jailFixture(t *testing.T, replies []string, binds []string, py string) (str
 	s := &jailSrv{replies: replies}
 	srv := newJailSrv(t, s)
 
-	// the jailed worker's rig home is the job's scratch home, so the row
-	// behind the job's model rides the runner's env, not any settings file
 	table, err := models.New(models.Model{
 		ID: "qwen3.8-workers", Window: 65536, MaxTokens: 8192, Reserve: 8192, KeepRecent: 16384, Role: models.RoleWorker,
 	})

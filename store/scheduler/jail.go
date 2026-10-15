@@ -133,9 +133,6 @@ func SocketRefusal(sock string, err error) string {
 
 const jailPath = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 
-// modelEnv carries the runner's model row to the jailed worker: the worker's
-// rig home is the job's scratch home, so the row the operator resolved lives
-// nowhere the worker can read it.
 func modelEnv(opts RunOpts, model string) []string {
 	row, ok := opts.modelRow(model)
 	if !ok {

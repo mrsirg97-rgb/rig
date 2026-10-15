@@ -414,8 +414,12 @@ func TestTheReplayAfterACoalesceSkipsOnlyWhatWasSeen(t *testing.T) {
 		t.Fatalf("a client one behind the run must receive it whole: %v", run)
 	}
 	_, again, _ := srv.chat.subscribe(first)
-	if len(again) != 1 || !strings.Contains(string(again[0]), "helloworld") {
-		t.Fatalf("a client holding the first delta's seq must still receive what coalesced after it: %v", again)
+	if len(again) != 1 || !strings.Contains(string(again[0]), `"text":"loworld"`) {
+		t.Fatalf("a client holding the first delta's seq receives only what coalesced after it: %v", again)
+	}
+	_, tail, _ := srv.chat.subscribe(first + 2)
+	if len(tail) != 1 || !strings.Contains(string(tail[0]), `"text":"ld"`) {
+		t.Fatalf("a client holding a mid-run seq receives only the deltas past it: %v", tail)
 	}
 	_, _, hi := srv.chat.subscribe(first)
 	if _, seen, _ := srv.chat.subscribe(hi); len(seen) != 0 {

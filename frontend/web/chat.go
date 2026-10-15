@@ -35,6 +35,7 @@ type chat struct {
 	ring [][]byte
 	seq  int64
 	last map[string]any
+	cuts []cut
 
 	asks   map[string]chan bool
 	askSeq int64

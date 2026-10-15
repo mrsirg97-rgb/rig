@@ -23,9 +23,6 @@ const (
 	childProbePause = 100 * time.Millisecond
 	childStopPoll   = 10 * time.Millisecond
 	childStartCeil  = 5 * time.Minute
-	// the stop's settle: a start race's loser holds the pid file until the
-	// winner's corrective hold lands one probe later, so the stop reads the
-	// world across that cadence before it calls the model childless
 	childStopSettle = 2 * childProbePause
 )
 
@@ -391,9 +388,7 @@ func (c *children) stopping(model string, grace int) {
 	signalled := make(map[int]bool)
 	signal := func(pids []int) {
 		for _, pid := range pids {
-			if _, err := os.FindProcess(pid); err == nil {
-				syscall.Kill(-pid, syscall.SIGTERM)
-			}
+			syscall.Kill(-pid, syscall.SIGTERM)
 			signalled[pid] = true
 		}
 	}
@@ -432,9 +427,6 @@ func (c *children) stopping(model string, grace int) {
 	c.owned[model] = 0
 }
 
-// pidsOf names every child the model may still be running in: the world's
-// pid file, which a start writes before its act publishes, and the instance's
-// own last-started child, which a lost race leaves alive while it dies.
 func (c *children) pidsOf(model string) []int {
 	candidates := []int{c.owned[model], c.held(model)}
 	pids := make([]int, 0, len(candidates))
