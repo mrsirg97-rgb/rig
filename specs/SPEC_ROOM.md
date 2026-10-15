@@ -976,7 +976,8 @@ comments in Go code; no Co-Authored-By or generated-with lines.
 ### the version a member declares, amended 3.2.0
 
 Rig 3.2.0 adds a sixth act, `room/job-status` (the scheduled job's state
-crossing processes — SPEC_STATE 9, the TUI's band row breathes it). The act
+crossing processes — SPEC_STATE's scheduler amendment; the TUI's band row
+breathes it, SPEC_TUI 3a). The act
 is new on the wire, and the room is full mesh: a frame an instance cannot
 decode closes the link, so a 3.1.x instance sitting in the room with a 3.2.0
 runner would lose its membership the first time a job fired. The gate is
