@@ -16,6 +16,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/mrsirg97-rgb/rig/v3/models"
 	sched "github.com/mrsirg97-rgb/rig/v3/store/scheduler"
 	"github.com/mrsirg97-rgb/rig/v3/testenv"
 )
@@ -205,6 +206,15 @@ func jailFixture(t *testing.T, replies []string, binds []string, py string) (str
 	s := &jailSrv{replies: replies}
 	srv := newJailSrv(t, s)
 
+	// the jailed worker's rig home is the job's scratch home, so the row
+	// behind the job's model rides the runner's env, not any settings file
+	table, err := models.New(models.Model{
+		ID: "qwen3.8-workers", Window: 65536, MaxTokens: 8192, Reserve: 8192, KeepRecent: 16384, Role: models.RoleWorker,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	err = sched.RunJob(key, sched.RunOpts{
 		Home:         h.home,
 		Crontab:      h.ct,
@@ -215,6 +225,7 @@ func jailFixture(t *testing.T, replies []string, binds []string, py string) (str
 		Sandbox:      "jailed",
 		SandboxBinds: binds,
 		RigHome:      opHome,
+		Models:       func() models.Table { return table },
 		Now:          func() time.Time { return runnerNow },
 	})
 	mustOK(t, err)
@@ -224,7 +235,13 @@ func jailFixture(t *testing.T, replies []string, binds []string, py string) (str
 		t.Fatalf("exactly one run record, got %d", len(rec))
 	}
 	if rec[0].Args["status"] != "ok" {
-		t.Fatalf("the fixture run must be ok, got %v", rec[0].Args)
+		dump := ""
+		if log, ok := rec[0].Args["log"].(string); ok {
+			if b, err := os.ReadFile(filepath.Join(h.home, log)); err == nil {
+				dump = "\n" + string(b)
+			}
+		}
+		t.Fatalf("the fixture run must be ok, got %v%s", rec[0].Args, dump)
 	}
 	if s.count() < 2 {
 		t.Fatalf("the worker's model calls must ride the socket (requests = %d)", s.count())
@@ -254,16 +271,16 @@ func jailFixture(t *testing.T, replies []string, binds []string, py string) (str
 func TestJailHomeAbsent(t *testing.T) {
 	requireJailBox(t)
 	cwd, srv := jailFixture(t, []string{
-		bashCall(t, "c1", `ls ~ 2>&1; echo rc=$?`),
+		bashCall(t, "c1", `ls ~; echo rc=$?; ls /home/fixture 2>&1; echo rc=$?`),
 		jailFinalReply,
 	}, nil, "")
 	_ = cwd
 	result := toolResultOfJail(t, lastBodyOf(t, srv))
-	if !strings.Contains(result, "No such file or directory") {
-		t.Fatalf("the home must be absent in the jail, got %q", result)
+	if !strings.Contains(result, "rc=0") {
+		t.Fatalf("the worker's home must be the jail's private /tmp, got %q", result)
 	}
-	if !strings.Contains(result, "/home/fixture") {
-		t.Fatalf("the refusal must name the (absent) home, got %q", result)
+	if !strings.Contains(result, "/home/fixture: No such file or directory") {
+		t.Fatalf("the operator's home must be absent in the jail, got %q", result)
 	}
 }
 

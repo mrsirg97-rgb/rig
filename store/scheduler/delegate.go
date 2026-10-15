@@ -288,8 +288,8 @@ func DelegateStart(in DelegateInput) (Delegation, error) {
 		}
 		spawnEnv = append(append(os.Environ(), DelegateEnv+"=1"), fleetEnv(pipe)...)
 	} else {
-		extra := append([]string{DelegateEnv + "=1"}, fleetEnv(pipe)...)
-		argv, proxy, spawnEnv, refuse, err = spawnJailed(in.toRunOpts(), profile, in.Cwd, id, workerCmd, in.Model, in.Effort, allow, in.WorkerSession, extra...)
+		extra := []string{DelegateEnv + "=1"}
+		argv, proxy, spawnEnv, refuse, err = spawnJailed(in.toRunOpts(), profile, in.Cwd, id, workerCmd, in.Model, in.Effort, allow, in.WorkerSession, pipe, extra...)
 		if err != nil {
 			release()
 			return Delegation{}, fmt.Errorf("delegate: jail: %w", err)

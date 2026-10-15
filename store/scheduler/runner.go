@@ -303,7 +303,7 @@ func RunJob(key string, opts RunOpts) error {
 			spawnEnv = append(os.Environ(), fleetEnv(pipe)...)
 		} else {
 			var refuse string
-			argv, proxy, spawnEnv, refuse, err = spawnJailed(opts, profile, job.Cwd, id, workerCmd, model, "", "", workerSession, fleetEnv(pipe)...)
+			argv, proxy, spawnEnv, refuse, err = spawnJailed(opts, profile, job.Cwd, id, workerCmd, model, "", "", workerSession, pipe)
 			if err != nil {
 				abandon()
 				return fmt.Errorf("run-job: jail: %w", err)

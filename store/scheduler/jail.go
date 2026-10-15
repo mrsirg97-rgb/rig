@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 )
 
@@ -23,12 +24,16 @@ type JailProfile struct {
 	StateDir  string
 	Allow     string
 	Env       []string
+	ExtraFDs  int
 }
 
 func JailArgv(p JailProfile) ([]string, error) {
 	argv := []string{
 		p.Bwrap,
 		"--unshare-all", "--die-with-parent", "--clearenv",
+	}
+	if p.ExtraFDs > 0 {
+		argv = append(argv, "--preserve-fds", strconv.Itoa(p.ExtraFDs))
 	}
 	for _, e := range p.Env {
 		k, v, ok := strings.Cut(e, "=")
@@ -132,7 +137,37 @@ func SocketRefusal(sock string, err error) string {
 
 const jailPath = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 
-func jailSpawn(opts RunOpts, cwd, sockID string, workerCmd []string, model, effort, allow, sessionID string, extraEnv ...string) ([]string, *SocketProxy, []string, string, error) {
+// modelEnv carries the runner's model row to the jailed worker: the worker's
+// rig home is the job's scratch home, so the row the operator resolved lives
+// nowhere the worker can read it.
+func modelEnv(opts RunOpts, model string) []string {
+	row, ok := opts.modelRow(model)
+	if !ok {
+		return nil
+	}
+	env := []string{
+		"RIG_MODEL_WINDOW=" + strconv.Itoa(row.Window),
+		"RIG_MODEL_MAX_TOKENS=" + strconv.Itoa(row.MaxTokens),
+		"RIG_MODEL_RESERVE=" + strconv.Itoa(row.Reserve),
+		"RIG_MODEL_KEEP_RECENT=" + strconv.Itoa(row.KeepRecent),
+	}
+	if row.Retries != 0 {
+		env = append(env, "RIG_MODEL_RETRIES="+strconv.Itoa(row.Retries))
+	}
+	if row.Remote {
+		env = append(env, "RIG_MODEL_REMOTE=true")
+	}
+	return env
+}
+
+func fleetFDs(fleet *fleetPipe) int {
+	if fleet == nil {
+		return 0
+	}
+	return 1
+}
+
+func jailSpawn(opts RunOpts, cwd, sockID string, workerCmd []string, model, effort, allow, sessionID string, fleet *fleetPipe, extraEnv ...string) ([]string, *SocketProxy, []string, string, error) {
 	if runtime.GOOS != "linux" {
 		return nil, nil, nil, PlatformRefusal(runtime.GOOS), nil
 	}
@@ -169,6 +204,10 @@ func jailSpawn(opts RunOpts, cwd, sockID string, workerCmd []string, model, effo
 		"HOME=/tmp",
 		"RIG_HOME=" + scratch,
 	}
+	env = append(env, modelEnv(opts, model)...)
+	if fleet != nil {
+		env = append(env, fleetEnv(fleet)...)
+	}
 	env = append(env, extraEnv...)
 	argv, err := JailArgv(JailProfile{
 		Bwrap:     bwrap,
@@ -184,6 +223,7 @@ func jailSpawn(opts RunOpts, cwd, sockID string, workerCmd []string, model, effo
 		StateDir:  opts.StateDir,
 		Allow:     allow,
 		Env:       env,
+		ExtraFDs:  fleetFDs(fleet),
 	})
 	if err != nil {
 		proxy.Close()

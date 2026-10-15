@@ -53,6 +53,46 @@ func TestJailArgvIsTheSpecProfileVerbatim(t *testing.T) {
 	}
 }
 
+// TestJailArgvPreservesTheFleetFileDescriptor pins the fd seam: bwrap closes
+// everything above 2 unless told otherwise, and the jailed worker's fleet
+// transport rides the runner's pipe on fd 3.
+func TestJailArgvPreservesTheFleetFileDescriptor(t *testing.T) {
+	p := sched.JailProfile{
+		Bwrap:    "/usr/bin/bwrap",
+		Binary:   "/opt/rig/bin/rig",
+		BaseURL:  "unix:/ws/j/.rig-job.sock",
+		Model:    "m",
+		Cwd:      "/ws/j",
+		SockPath: "/ws/j/.rig-job.sock",
+		ExtraFDs: 1,
+	}
+	argv, err := sched.JailArgv(p)
+	if err != nil {
+		t.Fatalf("JailArgv: %v", err)
+	}
+	found := false
+	for i := 0; i+1 < len(argv); i++ {
+		if argv[i] == "--preserve-fds" && argv[i+1] == "1" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("a jailed worker with a fleet pipe must preserve its fd: %v", argv)
+	}
+	quiet, err := sched.JailArgv(sched.JailProfile{
+		Bwrap: "/usr/bin/bwrap", Binary: "/opt/rig/bin/rig", BaseURL: "unix:/ws/j/.rig-job.sock",
+		Model: "m", Cwd: "/ws/j", SockPath: "/ws/j/.rig-job.sock",
+	})
+	if err != nil {
+		t.Fatalf("JailArgv: %v", err)
+	}
+	for _, a := range quiet {
+		if a == "--preserve-fds" {
+			t.Fatalf("a jailed worker without a fleet pipe preserves no fds: %v", quiet)
+		}
+	}
+}
+
 func TestJailArgvNoKernelLineWhenTheKernelDirIsAbsent(t *testing.T) {
 	p := sched.JailProfile{
 		Bwrap:    "/usr/bin/bwrap",

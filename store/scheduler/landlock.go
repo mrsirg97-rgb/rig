@@ -128,11 +128,12 @@ func landlockSpawn(opts RunOpts, cwd, sockID string, workerCmd []string, model, 
 	return argv, proxy, env, "", nil
 }
 
-func spawnJailed(opts RunOpts, profile, cwd, sockID string, workerCmd []string, model, effort, allow, sessionID string, extraEnv ...string) ([]string, *SocketProxy, []string, string, error) {
+func spawnJailed(opts RunOpts, profile, cwd, sockID string, workerCmd []string, model, effort, allow, sessionID string, fleet *fleetPipe, extraEnv ...string) ([]string, *SocketProxy, []string, string, error) {
 	if profile == "landlock" {
-		return landlockSpawn(opts, cwd, sockID, workerCmd, model, effort, allow, sessionID, extraEnv...)
+		shared := append(modelEnv(opts, model), fleetEnv(fleet)...)
+		return landlockSpawn(opts, cwd, sockID, workerCmd, model, effort, allow, sessionID, append(shared, extraEnv...)...)
 	}
-	argv, proxy, env, refuse, err := jailSpawn(opts, cwd, sockID, workerCmd, model, effort, allow, sessionID, extraEnv...)
+	argv, proxy, env, refuse, err := jailSpawn(opts, cwd, sockID, workerCmd, model, effort, allow, sessionID, fleet, extraEnv...)
 	return argv, proxy, env, refuse, err
 }
 

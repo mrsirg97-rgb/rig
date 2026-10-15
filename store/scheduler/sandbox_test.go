@@ -5,7 +5,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -21,7 +20,7 @@ type envSpawn struct {
 }
 
 func (f *envSpawn) spawn(ctx context.Context, argv []string, cwd string, env []string, observe func([]byte)) (sched.SpawnResult, error) {
-	f.calls = append(f.calls, fakeCall{Argv: argv, Cwd: cwd})
+	f.calls = append(f.calls, fakeCall{Argv: argv, Cwd: cwd, Ctx: ctx})
 	f.envs = append(f.envs, env)
 	return f.result, f.err
 }
@@ -178,8 +177,8 @@ func TestJailedRunCarriesTheFleetEnvIntoTheJail(t *testing.T) {
 	if !carriesSetenv(argv, sched.FleetEnv, "0") {
 		t.Fatalf("the jailed worker must learn the fleet door inside the jail (%s=0 as a --setenv pair), got %v", sched.FleetEnv, argv)
 	}
-	if !slices.Contains(spawn.envs[0], sched.FleetEnv+"=0") {
-		t.Fatalf("the bwrap process env must carry %s=0, got %v", sched.FleetEnv, spawn.envs[0])
+	if _, w, ok := sched.FleetFrom(spawn.calls[0].Ctx); !ok || w == nil {
+		t.Fatalf("the jailed spawn must carry the fleet pipe as a file descriptor, not only as a name (fleet in ctx: %v)", ok)
 	}
 }
 

@@ -316,8 +316,9 @@ where Landlock can carry them, each residual named.
 
 ## testing
 
-- the jail: a jailed fixture job whose prompt runs `bash ls ~`: the
-  home is absent; `bash curl 127.0.0.1:8090`; no network; a write
+- the jail: a jailed fixture job whose prompt runs `bash ls ~; ls
+  /home/fixture`: the worker's home is the jail's private /tmp and the
+  operator's home is absent; `bash curl 127.0.0.1:8090`; no network; a write
   inside the cwd lands; a write outside refuses; the kernel's python
   sees the same walls (one boundary, both tools).
 - the socket: the jailed worker completes a model call through the
