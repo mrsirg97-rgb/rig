@@ -241,7 +241,22 @@ func TestTwoInstancesRaceToStartAModelAndOneChildRuns(t *testing.T) {
 		return held != 0 && alive(held)
 	})
 	ka.stop("fake", 2)
-	await(t, "the child to be stopped", 10*time.Second, func() bool { return !machineroom.Answers(port) })
+	deadline := time.Now().Add(10 * time.Second)
+	for machineroom.Answers(port) && time.Now().Before(deadline) {
+		time.Sleep(25 * time.Millisecond)
+	}
+	if machineroom.Answers(port) {
+		world, _ := os.ReadFile(filepath.Join(home, "logs", "fake.pid"))
+		cline := func(pid int) string {
+			if pid <= 0 {
+				return "-"
+			}
+			b, _ := os.ReadFile("/proc/" + strconv.Itoa(pid) + "/cmdline")
+			return strconv.Quote(string(b))
+		}
+		t.Fatalf("the child to be stopped never happened within 10s: pid file %q, a's own %d (%s), b's own %d (%s)",
+			string(world), ka.owned["fake"], cline(ka.owned["fake"]), kb.owned["fake"], cline(kb.owned["fake"]))
+	}
 }
 
 func TestASwapWaitsForTheHoldsAndThenSwaps(t *testing.T) {

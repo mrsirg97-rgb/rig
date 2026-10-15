@@ -23,6 +23,10 @@ const (
 	childProbePause = 100 * time.Millisecond
 	childStopPoll   = 10 * time.Millisecond
 	childStartCeil  = 5 * time.Minute
+	// the stop's settle: a start race's loser holds the pid file until the
+	// winner's corrective hold lands one probe later, so the stop reads the
+	// world across that cadence before it calls the model childless
+	childStopSettle = 2 * childProbePause
 )
 
 type children struct {
@@ -383,22 +387,47 @@ func (c *children) stop(model string, grace int) {
 }
 
 func (c *children) stopping(model string, grace int) {
-	pids := c.pidsOf(model)
-	if len(pids) == 0 {
-		return
-	}
-	for _, pid := range pids {
-		if _, err := os.FindProcess(pid); err != nil {
-			continue
-		}
-		syscall.Kill(-pid, syscall.SIGTERM)
-	}
-	deadline := time.Duration(grace) * time.Second
-	if !c.waitGone(pids, deadline) {
+	deadline := time.Now().Add(time.Duration(grace) * time.Second)
+	signalled := make(map[int]bool)
+	signal := func(pids []int) {
 		for _, pid := range pids {
+			if _, err := os.FindProcess(pid); err == nil {
+				syscall.Kill(-pid, syscall.SIGTERM)
+			}
+			signalled[pid] = true
+		}
+	}
+	signal(c.pidsOf(model))
+	settled := time.Time{}
+	for {
+		pids := c.pidsOf(model)
+		if len(pids) == 0 {
+			if !settled.IsZero() && time.Since(settled) >= childStopSettle {
+				break
+			}
+			if settled.IsZero() {
+				settled = time.Now()
+			}
+		} else {
+			settled = time.Time{}
+			signal(pids)
+		}
+		if time.Now().After(deadline) {
+			break
+		}
+		time.Sleep(childStopPoll)
+	}
+	var survivors []int
+	for pid := range signalled {
+		if alive(pid) {
+			survivors = append(survivors, pid)
+		}
+	}
+	if len(survivors) > 0 {
+		for _, pid := range survivors {
 			syscall.Kill(-pid, syscall.SIGKILL)
 		}
-		c.waitGone(pids, deadline)
+		c.waitGone(survivors, time.Duration(grace)*time.Second)
 	}
 	c.owned[model] = 0
 }
