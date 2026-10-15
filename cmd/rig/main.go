@@ -311,6 +311,9 @@ func main() {
 	}, voice)
 	machine, err = machineroom.New(cfgDir, Version, kids.places, kids.effects, func(n evt.Notice) {
 		broadcast.Say(voice, n.Source, n.Text, n.Level)
+		if n.Source == "room" && n.Text == "member left" {
+			kids.endJobsOf(machine)
+		}
 	})
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "rig:", err)

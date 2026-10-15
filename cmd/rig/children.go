@@ -162,6 +162,38 @@ func (c *children) sayJob(st room.JobStatus) {
 	c.fleet.Publish(context.Background(), func(error) {}, broadcast.NewMessage(c.fleet.Id(), true, st))
 }
 
+// endJobsOf ends the jobs a departing member was running. The told fires
+// on the machine's engine, so the live set is read on a goroutine and the
+// ending lands on the children's own engine, serialized with Next.
+func (c *children) endJobsOf(m room.Member) {
+	go func() {
+		live := map[int64]bool{}
+		for _, id := range m.Live() {
+			live[id] = true
+		}
+		c.engine.Add(evt.Func(func(context.Context) { c.endJobs(live) }), room.PriorityFleet)
+	}()
+}
+
+func (c *children) endJobs(live map[int64]bool) {
+	var ended []room.JobStatus
+	for origin, set := range c.jobs {
+		if live[origin] {
+			continue
+		}
+		for _, st := range set {
+			st.State = room.JobFailed
+			st.Reason = "runner left"
+			st.Ended = time.Now().UTC()
+			ended = append(ended, st)
+		}
+		delete(c.jobs, origin)
+	}
+	for _, st := range ended {
+		c.sayJob(st)
+	}
+}
+
 func (c *children) Previous(op broadcast.Operation) error { return nil }
 
 func (c *children) resident(machine room.Member) []string {

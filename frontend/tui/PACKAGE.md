@@ -49,8 +49,10 @@ width); no core or loop line (decision 10).
   a scheduled job's start and end, a worker's tool call, and every
   `evt.Notice`. The row never goes away: a dim rule (four cells) over
   one row, the same height idle or busy. Items come in two kinds:
-  events never drop and keep their order (starts, ends, failures, and
-  the stores' notices, identical ones collapsing), and status items
+  events never drop and keep their order (starts, ends, failures —
+  including the room's own end for a runner that died without posting
+  one, `failed · runner left` — and the stores' notices, identical ones
+  collapsing), and status items
   replace — a worker's newer tool call replaces that worker's call
   still waiting in the queue, so the backlog is at most one call per
   worker however fast calls arrive. The row shows the breathing item

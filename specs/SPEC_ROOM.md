@@ -1012,6 +1012,14 @@ the declaration:
   instance that missed the act — the crash during an update, the machine
   that slept — stays live, and the gate is what holds the runner back
   while it does.
+- **A runner that dies without posting its end is ended by the room**
+  (3.2.0): each instance's children track the running jobs by the act's
+  origin, and the room's `member left` notice — which fires after the
+  fold has dropped the departed member's acts — has the survivors end
+  the origin's running jobs as `failed · runner left` and breathe the
+  end on their own band rows. No timeout, no poll: the leave is the
+  event, and a runner that posted its end first leaves no failure
+  behind.
 - **The window the gate does not close**: between `Admits` and the act
   reaching its peers an old member may join, receive the act through the
   join's checkpoint re-send, and drop. The -update flow makes it

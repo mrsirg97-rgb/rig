@@ -70,7 +70,10 @@ sees core and models and nothing else.
   job-status acts (3.2.0) track their job by the act's origin member
   and publish each one into the instance's local fleet, where
   `root.deliver` hands it to the frontends and the TUI's band row
-  breathes it; `ready`
+  breathes it; the room's `member left` notice has the children end
+  the departed origin's running jobs as `failed · runner left` on the
+  same fleet, so a runner that died without posting its end is ended by
+  the room and not by a timeout; `ready`
   is the path a claim takes when its row's port is silent (the start,
   or the swap on the resident row's key, then the wait while `/health`
   says 503); a stop signals the child's
