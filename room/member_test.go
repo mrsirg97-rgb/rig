@@ -15,7 +15,7 @@ import (
 
 func newRoom(t *testing.T, home string, places int) Member {
 	t.Helper()
-	m, err := New(home, func(int64) int { return places }, nil, nil)
+	m, err := New(home, JobStatusSince, func(int64) int { return places }, nil, nil)
 	if err != nil {
 		t.Fatalf("join: %v", err)
 	}
@@ -91,7 +91,7 @@ func TestTwoMembersStartedTogetherEndInOneRoom(t *testing.T) {
 	out := make(chan outcome, 2)
 	for i := 0; i < 2; i++ {
 		go func() {
-			m, err := New(home, func(int64) int { return 1 }, nil, nil)
+			m, err := New(home, JobStatusSince, func(int64) int { return 1 }, nil, nil)
 			out <- outcome{m, err}
 		}()
 	}
@@ -308,7 +308,7 @@ func TestAJoinWalksPastItsOwnTakenIds(t *testing.T) {
 	for i := 0; i < joinAttempts-1; i++ {
 		holdCandidate(t, home, seed, i)
 	}
-	m, err := New(home, func(int64) int { return 1 }, nil, nil)
+	m, err := New(home, JobStatusSince, func(int64) int { return 1 }, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -331,7 +331,7 @@ func TestAJoinPastTheBoundRefusesLoud(t *testing.T) {
 	for i := 0; i < joinAttempts; i++ {
 		holdCandidate(t, home, seed, i)
 	}
-	if _, err := New(home, func(int64) int { return 1 }, nil, nil); err == nil {
+	if _, err := New(home, JobStatusSince, func(int64) int { return 1 }, nil, nil); err == nil {
 		t.Fatal("a join past the bound must refuse loud")
 	} else if !strings.Contains(err.Error(), strconv.Itoa(joinAttempts)) {
 		t.Fatalf("the refusal names the bound: %v", err)

@@ -82,7 +82,7 @@ func TestARemoteRequestStartsTheColdChildAndSwapsTheResidentOut(t *testing.T) {
 	if !kids.start(resident.ID, resident.Port, resident.Command, nil, "") {
 		t.Fatal("the resident child's port never answered")
 	}
-	remote, err := machineroom.New(t.TempDir(), func(int64) int { return 1 }, nil, nil)
+	remote, err := machineroom.New(t.TempDir(), Version, func(int64) int { return 1 }, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -51,6 +51,8 @@ const (
 	JobRunning = "running"
 	JobDone    = "done"
 	JobFailed  = "failed"
+
+	JobStatusSince = "3.2.0"
 )
 
 type JobStatus struct {

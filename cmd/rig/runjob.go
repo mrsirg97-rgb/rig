@@ -67,7 +67,7 @@ func runJob(args []string) int {
 	voice := fleetroom.Add(rig.MemberDecision)
 	kids := newChildren(cfgDir, cfg.Models, engine, nil, voice)
 	var machine machineroom.Member
-	if m, merr := machineroom.New(cfgDir, kids.places, kids.effects, nil); merr != nil {
+	if m, merr := machineroom.New(cfgDir, Version, kids.places, kids.effects, nil); merr != nil {
 		fmt.Fprintln(os.Stderr, "rig:", merr)
 	} else {
 		machine = m
@@ -81,7 +81,7 @@ func runJob(args []string) int {
 		}
 	})
 	tell := func(status machineroom.JobStatus) {
-		if machine == nil {
+		if machine == nil || !machine.Admits(machineroom.JobStatusSince) {
 			return
 		}
 		machine.Act(status, machineroom.KeyOf("job/"+status.Job), machineroom.PriorityFleet, func(bool) {})

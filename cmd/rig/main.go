@@ -309,7 +309,7 @@ func main() {
 		broadcast.Say(voice, "room", "rig was updated: this instance left the room, restart it", evt.LevelError)
 		machine.Close()
 	}, voice)
-	machine, err = machineroom.New(cfgDir, kids.places, kids.effects, func(n evt.Notice) {
+	machine, err = machineroom.New(cfgDir, Version, kids.places, kids.effects, func(n evt.Notice) {
 		broadcast.Say(voice, n.Source, n.Text, n.Level)
 	})
 	if err != nil {

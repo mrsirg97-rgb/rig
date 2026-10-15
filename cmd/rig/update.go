@@ -149,7 +149,7 @@ func update(ctx context.Context, cfg updateCfg) error {
 
 func drainRoom(ctx context.Context, home, version string) error {
 	kids := newChildren(home, models.Table{}, nil, nil, nil)
-	machine, err := machineroom.New(home, kids.places, kids.effects, nil)
+	machine, err := machineroom.New(home, Version, kids.places, kids.effects, nil)
 	if err != nil {
 		return err
 	}

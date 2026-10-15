@@ -30,6 +30,10 @@ const joinAttempts = 64
 
 var procStat = "/proc/self/stat"
 
+const sidecarExt = ".version"
+
+var codecOf = Codec
+
 type Member interface {
 	Id() int64
 	Seated() bool
@@ -42,6 +46,7 @@ type Member interface {
 	Holders(key int64) []broadcast.Operation
 	Waiting(key int64) []broadcast.Operation
 	Live() []int64
+	Admits(version string) bool
 }
 
 type member struct {
@@ -49,6 +54,7 @@ type member struct {
 	engine   evt.Engine
 	claim    broadcast.Claimant
 	home     string
+	version  string
 	listener net.Listener
 	mu       sync.Mutex
 	trs      []broadcast.Transport
@@ -56,7 +62,7 @@ type member struct {
 	cancel   context.CancelFunc
 }
 
-func New(home string, places func(int64) int, effects func(self int64) broadcast.Effects, told func(evt.Notice)) (Member, error) {
+func New(home string, version string, places func(int64) int, effects func(self int64) broadcast.Effects, told func(evt.Notice)) (Member, error) {
 	dir := filepath.Join(home, "room")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return nil, err
@@ -72,6 +78,7 @@ func New(home string, places func(int64) int, effects func(self int64) broadcast
 	var members []int64
 	var id int64
 	joined := false
+	enc := codecOf()
 	for i := 0; i < joinAttempts; i++ {
 		id = broadcast.MemberOf([]byte(seed + " " + strconv.Itoa(i)))
 		listener, err = broadcast.Listen(dir, id)
@@ -98,12 +105,19 @@ func New(home string, places func(int64) int, effects func(self int64) broadcast
 		cancel()
 		return nil, fmt.Errorf("room: no free id in %s after %d attempts", dir, joinAttempts)
 	}
+	if version != "" {
+		if err := os.WriteFile(filepath.Join(dir, strconv.FormatInt(id, 10)+sidecarExt), []byte(version), 0o644); err != nil {
+			listener.Close()
+			cancel()
+			return nil, err
+		}
+	}
 	var extra broadcast.Effects
 	if effects != nil {
 		extra = effects(id)
 	}
 	claim := broadcast.NewClaimant(engine, engine, id, broadcast.NewMinter(id, broadcast.MachineClock()), broadcast.NewFold(places, extra), PriorityFleet, told)
-	m := &member{id: id, engine: engine, claim: claim, home: home, listener: listener, gone: ctx.Done(), cancel: cancel}
+	m := &member{id: id, engine: engine, claim: claim, home: home, version: version, listener: listener, gone: ctx.Done(), cancel: cancel}
 	go engine.Start(ctx)
 	go func() {
 		for {
@@ -111,7 +125,7 @@ func New(home string, places func(int64) int, effects func(self int64) broadcast
 			if err != nil {
 				return
 			}
-			tr := broadcast.NewPipeTransport(0, conn, Codec())
+			tr := broadcast.NewPipeTransport(0, conn, enc)
 			m.track(tr)
 			claim.Accept(tr)
 		}
@@ -124,7 +138,7 @@ func New(home string, places func(int64) int, effects func(self int64) broadcast
 		if err != nil {
 			continue
 		}
-		tr := broadcast.NewPipeTransport(peer, conn, Codec())
+		tr := broadcast.NewPipeTransport(peer, conn, enc)
 		m.track(tr)
 		claim.Subscribe(tr)
 	}
@@ -151,6 +165,9 @@ func (m *member) Close() {
 	m.mu.Unlock()
 	for _, tr := range trs {
 		tr.Close()
+	}
+	if m.version != "" {
+		os.Remove(filepath.Join(m.home, "room", strconv.FormatInt(m.id, 10)+sidecarExt))
 	}
 }
 
@@ -212,6 +229,46 @@ func (m *member) Live() []int64 {
 		return nil
 	}
 	return out
+}
+
+func (m *member) Admits(version string) bool {
+	if version == "" {
+		return false
+	}
+	for _, peer := range m.Live() {
+		if !declares(filepath.Join(m.home, "room", strconv.FormatInt(peer, 10)+sidecarExt), version) {
+			return false
+		}
+	}
+	return true
+}
+
+func declares(file, want string) bool {
+	b, err := os.ReadFile(file)
+	if err != nil {
+		return false
+	}
+	return versionAtLeast(strings.TrimSpace(string(b)), want)
+}
+
+func versionAtLeast(have, want string) bool {
+	hp, wp := strings.Split(have, "."), strings.Split(want, ".")
+	for i, part := range wp {
+		w, err := strconv.Atoi(part)
+		if err != nil {
+			return false
+		}
+		h := 0
+		if i < len(hp) {
+			if h, err = strconv.Atoi(hp[i]); err != nil {
+				return false
+			}
+		}
+		if h != w {
+			return h > w
+		}
+	}
+	return true
 }
 
 func identity() (string, error) {

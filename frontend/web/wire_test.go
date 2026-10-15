@@ -75,7 +75,7 @@ func wireServerDoor(t *testing.T, machine room.Member, door room.Door) (*Server,
 	}
 	home := seedHome(t)
 	if machine == nil {
-		m, err := room.New(home, func(int64) int { return 1 }, nil, nil)
+		m, err := room.New(home, room.JobStatusSince, func(int64) int { return 1 }, nil, nil)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -264,12 +264,12 @@ func TestTheLogsTailReadsTheEndOfALongFile(t *testing.T) {
 
 func TestTheFrontSGateServesAMintWhenTheFoldShowsIt(t *testing.T) {
 	key := room.KeyOf("fake-child")
-	machine, err := room.New(seedHome(t), func(int64) int { return 1 }, nil, nil)
+	machine, err := room.New(seedHome(t), room.JobStatusSince, func(int64) int { return 1 }, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(machine.Close)
-	remote, err := room.New(seedHome(t), func(int64) int { return 1 }, nil, nil)
+	remote, err := room.New(seedHome(t), room.JobStatusSince, func(int64) int { return 1 }, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -345,12 +345,12 @@ func TestTheFrontSGateServesAMintWhenTheFoldShowsIt(t *testing.T) {
 
 func TestTheFrontSEndsAClaimNoDoorCarriesAsAnError(t *testing.T) {
 	key := room.KeyOf("fake-alias")
-	machine, err := room.New(seedHome(t), func(int64) int { return 1 }, nil, nil)
+	machine, err := room.New(seedHome(t), room.JobStatusSince, func(int64) int { return 1 }, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(machine.Close)
-	remote, err := room.New(seedHome(t), func(int64) int { return 1 }, nil, nil)
+	remote, err := room.New(seedHome(t), room.JobStatusSince, func(int64) int { return 1 }, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -399,12 +399,12 @@ func TestTheFrontSEndsAClaimNoDoorCarriesAsAnError(t *testing.T) {
 
 func TestTheFrontSEndsAClockRefusedClaimAsAnError(t *testing.T) {
 	key := room.KeyOf("fake-child")
-	machine, err := room.New(seedHome(t), func(int64) int { return 1 }, nil, nil)
+	machine, err := room.New(seedHome(t), room.JobStatusSince, func(int64) int { return 1 }, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(machine.Close)
-	remote, err := room.New(seedHome(t), func(int64) int { return 1 }, nil, nil)
+	remote, err := room.New(seedHome(t), room.JobStatusSince, func(int64) int { return 1 }, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -462,12 +462,12 @@ func TestAMintAtAFrontWithNoDoorIsServed(t *testing.T) {
 
 func TestTheGateMakesTheChildReadyForARemoteRequest(t *testing.T) {
 	key := room.KeyOf("fake-child")
-	machine, err := room.New(seedHome(t), func(int64) int { return 1 }, nil, nil)
+	machine, err := room.New(seedHome(t), room.JobStatusSince, func(int64) int { return 1 }, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(machine.Close)
-	remote, err := room.New(seedHome(t), func(int64) int { return 1 }, nil, nil)
+	remote, err := room.New(seedHome(t), room.JobStatusSince, func(int64) int { return 1 }, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

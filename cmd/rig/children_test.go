@@ -35,11 +35,11 @@ func TestAnActEffectRunsOnceOnItsOwner(t *testing.T) {
 	ka := newChildren(home, models.Table{}, nil, nil, nil)
 	kb := newChildren(home, models.Table{}, nil, nil, nil)
 	var a, b machineroom.Member
-	a, err := machineroom.New(home, ka.places, ka.effects, nil)
+	a, err := machineroom.New(home, Version, ka.places, ka.effects, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	b, err = machineroom.New(home, kb.places, kb.effects, nil)
+	b, err = machineroom.New(home, Version, kb.places, kb.effects, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -67,11 +67,11 @@ func TestTheRoomEngineStaysFreeWhileAChildStarts(t *testing.T) {
 	ka := newChildren(home, models.Table{}, nil, nil, nil)
 	kb := newChildren(home, models.Table{}, nil, nil, nil)
 	var a, b machineroom.Member
-	a, err := machineroom.New(home, ka.places, ka.effects, nil)
+	a, err := machineroom.New(home, Version, ka.places, ka.effects, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	b, err = machineroom.New(home, kb.places, kb.effects, nil)
+	b, err = machineroom.New(home, Version, kb.places, kb.effects, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -154,7 +154,7 @@ func TestAJoinerReadsTheWorld(t *testing.T) {
 	}
 	ka := newChildren(home, loadRows(t, filepath.Join(home, "models.json")), nil, nil, nil)
 	var a, b machineroom.Member
-	a, err := machineroom.New(home, ka.places, ka.effects, nil)
+	a, err := machineroom.New(home, Version, ka.places, ka.effects, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -182,7 +182,7 @@ func TestAJoinerReadsTheWorld(t *testing.T) {
 		return err == nil
 	})
 	kb := newChildren(home, loadRows(t, filepath.Join(home, "models.json")), nil, nil, nil)
-	b, err = machineroom.New(home, kb.places, kb.effects, nil)
+	b, err = machineroom.New(home, Version, kb.places, kb.effects, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -222,11 +222,11 @@ func TestTwoInstancesRaceToStartAModelAndOneChildRuns(t *testing.T) {
 	ka := newChildren(home, models.Table{}, nil, nil, nil)
 	kb := newChildren(home, models.Table{}, nil, nil, nil)
 	var a, b machineroom.Member
-	a, err := machineroom.New(home, ka.places, ka.effects, nil)
+	a, err := machineroom.New(home, Version, ka.places, ka.effects, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	b, err = machineroom.New(home, kb.places, kb.effects, nil)
+	b, err = machineroom.New(home, Version, kb.places, kb.effects, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -265,11 +265,11 @@ func TestASwapWaitsForTheHoldsAndThenSwaps(t *testing.T) {
 	ka := newChildren(home, models.Table{}, nil, nil, nil)
 	kb := newChildren(home, models.Table{}, nil, nil, nil)
 	var a, b machineroom.Member
-	a, err := machineroom.New(home, ka.places, ka.effects, nil)
+	a, err := machineroom.New(home, Version, ka.places, ka.effects, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	b, err = machineroom.New(home, kb.places, kb.effects, nil)
+	b, err = machineroom.New(home, Version, kb.places, kb.effects, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -347,12 +347,12 @@ func TestTheUpdateDrainsTheRoom(t *testing.T) {
 	home := t.TempDir()
 	var a, b machineroom.Member
 	ka := newChildren(home, models.Table{}, nil, nil, nil)
-	a, err := machineroom.New(home, ka.places, ka.effects, nil)
+	a, err := machineroom.New(home, Version, ka.places, ka.effects, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	kb := newChildren(home, models.Table{}, nil, func() { b.Close() }, nil)
-	b, err = machineroom.New(home, kb.places, kb.effects, nil)
+	b, err = machineroom.New(home, Version, kb.places, kb.effects, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

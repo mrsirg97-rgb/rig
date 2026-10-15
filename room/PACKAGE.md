@@ -46,7 +46,15 @@ the five signals the instances exchange beside the protocol's own.
   prompt's first line, `running`, `done` or `failed`, the started and
   ended stamps, the failure's reason, the worker count, and the
   worker's latest call with its stamp), with `Codec` and `Registry`
-  declaring rig's six kinds beside `broadcast.Protocol()`'s.
+  declaring rig's six kinds beside `broadcast.Protocol()`'s. `New` takes
+  the member's version and writes it to `<room dir>/<id>.version` beside
+  the socket (`Close` removes it); `Admits(version)` reads every live
+  peer's sidecar and answers whether the room's slowest member still
+  declares at least it — a missing, empty or unreadable sidecar refuses,
+  fail closed — which is the gate a poster of a new act checks before
+  it posts (SPEC_ROOM, "the version a member declares"). `SetCodec`
+  swaps the encoder later joins build their transports with and returns
+  the restore; it exists for the mixed-version tests.
 - The priorities: outside 0, child 20, fleet 30, delegate's return 70,
   the operator's turn 90.
 - The door (3.1.0): `NewDoor(member, cfg, remote, home)` — the machine's

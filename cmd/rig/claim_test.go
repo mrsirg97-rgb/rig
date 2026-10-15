@@ -52,7 +52,7 @@ func roomOf(t *testing.T, rows ...models.Model) (string, *children, machineroom.
 		t.Fatal(err)
 	}
 	kids := newChildren(home, table, nil, nil, nil)
-	m, err := machineroom.New(home, kids.places, kids.effects, nil)
+	m, err := machineroom.New(home, Version, kids.places, kids.effects, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

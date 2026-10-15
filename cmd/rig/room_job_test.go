@@ -138,7 +138,7 @@ func roomInstanceRole() {
 	defer cancel()
 	go engine.Start(ctx)
 	kids := newChildren(cfgDir, models.Table{}, engine, nil, fleetroom.Add(rig.MemberDecision))
-	machine, err := machineroom.New(cfgDir, kids.places, kids.effects, nil)
+	machine, err := machineroom.New(cfgDir, machineroom.JobStatusSince, kids.places, kids.effects, nil)
 	if err != nil {
 		os.Stderr.WriteString("rig: room: " + err.Error() + "\n")
 		os.Exit(1)
