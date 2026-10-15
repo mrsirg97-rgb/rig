@@ -154,7 +154,7 @@ func TestADecideCallSortsAndRecords(t *testing.T) {
 	if decider != "fake" || session != "sess-3" || scope != "proj" {
 		t.Fatalf("the row names the decider, the session and the scope: %q %q %q", decider, session, scope)
 	}
-	if state != `{"item":"alpha"}` {
+	if state != `alpha` {
 		t.Fatalf("the state is the item: %q", state)
 	}
 	if confidence != 0.9 || unsure {
