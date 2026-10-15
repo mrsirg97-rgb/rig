@@ -13,8 +13,6 @@ import (
 	"sync"
 	"syscall"
 	"time"
-
-	"github.com/mrsirg97-rgb/evt"
 )
 
 type tui struct {
@@ -39,9 +37,12 @@ type tui struct {
 	showReasoning bool
 	turnLive      bool
 	compacting    bool
-	notices       []evt.Notice
-	noticing      bool
-	noticeFrame   int
+	bandQueue     []bandItem
+	bandHold      bandItem
+	bandLive      bool
+	bandFrame     int
+	bandCalls     map[string]bandCall
+	now           func() time.Time
 	aside         string
 	asideAt       time.Time
 	phaseLines    []string
@@ -216,6 +217,8 @@ func WithTitle(name string, rows []string, tagline string) Option {
 
 func WithTicks(ch <-chan time.Time) Option { return func(t *tui) { t.ticks = ch } }
 
+func WithNow(now func() time.Time) Option { return func(t *tui) { t.now = now } }
+
 func WithWinch(ch <-chan struct{}) Option { return func(t *tui) { t.winch = ch } }
 
 func New(in io.Reader, out io.Writer, theme Theme, opts ...Option) core.Frontend {
@@ -230,6 +233,7 @@ func New(in io.Reader, out io.Writer, theme Theme, opts ...Option) core.Frontend
 		pending:       make(chan string, 16),
 		wake:          make(chan struct{}, 1),
 		closed:        make(chan struct{}),
+		now:           time.Now,
 	}
 	if f, ok := in.(*os.File); ok && term.IsTerminal(int(f.Fd())) {
 		t.fdi = int(f.Fd())

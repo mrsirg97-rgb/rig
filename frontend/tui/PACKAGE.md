@@ -36,22 +36,39 @@ width); no core or loop line (decision 10).
   fleet as `workers: <model|none>`, and the hint line; `WithTitle`
   replaces the rig block letters, adds a tagline, and names the ascii
   fallback; `StatusIn.Rows` is the embedder's footer band under the same
-  dim rule the swarm band uses, nothing when empty), and the
+  dim rule the band row uses, nothing when empty), and the
   snapshot's recapture: every successful command re-reads the status
   function (the Used reset stays at `/new` and `sessions resume`), so
   the embedder's rows follow their commands, not a name list; with
   `WithStatusTick` the Input loop re-reads it every d while idle, and
   the region redraws only when the rows changed (zero is off, and
   rig's own main never sets it)).
-- **Notices breathe in the indicator's row** (`frame.go`, 2.11.7): a
-  `evt.Notice` never commits to the transcript. It joins a queue
-  (identical notices collapse, no size); when the row is idle, no turn
-  live and no compaction, the oldest takes the action indicator's exact
-  row and shape, breathes in once on the ember's curve in its level's
-  slot (`error` red, `success` green, `text` white) and is gone; the
-  next follows. While the model works the indicator owns the row and
-  notices wait. The breath rides the one frame ticker; a notice on an
-  idle row starts it for its own breath and the last breath stops it.
+- **The band row** (`band.go`, 3.2.0): everything happening in the
+  background passes through one row under the status rows, one item at
+  a time, in the order it happened — a delegate's or a swarm's start,
+  a scheduled job's start and end, a worker's tool call, and every
+  `evt.Notice`. The row never goes away: a dim rule (four cells) over
+  one row, the same height idle or busy. Items come in two kinds:
+  events never drop and keep their order (starts, ends, failures, and
+  the stores' notices, identical ones collapsing), and status items
+  replace — a worker's newer tool call replaces that worker's call
+  still waiting in the queue, so the backlog is at most one call per
+  worker however fast calls arrive. The row shows the breathing item
+  (`BreathPaint` on the item's slot: a call in the warn slot, a notice
+  in its level's slot, a start and a done in the text and success
+  slots, a failure in the fault slot), then holds it dimmed until the
+  next one, `—` before the first. Each breath is `emberBreathStops`
+  (12) × `animPeriod` (120 ms) of the ember's curve, riding the one
+  frame ticker; the breath runs whether or not a turn, a compaction or
+  an aside is live, and the ticker stops once the queue rests and the
+  row holds. A call is `#<worker> <call> · <age>`, prefixed with the
+  job's id for a scheduled job's worker (`j8 #1 …`), the call cut at
+  `bandCallCols` (25) display columns with `…` on rune and
+  display-width boundaries — 25 is the call width the 52-column phone
+  mockup shows, which leaves the row `j8 #1 ` + 25 + ` · 2s` = 36
+  columns at the phone's 52. The ages and the durations are computed
+  once, at the moment the item was made: the row is a sequence of
+  snapshots, not a live read.
 - **Phases share the row too** (`frame.go`, `phasepreview.go`, 2.11.7):
   a `core.Phase` opening takes the indicator's row as `<name> · <elapsed>`
   on the ember when no turn owns it. Since 2.12.9 its deltas stream as a
@@ -59,8 +76,9 @@ width); no core or loop line (decision 10).
   most `phasePreviewRows` (10) screen rows, dim reasoning, headed by
   `· n rows above ·` once the tail scrolls, gated by the same reasoning
   toggle and re-measured on resize. With the end the preview is gone —
-  nothing of it reaches the scrollback. Then the row goes idle and any
-  waiting notice breathes. A phase that arrives during a live turn waits
+  nothing of it reaches the scrollback. Then the row goes idle; the
+  band row's breath never waited on the phase. A phase that arrives
+  during a live turn waits
   and its deltas are not shown (the run log has them).
   One phase is open at a time and it is ended, never abandoned:
   `reviewing` ends on its settle, committing the check line (a green
@@ -70,35 +88,23 @@ width); no core or loop line (decision 10).
   (`endPhaseLocked`), because a reactive compaction runs inside the turn,
   where the cue cannot take the row and an abandoned phase would keep the
   indicator lit and the ticker spinning for the rest of the session.
-  Notices and phases are rendered, not stored: the recorder has no case
-  for either, and the web feed carries them live.
-- **The swarm band** (`swarm.go`): `RenderSwarmBand`
-  folds the latest `SwarmStatus` into one row per role below the status
-  rows, behind a short dim rule (four cells), while a swarm runs — the
-  densified counts (`+pending ✓done ✕failed`, the review clock for the
-  reviewer row) ride the theme's glyph switch, zero rows and no rule when
-  nothing runs; the swarm's decision lines are `Notice`s with source
-  `swarm` and breathe like every other (SPEC_SWARM 7;
-  `RenderSwarmNotice` left in 2.11.0, `RenderNotice` in 2.11.7).
-- **The delegate band** (`swarm.go`, 2.14.0): a delegate's snapshot is
-  told apart by the role it stamps (`delegate`), since a `SwarmStatus`
-  carries no origin, and renders as the rule and exactly two rows under
-  the cache and status rows — `delegating · N worker(s) · <elapsed of
-  the batch>` over the most recent call across the batch (`#2 edit
-  tool/file/edit.go · 12s`, `—` until a worker calls). The batch's start
-  is the earliest first-sighting of a running worker's heartbeat (the
-  delegate stamps it at spawn), so the row breathes without a new field
-  and without a poll; the call's age is the snapshot's `ToolAt`. The
-  first sighting is the only honest reading of `elapsed since this
-  batch started` the snapshot can give — it carries a heartbeat, and a
-  heartbeat is refreshed by the next one. `bandRunning` keeps the frame
-  ticker alive while a batch runs, which is what makes it breathe
-  between turns — between turns nothing else repaints; only a
-  delegate's rows drive a repaint on their own, a swarm's band has
-  always been painted by the events that move it. The band is the same
-  two rows for ten workers as for one — the per-worker story stays
-  where it always was, and a row per worker would have made it grow
-  with the fan-out it exists to summarize.
+  Phases are rendered, not stored: the recorder has no case for one, and
+  the web feed carries them live. A notice takes the band row (above),
+  never the indicator's: the indicator row shows only the turn, the
+  compaction and the phase.
+- **The publishers** (`swarm.go`, `notify.go`, 3.2.0): a `SwarmStatus`
+  no longer renders as a band; it feeds the row. A snapshot is told
+  apart by the role it stamps (`delegate`), since a `SwarmStatus`
+  carries no origin — the delegate's rows route to the delegate's slot,
+  the rest to the swarm's, a zero-row status is its publisher's
+  "nothing running" and clears both (2.14.7). The transition from
+  nothing running to workers running makes the start event
+  (`delegating · N worker(s)`, `swarm · N worker(s)`); each running
+  worker's tool is its own status item keyed by its publisher and id,
+  so a delegate's worker and a swarm's worker never replace each other.
+  The old band's per-role counts and its busiest tail are the swarm
+  tool's story now (`SPEC_SWARM 7`); the row carries one item at a
+  time.
 - **The worker inbox** (`worker.go`, 2.14.0): `core.WorkerDone` events
   append to an inbox and wake `Input`; the inbox drains at the top of
   `Input`, ahead of the steer slot, as one block in arrival order, and a

@@ -2,6 +2,7 @@ package room
 
 import (
 	"encoding/json"
+	"time"
 
 	"github.com/mrsirg97-rgb/evt"
 	"github.com/mrsirg97-rgb/evt/broadcast"
@@ -44,6 +45,25 @@ type TableChange struct {
 type Update struct {
 	evt.Mark
 	Version string
+}
+
+const (
+	JobRunning = "running"
+	JobDone    = "done"
+	JobFailed  = "failed"
+)
+
+type JobStatus struct {
+	evt.Mark
+	Job     string
+	Prompt  string
+	State   string
+	Started time.Time
+	Ended   time.Time
+	Reason  string
+	Workers int
+	Call    string
+	CallAt  time.Time
 }
 
 func jsonDeclare[T evt.Signal](reg broadcast.Registry, kind string) (broadcast.Registry, error) {

@@ -56,14 +56,14 @@ func TestStreamingProseStaysInsideTheViewport(t *testing.T) {
 	if got := paintFree(rows[0]); !strings.Contains(got, "hidden") {
 		t.Fatalf("the capped pending line does not name its hidden head: %q", rows[0])
 	}
-	if !strings.Contains(paintFree(rows[5]), "out loud here") {
-		t.Fatalf("the pending tail's newest row is not on screen: %q", rows[5])
+	if !strings.Contains(paintFree(rows[3]), "out loud here") {
+		t.Fatalf("the pending tail's newest row is not on screen: %q", rows[3])
 	}
-	if paintFree(rows[7]) != "thinking" {
-		t.Fatalf("the activity row drifted: %q", rows[7])
+	if paintFree(rows[5]) != "thinking" {
+		t.Fatalf("the activity row drifted: %q", rows[5])
 	}
-	if paintFree(rows[9]) != "❯ " {
-		t.Fatalf("the input row drifted: %q", rows[9])
+	if paintFree(rows[7]) != "❯ " {
+		t.Fatalf("the input row drifted: %q", rows[7])
 	}
 
 	s.fe.Notify(core.ReasoningDelta{Text: "\n"})
@@ -83,10 +83,10 @@ func TestStreamingProseStaysInsideTheViewport(t *testing.T) {
 	if n < 7 {
 		t.Fatalf("the screen lost the transcript tail:\n%q", rows)
 	}
-	if paintFree(rows[n-6]) != "" {
+	if paintFree(rows[n-8]) != "" {
 		t.Fatalf("the blank between the transcript and the input is gone: %q", rows)
 	}
-	if !strings.Contains(paintFree(rows[n-7]), "out loud here") {
+	if !strings.Contains(paintFree(rows[n-9]), "out loud here") {
 		t.Fatalf("the committed prose tail is not the row above the blank: %q", rows)
 	}
 }
@@ -105,7 +105,7 @@ func TestMenuWindowFitsTheViewport(t *testing.T) {
 		verbs[i] = command.Sub{Name: fmt.Sprintf("verb%d", i+1), Desc: "test"}
 	}
 	wc := &wideCmd{fakeCmd: fakeCmd{name: "wide", out: "ok"}, verbs: verbs}
-	s := newScriptedSession(t, th, WithWidth(50), WithSize(sizeFixture(50, 9)),
+	s := newScriptedSession(t, th, WithWidth(50), WithSize(sizeFixture(50, 11)),
 		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
 		WithCommands([]core.Command{wc}, nil),
 	)
@@ -120,9 +120,9 @@ func TestMenuWindowFitsTheViewport(t *testing.T) {
 	s.await("verb1")
 	s.await(promptMark(th) + th.Paint(SlotText, " /wide "))
 
-	rows := screenAt(t, s, 50, 9)
-	if len(rows) != 9 {
-		t.Fatalf("the screen holds %d rows, want the 9-row viewport:\n%q", len(rows), rows)
+	rows := screenAt(t, s, 50, 11)
+	if len(rows) != 11 {
+		t.Fatalf("the screen holds %d rows, want the 11-row viewport:\n%q", len(rows), rows)
 	}
 	joined := ""
 	for _, r := range rows {
@@ -134,7 +134,7 @@ func TestMenuWindowFitsTheViewport(t *testing.T) {
 	if strings.Contains(joined, "verb2") {
 		t.Fatalf("the menu window did not shrink to the viewport:\n%s", joined)
 	}
-	want := []string{"❯ /wide ", "", "huihui3.8", "xhigh · default · auto", "up 214k down 18k · cache r 187k 87%"}
+	want := []string{"❯ /wide ", "", "huihui3.8", "xhigh · default · auto", "up 214k down 18k · cache r 187k 87%", "····", "—"}
 	tail := rows[len(rows)-len(want):]
 	for i := range want {
 		if paintFree(tail[i]) != want[i] {
@@ -168,7 +168,7 @@ func TestTypingRewritesOnlyTheInputRow(t *testing.T) {
 		t.Fatalf("a keystroke re-laid the whole region (clear-below in the frame): %q", last)
 	}
 	rows := screenAt(t, s, 50, 24)
-	want := []string{"❯ x", "", "huihui3.8", "xhigh · default · auto", "up 214k down 18k · cache r 187k 87%"}
+	want := []string{"❯ x", "", "huihui3.8", "xhigh · default · auto", "up 214k down 18k · cache r 187k 87%", "····", "—"}
 	tail := rows[len(rows)-len(want):]
 	for i := range want {
 		if paintFree(tail[i]) != want[i] {
@@ -220,7 +220,7 @@ func TestFramesAfterACommitCarryNoCursorDown(t *testing.T) {
 
 func TestInputWindowFitsTheViewport(t *testing.T) {
 	th := oledTheme(t)
-	s := newScriptedSession(t, th, WithWidth(50), WithSize(sizeFixture(50, 8)),
+	s := newScriptedSession(t, th, WithWidth(50), WithSize(sizeFixture(50, 10)),
 		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
 	)
 	done := make(chan struct{})
@@ -234,9 +234,9 @@ func TestInputWindowFitsTheViewport(t *testing.T) {
 	s.await("up 214k down 18k · cache r 187k 87%")
 	time.Sleep(50 * time.Millisecond)
 
-	rows := screenAt(t, s, 50, 8)
-	if len(rows) != 8 {
-		t.Fatalf("the screen holds %d rows, want the 8-row viewport:\n%q", len(rows), rows)
+	rows := screenAt(t, s, 50, 10)
+	if len(rows) != 10 {
+		t.Fatalf("the screen holds %d rows, want the 10-row viewport:\n%q", len(rows), rows)
 	}
 	joined := ""
 	for _, r := range rows {
@@ -248,7 +248,7 @@ func TestInputWindowFitsTheViewport(t *testing.T) {
 	if !strings.Contains(joined, "word") {
 		t.Fatalf("the input window lost its text:\n%s", joined)
 	}
-	want := []string{"", "huihui3.8", "xhigh · default · auto", "up 214k down 18k · cache r 187k 87%"}
+	want := []string{"", "huihui3.8", "xhigh · default · auto", "up 214k down 18k · cache r 187k 87%", "····", "—"}
 	tail := rows[len(rows)-len(want):]
 	for i := range want {
 		if paintFree(tail[i]) != want[i] {
@@ -295,7 +295,7 @@ func checkViewportInvariants(t *testing.T, label string, v *vt, wantMark string)
 			t.Fatalf("%s: the committed prose was wiped from the screen:\n%q", label, rows)
 		}
 	}
-	start := len(rows) - 4
+	start := len(rows) - 6
 	if start < 0 {
 		start = 0
 	}
@@ -562,14 +562,14 @@ func resizeVT(v *vt, w, h int) *vt {
 
 func TestKeyboardShrinkAimsInsideTheViewport(t *testing.T) {
 	th := oledTheme(t)
-	size := newMutable(50, 14)
+	size := newMutable(50, 16)
 	s := newScriptedSession(t, th, WithWidth(50), WithSize(size.get),
 		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
 	)
 	if got := s.prompt(promptMark(th), "go\n"); got != "go" {
 		t.Fatalf("the prompt returned %q", got)
 	}
-	v := newVTScreen(50, 14)
+	v := newVTScreen(50, 16)
 	painted := 0
 	step := func(label string, want string) {
 		t.Helper()
@@ -586,14 +586,14 @@ func TestKeyboardShrinkAimsInsideTheViewport(t *testing.T) {
 		step("pre-shrink", "")
 	}
 
-	size.set(50, 10)
-	v = resizeVT(v, 50, 10)
+	size.set(50, 12)
+	v = resizeVT(v, 50, 12)
 	for i := 0; i < 6; i++ {
 		step("post-shrink", "word word word")
 	}
 
-	size.set(50, 14)
-	v = resizeVT(v, 50, 14)
+	size.set(50, 16)
+	v = resizeVT(v, 50, 16)
 	for i := 0; i < 6; i++ {
 		step("regrown", "word word word")
 	}
@@ -782,8 +782,8 @@ func TestParkedShrinkSteppedKeepsCommittedRows(t *testing.T) {
 	}
 	v := newVTScreen(50, 24)
 	parked, committed, painted := parkOnStreaming(t, s, v, 6)
-	if parked != 4 {
-		t.Fatalf("the fixture parked %d rows, want the 4-row status block", parked)
+	if parked != 6 {
+		t.Fatalf("the fixture parked %d rows, want the 6-row footer block", parked)
 	}
 
 	steps := []struct {

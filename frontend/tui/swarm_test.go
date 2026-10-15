@@ -24,103 +24,69 @@ func swarmBandStatus() core.SwarmStatus {
 	}
 }
 
-func TestSwarmBandRows(t *testing.T) {
-	th, err := ResolveTheme("oled", nil, true)
-	if err != nil {
-		t.Fatal(err)
+func TestTheStartItemsRouteByRoleAndKeepTheirOrder(t *testing.T) {
+	th := oledTheme(t)
+	s := newScriptedSession(t, th, WithWidth(90), WithNow(func() time.Time { return bandNow() }))
+	s.fe.Notify(core.SwarmStatus{
+		Workers: []core.SwarmWorker{{ID: 2, Role: "worker", State: "running", Heartbeat: bandNow()}},
+		Pending: 3,
+	})
+	s.fe.Notify(core.SwarmStatus{Workers: []core.SwarmWorker{
+		{ID: 1, Role: "delegate", State: "running", Heartbeat: bandNow()},
+	}})
+	s.fe.mu.Lock()
+	first, second, queued := s.fe.bandHold.text, s.fe.bandQueue[0].text, len(s.fe.bandQueue)
+	s.fe.mu.Unlock()
+	if first != "swarm · 1 worker" || second != "delegating · 1 worker" {
+		t.Fatalf("the starts name their publisher and count: %q then %q", first, second)
 	}
-	got := RenderSwarmBand(th, swarmBandStatus())
-	sep := th.Paint("dim", " · ")
-	want := th.Paint("dim", "····") + "\n" +
-		th.Paint("dim", "workers") + th.Paint("text", " 2") + sep +
-		th.Paint("dim", "+") + th.Paint("text", "7") + " " +
-		th.Paint("success", th.Glyph(GlyphOK)) + th.Paint("text", "3") + " " +
-		th.Paint("error", th.Glyph(GlyphFail)) + th.Paint("text", "1") + sep +
-		th.Paint("dim", "w2 t388 12s") + "\n" +
-		th.Paint("dim", "reviewer") + th.Paint("text", " 1") + sep +
-		th.Paint("dim", th.Glyph(GlyphReview)) + th.Paint("text", "2") + " " +
-		th.Paint("success", th.Glyph(GlyphOK)) + th.Paint("text", "1") + " " +
-		th.Paint("error", th.Glyph(GlyphFail)) + th.Paint("text", "0") + sep +
-		th.Paint("dim", "w3 t386 4m")
-	if got != want {
-		t.Fatalf("the band:\ngot  %q\nwant %q", got, want)
+	if queued != 1 {
+		t.Fatalf("the swarm's start holds the row and the delegate's waits: %d queued", queued)
+	}
+	s.fe.Notify(core.SwarmStatus{Workers: []core.SwarmWorker{
+		{ID: 2, Role: "worker", State: "exited", Done: 1},
+	}})
+	s.fe.mu.Lock()
+	second = s.fe.bandQueue[0].text
+	s.fe.mu.Unlock()
+	if second != "delegating · 1 worker" {
+		t.Fatalf("the swarm's drained status leaves the delegate's item: %q", second)
 	}
 }
 
-func TestSwarmBandRulesAndGlyphsFollowTheTheme(t *testing.T) {
+func TestTheRuleNeverLeavesTheFooter(t *testing.T) {
 	th, err := ResolveTheme("", []byte(`{"base":"p1","glyphs":"ascii"}`), true)
 	if err != nil {
 		t.Fatal(err)
 	}
-	got := RenderSwarmBand(th, swarmBandStatus())
-	rows := strings.Split(paintFree(got), "\n")
-	if len(rows) != 3 {
-		t.Fatalf("the ascii band paints %d rows, want rule + 2:\n%s", len(rows), got)
+	s := newScriptedSession(t, th, WithWidth(60),
+		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }))
+	if got := s.prompt(promptMark(th), "go\n"); got != "go" {
+		t.Fatalf("prompt = %q", got)
 	}
-	if rows[0] != "...." {
-		t.Errorf("the ascii rule = %q, want four dots", rows[0])
-	}
-	row := rows[1]
-	for _, want := range []string{".", "+7", "v3", "[x]1", "w2 t388 12s"} {
-		if !strings.Contains(row, want) {
-			t.Errorf("the ascii worker row %q misses %q", row, want)
-		}
-	}
-	if !strings.Contains(rows[2], "~2") {
-		t.Errorf("the ascii reviewer row %q misses the review glyph", rows[2])
+	s.await("....")
+	joined := paintFree(strings.Join(screenLines(t, s, 60), "\n"))
+	if !strings.Contains(joined, "....\n—") {
+		t.Fatalf("the idle footer carries the rule and the dash:\n%s", joined)
 	}
 }
 
-func TestSwarmBandZeroRowsAndNoRuleWhenNothingRuns(t *testing.T) {
-	th, err := ResolveTheme("oled", nil, true)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got := RenderSwarmBand(th, core.SwarmStatus{}); got != "" {
-		t.Fatalf("an empty snapshot paints %q", got)
-	}
+func TestAnEmptySnapshotQueuesNothing(t *testing.T) {
+	s := newScriptedSession(t, oledTheme(t), WithWidth(90), WithNow(func() time.Time { return bandNow() }))
+	s.fe.Notify(core.SwarmStatus{})
 	exited := core.SwarmStatus{Workers: []core.SwarmWorker{
 		{ID: 1, Role: "worker", Done: 5, State: "exited"},
 	}}
-	if got := RenderSwarmBand(th, exited); got != "" {
-		t.Fatalf("an all-exited swarm paints %q", got)
+	s.fe.Notify(exited)
+	s.fe.mu.Lock()
+	queued, hold := len(s.fe.bandQueue), s.fe.bandHold.text
+	s.fe.mu.Unlock()
+	if queued != 0 || hold != "" {
+		t.Fatalf("nothing runs, nothing queues: %d items, hold %q", queued, hold)
 	}
 }
 
-func TestSwarmBandDelegateShowsTheWorkerRowOnly(t *testing.T) {
-	th, err := ResolveTheme("oled", nil, true)
-	if err != nil {
-		t.Fatal(err)
-	}
-	st := core.SwarmStatus{Workers: []core.SwarmWorker{
-		{ID: 1, Role: "worker", Task: "sweep the floor", Heartbeat: time.Now(), State: "running"},
-	}}
-	got := RenderSwarmBand(th, st)
-	rows := strings.Split(got, "\n")
-	if len(rows) != 2 {
-		t.Fatalf("a delegate paints %d rows, want rule + one:\n%s", len(rows), got)
-	}
-	if !strings.Contains(paintFree(got), "workers 1 · +0 ✓0 ✕0 · w1 sweep the floor") {
-		t.Fatalf("the delegate row:\n%s", got)
-	}
-}
-
-func TestSwarmBandBusiestIsInFlightFirst(t *testing.T) {
-	th, err := ResolveTheme("oled", nil, true)
-	if err != nil {
-		t.Fatal(err)
-	}
-	st := core.SwarmStatus{Workers: []core.SwarmWorker{
-		{ID: 1, Role: "worker", Done: 9, State: "running"},
-		{ID: 2, Role: "worker", Task: "t388", Heartbeat: time.Now(), Done: 1, State: "running"},
-	}}
-	got := RenderSwarmBand(th, st)
-	if !strings.Contains(paintFree(got), "w2 t388") {
-		t.Fatalf("the in-flight worker must lead the tail:\n%s", got)
-	}
-}
-
-func TestSwarmBandFooterGrowsUpdatesAndReturns(t *testing.T) {
+func TestTheFooterHoldsItsHeightThroughABand(t *testing.T) {
 	th := oledTheme(t)
 	s := newScriptedSession(t, th, WithWidth(60), WithSize(sizeFixture(60, 20)),
 		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
@@ -130,36 +96,26 @@ func TestSwarmBandFooterGrowsUpdatesAndReturns(t *testing.T) {
 	}
 	base := screenAt(t, s, 60, 20)
 
-	s.fe.Notify(core.SwarmStatus{
-		Workers: []core.SwarmWorker{
-			{ID: 2, Role: "worker", Task: "t388", Heartbeat: time.Now(), Done: 1, State: "running"},
-			{ID: 3, Role: "reviewer", Task: "t386", Heartbeat: time.Now(), State: "running"},
-		},
-		Pending: 3,
-		Review:  1,
-	})
-	s.await(th.Paint("dim", "····"))
+	s.fe.Notify(swarmBandStatus())
+	s.await("swarm · 2 workers")
 	rows := screenAt(t, s, 60, 20)
-	if len(rows) != len(base)+3 {
-		t.Fatalf("the footer grew to %d rows, want %d (base %d):\n%q", len(rows), len(base)+3, len(base), rows)
+	if len(rows) != len(base) {
+		t.Fatalf("a band's start must not grow the footer: %d rows, base %d:\n%q", len(rows), len(base), rows)
 	}
 
 	s.fe.Notify(core.SwarmStatus{
 		Workers: []core.SwarmWorker{
-			{ID: 2, Role: "worker", Task: "t389", Heartbeat: time.Now().Add(-12 * time.Second), Done: 2, Failed: 1, State: "running"},
+			{ID: 2, Role: "worker", Task: "t389", Heartbeat: time.Now().Add(-12 * time.Second), Done: 2, Failed: 1, State: "running", Tool: "read x", ToolAt: time.Now()},
 			{ID: 3, Role: "reviewer", Task: "t387", Heartbeat: time.Now(), State: "running"},
 		},
 		Pending: 5,
 		Review:  2,
 	})
-	s.await(th.Paint("text", "5"))
+	breathe(t, s, emberBreathStops)
+	s.await("#2 read x · 0s")
 	rows = screenAt(t, s, 60, 20)
-	if len(rows) != len(base)+3 {
-		t.Fatalf("the update changed the footer height to %d, want %d", len(rows), len(base)+3)
-	}
-	joined := paintFree(strings.Join(rows, "\n"))
-	if !strings.Contains(joined, "w2 t389 12s") || !strings.Contains(joined, "✓2") {
-		t.Fatalf("the updated band did not paint:\n%s", joined)
+	if len(rows) != len(base) {
+		t.Fatalf("the call item must not grow the footer: %d rows, base %d", len(rows), len(base))
 	}
 
 	s.fe.Notify(core.SwarmStatus{
@@ -167,8 +123,6 @@ func TestSwarmBandFooterGrowsUpdatesAndReturns(t *testing.T) {
 			{ID: 2, Role: "worker", State: "exited", Done: 2, Failed: 1},
 			{ID: 3, Role: "reviewer", State: "exited"},
 		},
-		Pending: 0,
-		Review:  0,
 	})
 	deadline := time.Now().Add(3 * time.Second)
 	for {
@@ -177,17 +131,16 @@ func TestSwarmBandFooterGrowsUpdatesAndReturns(t *testing.T) {
 			break
 		}
 		if time.Now().After(deadline) {
-			t.Fatalf("the footer did not return to %d rows, holds %d:\n%q", len(base), len(rows), rows)
+			t.Fatalf("the footer left its base height: %d rows, base %d:\n%q", len(rows), len(base), rows)
 		}
 		time.Sleep(2 * time.Millisecond)
 	}
-	joined = paintFree(strings.Join(rows, "\n"))
-	if strings.Contains(joined, "workers 2") || strings.Contains(joined, "····") {
-		t.Fatalf("the band lingers after the exit:\n%s", joined)
+	if got := paintFree(strings.Join(rows, "\n")); strings.Contains(got, "w2") && !strings.Contains(got, "read x") {
+		t.Fatalf("the row lost its held item:\n%s", got)
 	}
 }
 
-func TestTheDelegateBandSurvivesTheSwarmDraining(t *testing.T) {
+func TestTheSwarmAndTheDelegateStartsBreatheInOrder(t *testing.T) {
 	th := oledTheme(t)
 	s := newScriptedSession(t, th, WithWidth(60), WithSize(sizeFixture(60, 20)),
 		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
@@ -202,65 +155,19 @@ func TestTheDelegateBandSurvivesTheSwarmDraining(t *testing.T) {
 		},
 		Pending: 3,
 	})
-	s.await(th.Paint("dim", "····"))
 	s.fe.Notify(core.SwarmStatus{Workers: []core.SwarmWorker{
 		{ID: 1, Role: "delegate", Task: "t1", Heartbeat: time.Now(), State: "running"},
 	}})
-	s.await("delegating")
+	s.await("swarm · 1 worker")
+	breathe(t, s, emberBreathStops)
+	s.await("delegating · 1 worker")
 
 	s.fe.Notify(core.SwarmStatus{Workers: []core.SwarmWorker{
 		{ID: 2, Role: "worker", State: "exited", Done: 1},
 	}})
-	joined := s.screenUntil(t, 60, 20, 3*time.Second, func(j string) bool {
-		return !strings.Contains(j, "workers 1")
-	}, "the swarm's drained status did not clear the swarm band")
-	if !strings.Contains(joined, "delegating") {
-		t.Fatalf("the swarm's drained status took the delegate band:\n%s", joined)
-	}
-
-	s.fe.Notify(core.SwarmStatus{})
-	s.screenUntil(t, 60, 20, 3*time.Second, func(j string) bool {
-		return !strings.Contains(j, "delegating")
-	}, "the empty status left the delegate band")
-}
-
-func TestTheSwarmAndTheDelegateBandsSitSideBySide(t *testing.T) {
-	th := oledTheme(t)
-	s := newScriptedSession(t, th, WithWidth(60), WithSize(sizeFixture(60, 20)),
-		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
-	)
-	if got := s.prompt(promptMark(th), "go\n"); got != "go" {
-		t.Fatalf("prompt = %q", got)
-	}
-
-	s.fe.Notify(core.SwarmStatus{
-		Workers: []core.SwarmWorker{
-			{ID: 2, Role: "worker", Task: "t388", Heartbeat: time.Now(), State: "running"},
-		},
-		Pending: 3,
-	})
-	s.await(th.Paint("dim", "····"))
-	s.fe.Notify(core.SwarmStatus{Workers: []core.SwarmWorker{
-		{ID: 1, Role: "delegate", Task: "t1", Heartbeat: time.Now(), State: "running"},
-	}})
-	s.await("delegating")
-	rows := screenAt(t, s, 60, 20)
-	delegating := -1
-	workers := -1
-	for i, row := range rows {
-		plain := paintFree(row)
-		if delegating < 0 && strings.Contains(plain, "delegating") {
-			delegating = i
-		}
-		if workers < 0 && strings.Contains(plain, "workers 1") {
-			workers = i
-		}
-	}
-	if delegating < 0 || workers < 0 {
-		t.Fatalf("the bands did not both paint:\n%q", rows)
-	}
-	if delegating > workers {
-		t.Fatalf("the delegate band leads: %d > %d\n%q", delegating, workers, rows)
+	time.Sleep(100 * time.Millisecond)
+	if got := paintFree(strings.Join(screenAt(t, s, 60, 20), "\n")); !strings.Contains(got, "delegating · 1 worker") && !strings.Contains(got, "swarm · 1 worker") {
+		t.Fatalf("the row lost both starts:\n%s", got)
 	}
 }
 
@@ -279,7 +186,7 @@ func (s *scriptedSession) screenUntil(t *testing.T, w, h int, within time.Durati
 	}
 }
 
-func TestSwarmBandResizeLeavesNoTornRows(t *testing.T) {
+func TestTheRowSurvivesAResizeWithoutTornRows(t *testing.T) {
 	th := oledTheme(t)
 	size := newMutable(50, 14)
 	winch := make(chan struct{}, 4)
@@ -298,7 +205,7 @@ func TestSwarmBandResizeLeavesNoTornRows(t *testing.T) {
 		Pending: 3,
 		Review:  1,
 	})
-	s.await(th.Paint("dim", "····"))
+	s.await("swarm · 2 workers")
 	time.Sleep(20 * time.Millisecond)
 
 	v := newVTScreen(50, 14)
@@ -307,7 +214,7 @@ func TestSwarmBandResizeLeavesNoTornRows(t *testing.T) {
 	for ; painted < len(chunks); painted++ {
 		v.feed([]byte(chunks[painted]))
 	}
-	checkViewportInvariants(t, "band pre-resize", v, "workers 1")
+	checkViewportInvariants(t, "band pre-resize", v, "swarm · 2 workers")
 
 	size.set(36, 10)
 	v.width = 36
@@ -317,10 +224,10 @@ func TestSwarmBandResizeLeavesNoTornRows(t *testing.T) {
 	for ; painted < len(chunks); painted++ {
 		v.feed([]byte(chunks[painted]))
 	}
-	checkViewportInvariants(t, "band resize", v, "workers 1")
+	checkViewportInvariants(t, "band resize", v, "swarm · 2 workers")
 	joined := paintFree(strings.Join(v.rows, "\n"))
-	if !strings.Contains(joined, "····") || !strings.Contains(joined, "+3") || !strings.Contains(joined, "⧗1") {
-		t.Fatalf("the band or its rule vanished on the resize:\n%s", joined)
+	if !strings.Contains(joined, "····") || !strings.Contains(joined, "swarm · 2 workers") {
+		t.Fatalf("the row or its rule vanished on the resize:\n%s", joined)
 	}
 
 	freeze := newVTStream(36)
@@ -336,8 +243,8 @@ func TestSwarmBandResizeLeavesNoTornRows(t *testing.T) {
 		}
 	}
 	joined = paintFree(strings.Join(freeze.rows, "\n"))
-	if !strings.Contains(joined, "workers 1") || !strings.Contains(joined, "+3") {
-		t.Fatalf("the freeze harness lost the band rows:\n%s", joined)
+	if !strings.Contains(joined, "····") || !strings.Contains(joined, "swarm · 2 workers") {
+		t.Fatalf("the freeze harness lost the row:\n%s", joined)
 	}
 }
 
@@ -389,7 +296,7 @@ func awaitScreen(t *testing.T, s *scriptedSession, text string, present bool) {
 	}
 }
 
-func TestANoticeBreathesInTheIndicatorRowThenGoes(t *testing.T) {
+func TestANoticeBreathesOnTheRowThenHoldsDimmed(t *testing.T) {
 	th := oledTheme(t)
 	s := idleSession(t, th)
 	s.fe.Notify(evt.Notice{Source: "decision", Text: "review: fire: refused", Level: evt.LevelError})
@@ -398,32 +305,23 @@ func TestANoticeBreathesInTheIndicatorRowThenGoes(t *testing.T) {
 		t.Fatalf("the notice paints one row while it breathes, got %d", n)
 	}
 	breathe(t, s, emberBreathStops)
-	awaitScreen(t, s, "decision: review: fire: refused", false)
-	s.fe.mu.Lock()
-	noticing, running := s.fe.noticing, s.fe.tickStop != nil
-	s.fe.mu.Unlock()
-	if noticing || running {
-		t.Fatalf("after the breath the row is idle and the ticker stopped: noticing=%v ticker=%v", noticing, running)
+	awaitScreen(t, s, "decision: review: fire: refused", true)
+	deadline := time.Now().Add(3 * time.Second)
+	for {
+		s.fe.mu.Lock()
+		live, running, hold := s.fe.bandLive, s.fe.tickStop != nil, s.fe.bandHold.text
+		s.fe.mu.Unlock()
+		if !live && !running && hold == "decision: review: fire: refused" {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("after the breath the row holds and the ticker stops: live=%v ticker=%v hold=%q", live, running, hold)
+		}
+		time.Sleep(time.Millisecond)
 	}
-}
-
-func TestANoticeWaitsWhileTheTurnIsLive(t *testing.T) {
-	th := oledTheme(t)
-	s := newScriptedSession(t, th, WithWidth(60),
-		WithStatus(func(ctx context.Context) StatusIn { return statusFixture() }),
-	)
-	if got := s.prompt(promptMark(th), "go\n"); got != "go" {
-		t.Fatalf("prompt = %q", got)
+	if !strings.Contains(s.out.String(), th.Paint(SlotDim, "decision: review: fire: refused")) {
+		t.Fatalf("the hold is not dim:\n%s", s.out.String())
 	}
-	s.fe.Notify(evt.Notice{Source: "graph", Text: "queue full, dropping a.go", Level: evt.LevelError})
-	breathe(t, s, 3)
-	if n := screenHas(t, s, "graph: queue full"); n != 0 {
-		t.Fatalf("a notice waits while the model works, got %d rows", n)
-	}
-	s.fe.Notify(core.TurnEnd{Reason: core.TurnOver})
-	awaitScreen(t, s, "graph: queue full, dropping a.go", true)
-	breathe(t, s, emberBreathStops)
-	awaitScreen(t, s, "graph: queue full, dropping a.go", false)
 }
 
 func TestNoticesShowInOrderAndADuplicateCollapses(t *testing.T) {
@@ -435,10 +333,10 @@ func TestNoticesShowInOrderAndADuplicateCollapses(t *testing.T) {
 	s.fe.Notify(first)
 	s.fe.Notify(second)
 	s.fe.mu.Lock()
-	queued := len(s.fe.notices)
+	queued, hold := len(s.fe.bandQueue), s.fe.bandHold.text
 	s.fe.mu.Unlock()
-	if queued != 2 {
-		t.Fatalf("a duplicate collapses: queued %d, want 2", queued)
+	if queued != 1 || hold != "swarm: w1 died — t1 restarted" {
+		t.Fatalf("a duplicate collapses against the breathing hold: queued %d, hold %q", queued, hold)
 	}
 	awaitScreen(t, s, "swarm: w1 died — t1 restarted", true)
 	if screenHas(t, s, "/swarm exited") != 0 {
@@ -447,7 +345,7 @@ func TestNoticesShowInOrderAndADuplicateCollapses(t *testing.T) {
 	breathe(t, s, emberBreathStops)
 	awaitScreen(t, s, "swarm: /swarm exited — 2 workers stopped", true)
 	breathe(t, s, emberBreathStops)
-	awaitScreen(t, s, "swarm: /swarm exited — 2 workers stopped", false)
+	awaitScreen(t, s, "swarm: /swarm exited — 2 workers stopped", true)
 	if n := screenHas(t, s, "w1 died"); n != 0 {
 		t.Fatalf("nothing commits to the transcript, found %d rows", n)
 	}

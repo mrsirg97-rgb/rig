@@ -152,9 +152,6 @@ func (t *tui) activityLineLocked() string {
 		return t.theme.EmberPaint(t.frame, "summarizing") + t.theme.Paint(SlotDim, " \u00b7 "+swarmAge(time.Since(t.asideAt)))
 	case !t.turnLive && t.aside != "":
 		return t.theme.EmberPaint(t.frame, t.aside) + t.theme.Paint(SlotDim, " \u00b7 "+swarmAge(time.Since(t.asideAt)))
-	case !t.turnLive && t.noticing && len(t.notices) > 0:
-		n := t.notices[0]
-		return t.theme.BreathPaint(noticeSlot(n.Level), t.noticeFrame, n.Source+": "+n.Text)
 	case !t.turnLive && t.escArm > 0:
 		return t.theme.Paint(SlotWarn, "esc again to stop "+strconv.Itoa(t.escArm)+" "+wordFor(t.escArm))
 	}

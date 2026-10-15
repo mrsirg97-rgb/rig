@@ -28,77 +28,121 @@ func delegateSnapshot(calls ...string) core.SwarmStatus {
 	return st
 }
 
-func TestTheDelegateBandIsTwoRowsForAnyCount(t *testing.T) {
+func TestTheStartItemCountsTheBatch(t *testing.T) {
 	th, err := ResolveTheme("oled", nil, true)
 	if err != nil {
 		t.Fatal(err)
 	}
-	now := time.Now()
 	for _, workers := range []int{1, 3} {
-		calls := make([]string, workers)
-		band := RenderDelegateBand(th, delegateSnapshot(calls...), now.Add(-72*time.Second), now)
-		rows := strings.Split(band, "\n")
-		if len(rows) != 3 {
-			t.Fatalf("%d workers: the band is the rule and two rows, got %d:\n%s", workers, len(rows), band)
+		s := newScriptedSession(t, th, WithWidth(90), WithNow(func() time.Time { return bandNow() }))
+		ws := make([]core.SwarmWorker, workers)
+		for i := range ws {
+			ws[i] = core.SwarmWorker{ID: i + 1, Role: "delegate", Task: "t", State: "running", Heartbeat: bandNow()}
 		}
-		head := stripANSI(rows[1])
-		if !strings.Contains(head, "delegating") || !strings.Contains(head, fmt.Sprintf("%d %s", workers, wordFor(workers))) {
-			t.Fatalf("%d workers: the head row counts them: %q", workers, head)
-		}
-		if !strings.Contains(head, "1m") {
-			t.Fatalf("the head row carries the elapsed of the batch: %q", head)
-		}
-		if strings.TrimSpace(stripANSI(rows[2])) != "—" {
-			t.Fatalf("no worker has called yet, so the call row is a dash: %q", rows[2])
+		s.fe.Notify(core.SwarmStatus{Workers: ws})
+		s.fe.mu.Lock()
+		text := s.fe.bandHold.text
+		s.fe.mu.Unlock()
+		if text != "delegating · "+strconv.Itoa(workers)+" "+wordFor(workers) {
+			t.Fatalf("%d workers: the start item counts them: %q", workers, text)
 		}
 	}
 }
 
-func TestTheCallRowIsTheMostRecentCallAcrossWorkers(t *testing.T) {
+func TestEachWorkersCallIsItsOwnItem(t *testing.T) {
 	th, _ := ResolveTheme("oled", nil, true)
-	now := time.Now()
-	st := core.SwarmStatus{Workers: []core.SwarmWorker{
-		{ID: 1, Role: "delegate", Task: "a", State: "running", Heartbeat: now, Tool: "read core/provider.go", ToolAt: now.Add(-30 * time.Second)},
-		{ID: 2, Role: "delegate", Task: "b", State: "running", Heartbeat: now, Tool: "edit tool/file/edit.go", ToolAt: now.Add(-12 * time.Second)},
-		{ID: 3, Role: "delegate", Task: "c", State: "running", Heartbeat: now},
-	}}
-	rows := strings.Split(RenderDelegateBand(th, st, now.Add(-time.Hour), now), "\n")
-	got := stripANSI(rows[2])
-	if !strings.Contains(got, "#2") || !strings.Contains(got, "edit tool/file/edit.go") || !strings.Contains(got, "12s") {
-		t.Fatalf("the row is the freshest call, its worker and its age: %q", got)
+	s := newScriptedSession(t, th, WithWidth(90), WithNow(func() time.Time { return bandNow() }))
+	now := bandNow()
+	s.fe.Notify(core.SwarmStatus{Workers: []core.SwarmWorker{
+		{ID: 1, Role: "delegate", State: "running", Heartbeat: now, Tool: "read core/provider.go", ToolAt: now.Add(-30 * time.Second)},
+		{ID: 2, Role: "delegate", State: "running", Heartbeat: now, Tool: "edit tool/file/edit.go", ToolAt: now.Add(-12 * time.Second)},
+	}})
+	s.fe.mu.Lock()
+	queued := len(s.fe.bandQueue)
+	first := s.fe.bandQueue[0].text
+	second := s.fe.bandQueue[1].text
+	s.fe.mu.Unlock()
+	if queued != 2 {
+		t.Fatalf("two workers' calls queue as two items beside the held start, got %d", queued)
 	}
-	if strings.Contains(got, "read core") {
-		t.Fatalf("the older call does not belong to the row: %q", got)
+	if first != "#1 read core/provider.go · 30s" {
+		t.Fatalf("the first worker's item: %q", first)
+	}
+	if second != "#2 edit tool/file/edit.go · 12s" {
+		t.Fatalf("the second worker's item: %q", second)
+	}
+	s.fe.Notify(core.SwarmStatus{Workers: []core.SwarmWorker{
+		{ID: 1, Role: "delegate", State: "running", Heartbeat: now, Tool: "read core/other.go", ToolAt: now.Add(-5 * time.Second)},
+		{ID: 2, Role: "delegate", State: "running", Heartbeat: now, Tool: "edit tool/file/edit.go", ToolAt: now.Add(-12 * time.Second)},
+	}})
+	s.fe.mu.Lock()
+	queued = len(s.fe.bandQueue)
+	first = s.fe.bandQueue[0].text
+	s.fe.mu.Unlock()
+	if queued != 2 {
+		t.Fatalf("a newer call replaces its worker's item in place, got %d", queued)
+	}
+	if first != "#1 read core/other.go · 5s" {
+		t.Fatalf("the replaced item: %q", first)
 	}
 }
 
-func TestTheSwarmBandKeepsItsRoleRows(t *testing.T) {
+func TestTheHeartbeatStreamDoesNotRebreatheACall(t *testing.T) {
 	th, _ := ResolveTheme("oled", nil, true)
-	now := time.Now()
-	st := core.SwarmStatus{Pending: 7, Review: 2, Workers: []core.SwarmWorker{
-		{ID: 2, Role: "worker", Task: "t388", State: "running", Heartbeat: now.Add(-12 * time.Second), Done: 3, Failed: 1},
-		{ID: 3, Role: "reviewer", Task: "t386", State: "running", Heartbeat: now.Add(-4 * time.Minute)},
-	}}
-	if IsDelegateBand(st) {
-		t.Fatal("a swarm's rows are not a delegate's")
+	s := newScriptedSession(t, th, WithWidth(90), WithNow(func() time.Time { return bandNow() }))
+	now := bandNow()
+	s.fe.Notify(core.SwarmStatus{Workers: []core.SwarmWorker{
+		{ID: 1, Role: "delegate", State: "running", Heartbeat: now, Tool: "read core/provider.go", ToolAt: now.Add(-2 * time.Second)},
+	}})
+	s.fe.mu.Lock()
+	queued := len(s.fe.bandQueue)
+	s.fe.mu.Unlock()
+	if queued != 1 {
+		t.Fatalf("the first call queues: %d", queued)
 	}
-	band := RenderSwarmBand(th, st)
-	if !strings.Contains(band, "workers") || !strings.Contains(band, "reviewer") {
-		t.Fatalf("the swarm band keeps its role rows:\n%s", band)
+	s.fe.Notify(core.SwarmStatus{Workers: []core.SwarmWorker{
+		{ID: 1, Role: "delegate", State: "running", Heartbeat: now.Add(time.Second), Tool: "read core/provider.go", ToolAt: now.Add(-2 * time.Second)},
+	}})
+	s.fe.mu.Lock()
+	queued = len(s.fe.bandQueue)
+	s.fe.mu.Unlock()
+	if queued != 1 {
+		t.Fatalf("the same call re-reported on a heartbeat must not requeue: %d", queued)
 	}
 }
 
-func TestABandOnlyBreathesWhileWorkersRun(t *testing.T) {
-	if !bandRunning(delegateSnapshot("read x")) {
-		t.Fatal("a delegate batch running between turns still breathes the status")
+func TestTheTickerRunsForBreathsNotBatches(t *testing.T) {
+	th := oledTheme(t)
+	s := newScriptedSession(t, th, WithWidth(90), WithNow(func() time.Time { return bandNow() }))
+	if got := s.prompt(promptMark(th), "go\n"); got != "go" {
+		t.Fatalf("prompt = %q", got)
 	}
-	done := delegateSnapshot("")
-	done.Workers[0].State = "done"
-	if bandRunning(done) {
-		t.Fatal("nothing runs, nothing breathes")
+	s.fe.Notify(core.TurnEnd{Reason: core.TurnOver})
+	now := bandNow()
+	s.fe.Notify(core.SwarmStatus{Workers: []core.SwarmWorker{
+		{ID: 1, Role: "delegate", State: "running", Heartbeat: now},
+	}})
+	s.fe.mu.Lock()
+	live := s.fe.bandLive
+	s.fe.mu.Unlock()
+	if !live {
+		t.Fatal("a work item breathes as soon as it arrives")
 	}
-	if bandRunning(core.SwarmStatus{Workers: []core.SwarmWorker{{ID: 1, Role: "worker", State: "running"}}}) {
-		t.Fatal("a swarm's band has always been painted by its events")
+	breathe(t, s, emberBreathStops)
+	s.fe.Notify(core.SwarmStatus{Workers: []core.SwarmWorker{
+		{ID: 1, Role: "delegate", State: "running", Heartbeat: now, Tool: "read x", ToolAt: now},
+	}})
+	breathe(t, s, emberBreathStops)
+	s.fe.Notify(core.SwarmStatus{})
+	time.Sleep(50 * time.Millisecond)
+	s.fe.mu.Lock()
+	live, running, hold := s.fe.bandLive, s.fe.tickStop != nil, s.fe.bandHold.text
+	s.fe.mu.Unlock()
+	if live || running {
+		t.Fatalf("nothing breathes once the queue drains: live=%v ticker=%v", live, running)
+	}
+	if hold != "#1 read x · 0s" {
+		t.Fatalf("the row holds the last item dimmed: %q", hold)
 	}
 }
 
@@ -125,7 +169,7 @@ func TestTheInboxDrainsAloneWhenNoTurnIsLive(t *testing.T) {
 	}
 }
 
-func TestTheDelegateBandShowsDuringAndBetweenTurns(t *testing.T) {
+func TestTheDelegateItemsShowDuringAndBetweenTurns(t *testing.T) {
 	th, _ := ResolveTheme("oled", nil, true)
 	ticks := make(chan time.Time, 64)
 	go func() {
@@ -157,23 +201,17 @@ func TestTheDelegateBandShowsDuringAndBetweenTurns(t *testing.T) {
 
 	s.fe.Notify(core.TurnEnd{Reason: core.TurnOver})
 
-	before := len(s.out.Bytes())
-	deadline := time.Now().Add(2 * time.Second)
-	for len(s.out.Bytes()) <= before && time.Now().Before(deadline) {
-		time.Sleep(10 * time.Millisecond)
-	}
-	if len(s.out.Bytes()) <= before {
-		t.Fatal("between turns the band keeps breathing")
+	time.Sleep(150 * time.Millisecond)
+	if !strings.Contains(paintFree(strings.Join(screenLines(t, s, 90), "\n")), "edit tool/file/edit.go") {
+		t.Fatalf("between turns the row holds the last item:\n%s", stripANSI(s.since()))
 	}
 
 	stale := delegateSnapshot("")
 	stale.Workers[0].State = "done"
 	s.fe.Notify(stale)
 	time.Sleep(150 * time.Millisecond)
-	s.tail = len(s.out.Bytes())
-	time.Sleep(150 * time.Millisecond)
-	if plain := stripANSI(s.since()); strings.Contains(plain, "delegating") {
-		t.Fatalf("the band left when the batch did:\n%s", plain)
+	if !strings.Contains(paintFree(strings.Join(screenLines(t, s, 90), "\n")), "edit tool/file/edit.go") {
+		t.Fatalf("the batch's end holds the last item, it does not erase the row")
 	}
 }
 
@@ -393,21 +431,19 @@ func TestTheCallRowPaintsTheCallWarnAndTheAgeDim(t *testing.T) {
 	if th.Paint(SlotWarn, "x") == th.Paint(SlotDim, "x") {
 		t.Fatal("the theme must tell warn from dim for this test to mean anything")
 	}
-	now := time.Now()
-	st := core.SwarmStatus{Workers: []core.SwarmWorker{
-		{ID: 8, Role: "delegate", Task: "a", State: "running", Heartbeat: now, Tool: "read specs/SPEC_HARDENING.md", ToolAt: now.Add(-12 * time.Second)},
-	}}
-	rows := strings.Split(RenderDelegateBand(th, st, now.Add(-time.Minute), now), "\n")
-	want := th.Paint(SlotWarn, "#8 read specs/SPEC_HARDENING.md") + th.Paint(SlotDim, " · 12s")
-	if rows[2] != want {
-		t.Fatalf("the call is warn, the separator and age dim:\n got %q\nwant %q", rows[2], want)
+	s := newScriptedSession(t, th, WithWidth(90), WithNow(func() time.Time { return bandNow() }))
+	now := bandNow()
+	s.fe.Notify(core.SwarmStatus{Workers: []core.SwarmWorker{
+		{ID: 8, Role: "delegate", Task: "a", State: "running", Heartbeat: now, Tool: "read core/provider.go", ToolAt: now.Add(-12 * time.Second)},
+	}})
+	s.fe.mu.Lock()
+	item := s.fe.bandQueue[0]
+	s.fe.mu.Unlock()
+	if item.text != "#8 read core/provider.go · 12s" {
+		t.Fatalf("the call item carries the worker, the call and its age: %q", item.text)
 	}
-	if stripANSI(rows[2]) != "#8 read specs/SPEC_HARDENING.md · 12s" {
-		t.Fatalf("the visible text does not move: %q", stripANSI(rows[2]))
-	}
-	idle := strings.Split(RenderDelegateBand(th, delegateSnapshot(""), now.Add(-time.Minute), now), "\n")
-	if idle[2] != th.Paint(SlotDim, "—") {
-		t.Fatalf("no call yet stays a dim dash: %q", idle[2])
+	if th.Paint(item.slot, item.text) != th.Paint(SlotWarn, "#8 read core/provider.go · 12s") {
+		t.Fatalf("the call breathes in the warn slot: %q", item.slot)
 	}
 }
 

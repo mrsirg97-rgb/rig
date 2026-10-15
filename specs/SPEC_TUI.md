@@ -71,8 +71,8 @@ frontend/tui/         NEW package, main module (decision 10 names the
                       gate, Close
   notify.go           Notify: every event's transition, the live-region
                       row building, the pager and the menu hand-off
-  frame.go            the frame ticker, the notice breath, the phase
-                      begin/end (one open phase: `aside`)
+  frame.go            the frame ticker, the band row's breath, the
+                      phase begin/end (one open phase: `aside`)
   commands.go         the command door: dispatch, the two reply shapes'
                       routing, the activity row
   live.go             the live region's drawing: cursor-up redraw, width
@@ -105,7 +105,10 @@ frontend/tui/         NEW package, main module (decision 10 names the
   pending.go          the pending-approval rows
   phasepreview.go     the open phase's preview rows
   repaint.go          the full repaint (theme swap, resize)
-  swarm.go            the delegate and swarm band painters (3a)
+  swarm.go            the band row's helpers: the role test, the rule,
+                      the counts, the age (3a)
+  band.go             the band row: the item queue, the breath, the
+                      call's cut (3a)
   width.go            display width (SGR-stripped, runewidth)
   worker.go           the worker inbox drain and the return line
   wrap.go             the cell wrap for row painting
@@ -543,14 +546,14 @@ A pinned one-line header via scroll region is named future work
 (`-pin-header`), not built: inside a margin region most terminals
 drop scrolled lines from scrollback, which trades away decision 1.
 
-### 3a. The swarm band and the transcript notice, amended 1.5.4, 2.14.7
+### 3a. The band row and the transcript notice, amended 1.5.4, 2.14.7, 3.2.0
 
-The status string is a newline-joined footer already; the swarm band is
-one row per role below the existing status rows while a swarm runs,
-separated from them by a short dim rule (four cells, not full width),
-zero rows and no rule when nothing runs — the region's
-height-changing machinery (the stability check's status offset, the
-painted aim, the viewport budget) handles it without a `live.go` line:
+The status string is a newline-joined footer already; under the status
+rows sits one row that never goes away, carrying everything that
+happens in the background one item at a time, in the order it
+happened — a delegate's or a swarm's start, a scheduled job's start
+and end, a worker's tool call, and every notice — behind a dim rule
+(four cells, not full width):
 
 ```
 ❯
@@ -559,55 +562,39 @@ huihui3.8 · 41.2k/262k
 default · auto
 up 214k down 18.2k · cache r 187k 92%
 ····
-workers 1 · +7 ✓0 ✕0 · w1 t423 12s
-reviewer 1 · ⧗0 ✓0 ✕0 · w2 — —
+delegating · 1 worker
 ```
 
-- The TUI folds the latest `core.SwarmStatus` (SPEC_SWARM 7) into the
-  footer; the band's rows are `workers <n> · +<pending> ✓<done>
-  ✕<failed> · <busiest>` and `reviewer <n> · ⧗<review> ✓<done>
-  ✕<failed> · <busiest>` — one row per role that has a worker. No new
-  colors: the role labels, the `+`/`⧗` markers and the separators are
-  the footer's dim role, the counts the footer's text role, `✓` the
-  success role and `✕` the fault role that tool results already use,
-  and the tail the role's busiest worker's `w<id> <task> <age>` (dim;
-  `—` when idle or unbeat). The glyphs ride the theme's glyph switch —
-  the rule is four `·` cells (`....` under the ascii set), `+` stays
-  `+`, `⧗` falls back to `~`, `✓`/`✕` are the tool rows' glyphs
-  (`v`/`[x]` under ascii).
-- The two publishers keep their own slots (2.14.7): the TUI holds the
-  swarm's status and the delegate's status side by side, and a status
-  routes to its slot by role — `delegate` rows to the delegate's slot,
-  the rest to the swarm's, and a zero-row status is its publisher's
-  "nothing running" and clears both. Each band is present only while
-  its own slot has running rows; the delegate's band leads and the
-  swarm's rows follow it.
-- A delegate's band is two rows, and they are the *same two rows* for
-  ten workers as for one (2.14.0). Its snapshot stamps `delegate` as
-  the worker's role — the role string is the only thing that tells the
-  two publishers of `core.SwarmStatus` apart — and the band renders
-  from it, under the cache row and the status rows:
-
-      delegating · 3 workers · 1 queued · 1m12s
-      #2 edit tool/file/edit.go · 12s
-
-  the head counting the batch and the time since its first spawn (one
-  worker reads `1 worker`), the queued count between them naming the
-  calls the `maxWorkers` cap holds back (2.14.9; the segment is absent
-  when nothing queues), the second row the most recent call across
-  all of them — the worker's number, the tool, the first argument line,
-  and that call's age — `—` until a worker has called. Nothing per
-  worker is listed: the band summarizes a batch the operator is not
-  watching worker by worker, and the tally that the swarm's rows carry
-  has always been the swarm's own. Two bounds are new and are the only
-  new numbers: the argument preview is cut at 80 characters, and the
-  band is two rows.
-- The band breathes while a batch runs, during a turn or between turns.
-  Between turns nothing else repaints, so a running delegate batch keeps
-  the frame ticker alive on its own; when the batch empties the ticker
-  stops and the rows go. The ages the rows show are computed at paint
-  from the snapshot's own stamps (`Heartbeat`, and the call's `ToolAt`),
-  so no new clock is added to render them.
+- Items come in two kinds. Events never drop and keep their order:
+  work starting (`delegating · n workers`, `swarm · n workers`,
+  `scheduled job · n workers`), work ending (`job j8 done · 8m`),
+  failures (`job j8 failed · <reason>`), and the stores' notices
+  (`source: text`, identical ones collapsing). Status items replace:
+  a worker's newer tool call replaces that worker's call still waiting
+  in the queue, so the backlog is at most one call per worker however
+  fast calls arrive. A call is `#<worker> <call> · <age>`, prefixed
+  with the job's id for a scheduled job's worker (`j8 #1 …`), the call
+  cut at `bandCallCols` (25) display columns with `…` on rune and
+  display-width boundaries (go-runewidth, the way `width.go`
+  measures).
+- The row shows the breathing item on the ember's curve in the item's
+  slot — a call in the warn slot, a notice in its level's slot, a
+  start in the text slot, a done in the success slot, a failure in the
+  fault slot — then holds it dimmed until the next one, `—` before the
+  first. One breath is `emberBreathStops` (12) × `animPeriod` (120 ms)
+  of the frame ticker's animation, and it runs whether or not a turn,
+  a compaction or an aside is live: the row is not the indicator's.
+  When the queue rests the ticker stops and the row holds the last
+  item dimmed. The ages and durations are computed once, when the item
+  is made — the row is a sequence of snapshots, not a live read.
+- The two publishers keep their own slots (2.14.7): a `core.SwarmStatus`
+  routes by role — `delegate` rows to the delegate's slot, the rest to
+  the swarm's — and a zero-row status is its publisher's "nothing
+  running" and clears both. A worker's call item is keyed by its
+  publisher and its id, so a delegate's worker and a swarm's worker
+  never replace each other's call. The band's old per-role counts and
+  its busiest tail are the swarm tool's story (SPEC_SWARM 7); the row
+  carries one item at a time.
 - A worker that returns is not a notice and not an interrupt: it folds
   into the head of the next user turn (SPEC_DELEGATE 8), and what the
   transcript shows at that boundary is the tool block grammar again
@@ -621,15 +608,11 @@ reviewer 1 · ⧗0 ✓0 ✕0 · w2 — —
   batch), never the block painted as the prompt with newlines shown.
 - `evt.Notice` with source `swarm` (`SwarmNotice` until 2.11.0) is the
   decision-point notice SPEC_SWARM 7 names. Through 2.11.6 a notice
-  committed one dim line in the transcript. Since 2.11.7 no notice
-  commits: notices queue (identical ones collapse, no size) and, when
-  the live region's action row is idle, the oldest takes that exact row
-  as `source: text`, breathes in once on the ember's curve in its
-  level's slot (`error`, `success`, or `text` for info) and is gone, the
-  next following; while a turn, a phase or a compaction owns the row they
-  wait. No new row, no height change, no second clock: the breath rides
-  the frame ticker, started for a notice on an idle row and stopped after
-  the last. The web frontend renders every notice in its feed and the
+  committed one dim line in the transcript; since 2.11.7 no notice
+  commits; since 3.2.0 a notice is an event item on the band row (3a):
+  it breathes in its level's slot whether or not a turn, a phase or a
+  compaction is live, identical ones collapsing, and then the row holds
+  it dimmed. The web frontend renders every notice in its feed and the
   piped frontends print theirs as `rig: source: text`; the transcript is
   no longer where they live, and nothing persists one (2.13.1, named:
   `Notice` has no recorder case), so a resumed session shows neither the
@@ -648,8 +631,9 @@ reviewer 1 · ⧗0 ✓0 ✕0 · w2 — —
   gated the deltas before. The recorder, the web feed and the piped
   frontends still receive every delta: this is the TUI's rendering
   choice, not the event's.
-  A phase ends, and the row returns to idle: waiting notices then
-  breathe. `reviewing` ends with its settle, committing one line — the ok
+  A phase ends, and the indicator row returns to idle; the band row's
+  breath never waited on the phase. `reviewing` ends with its settle,
+  committing one line — the ok
   glyph in `success` or the fail glyph in `error`, the name dim, the note
   dim. `summarizing` has no check line of its own: the `⧉ compact` line
   is its end (2.12.1), and since 2.13.1 `Compacted` closes the phase the

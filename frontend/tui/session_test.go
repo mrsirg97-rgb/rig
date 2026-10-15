@@ -884,6 +884,8 @@ func TestWidePendingLineWrapsClean(t *testing.T) {
 
 		"up 10 down 2 · cache",
 		" r 0 0%",
+		"····",
+		"—",
 	}
 	if len(v.rows) != len(want) {
 		t.Fatalf("%d rows, want %d:\n%q", len(v.rows), len(want), v.rows)
@@ -919,7 +921,7 @@ func TestDoneNewlineIsTheCLIs(t *testing.T) {
 	}
 
 	usage := "up 10 down 2 · cache r 0 0%"
-	if last := v.rows[len(v.rows)-1]; last != usage {
+	if last := v.rows[len(v.rows)-3]; last != usage {
 		t.Fatalf("the status's second row must carry the turn's usage: %q\n%q", last, v.rows)
 	}
 
@@ -1040,30 +1042,31 @@ func TestCompletionMenu(t *testing.T) {
 	hint := "tab/↓ pick · enter runs"
 
 	s.si.feed("/mo")
-	s.awaitScreen(50, 16, []string{"models  the per-model table", "move  move a thing", hint, "❯ /mo", "", status, stance, usage})
+	s.awaitScreen(50, 18, []string{"models  the per-model table", "move  move a thing", hint, "❯ /mo", "", status, stance, usage, "····", "—"})
 	s.await(th.Invert(row("models", "the per-model table")))
 
 	s.si.feed("\t")
 	s.await(th.Invert(row("move", "move a thing")))
 	s.si.feed("\x1b[Z")
-	s.awaitScreen(50, 16, []string{"models  the per-model table", "move  move a thing", hint, "❯ /mo", "", status, stance, usage})
+	s.awaitScreen(50, 18, []string{"models  the per-model table", "move  move a thing", hint, "❯ /mo", "", status, stance, usage, "····", "—"})
 
 	s.si.feed("\x1b")
-	s.awaitScreen(50, 13, []string{"❯ /mo", "", status, stance, usage})
+	s.awaitScreen(50, 15, []string{"❯ /mo", "", status, stance, usage, "····", "—"})
 
 	s.si.feed("d")
 	s.await(th.Paint(SlotDim, "els"))
 
 	s.si.feed("\x1b")
-	s.awaitScreen(50, 13, []string{"❯ ", "", status, stance, usage})
+	s.awaitScreen(50, 15, []string{"❯ ", "", status, stance, usage, "····", "—"})
 
 	s.si.feed("/todo ")
-	s.awaitScreen(50, 17, []string{
+	s.awaitScreen(50, 19, []string{
 		"read  the queue",
 		"create  the queue, the task's text",
 		"done  a task's id",
 		hint,
 		"❯ /todo ", "", status, stance, usage,
+		"····", "—",
 	})
 	s.si.feed("\n")
 
@@ -1073,12 +1076,13 @@ func TestCompletionMenu(t *testing.T) {
 	}
 
 	s.si.feed("/todo ")
-	s.awaitScreen(50, 22, []string{
+	s.awaitScreen(50, 24, []string{
 		"read  the queue",
 		"create  the queue, the task's text",
 		"done  a task's id",
 		hint,
 		"❯ /todo ", "", status, stance, usage,
+		"····", "—",
 	})
 
 	s.si.feed("\t")
@@ -1087,7 +1091,7 @@ func TestCompletionMenu(t *testing.T) {
 	s.await(th.Invert(row("done", "a task's id")))
 
 	s.si.feed("\n")
-	s.awaitScreen(50, 18, []string{"❯ /todo done ", "", status, stance, usage})
+	s.awaitScreen(50, 20, []string{"❯ /todo done ", "", status, stance, usage, "····", "—"})
 	if todo.calls != 1 {
 		t.Fatalf("the accepted line dispatched: %d calls, want 1 (Enter after navigation accepts, it does not run)", todo.calls)
 	}
@@ -1122,7 +1126,7 @@ func TestInputWrapsAndScrolls(t *testing.T) {
 
 	digits := strings.Repeat("0123456789", 5) + "01234567XY"
 
-	statusRows := 1
+	statusRows := 3
 	for _, r := range strings.Split(RemoveColor(RenderStatusLine(th, "huihui3.8", "xhigh", "", "", 0, 262144, false,
 		214000, 18200, 187000, 0)), "\n") {
 		statusRows += (displayWidth(r) + 9) / 10
@@ -1297,9 +1301,9 @@ func TestMenuRowsFitTheWidth(t *testing.T) {
 	s.await(promptMark(th))
 	s.si.feed("/mo")
 
-	s.awaitScreen(30, 18, []string{"move  short", "tab/↓ pick · enter runs", "❯ /mo", "", "huihui3.8", "xhigh · default · auto", "up 214k down 18k · cache r 187", "k 87%"})
+	s.awaitScreen(30, 20, []string{"move  short", "tab/↓ pick · enter runs", "❯ /mo", "", "huihui3.8", "xhigh · default · auto", "up 214k down 18k · cache r 187", "k 87%", "····", "—"})
 	rows := screenLines(t, s, 30)
-	menuRow := rows[len(rows)-9]
+	menuRow := rows[len(rows)-11]
 	if !strings.HasPrefix(menuRow, "models  a long") || !strings.HasSuffix(menuRow, th.Glyph(GlyphDot)) {
 		t.Fatalf("the long menu row must be dotted to the width: %q", menuRow)
 	}
@@ -1339,11 +1343,11 @@ func TestLoaderLocksAboveTheInput(t *testing.T) {
 	}
 	s.fe.Notify(core.TextDelta{Text: "streaming text"})
 	s.tick()
-	s.awaitScreen(50, 19, []string{"streaming text", "", "thinking", "", "❯ ", "", "huihui3.8", "xhigh · default · auto", "up 214k down 18k · cache r 187k 87%"})
+	s.awaitScreen(50, 21, []string{"streaming text", "", "thinking", "", "❯ ", "", "huihui3.8", "xhigh · default · auto", "up 214k down 18k · cache r 187k 87%", "····", "—"})
 
 	s.fe.Notify(core.TextDelta{Text: "\nmore"})
 	s.tick()
-	s.awaitScreen(50, 20, []string{"streaming text", "more", "", "thinking", "", "❯ ", "", "huihui3.8", "xhigh · default · auto", "up 214k down 18k · cache r 187k 87%"})
+	s.awaitScreen(50, 22, []string{"streaming text", "more", "", "thinking", "", "❯ ", "", "huihui3.8", "xhigh · default · auto", "up 214k down 18k · cache r 187k 87%", "····", "—"})
 }
 
 func TestActivityLineBreathes(t *testing.T) {
@@ -1673,7 +1677,7 @@ func TestUsageRowIsLiveWithinTheTurn(t *testing.T) {
 
 	s.fe.Notify(core.TurnEnd{Reason: core.TurnOver})
 	rows := screenLines(t, s, 60)
-	if last := rows[len(rows)-1]; last != "up 3.0k down 80 · cache r 2.8k 93%" {
+	if last := rows[len(rows)-3]; last != "up 3.0k down 80 · cache r 2.8k 93%" {
 		t.Fatalf("the usage row after the close = %q, want the turn's totals", last)
 	}
 }
@@ -1689,12 +1693,13 @@ func TestVerbMenuOnTheWholeName(t *testing.T) {
 	s.await(promptMark(th))
 	s.si.feed("/todo")
 
-	s.awaitScreen(50, 17, []string{
+	s.awaitScreen(50, 19, []string{
 		"read  the queue",
 		"create  the queue, the task's text",
 		"done  a task's id",
 		"tab/↓ pick · enter runs",
 		"❯ /todo", "", "huihui3.8", "xhigh · default · auto", "up 214k down 18k · cache r 187k 87%",
+		"····", "—",
 	})
 
 	s.si.feed("\t\n")
@@ -1713,17 +1718,17 @@ func TestMargins(t *testing.T) {
 	in := make(chan string, 1)
 	go func() { l, _ := s.input(); in <- l }()
 	s.await(promptMark(th))
-	s.awaitScreen(60, 13, []string{"session 2f9a1c0e77b3", "workers: none", "chat with your model, or type / for commands", "", "❯ ", "", "huihui3.8", "xhigh · default · auto", "up 214k down 18k · cache r 187k 87%"})
+	s.awaitScreen(60, 15, []string{"session 2f9a1c0e77b3", "workers: none", "chat with your model, or type / for commands", "", "❯ ", "", "huihui3.8", "xhigh · default · auto", "up 214k down 18k · cache r 187k 87%", "····", "—"})
 	s.si.feed("go\n")
 	<-in
 	s.fe.Notify(core.TextDelta{Text: "text"})
 	s.tick()
-	s.awaitScreen(60, 19, []string{"❯ go", "", "text", "", "thinking", "", "❯ ", "", "huihui3.8", "xhigh · default · auto", "up 214k down 18k · cache r 187k 87%"})
+	s.awaitScreen(60, 21, []string{"❯ go", "", "text", "", "thinking", "", "❯ ", "", "huihui3.8", "xhigh · default · auto", "up 214k down 18k · cache r 187k 87%", "····", "—"})
 	s.fe.Notify(core.TextDelta{Text: "\n"})
 	s.fe.Notify(core.Done{Usage: core.Usage{Prompt: 10, Completion: 2}})
 	s.fe.Notify(core.TurnEnd{Reason: core.TurnOver})
 
-	s.awaitScreen(60, 17, []string{"❯ go", "", "text", "", "❯ ", "", "huihui3.8 · 12/262k", "xhigh · default · auto", "up 10 down 2 · cache r 0 0%"})
+	s.awaitScreen(60, 19, []string{"❯ go", "", "text", "", "❯ ", "", "huihui3.8 · 12/262k", "xhigh · default · auto", "up 10 down 2 · cache r 0 0%", "····", "—"})
 	rows := screenLines(t, s, 60)
 	for i := 1; i < len(rows); i++ {
 		if rows[i] == "" && rows[i-1] == "" {
