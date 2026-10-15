@@ -11,7 +11,7 @@ the five signals the instances exchange beside the protocol's own.
 ## What it includes
 
 - `Member`: `Id`, `Seated`, `Close`, `Gone`, `Ask`, `Claim`, `Release`,
-  `Act`, `Holders`, `Waiting`, `Live`, `Say` — the verbs the instance and
+  `Act`, `Holders`, `Waiting`, `Live` — the verbs the instance and
   the dashboard use. `Gone` closes when the member has left; `Ask` and
   the reads return at once then (false, or nothing) instead of waiting
   on an engine that stopped. A claim is final by acknowledgement; a member is

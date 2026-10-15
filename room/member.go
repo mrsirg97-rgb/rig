@@ -42,7 +42,6 @@ type Member interface {
 	Holders(key int64) []broadcast.Operation
 	Waiting(key int64) []broadcast.Operation
 	Live() []int64
-	Say(source, text string, level ...evt.Level)
 }
 
 type member struct {
@@ -213,14 +212,6 @@ func (m *member) Live() []int64 {
 		return nil
 	}
 	return out
-}
-
-func (m *member) Say(source, text string, level ...evt.Level) {
-	n := evt.Notice{Source: source, Text: text}
-	if len(level) > 0 {
-		n.Level = level[0]
-	}
-	m.claim.Act(n, KeyOf("notice/"+source), PriorityFleet, func(bool) {})
 }
 
 func identity() (string, error) {
