@@ -203,13 +203,13 @@ func mirrored(act broadcast.Act) broadcast.Mint {
 }
 
 func (d *door) Holding(key int64, mint broadcast.Mint) (bool, string, int) {
-	found := make(chan *repost, 1)
+	found := make(chan repost, 1)
 	d.engine.Add(evt.Func(func(context.Context) {
 		for _, r := range d.in[key] {
 			if r.remote != mint {
 				continue
 			}
-			found <- r
+			found <- *r
 			return
 		}
 		close(found)
