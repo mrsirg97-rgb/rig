@@ -11,33 +11,20 @@ import (
 	"github.com/mrsirg97-rgb/rig/v3/imagemarker"
 )
 
-func formatTokens(n int) string {
-	switch {
-	case n < 1000:
-		return strconv.Itoa(n)
-	case n < 10000:
-		return fmt.Sprintf("%.1fk", float64(n)/1000)
-	case n < 1000000:
-		return fmt.Sprintf("%dk", (n+500)/1000)
-	default:
-		return fmt.Sprintf("%.1fM", float64(n)/1000000)
-	}
-}
-
 func RenderUsage(t Theme, up, down, cacheRead int) string {
 	hit := 0
 	if up > 0 {
 		hit = int(int64(cacheRead) * 100 / int64(up))
 	}
 	return t.Paint(SlotDim, fmt.Sprintf("up %s down %s · cache r %s %d%%",
-		formatTokens(up), formatTokens(down), formatTokens(cacheRead), hit))
+		core.FormatTokens(up), core.FormatTokens(down), core.FormatTokens(cacheRead), hit))
 }
 
 func RenderCompacted(t Theme, ev core.Compacted) string {
 	return t.Paint(SlotEmber, t.Glyph(GlyphCompact)) + " " +
 		t.Paint(SlotDim, fmt.Sprintf("compact: -%s kept %s · up %s down %s",
-			formatTokens(ev.Dropped), formatTokens(ev.Kept),
-			formatTokens(ev.Usage.Prompt), formatTokens(ev.Usage.Completion)))
+			core.FormatTokens(ev.Dropped), core.FormatTokens(ev.Kept),
+			core.FormatTokens(ev.Usage.Prompt), core.FormatTokens(ev.Usage.Completion)))
 }
 
 func RenderPhaseEnd(t Theme, p core.Phase) string {

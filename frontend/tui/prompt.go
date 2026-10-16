@@ -92,7 +92,6 @@ func (t *tui) onEnter() {
 	t.editPos = 0
 	t.menuSyncLocked()
 	wasLive := t.turnLive
-	established := t.turnEstablished
 	isCmd := t.commands != nil && command.IsCommandLine(line)
 	if !wasLive && !isCmd {
 
@@ -120,7 +119,6 @@ func (t *tui) onEnter() {
 		t.steer(line)
 		return
 	}
-	_ = established
 
 	t.pending <- line
 }
@@ -163,7 +161,6 @@ func (t *tui) Input(ctx context.Context) (string, error) {
 	if cancel, ok := core.InterruptFrom(ctx); ok {
 		t.cancel = cancel
 	}
-	t.reading = true
 
 	if !t.started {
 
@@ -176,7 +173,6 @@ func (t *tui) Input(ctx context.Context) (string, error) {
 	t.readerOnce.Do(func() { go t.readLoop() })
 	defer func() {
 		t.mu.Lock()
-		t.reading = false
 		t.mu.Unlock()
 	}()
 	for {
@@ -252,7 +248,6 @@ func (t *tui) startTurnLocked(ctx context.Context) {
 	t.turnCtx = ctx
 	t.steeredLive = false
 	t.turnLive = true
-	t.turnEstablished = false
 	t.pend = nil
 	t.pendGen++
 	t.dirty = false

@@ -72,18 +72,7 @@ func (s *Server) handleWireModels(w http.ResponseWriter) {
 }
 
 func (s *Server) resolve(name string) (models.Model, bool) {
-	if m, ok := s.models.Get(name); ok {
-		return m, true
-	}
-	for _, id := range s.models.Known() {
-		m, _ := s.models.Get(id)
-		for _, alias := range m.Aliases {
-			if alias == name {
-				return m, true
-			}
-		}
-	}
-	return models.Model{}, false
+	return s.models.Get(name)
 }
 
 func (s *Server) upstream(w http.ResponseWriter, r *http.Request, body []byte, row models.Model) {
@@ -215,14 +204,18 @@ func (s *Server) handleWireChat(w http.ResponseWriter, r *http.Request) {
 		}
 		defer s.door.Release(mint)
 	} else {
-		claimed := make(chan struct{})
+		claimed := make(chan bool, 1)
 		own := broadcast.Mint{}
 		s.machine.Claim(key, room.PriorityOutside, 0, func(m broadcast.Mint, ok bool) {
 			own = m
-			close(claimed)
+			claimed <- ok
 		})
 		select {
-		case <-claimed:
+		case ok := <-claimed:
+			if !ok {
+				writeErr(w, http.StatusServiceUnavailable, "the outside claim was not admitted: the room did not seat it")
+				return
+			}
 		case <-s.machine.Gone():
 			writeErr(w, http.StatusServiceUnavailable, "this instance left the room for an update: restart it")
 			return

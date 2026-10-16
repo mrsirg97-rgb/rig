@@ -1080,3 +1080,32 @@ func TestTodoRefusesAnUnknownField(t *testing.T) {
 		t.Fatalf("an unknown field must refuse: %v", err)
 	}
 }
+
+func TestTodoRetryWakesTheRouter(t *testing.T) {
+	var mu sync.Mutex
+	var calls int
+	tool := todoapi.New(newDB(t), todoapi.Interactive, func() {
+		mu.Lock()
+		calls++
+		mu.Unlock()
+	})
+	ctx := core.WithSession(context.Background(), core.NewSession())
+	step := func(args map[string]any) {
+		t.Helper()
+		if _, err := exec(t, tool, ctx, args); err != nil {
+			t.Fatalf("%v: %v", args["action"], err)
+		}
+	}
+	step(map[string]any{"action": "create", "text": "the work"})
+	step(map[string]any{"action": "claim"})
+	step(map[string]any{"action": "complete", "id": "t1"})
+	step(map[string]any{"action": "create", "text": "the retry"})
+	step(map[string]any{"action": "claim"})
+	step(map[string]any{"action": "fail", "id": "t2"})
+	step(map[string]any{"action": "retry", "id": "t2"})
+	mu.Lock()
+	defer mu.Unlock()
+	if want := 5; calls != want {
+		t.Fatalf("create, complete, fail and retry each wake the router: %d wakes, want %d", calls, want)
+	}
+}

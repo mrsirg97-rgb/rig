@@ -53,16 +53,15 @@ type tui struct {
 	phaseOpen     string
 	phaseHidden   int
 
-	turnEstablished bool
-	reading         bool
-	turnCtx         context.Context
-	cancel          context.CancelFunc
-	slot            string
-	hasSlot         bool
-	steeredLive     bool
-	started         bool
-	quit            bool
-	rawOld          *term.State
+	reading     bool
+	turnCtx     context.Context
+	cancel      context.CancelFunc
+	slot        string
+	hasSlot     bool
+	steeredLive bool
+	started     bool
+	quit        bool
+	rawOld      *term.State
 
 	prompt, completion, cacheRead int
 	cost                          float64
@@ -109,8 +108,6 @@ type tui struct {
 
 	swarm    core.SwarmStatus
 	delegate core.SwarmStatus
-
-	bandSpawns map[int]time.Time
 
 	inbox []core.WorkerDone
 

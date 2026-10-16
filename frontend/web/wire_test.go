@@ -275,12 +275,12 @@ func TestTheFrontSGateServesAMintWhenTheFoldShowsIt(t *testing.T) {
 	}
 	t.Cleanup(remote.Close)
 	ports := freePorts(t, 2)
-	remoteDoor, err := room.NewDoor(remote, room.MeshConfig(ports[0], []string{ports[1]}, meshTestPeriod, meshTestWindow), []int64{key}, nil)
+	remoteDoor, err := room.NewDoor(remote, room.MeshConfig(ports[0], []string{ports[1]}, meshTestPeriod, meshTestWindow), []int64{key}, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(remoteDoor.Close)
-	door, err := room.NewDoor(machine, room.MeshConfig(ports[1], []string{ports[0]}, meshTestPeriod, meshTestWindow), nil, []int64{key})
+	door, err := room.NewDoor(machine, room.MeshConfig(ports[1], []string{ports[0]}, meshTestPeriod, meshTestWindow), nil, []int64{key}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -356,12 +356,12 @@ func TestTheFrontSEndsAClaimNoDoorCarriesAsAnError(t *testing.T) {
 	}
 	t.Cleanup(remote.Close)
 	ports := freePorts(t, 2)
-	remoteDoor, err := room.NewDoor(remote, room.MeshConfig(ports[0], []string{ports[1]}, meshTestPeriod, meshTestWindow), []int64{key}, nil)
+	remoteDoor, err := room.NewDoor(remote, room.MeshConfig(ports[0], []string{ports[1]}, meshTestPeriod, meshTestWindow), []int64{key}, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(remoteDoor.Close)
-	door, err := room.NewDoor(machine, room.MeshConfig(ports[1], []string{ports[0]}, meshTestPeriod, meshTestWindow), nil, []int64{room.KeyOf("fake-child")})
+	door, err := room.NewDoor(machine, room.MeshConfig(ports[1], []string{ports[0]}, meshTestPeriod, meshTestWindow), nil, []int64{room.KeyOf("fake-child")}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -410,12 +410,12 @@ func TestTheFrontSEndsAClockRefusedClaimAsAnError(t *testing.T) {
 	}
 	t.Cleanup(remote.Close)
 	ports := freePorts(t, 2)
-	remoteDoor, err := room.NewDoor(remote, room.MeshConfig(ports[0], []string{ports[1]}, meshTestPeriod, meshTestWindow), []int64{key}, nil)
+	remoteDoor, err := room.NewDoor(remote, room.MeshConfig(ports[0], []string{ports[1]}, meshTestPeriod, meshTestWindow), []int64{key}, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(remoteDoor.Close)
-	door, err := room.NewDoor(machine, room.MeshConfig(ports[1], []string{ports[0]}, meshTestPeriod/2, meshTestWindow), nil, []int64{key})
+	door, err := room.NewDoor(machine, room.MeshConfig(ports[1], []string{ports[0]}, meshTestPeriod/2, meshTestWindow), nil, []int64{key}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -473,12 +473,12 @@ func TestTheGateMakesTheChildReadyForARemoteRequest(t *testing.T) {
 	}
 	t.Cleanup(remote.Close)
 	ports := freePorts(t, 2)
-	remoteDoor, err := room.NewDoor(remote, room.MeshConfig(ports[0], []string{ports[1]}, meshTestPeriod, meshTestWindow), []int64{key}, nil)
+	remoteDoor, err := room.NewDoor(remote, room.MeshConfig(ports[0], []string{ports[1]}, meshTestPeriod, meshTestWindow), []int64{key}, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(remoteDoor.Close)
-	door, err := room.NewDoor(machine, room.MeshConfig(ports[1], []string{ports[0]}, meshTestPeriod, meshTestWindow), nil, []int64{key})
+	door, err := room.NewDoor(machine, room.MeshConfig(ports[1], []string{ports[0]}, meshTestPeriod, meshTestWindow), nil, []int64{key}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -17,7 +17,6 @@ func (t *tui) Notify(ev evt.Signal) {
 		core.Done, core.Fault, core.Compacted, core.EmptyTurn, core.TurnEnd:
 
 		t.mu.Lock()
-		t.turnEstablished = true
 		t.mu.Unlock()
 	}
 	switch e := ev.(type) {

@@ -608,7 +608,7 @@
         },
         "name": {
           "type": "string",
-          "description": "the live plugin (run, schema, delete), or the new plugin's name (create)"
+          "description": "a plugin name: live for run/schema/delete, new for create (list shows the live set)"
         },
         "args": {
           "type": "object",

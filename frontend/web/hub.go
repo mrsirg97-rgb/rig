@@ -14,6 +14,15 @@ type cut struct {
 	end int
 }
 
+// frame is one ring entry: the marshalled newest shape of a run plus the
+// cut marks of every delta that coalesced into it. Replay trims on the
+// marks, so a reconnect mid-run gets the suffix it has not seen, not the
+// whole run.
+type frame struct {
+	raw  []byte
+	cuts []cut
+}
+
 func (c *chat) publish(f map[string]any) {
 	c.hub.Lock()
 	defer c.hub.Unlock()
@@ -27,7 +36,7 @@ func (c *chat) publish(f map[string]any) {
 			c.last["text"] = prev + next
 			c.last["seq"] = c.seq
 			c.cuts = append(c.cuts, cut{seq: c.seq, end: len(prev) + len(next)})
-			c.ring[len(c.ring)-1] = mustJSON(c.last)
+			c.ring[len(c.ring)-1] = frame{raw: mustJSON(c.last), cuts: c.cuts}
 			c.send(mustJSON(f))
 			return
 		}
@@ -38,7 +47,7 @@ func (c *chat) publish(f map[string]any) {
 		c.cuts = []cut{{seq: c.seq, end: len(text)}}
 	}
 	raw := mustJSON(f)
-	c.ring = append(c.ring, raw)
+	c.ring = append(c.ring, frame{raw: raw, cuts: c.cuts})
 	if len(c.ring) > ringCap {
 		c.ring = c.ring[len(c.ring)-ringCap:]
 	}
@@ -50,6 +59,16 @@ func (c *chat) send(raw []byte) {
 		select {
 		case ch <- raw:
 		default:
+			// a slow subscriber loses its oldest held frame, never the
+			// newest: the newest carries the turn's progress.
+			select {
+			case <-ch:
+			default:
+			}
+			select {
+			case ch <- raw:
+			default:
+			}
 		}
 	}
 }
@@ -68,32 +87,36 @@ func (c *chat) subscribe(since int64) (chan []byte, [][]byte, int64) {
 	ch := make(chan []byte, 256)
 	c.subs[ch] = struct{}{}
 	var replay [][]byte
-	for i, raw := range c.ring {
+	for _, fr := range c.ring {
 		var head struct {
 			Seq int64 `json:"seq"`
 		}
-		if json.Unmarshal(raw, &head) == nil && head.Seq > since {
-			if i == len(c.ring)-1 {
-				raw = c.unseen(since, raw)
-			}
-			replay = append(replay, raw)
+		if json.Unmarshal(fr.raw, &head) == nil && head.Seq > since {
+			replay = append(replay, fr.seen(since))
 		}
 	}
 	return ch, replay, c.seq
 }
 
-func (c *chat) unseen(since int64, raw []byte) []byte {
-	for i := len(c.cuts) - 1; i >= 0; i-- {
-		if c.cuts[i].seq <= since {
-			f := make(map[string]any, len(c.last))
-			for k, v := range c.last {
-				f[k] = v
+// seen trims a coalesced frame to the text a subscriber has not seen:
+// the suffix after the newest cut at or before its watermark.
+func (fr frame) seen(since int64) []byte {
+	for i := len(fr.cuts) - 1; i >= 0; i-- {
+		if fr.cuts[i].seq <= since {
+			var f map[string]any
+			if json.Unmarshal(fr.raw, &f) != nil {
+				return fr.raw
 			}
-			f["text"] = c.last["text"].(string)[c.cuts[i].end:]
+			text, _ := f["text"].(string)
+			end := fr.cuts[i].end
+			if end > len(text) {
+				end = len(text)
+			}
+			f["text"] = text[end:]
 			return mustJSON(f)
 		}
 	}
-	return raw
+	return fr.raw
 }
 
 func (c *chat) unsubscribe(ch chan []byte) {

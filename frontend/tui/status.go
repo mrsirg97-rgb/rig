@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"github.com/mrsirg97-rgb/rig/v3/core"
 	"strings"
 )
 
@@ -93,7 +94,7 @@ func RenderStatusLine(t Theme, model, effort, role, approveMode string, used, wi
 		case pct >= 70:
 			slot = SlotWarn
 		}
-		row1 += sep + t.Paint(slot, formatTokens(used)+"/"+formatTokens(window))
+		row1 += sep + t.Paint(slot, core.FormatTokens(used)+"/"+core.FormatTokens(window))
 	}
 	var row2 string
 	if effort != "" {
@@ -110,7 +111,7 @@ func RenderStatusLine(t Theme, model, effort, role, approveMode string, used, wi
 		hit = int(int64(cacheRead) * 100 / int64(up))
 	}
 	row3 := t.Paint(SlotDim, fmt.Sprintf("up %s down %s · cache r %s %d%%",
-		formatTokens(up), formatTokens(down), formatTokens(cacheRead), hit))
+		core.FormatTokens(up), core.FormatTokens(down), core.FormatTokens(cacheRead), hit))
 	if cost > 0 {
 		row3 += t.Paint(SlotDim, " · $"+fmt.Sprintf("%.2f", cost))
 	}

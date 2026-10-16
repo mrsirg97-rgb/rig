@@ -16,6 +16,8 @@ import (
 	"github.com/mrsirg97-rgb/rig/v3/tool"
 )
 
+const latestFaultsRead = 1 // the summary names one fault per session: the newest
+
 const (
 	defaultN = 10
 	maxN     = state.ListCap
@@ -169,7 +171,7 @@ func (a adapter) summary(ctx context.Context, db store.DB, project string, n int
 		if len(seen) > 1 {
 			mixed = true
 		}
-		faults, err := state.SessionFaults(ctx, db, r.ID)
+		faults, err := state.SessionFaults(ctx, db, r.ID, latestFaultsRead)
 		if err != nil {
 			return "", fmt.Errorf("sessions: %v", err)
 		}

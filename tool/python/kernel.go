@@ -54,8 +54,15 @@ func (p *proc) failAll(msg string) {
 }
 
 func (k *kernel) send(ctx context.Context, req request, timeoutMs int) (Reply, error) {
-	k.queue <- struct{}{}
+	select {
+	case k.queue <- struct{}{}:
+	case <-ctx.Done():
+		return Reply{}, fmt.Errorf("python: the caller was cancelled before its cell reached the kernel: %w", ctx.Err())
+	}
 	defer func() { <-k.queue }()
+	if err := ctx.Err(); err != nil {
+		return Reply{}, fmt.Errorf("python: the caller was cancelled while the cell queued: %w", err)
+	}
 
 	var p *proc
 	k.mu.Lock()

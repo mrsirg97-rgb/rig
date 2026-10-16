@@ -52,6 +52,16 @@ func (editTool) Edit(ctx context.Context, path, old, new string) (string, error)
 		return "", fmt.Errorf("edit: old plus new is %d bytes, the read ceiling is %d; split the change across calls", total, ReadCap)
 	}
 
+	info, err := os.Stat(path)
+	if err != nil {
+		return "", fmt.Errorf("edit: %w", err)
+	}
+	if !info.Mode().IsRegular() {
+		return "", fmt.Errorf("edit: %s is not a regular file", path)
+	}
+	if info.Size() > maxEditBytes {
+		return "", fmt.Errorf("edit: %s is %d bytes, past the %d byte edit ceiling", path, info.Size(), maxEditBytes)
+	}
 	fileData, err := os.ReadFile(path)
 	if err != nil {
 		return "", fmt.Errorf("edit: %w", err)
@@ -89,7 +99,7 @@ func (editTool) Edit(ctx context.Context, path, old, new string) (string, error)
 }
 
 func unreadObservation(ctx context.Context, path string) (string, error) {
-	content, total, sum, err := readWindow(path, 0, -1)
+	content, total, sum, err := readWindow(ctx, path, 0, -1)
 	if err != nil {
 		return "", fmt.Errorf("edit: %w", err)
 	}
@@ -119,7 +129,7 @@ func driftRefusal(ctx context.Context, path, onDisk string) string {
 	}
 	now := onDisk
 	if obs.at != fullSpan {
-		content, _, _, err := readWindow(path, obs.at.offset, obs.at.limit)
+		content, _, _, err := readWindow(ctx, path, obs.at.offset, obs.at.limit)
 		if err != nil {
 			return header
 		}

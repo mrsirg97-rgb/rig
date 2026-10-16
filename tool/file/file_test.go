@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 	"unicode/utf8"
 
 	"github.com/mrsirg97-rgb/rig/v3/core"
@@ -579,5 +580,19 @@ func TestReadDiffCleanSaysNoChanges(t *testing.T) {
 	}
 	if !strings.HasSuffix(got, "\n\nno changes") {
 		t.Fatalf("a clean file must append 'no changes':\n%s", got)
+	}
+}
+
+func TestACharacterDeviceRefusesTheReadAndTheEdit(t *testing.T) {
+	if _, err := os.Stat("/dev/zero"); err != nil {
+		t.Skip("no /dev/zero on this box")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	if _, err := file.NewRead().Exec(ctx, argsJSON(t, map[string]any{"path": "/dev/zero"})); err == nil || !strings.Contains(err.Error(), "not a regular file") {
+		t.Fatalf("read of /dev/zero must refuse by name, got %v", err)
+	}
+	if _, err := file.NewEdit().Exec(ctx, argsJSON(t, map[string]any{"path": "/dev/zero", "old": "x", "new": "y"})); err == nil || !strings.Contains(err.Error(), "not a regular file") {
+		t.Fatalf("edit of /dev/zero must refuse by name, got %v", err)
 	}
 }
