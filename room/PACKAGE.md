@@ -27,7 +27,14 @@ the five signals the instances exchange beside the protocol's own.
   of spinning. The start time's read fails loud too: a join whose
   `/proc/self/stat` cannot be read has no identity to sit under. The
   scan after the listen skips the peer whose dial refuses.
-  Nothing mints until `Settle`, called after the last `Subscribe`.
+  Nothing mints until `Settle`, called after the last `Subscribe`. The
+  accept loop classifies: a closed listener or a gone member ends it;
+  any other error — the fd table full, the transient — is said loud
+  through `told` at error level (naming the member and the error) and
+  retried after `acceptBackoff`, one mesh period, the only duration the
+  operator's row owns: a busy loop must not spin, and a momentary
+  exhaustion must not stop a member its socket and sidecar still
+  advertise.
 - `KeyOf(model string)` and `TableKey()`: the keys the claims and the
   child operations ride, hashed from the model's id and the table's
   name. `MemberLeftNotice` is the machine room's member-leave notice

@@ -7,9 +7,13 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
+	"sync/atomic"
+	"syscall"
 	"testing"
 	"time"
 
+	"github.com/mrsirg97-rgb/evt"
 	"github.com/mrsirg97-rgb/evt/broadcast"
 )
 
@@ -254,6 +258,49 @@ func TestAHigherClaimEntersPastOneInFlight(t *testing.T) {
 	case <-time.After(10 * time.Second):
 		t.Fatal("the waiting claim must enter when the place frees")
 	}
+}
+
+func TestATransientAcceptErrorKeepsTheMemberAdmitting(t *testing.T) {
+	home := t.TempDir()
+	old := acceptFrom
+	var calls int32
+	acceptFrom = func(l net.Listener) (net.Conn, error) {
+		if atomic.AddInt32(&calls, 1) == 1 {
+			return nil, syscall.EMFILE
+		}
+		return old(l)
+	}
+	t.Cleanup(func() { acceptFrom = old })
+	var mu sync.Mutex
+	var said []evt.Notice
+	m, err := New(home, JobStatusSince, func(int64) int { return 1 }, nil, func(n evt.Notice) {
+		mu.Lock()
+		said = append(said, n)
+		mu.Unlock()
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(m.Close)
+	peer := newRoom(t, home, 1)
+	waitFor(t, "the peer to be admitted past the transient accept error", func() bool {
+		for _, id := range m.Live() {
+			if id == peer.Id() {
+				return true
+			}
+		}
+		return false
+	})
+	waitFor(t, "the transient accept error to be said loud", func() bool {
+		mu.Lock()
+		defer mu.Unlock()
+		for _, n := range said {
+			if n.Level == evt.LevelError && strings.Contains(n.Text, "accept") {
+				return true
+			}
+		}
+		return false
+	})
 }
 
 func TestTheSocketNameRoundTrips(t *testing.T) {

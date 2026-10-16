@@ -33,7 +33,11 @@ const meshPeriod = time.Duration(config.DefaultMeshPeriod) * time.Millisecond
 
 const JobStatusPostWait = 2 * meshPeriod
 
+const acceptBackoff = meshPeriod
+
 var procStat = "/proc/self/stat"
+
+var acceptFrom = func(l net.Listener) (net.Conn, error) { return l.Accept() }
 
 const sidecarExt = ".version"
 
@@ -126,9 +130,21 @@ func New(home string, version string, places func(int64) int, effects func(self 
 	go engine.Start(ctx)
 	go func() {
 		for {
-			conn, err := listener.Accept()
+			conn, err := acceptFrom(listener)
 			if err != nil {
-				return
+				if errors.Is(err, net.ErrClosed) || ctx.Err() != nil {
+					return
+				}
+				if told != nil {
+					told(evt.Notice{Source: "room", Level: evt.LevelError,
+						Text: fmt.Sprintf("member %d: accept failed, retrying after %s: %v", id, acceptBackoff, err)})
+				}
+				select {
+				case <-time.After(acceptBackoff):
+				case <-ctx.Done():
+					return
+				}
+				continue
 			}
 			tr := broadcast.NewPipeTransport(0, conn, enc)
 			m.track(tr)
