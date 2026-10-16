@@ -17,7 +17,9 @@ everything the supervisor says is a `broadcast` message.
   swarm works its bound queue, and the supervisor's doors attribute to
   it. Against a running swarm a start adds (the roles mix), and the
   reply is one phrasing either way: `swarm: added N agents (role X ·
-  model M)`. `StartOpts.Budget` (dollars) caps the router's claims — the
+  model M)`. Against a swarm whose context died without a Stop the
+  start refuses — `swarm: the swarm's context died: stop the swarm and
+  start again` — and adds nothing. `StartOpts.Budget` (dollars) caps the router's claims — the
   spend is summed from each delegate result's cost and at the cap the
   router stops claiming with the notice `swarm: budget reached — $X.XX /
   $Y.YY — the swarm stops claiming`. A start resets the spend and the

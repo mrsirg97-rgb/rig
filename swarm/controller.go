@@ -221,7 +221,12 @@ func (c *Controller) Start(ctx context.Context, in StartOpts) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("swarm: queue: %w", err)
 	}
+	var dead error
 	c.call(func() {
+		if c.ctx != nil && c.ctx.Err() != nil {
+			dead = errors.New("swarm: the swarm's context died: stop the swarm and start again")
+			return
+		}
 		if c.ctx == nil {
 			c.ctx, c.cancel = context.WithCancel(ctx)
 		}
@@ -250,6 +255,9 @@ func (c *Controller) Start(ctx context.Context, in StartOpts) (string, error) {
 		}
 		c.refresh()
 	})
+	if dead != nil {
+		return "", dead
+	}
 	c.Wake()
 	return fmt.Sprintf("swarm: added %d %s (role %s · model %s)", in.Count, plural(in.Count, "agent"), role, modelName(model)), nil
 }
