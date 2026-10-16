@@ -16,6 +16,7 @@ import (
 
 	"github.com/mrsirg97-rgb/evt"
 	"github.com/mrsirg97-rgb/evt/broadcast"
+	"github.com/mrsirg97-rgb/rig/v3/config"
 )
 
 const (
@@ -27,6 +28,10 @@ const (
 )
 
 const joinAttempts = 64
+
+const meshPeriod = time.Duration(config.DefaultMeshPeriod) * time.Millisecond
+
+const JobStatusPostWait = 2 * meshPeriod
 
 var procStat = "/proc/self/stat"
 
@@ -235,7 +240,11 @@ func (m *member) Admits(version string) bool {
 	if version == "" {
 		return false
 	}
-	for _, peer := range m.Live() {
+	var peers []int64
+	if !m.Ask(func() { peers = m.claim.Live() }) {
+		return false
+	}
+	for _, peer := range peers {
 		if !declares(filepath.Join(m.home, "room", strconv.FormatInt(peer, 10)+sidecarExt), version) {
 			return false
 		}

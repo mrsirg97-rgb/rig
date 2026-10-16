@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/mrsirg97-rgb/evt"
 	"github.com/mrsirg97-rgb/evt/broadcast"
@@ -80,7 +81,7 @@ func runJob(args []string) int {
 			}
 		}
 	})
-	tell := jobTeller(machine)
+	tell := jobTeller(machine, voice)
 	if err := os.MkdirAll(filepath.Dir(decPath), 0o755); err != nil {
 		fmt.Fprintln(os.Stderr, "rig: decision store:", err)
 	} else if jdb, _, _, jerr := store.Open(decPath, decisionstore.Statements(), decisionstore.SchemaVersion, decisionstore.Migration()); jerr != nil {
@@ -112,15 +113,21 @@ func runJob(args []string) int {
 	return 0
 }
 
-func jobTeller(machine machineroom.Member) func(machineroom.JobStatus) {
+func jobTeller(machine machineroom.Member, voice broadcast.Member) func(machineroom.JobStatus) {
 	return func(status machineroom.JobStatus) {
 		if machine == nil || !machine.Admits(machineroom.JobStatusSince) {
 			return
 		}
 		posted := make(chan struct{})
 		machine.Act(status, machineroom.KeyOf("job/"+status.Job), machineroom.PriorityFleet, func(bool) { close(posted) })
-		if status.State != machineroom.JobRunning {
-			<-posted
+		if status.State == machineroom.JobRunning {
+			return
+		}
+		select {
+		case <-posted:
+		case <-time.After(machineroom.JobStatusPostWait):
+			broadcast.Say(voice, "room", fmt.Sprintf("job %s: the %s status went unacknowledged after %s; the runner proceeds and the status may be lost",
+				status.Job, status.State, machineroom.JobStatusPostWait), evt.LevelError)
 		}
 	}
 }

@@ -52,7 +52,14 @@ the five signals the instances exchange beside the protocol's own.
   peer's sidecar and answers whether the room's slowest member still
   declares at least it — a missing, empty or unreadable sidecar refuses,
   fail closed — which is the gate a poster of a new act checks before
-  it posts (SPEC_ROOM, "the version a member declares"). `SetCodec`
+  it posts (SPEC_ROOM, "the version a member declares"). The walk rides
+  `Ask`, so a gone member refuses — past `Close` the read fails and the
+  answer is false, never the vacuous true of a walk over nothing. The
+  run-job teller waits `JobStatusPostWait` for the posted
+  acknowledgement of a terminal job status — two mesh periods, the
+  proposal round and the vote round a pin needs, derived from the
+  settings' period (250 ms by default) — then proceeds loud: the runner
+  goes on and the status may be lost. `SetCodec`
   swaps the encoder later joins build their transports with and returns
   the restore; it exists for the mixed-version tests.
 - The priorities: outside 0, child 20, fleet 30, delegate's return 70,

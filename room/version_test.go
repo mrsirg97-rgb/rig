@@ -149,6 +149,14 @@ func TestAdmitsGatesOnTheDeclarations(t *testing.T) {
 	}
 }
 
+func TestAClosedMemberAdmitsNothing(t *testing.T) {
+	m := newRoom(t, t.TempDir(), 1)
+	m.Close()
+	if m.Admits(JobStatusSince) {
+		t.Fatal("a closed member admits everything: the live walk over nothing returned true")
+	}
+}
+
 func TestTheSidecarNamesTheJoinAndIsCleanedUp(t *testing.T) {
 	home := t.TempDir()
 	m := newRoom(t, home, 1)

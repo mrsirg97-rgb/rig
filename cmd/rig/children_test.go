@@ -576,7 +576,7 @@ func TestARunnerThatPostedItsEndLeavesWithoutAFailure(t *testing.T) {
 		}
 		time.Sleep(25 * time.Millisecond)
 	}
-	jobTeller(b)(machineroom.JobStatus{Job: "j1", State: machineroom.JobDone,
+	jobTeller(b, voice)(machineroom.JobStatus{Job: "j1", State: machineroom.JobDone,
 		Started: started, Ended: started.Add(5 * time.Second)})
 	b.Close()
 	deadline = time.Now().Add(10 * time.Second)
