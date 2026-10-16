@@ -16,7 +16,6 @@ import (
 	"github.com/mrsirg97-rgb/rig/v3/frontend/cli"
 	"github.com/mrsirg97-rgb/rig/v3/loop"
 	"github.com/mrsirg97-rgb/rig/v3/models"
-	"github.com/mrsirg97-rgb/rig/v3/policy"
 )
 
 type cmdRig struct {
@@ -101,7 +100,7 @@ func TestDispatchByPrefixLoopNeverSeesCommand(t *testing.T) {
 	k := rigpkg.New(
 		rigpkg.WithProvider(prov),
 		rigpkg.WithFrontend(r.fe),
-		rigpkg.WithPolicy(policy.Passthrough("")),
+		rigpkg.WithPolicy(transcriptPolicy{}),
 		rigpkg.WithCommands(command.All()...),
 	)
 	if err := loop.Run(context.Background(), k); err != nil {
@@ -350,4 +349,10 @@ func TestPastedPromptsAreDeliveredInOrder(t *testing.T) {
 	if err != nil || b != "two" {
 		t.Fatalf("second pasted prompt = %q, %v; want \"two\"", b, err)
 	}
+}
+
+type transcriptPolicy struct{}
+
+func (transcriptPolicy) Assemble(ctx context.Context, s *core.Session) ([]core.Message, error) {
+	return append([]core.Message{}, s.Messages...), nil
 }

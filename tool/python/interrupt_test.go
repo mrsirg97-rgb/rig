@@ -52,3 +52,29 @@ func TestInterruptTearsDownTheBusyKernel(t *testing.T) {
 		t.Fatalf("the call after an interrupt took %v; the busy kernel was not torn down", elapsed)
 	}
 }
+
+func TestACallerCancelledWhileQueuedRefusesItsCell(t *testing.T) {
+	py := requireKernel(t)
+	kt := NewWith(py, DefaultHost(), inlineBG{})
+	defer kt.Close()
+	busyCtx, busyCancel := context.WithCancel(context.Background())
+	defer busyCancel()
+	busy, _ := json.Marshal(map[string]any{"code": "import time; time.sleep(30)", "timeoutMs": 60000})
+	go kt.Exec(busyCtx, busy)
+	time.Sleep(500 * time.Millisecond)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	queued, _ := json.Marshal(map[string]any{"code": "1 + 1", "timeoutMs": 5000})
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		if _, err := kt.Exec(ctx, queued); err == nil || !strings.Contains(err.Error(), "canceled") {
+			t.Errorf("a caller cancelled while queued must surface the cancel, got %v", err)
+		}
+	}()
+	select {
+	case <-done:
+	case <-time.After(3 * time.Second):
+		t.Fatal("the queued caller waited on the busy kernel with a dead context")
+	}
+}

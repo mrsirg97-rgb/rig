@@ -14,8 +14,8 @@ func TestApproveBareShows(t *testing.T) {
 	env := &command.Env{Approve: func() string { return "" }}
 	out, err := byName["approve"].Run(context.Background(), "", env)
 	want := "2 modes · active auto\n" +
-		"  auto   [~] runs tools without asking\n" +
-		"  manual waits for your y/n before every call that changes something"
+		"  auto   [~] tools run without asking (the default)\n" +
+		"  manual every call that changes something waits for your y/n; esc declines and interrupts"
 	if err != nil || out != want {
 		t.Fatalf("bare = (%q, %v), want the two modes with auto active", out, err)
 	}

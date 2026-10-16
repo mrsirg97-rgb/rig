@@ -119,7 +119,7 @@ func (r *run) input(t *turn, msg string, err error) {
 		return
 	}
 	if err != nil {
-		t.cancel()
+		defer t.cancel()
 		if r.ctx.Err() != nil || errors.Is(err, io.EOF) {
 			r.stop(nil)
 			return
@@ -329,7 +329,7 @@ func (r *run) advance(t *turn) {
 		t.cursor++
 	}
 	if in, ok := r.k.Frontend.(core.Inbox); ok && t.ctx.Err() == nil {
-		if block, ok := in.Returns(); ok {
+		if block, ok := in.Returns(); ok && block != "" {
 			session.Append(core.Message{Role: core.RoleUser, Content: block})
 		}
 	}

@@ -2,7 +2,6 @@ package guard
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -49,7 +48,7 @@ func (g *bound) Wrap(next core.ToolExec) core.ToolExec {
 				})
 			}
 			msg := fmt.Sprintf("bound exhausted: %s has failed %d times; stop reissuing this call", call.Name, g.limit)
-			return msg, errors.New(msg)
+			return core.Refusal(msg)
 		}
 		g.mu.Unlock()
 		content, err := next(ctx, call)

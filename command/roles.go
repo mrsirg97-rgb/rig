@@ -32,7 +32,7 @@ func ValidRole(name string) bool {
 	return name == "" || name == "default" || name == "architect" || name == "reviewer"
 }
 
-func RoleHints() []Sub {
+func roleSubs() []Sub {
 	out := make([]Sub, len(roleHints))
 	copy(out, roleHints)
 	return out

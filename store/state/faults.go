@@ -14,12 +14,16 @@ type FaultRow struct {
 	Message   string
 }
 
-func SessionFaults(ctx context.Context, db store.DB, sessionID string) ([]FaultRow, error) {
+func SessionFaults(ctx context.Context, db store.DB, sessionID string, limit int) ([]FaultRow, error) {
+	if limit < 1 {
+		limit = 1
+	}
 	rows, err := db.DB.QueryContext(ctx, `
 		SELECT "seq", "session_id", "at", "message"
 		FROM "faults"
 		WHERE "session_id" = $1
-		ORDER BY "at" DESC, "seq" DESC`, sessionID)
+		ORDER BY "at" DESC, "seq" DESC
+		LIMIT $2`, sessionID, limit)
 	if err != nil {
 		return nil, err
 	}

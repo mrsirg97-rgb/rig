@@ -128,9 +128,13 @@ func discoveryCell(files []string, c Contract) string {
 		reads += fmt.Sprintf("        _rig_e[\"schema\"] = _rig_m.%s\n", schema)
 	}
 	return `import importlib.util as _rig_iu, json as _rig_j, os as _rig_os, sys as _rig_sys
+_rig_paths = _rig_j.loads('` + pyLiteral(string(paths)) + `')
+for _rig_d in sorted({(_rig_os.path.dirname(_rig_p) or ".") for _rig_p in _rig_paths}):
+    if _rig_d not in _rig_sys.path:
+        _rig_sys.path.insert(0, _rig_d)
 _rig_next = {}
 _rig_report = []
-for _rig_p in _rig_j.loads('` + pyLiteral(string(paths)) + `'):
+for _rig_p in _rig_paths:
     _rig_n = _rig_os.path.basename(_rig_p)[:-3]
     _rig_e = {"name": _rig_n, "file": _rig_p}
     try:
@@ -140,6 +144,7 @@ for _rig_p in _rig_j.loads('` + pyLiteral(string(paths)) + `'):
             raise ValueError("the name shadows a stdlib module: " + _rig_n)
         _rig_s = _rig_iu.spec_from_file_location(_rig_n, _rig_p)
         _rig_m = _rig_iu.module_from_spec(_rig_s)
+        _rig_sys.modules[_rig_n] = _rig_m
         _rig_s.loader.exec_module(_rig_m)
         _rig_miss = [f for f in ` + string(names) + ` if not hasattr(_rig_m, f)]
         if _rig_miss:
@@ -151,10 +156,11 @@ for _rig_p in _rig_j.loads('` + pyLiteral(string(paths)) + `'):
         _rig_next[_rig_n] = _rig_m
         _rig_e["ok"] = True
 ` + reads + `    except Exception as _rig_ex:
+        _rig_sys.modules.pop(_rig_n, None)
         _rig_e["ok"] = False
         _rig_e["error"] = type(_rig_ex).__name__ + ": " + str(_rig_ex)
     _rig_report.append(_rig_e)
-for _rig_n in set(globals().get("` + registry + `", {})) - set(_rig_next):
+for _rig_n in set(globals().get("` + registry + `", {})):
     _rig_sys.modules.pop(_rig_n, None)
 for _rig_n, _rig_m in _rig_next.items():
     _rig_sys.modules[_rig_n] = _rig_m
@@ -193,6 +199,9 @@ func Invoke(ctx context.Context, k Kernel, kind, name, fn string, timeoutMs int,
 	}
 	if out == "" {
 		return nil, fmt.Errorf("%s.%s: the kernel printed nothing", name, fn)
+	}
+	if !json.Valid([]byte(out)) {
+		return nil, fmt.Errorf("%s.%s: the plugin printed %.60q, not JSON", name, fn, out)
 	}
 	return json.RawMessage(out), nil
 }

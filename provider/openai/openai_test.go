@@ -353,9 +353,60 @@ func TestNoArgToolCallStillEmitted(t *testing.T) {
 	if len(calls) != 1 {
 		t.Fatalf("no-arg tool call must still be emitted, got %d calls (%s)", len(calls), kinds(events))
 	}
-	if len(calls[0].Args) != 0 {
-		t.Fatalf("no-arg call args = %s, want empty", calls[0].Args)
+	if string(calls[0].Args) != "{}" {
+		t.Fatalf("no-arg call args = %s, want the empty argument object (a tool with no arguments is called with {}, and finish_reason says tool_calls, not stop)", calls[0].Args)
 	}
+}
+
+func TestUnknownSSEFieldLinesAreSkipped(t *testing.T) {
+	body := strings.Join([]string{
+		`event: message`,
+		`id: 42`,
+		`data: {"choices":[{"delta":{"content":"hi"}}]}`,
+		`event: done`,
+		`data: {"choices":[{"delta":{},"finish_reason":"stop"}]}`,
+		`data: [DONE]`,
+		"",
+	}, "\n")
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		io.WriteString(w, body)
+	}))
+	defer srv.Close()
+	events, err := drain(t, context.Background(), openai.New(srv.URL, "local"), userReq())
+	if err != nil {
+		t.Fatalf("stream: %v", err)
+	}
+	for _, ev := range events {
+		if f, ok := ev.(core.Fault); ok {
+			t.Fatalf("a field line must not fault the stream: %v", f.Err)
+		}
+	}
+}
+
+func TestUsageFieldsMergeNotOverwrite(t *testing.T) {
+	body := strings.Join([]string{
+		`data: {"choices":[{"delta":{"content":"hi"},"finish_reason":"stop"}],"usage":{"prompt_tokens":900,"completion_tokens":10,"total_tokens":910}}`,
+		`data: {"choices":[{"delta":{}}],"usage":{}}`,
+		`data: [DONE]`,
+		"",
+	}, "\n")
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		io.WriteString(w, body)
+	}))
+	defer srv.Close()
+	events, err := drain(t, context.Background(), openai.New(srv.URL, "local"), userReq())
+	if err != nil {
+		t.Fatalf("stream: %v", err)
+	}
+	for _, ev := range events {
+		if d, ok := ev.(core.Done); ok {
+			if d.Usage.Prompt != 900 || d.Usage.Completion != 10 {
+				t.Fatalf("an empty usage chunk must not zero the counts: %+v", d.Usage)
+			}
+			return
+		}
+	}
+	t.Fatal("no Done")
 }
 
 func TestMalformedJSONLineFaults(t *testing.T) {

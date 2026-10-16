@@ -3,6 +3,7 @@ package core
 import (
 	"context"
 	"encoding/json"
+	"errors"
 )
 
 type Tool interface {
@@ -17,3 +18,5 @@ type ToolSpec struct {
 	Description string
 	Schema      json.RawMessage
 }
+
+func Refusal(msg string) (string, error) { return msg, errors.New(msg) }

@@ -88,12 +88,12 @@ func TestARemoteRequestStartsTheColdChildAndSwapsTheResidentOut(t *testing.T) {
 	}
 	t.Cleanup(remote.Close)
 	addrs := gateAddrs(t, 2)
-	remoteDoor, err := machineroom.NewDoor(remote, machineroom.MeshConfig(addrs[0], []string{addrs[1]}, gateTestPeriod, gateTestWindow), []int64{machineroom.KeyOf(cold.ID)}, nil)
+	remoteDoor, err := machineroom.NewDoor(remote, machineroom.MeshConfig(addrs[0], []string{addrs[1]}, gateTestPeriod, gateTestWindow), []int64{machineroom.KeyOf(cold.ID)}, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(remoteDoor.Close)
-	homeDoor, err := machineroom.NewDoor(m, machineroom.MeshConfig(addrs[1], []string{addrs[0]}, gateTestPeriod, gateTestWindow), nil, []int64{machineroom.KeyOf(resident.ID), machineroom.KeyOf(cold.ID)})
+	homeDoor, err := machineroom.NewDoor(m, machineroom.MeshConfig(addrs[1], []string{addrs[0]}, gateTestPeriod, gateTestWindow), nil, []int64{machineroom.KeyOf(resident.ID), machineroom.KeyOf(cold.ID)}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

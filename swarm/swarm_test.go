@@ -537,7 +537,7 @@ func TestSwarmTwoSessionsOnOneQueueNeverRunATaskTwice(t *testing.T) {
 		t.Fatalf("spawn calls across both swarms = %d, want 1 (the claim is atomic)", got)
 	}
 	done := 0
-	for _, rows := range [][]swarm.Worker{first.List(), second.List()} {
+	for _, rows := range [][]core.SwarmWorker{first.List(), second.List()} {
 		for _, r := range rows {
 			done += r.Done
 		}
@@ -744,7 +744,7 @@ func TestSwarmListsWorkersAndStops(t *testing.T) {
 	}
 	h.fetch.resident = []string{"qwen3.8-review"}
 	h.start(t, swarm.StartOpts{Count: 1, Role: "worker", Model: "qwen3.8-review"})
-	var busy swarm.Worker
+	var busy core.SwarmWorker
 	h.waitFor(t, "a worker holding the task with a heartbeat", func() bool {
 		for _, r := range h.ctl.List() {
 			if r.Task == "t1" && !r.Heartbeat.IsZero() {

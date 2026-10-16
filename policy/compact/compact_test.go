@@ -12,7 +12,6 @@ import (
 	"github.com/mrsirg97-rgb/evt"
 	"github.com/mrsirg97-rgb/rig/v3/core"
 	"github.com/mrsirg97-rgb/rig/v3/models"
-	"github.com/mrsirg97-rgb/rig/v3/policy"
 	compact "github.com/mrsirg97-rgb/rig/v3/policy/compact"
 	"github.com/mrsirg97-rgb/rig/v3/store"
 	remstore "github.com/mrsirg97-rgb/rig/v3/store/rem"
@@ -37,7 +36,7 @@ func TestBelowTriggerIsPassthroughByteIdentical(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Assemble: %v", err)
 		}
-		want, err := policy.Passthrough(system).Assemble(context.Background(), s)
+		want, err := passthrough{system}.Assemble(context.Background(), s)
 		if err != nil {
 			t.Fatalf("Passthrough: %v", err)
 		}
@@ -162,7 +161,7 @@ func TestTriggerMathPerModelOneConfig(t *testing.T) {
 	if err != nil {
 		t.Fatalf("brain Assemble: %v", err)
 	}
-	want, err := policy.Passthrough("S").Assemble(context.Background(), sb)
+	want, err := passthrough{"S"}.Assemble(context.Background(), sb)
 	if err != nil {
 		t.Fatalf("Passthrough: %v", err)
 	}
@@ -724,4 +723,14 @@ func TestTheSummaryCallsThinkingStreamsAsTheSummarizingPhase(t *testing.T) {
 	if strings.Join(thinking, "") != "weighing the tail" {
 		t.Fatalf("the summary call's reasoning streams as phase deltas, got %q", thinking)
 	}
+}
+
+type passthrough struct{ system string }
+
+func (p passthrough) Assemble(ctx context.Context, s *core.Session) ([]core.Message, error) {
+	msgs := make([]core.Message, 0, len(s.Messages)+1)
+	if p.system != "" {
+		msgs = append(msgs, core.Message{Role: core.RoleSystem, Content: p.system})
+	}
+	return append(msgs, s.Messages...), nil
 }

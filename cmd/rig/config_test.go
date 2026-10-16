@@ -781,7 +781,7 @@ func TestAgentsOrderAgainstGuidelines(t *testing.T) {
 func TestRowEnvBeatsFileForActiveID(t *testing.T) {
 	dir := t.TempDir()
 	writeModelRows(t, dir, `{"id": "local", "window": 32768, "maxTokens": 8192, "reserve": 8192, "keepRecent": 16384}`)
-	cfg, err := config.Load(dir, t.TempDir())
+	cfg, err := config.Load(dir)
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
@@ -960,7 +960,7 @@ func TestRetiredWorkersFileIsNamedOnceAtStart(t *testing.T) {
 
 func TestSchedulerCreateWithoutAModelStoresTheUnnamedJob(t *testing.T) {
 	dir := t.TempDir()
-	if _, err := config.Load(dir, t.TempDir()); err != nil {
+	if _, err := config.Load(dir); err != nil {
 		t.Fatalf("Load: %v", err)
 	}
 
@@ -1077,7 +1077,7 @@ func TestNegativeEnvBoundsRefuseLoud(t *testing.T) {
 func TestModelsFileRowListsAndSwitches(t *testing.T) {
 	dir := t.TempDir()
 	writeModelRows(t, dir, localModelRow, `{"id": "brain", "window": 262144, "maxTokens": 16384, "reserve": 16384, "keepRecent": 32768, "role": "worker"}`)
-	cfg, err := config.Load(dir, t.TempDir())
+	cfg, err := config.Load(dir)
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
@@ -1118,7 +1118,7 @@ func TestModelsFileRowListsAndSwitches(t *testing.T) {
 }
 
 func TestEmbeddedAllowIsTheNativeSet(t *testing.T) {
-	cfg, err := config.Load(t.TempDir(), t.TempDir())
+	cfg, err := config.Load(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1152,7 +1152,7 @@ func TestEmbeddedAllowGrowsWithTheFleet(t *testing.T) {
 		[]byte(`{"model": "local", "slots": 1}`), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	cfg, err := config.Load(dir, t.TempDir())
+	cfg, err := config.Load(dir)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1180,7 +1180,7 @@ func TestOperatorAllowStandsAsWritten(t *testing.T) {
 		[]byte(`{"allow": ["bash", "read"]}`), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	cfg, err := config.Load(dir, t.TempDir())
+	cfg, err := config.Load(dir)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1319,5 +1319,33 @@ func TestTheProjectContractFollowsTheWorkspaceAtWire(t *testing.T) {
 	wire(r)
 	if !strings.Contains(r.fullSystem, "CONTRACT-B") || strings.Contains(r.fullSystem, "CONTRACT-A") {
 		t.Fatalf("a wire in another workspace reads that workspace's contract: %q", r.fullSystem)
+	}
+}
+
+func TestABadEnvBoundFailsTheStart(t *testing.T) {
+	for _, tc := range []struct{ env, value string }{{"RIG_ROUNDS", "abc"}, {"RIG_RESULT_CAP", "10k"}} {
+		t.Run(tc.env, func(t *testing.T) {
+			s := &bodySrv{reply: `data: {"choices":[{"delta":{"content":"pong"},"finish_reason":"stop"}],"usage":{"prompt_tokens":1,"completion_tokens":1}}` + "\n"}
+			srv := newBodySrv(t, s)
+			defer srv.Close()
+			bin := buildBin(t, t.TempDir())
+			cmd := exec.Command(bin, "-p", "hello", "-base-url", srv.URL+"/v1")
+			cmd.Dir = t.TempDir()
+			cmd.Env = append(rigEnv(t, shortTemp(t), ""), tc.env+"="+tc.value)
+			out, runErr := cmd.CombinedOutput()
+			if runErr == nil {
+				t.Fatalf("%s=%s must fail the start, not run with a fallback: %q", tc.env, tc.value, out)
+			}
+			ee, ok := runErr.(*exec.ExitError)
+			if !ok || ee.ExitCode() != 1 {
+				t.Fatalf("the start must exit 1, got %v: %q", runErr, out)
+			}
+			if !strings.Contains(string(out), "rig: "+tc.env) {
+				t.Fatalf("the voice must name the key: %q", out)
+			}
+			if s.bodiesAll() != nil && len(s.bodiesAll()) != 0 {
+				t.Fatalf("a bad bound must stop before the provider: %d bodies", len(s.bodiesAll()))
+			}
+		})
 	}
 }

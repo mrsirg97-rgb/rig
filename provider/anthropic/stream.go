@@ -8,13 +8,13 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"strconv"
 	"strings"
 	"sync/atomic"
 	"time"
 
 	"github.com/mrsirg97-rgb/evt"
 	"github.com/mrsirg97-rgb/rig/v3/core"
+	"github.com/mrsirg97-rgb/rig/v3/provider/wire"
 )
 
 func (p *provider) Stream(ctx context.Context, req core.Request) (<-chan evt.Signal, error) {
@@ -74,7 +74,7 @@ func (p *provider) Stream(ctx context.Context, req core.Request) (<-chan evt.Sig
 				case <-ctx.Done():
 					emit(core.Done{Usage: usage, Model: model})
 					return
-				case <-time.After(p.backoff(attempts, resp.Header)):
+				case <-time.After(wire.Backoff(p.base, p.jitter, attempts, resp.Header)):
 				}
 				continue
 			}
@@ -126,7 +126,7 @@ func (p *provider) pump(ctx context.Context, resp *http.Response, emit func(evt.
 		if line == "" || strings.HasPrefix(line, ":") {
 			continue
 		}
-		payload, ok := sseData(line)
+		payload, ok := wire.SSEData(line)
 		if !ok {
 			continue
 		}
@@ -228,7 +228,7 @@ func (p *provider) pump(ctx context.Context, resp *http.Response, emit func(evt.
 
 	if err := scanner.Err(); err != nil {
 		if ctx.Err() != nil {
-			emit(core.Done{Usage: usage, Model: model})
+			emit(core.Done{Usage: p.settle(usage, input), Model: model})
 			return
 		}
 		if idleClosed.Load() {
@@ -240,7 +240,7 @@ func (p *provider) pump(ctx context.Context, resp *http.Response, emit func(evt.
 	}
 	if !done || stop == "" {
 		if ctx.Err() != nil {
-			emit(core.Done{Usage: usage, Model: model})
+			emit(core.Done{Usage: p.settle(usage, input), Model: model})
 			return
 		}
 		fault(fmt.Errorf("anthropic: stream truncated: no finish marker"))
@@ -262,8 +262,7 @@ func (p *provider) pump(ctx context.Context, resp *http.Response, emit func(evt.
 		}
 		emit(core.ToolCallEvent{Call: call})
 	}
-	usage.Prompt = input + usage.CacheRead + usage.CacheWrite
-	usage.Cost = p.cost(usage)
+	usage = p.settle(usage, input)
 	emit(core.Done{StopReason: stopReason(stop), Usage: usage, Model: model})
 }
 
@@ -284,28 +283,18 @@ func emitRecord(emit func(evt.Signal), b *blockState) {
 	emit(core.ReasoningDelta{Details: raw})
 }
 
+func (p *provider) settle(u core.Usage, input int) core.Usage {
+	u.Prompt = input + u.CacheRead + u.CacheWrite
+	u.Cost = p.cost(u)
+	return u
+}
+
 func (p *provider) cost(u core.Usage) float64 {
 	uncached := u.Prompt - u.CacheRead - u.CacheWrite
 	return (p.prices.input*float64(uncached) +
 		p.prices.write*float64(u.CacheWrite) +
 		p.prices.read*float64(u.CacheRead) +
 		p.prices.output*float64(u.Completion)) / 1e6
-}
-
-func (p *provider) backoff(attempts int, h http.Header) time.Duration {
-	if v := h.Get("Retry-After"); v != "" {
-		if n, err := strconv.ParseFloat(strings.TrimSpace(v), 64); err == nil && n >= 0 {
-			if n >= float64(maxRetryAfterWait/time.Second) {
-				return maxRetryAfterWait
-			}
-			wait := time.Duration(n * float64(time.Second))
-			if wait > maxRetryAfterWait {
-				wait = maxRetryAfterWait
-			}
-			return wait
-		}
-	}
-	return time.Duration(float64(p.base*(1<<(attempts-1))) * (1 + p.jitter()))
 }
 
 func errorBody(status int, snippet []byte) error {

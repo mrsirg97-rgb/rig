@@ -51,7 +51,7 @@ func liveLines(root, rel string, start, end int64) ([]liveLine, error) {
 	var out []liveLine
 	var size int64
 	sc := bufio.NewScanner(f)
-	sc.Buffer(make([]byte, 0, 64*1024), ReadCap)
+	sc.Buffer(make([]byte, 0, 64*1024), ReadCeiling)
 	var n int64
 	for sc.Scan() {
 		n++
@@ -61,7 +61,7 @@ func liveLines(root, rel string, start, end int64) ([]liveLine, error) {
 		text := sc.Text()
 		out = append(out, liveLine{n, text})
 		size += int64(len(text))
-		if n >= end || size >= ReadCap {
+		if n >= end || size >= ReadCeiling {
 			break
 		}
 	}

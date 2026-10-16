@@ -20,6 +20,8 @@ import (
 
 const ReadCap = 1 << 20
 
+const maxEditBytes = 64 * ReadCap
+
 const readChunk = 64 * 1024
 
 type Read interface {
@@ -64,7 +66,7 @@ func (readTool) Read(ctx context.Context, path string, offset, limit *int, diff 
 		}
 		window = *limit
 	}
-	content, total, sum, err := readWindow(path, start, window)
+	content, total, sum, err := readWindow(ctx, path, start, window)
 	if err != nil {
 		return "", fmt.Errorf("read: %w", err)
 	}
@@ -110,14 +112,39 @@ func capReply(content string, total, offset int) string {
 	return content[:cut] + fmt.Sprintf("\n[output truncated: %d of %d lines; continue at offset %d]", lines, total, offset+lines)
 }
 
-func readWindow(path string, offset, limit int) (string, int, [32]byte, error) {
+const ctxChunks = 256
+
+type ctxReader struct {
+	r      io.Reader
+	ctx    context.Context
+	chunks int
+}
+
+func (c *ctxReader) Read(p []byte) (int, error) {
+	if c.chunks--; c.chunks <= 0 {
+		c.chunks = ctxChunks
+		if err := c.ctx.Err(); err != nil {
+			return 0, err
+		}
+	}
+	return c.r.Read(p)
+}
+
+func readWindow(ctx context.Context, path string, offset, limit int) (string, int, [32]byte, error) {
+	info, err := os.Stat(path)
+	if err != nil {
+		return "", 0, [32]byte{}, err
+	}
+	if !info.Mode().IsRegular() {
+		return "", 0, [32]byte{}, fmt.Errorf("%s is not a regular file", path)
+	}
 	f, err := os.Open(path)
 	if err != nil {
 		return "", 0, [32]byte{}, err
 	}
 	defer f.Close()
 	h := sha256.New()
-	lr := lineReader{r: bufio.NewReaderSize(io.TeeReader(f, h), readChunk), cap: ReadCap + 1}
+	lr := lineReader{r: bufio.NewReaderSize(io.TeeReader(&ctxReader{r: f, ctx: ctx, chunks: ctxChunks}, h), readChunk), cap: ReadCap + 1}
 	var window []byte
 	appendWindow := func(b []byte) {
 		if room := ReadCap + 1 - len(window); len(b) >= room {

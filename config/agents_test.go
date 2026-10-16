@@ -13,7 +13,7 @@ func TestAgentsIsTheOperatorsFileAlone(t *testing.T) {
 	cwd := t.TempDir()
 	write(t, dir, "AGENTS.md", "G")
 	write(t, cwd, "AGENTS.md", "P")
-	cfg := load(t, dir, cwd)
+	cfg := load(t, dir)
 	if cfg.Agents != "G" {
 		t.Fatalf("Agents = %q, want the operator's file alone; the project's follows the workspace", cfg.Agents)
 	}
@@ -103,7 +103,7 @@ func TestAgentsUnreadableRefuses(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { os.Chmod(p, 0o644) })
-	err := loadErr(t, dir, t.TempDir())
+	err := loadErr(t, dir)
 	if err.Error() != "config: "+p+": permission denied" {
 		t.Fatalf("the voice = %q, want the OS reason with the path named once", err)
 	}
@@ -115,7 +115,7 @@ func TestAgentsDirectoryRefuses(t *testing.T) {
 	if err := os.Mkdir(p, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	err := loadErr(t, dir, t.TempDir())
+	err := loadErr(t, dir)
 	if err.Error() != "config: "+p+": is a directory" {
 		t.Fatalf("the voice = %q, want the OS reason with the path named once", err)
 	}

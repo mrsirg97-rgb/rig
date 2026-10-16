@@ -11,7 +11,7 @@ const (
 	suffix   = "]]"
 	srcKey   = " src="
 	fixedLen = 6
-	StoreDir = "blobs"
+	storeDir = "blobs"
 )
 
 type Ref struct {
@@ -81,9 +81,6 @@ func Parse(line string) (Ref, bool) {
 	if !matchInt(&ref.Bytes, fixed[5], "bytes=") {
 		return Ref{}, false
 	}
-	if !keysInOrder(fixed) {
-		return Ref{}, false
-	}
 	ref.Src = src
 	return ref, true
 }
@@ -110,32 +107,21 @@ func Find(content string) (Ref, bool) {
 }
 
 func BlobPath(dir, sha string) string {
-	if !IsAddress(sha) {
+	if !isAddress(sha) {
 		return ""
 	}
 	return filepath.Join(dir, sha)
 }
 
 func BlobsDir(home string) string {
-	return filepath.Join(home, StoreDir)
+	return filepath.Join(home, storeDir)
 }
 
-func IsAddress(sha string) bool {
+func isAddress(sha string) bool {
 	if len(sha) != 64 {
 		return false
 	}
 	return allHex(sha)
-}
-
-var keyOrder = [...]string{"sha256", "mime", "w", "h", "orig", "bytes"}
-
-func keysInOrder(fixed []string) bool {
-	for i, key := range keyOrder {
-		if !strings.HasPrefix(fixed[i], key+"=") {
-			return false
-		}
-	}
-	return true
 }
 
 func matchSHA(out *string, token string) bool {
@@ -144,7 +130,7 @@ func matchSHA(out *string, token string) bool {
 		return false
 	}
 	v := token[len(key):]
-	if !IsAddress(v) {
+	if !isAddress(v) {
 		return false
 	}
 	*out = v

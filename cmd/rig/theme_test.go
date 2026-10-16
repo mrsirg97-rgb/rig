@@ -46,7 +46,7 @@ func TestSwitchThemePersistsAndRepaints(t *testing.T) {
 	if err := r.switchTheme(context.Background(), "cool"); err != nil {
 		t.Fatalf("switchTheme(cool): %v", err)
 	}
-	cfg, err := config.Load(r.rigHome, r.cwd)
+	cfg, err := config.Load(r.rigHome)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -104,7 +104,7 @@ func TestSwitchThemeCustomLoadsTheFile(t *testing.T) {
 	if fe.repainted().Slot("accent") != "#ff9e64" {
 		t.Fatalf("the repainted accent = %s, want the file's override", fe.repainted().Slot("accent"))
 	}
-	cfg, err := config.Load(r.rigHome, r.cwd)
+	cfg, err := config.Load(r.rigHome)
 	if err != nil {
 		t.Fatal(err)
 	}

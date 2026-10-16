@@ -55,3 +55,24 @@ func SessionCost(ctx context.Context, db store.DB, sessionID string) (float64, e
 	}
 	return cost, nil
 }
+
+type UsageTotals struct {
+	Prompt     int
+	Completion int
+	CacheRead  int
+	Cost       float64
+}
+
+func UsageTotalsFor(ctx context.Context, db store.DB, sessionID string) (UsageTotals, error) {
+	var t UsageTotals
+	err := db.DB.QueryRowContext(ctx, `
+		SELECT COALESCE(SUM(u."prompt"), 0), COALESCE(SUM(u."completion"), 0),
+			COALESCE(SUM(u."cache_read"), 0), COALESCE(SUM(u."cost"), 0)
+		FROM "usage" u
+		JOIN "messages" m ON m."seq" = u."message_seq"
+		WHERE m."session_id" = ?`, sessionID).Scan(&t.Prompt, &t.Completion, &t.CacheRead, &t.Cost)
+	if err != nil {
+		return UsageTotals{}, err
+	}
+	return t, nil
+}

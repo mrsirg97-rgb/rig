@@ -495,3 +495,35 @@ func TestANoticePublishesOneFrameWithItsSource(t *testing.T) {
 		t.Fatalf("notice frame = %v", got[1])
 	}
 }
+
+func TestTheReplayAfterAFinishedRunSkipsOnlyWhatWasSeen(t *testing.T) {
+	srv, _ := newChatServer(t)
+	ch, _, _ := srv.chat.subscribe(0)
+	for _, d := range []string{"hel", "lo", "wor", "ld"} {
+		srv.Notify(core.TextDelta{Text: d})
+	}
+	var first int64
+	select {
+	case raw := <-ch:
+		var f map[string]any
+		if err := json.Unmarshal(raw, &f); err != nil {
+			t.Fatal(err)
+		}
+		first = int64(f["seq"].(float64))
+	case <-time.After(2 * time.Second):
+		t.Fatal("the first delta never crossed")
+	}
+	srv.Notify(core.ToolStart{Call: core.ToolCall{ID: "c1", Name: "bash"}})
+	time.Sleep(100 * time.Millisecond)
+	_, run, _ := srv.chat.subscribe(first)
+	var texts []string
+	for _, raw := range run {
+		var f map[string]any
+		if json.Unmarshal(raw, &f) == nil && f["kind"] == "text" {
+			texts = append(texts, f["text"].(string))
+		}
+	}
+	if len(texts) != 1 || texts[0] != "loworld" {
+		t.Fatalf("a client holding the first delta must replay only the unseen suffix of the finished run, got %q", texts)
+	}
+}

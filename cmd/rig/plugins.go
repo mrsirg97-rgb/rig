@@ -2,9 +2,10 @@ package main
 
 import (
 	"context"
-	"fmt"
+	"errors"
 
 	"github.com/mrsirg97-rgb/rig/v3/command"
+	"github.com/mrsirg97-rgb/rig/v3/core"
 	"github.com/mrsirg97-rgb/rig/v3/plugins"
 )
 
@@ -31,14 +32,16 @@ func capPlugins(reports []plugins.Report, max int) []plugins.Report {
 func (r *root) swapPlugins(ctx context.Context, reports []plugins.Report) (string, error) {
 	reports = capPlugins(reports, r.pluginMax)
 	infos := make([]command.PluginInfo, 0, len(reports))
-	tools := r.tableTools()
+	var pluginTools []core.Tool
 	for _, rep := range reports {
 		infos = append(infos, command.PluginInfo{
 			Name: rep.Name, Description: rep.Description, File: rep.File,
 			Skipped: rep.Skipped, Reason: rep.Reason,
 		})
 		if !rep.Skipped {
-			tools = append(tools, plugins.New(rep.Name, rep.Description, rep.File, rep.Schema, r.py))
+			tool := plugins.New(rep.Name, rep.Description, rep.File, rep.Schema, r.py)
+			pluginTools = append(pluginTools, tool)
+			r.tools[rep.Name] = tool
 		}
 	}
 	names := make([]string, 0, len(reports))
@@ -47,7 +50,8 @@ func (r *root) swapPlugins(ctx context.Context, reports []plugins.Report) (strin
 			names = append(names, rep.Name)
 		}
 	}
-	r.live.Swap(tools, names...)
+	r.pluginTools = pluginTools
+	r.live.Swap(append(r.tableTools(), r.pluginTools...), names...)
 	r.pluginInfos = infos
 	return command.RenderPlugins(infos, "reload", r.pluginsHome), nil
 }
@@ -72,22 +76,8 @@ func (r *root) redoPlugins(ctx context.Context) error {
 }
 
 func (r *root) reloadPlugins(ctx context.Context) (string, error) {
-	files, err := plugins.List(r.pluginsHome, "plugins")
-	if err != nil {
-		return "", fmt.Errorf("plugins: reload: %v", err)
+	if r.eco == nil {
+		return "", errors.New("plugins: no ecosystem (the root did not wire one)")
 	}
-	reports := make([]plugins.Report, 0)
-	if len(files) > 0 {
-		reports, err = plugins.DiscoverChecked(ctx, r.py, files, r.natives, plugins.PluginContract)
-		if err != nil {
-			if plugins.IsNameCollision(err) {
-				return "", err
-			}
-			return "", fmt.Errorf("plugins: reload: %v", err)
-		}
-	}
-	if err := plugins.Check(reports, r.natives); err != nil {
-		return "", err
-	}
-	return r.swapPlugins(ctx, reports)
+	return r.eco.Reload(ctx)
 }

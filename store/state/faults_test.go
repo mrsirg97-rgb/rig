@@ -31,7 +31,7 @@ func TestSessionFaultsNewestFirst(t *testing.T) {
 		t.Fatal(e)
 	}
 
-	rows, err := state.SessionFaults(ctx, db, "s1")
+	rows, err := state.SessionFaults(ctx, db, "s1", 10)
 	if err != nil {
 		t.Fatalf("SessionFaults: %v", err)
 	}
@@ -54,7 +54,7 @@ func TestSessionFaultsNewestFirst(t *testing.T) {
 
 func TestSessionFaultsUnknownSessionIsEmpty(t *testing.T) {
 	db := openStore(t)
-	rows, err := state.SessionFaults(context.Background(), db, "nope")
+	rows, err := state.SessionFaults(context.Background(), db, "nope", 10)
 	if err != nil {
 		t.Fatalf("SessionFaults: %v", err)
 	}

@@ -3,6 +3,7 @@ package core
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"strconv"
 	"strings"
 	"time"
@@ -69,6 +70,19 @@ type Fault struct {
 	Err error
 
 	evt.Mark
+}
+
+func FormatTokens(n int) string {
+	switch {
+	case n < 1000:
+		return strconv.Itoa(n)
+	case n < 10000:
+		return fmt.Sprintf("%.1fk", float64(n)/1000)
+	case n < 1000000:
+		return fmt.Sprintf("%dk", (n+500)/1000)
+	default:
+		return fmt.Sprintf("%.1fM", float64(n)/1000000)
+	}
 }
 
 type Usage struct {
@@ -145,6 +159,7 @@ type Compacting struct {
 type SwarmWorker struct {
 	ID        int
 	Role      string
+	Model     string
 	Task      string
 	Heartbeat time.Time
 	Done      int

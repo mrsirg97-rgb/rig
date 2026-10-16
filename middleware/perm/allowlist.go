@@ -2,7 +2,6 @@ package perm
 
 import (
 	"context"
-	"errors"
 	"fmt"
 
 	"github.com/mrsirg97-rgb/rig/v3/core"
@@ -44,7 +43,7 @@ func allowlist(names []string, door func(string) bool, record decision.Recorder)
 				})
 			}
 			msg := fmt.Sprintf("permission denied: %s is not in the allow-list", call.Name)
-			return msg, errors.New(msg)
+			return core.Refusal(msg)
 		}
 	})
 }

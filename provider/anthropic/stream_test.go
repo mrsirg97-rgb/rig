@@ -499,7 +499,7 @@ func TestACancelledStreamEndsInATerminalEvent(t *testing.T) {
 	}))
 	defer srv.Close()
 	ctx, cancel := context.WithCancel(context.Background())
-	p := anthropic.New(anthropic.Config{BaseURL: srv.URL, Model: "claude-fake", MaxTokens: 1024})
+	p := anthropic.New(anthropic.Config{BaseURL: srv.URL, Model: "claude-fake", MaxTokens: 1024, InputPrice: 3})
 	ch, err := p.Stream(ctx, userReq())
 	if err != nil {
 		t.Fatalf("stream: %v", err)
@@ -518,7 +518,7 @@ func TestACancelledStreamEndsInATerminalEvent(t *testing.T) {
 	if !done {
 		t.Fatalf("a cancelled stream must end in a terminal event: %s", kinds(events))
 	}
-	if lastDone(t, events).Usage.CacheRead != 7 {
-		t.Fatalf("the terminal event must carry the usage known so far: %+v", lastDone(t, events).Usage)
+	if d := lastDone(t, events); d.Usage.CacheRead != 7 || d.Usage.Prompt != 16 || d.Usage.Cost <= 0 {
+		t.Fatalf("a cancelled stream still bills what the endpoint read: %+v", d.Usage)
 	}
 }

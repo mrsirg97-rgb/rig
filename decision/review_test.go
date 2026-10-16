@@ -1122,3 +1122,20 @@ func TestAnInputBeforeTheFireStartsEndsTheBite(t *testing.T) {
 	}
 	waitSettled(t, db, 1)
 }
+
+func TestAPartialSettleReArmsTheBoard(t *testing.T) {
+	db := openReviewedStore(t, 12)
+	f := &verdictFire{fired: make(chan struct{}, 64)}
+	r := reviewerBatch(db, f.fire, 10)
+
+	r.Land()
+	r.Wake()
+	<-f.fired
+	time.Sleep(200 * time.Millisecond)
+	r.Wake()
+	<-f.fired
+	time.Sleep(200 * time.Millisecond)
+	if f.calls() != 2 {
+		t.Fatalf("a settle that took ten of twelve must re-arm the board for the rest, got %d fires", f.calls())
+	}
+}

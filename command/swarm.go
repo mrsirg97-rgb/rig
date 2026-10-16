@@ -29,7 +29,7 @@ func (swarmCmd) Sub() []Sub {
 }
 
 func (swarmCmd) Run(ctx context.Context, args string, env any) (string, error) {
-	e, err := EnvOf(env)
+	e, err := envOf(env)
 	if err != nil {
 		return "", err
 	}

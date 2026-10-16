@@ -37,75 +37,45 @@ type writeResult struct {
 const maxContentBytes = 64 * 1024
 
 func Learn(ctx context.Context, db store.DB, cwd string, in LearnInput) (string, *remdom.Memory, bool, error) {
-	if in.Content == "" {
-		return "", nil, false, fmt.Errorf("rem: action 'learn' requires content")
-	}
-	if len(in.Content) > maxContentBytes {
-		return "", nil, false, fmt.Errorf("rem: content must be at most %d bytes, got %d", maxContentBytes, len(in.Content))
-	}
-	res, err := transact(ctx, db, func(bound context.Context, tx *sql.Tx) (writeResult, error) {
-		mem, existing, err := storeOrTouch(bound, writeShape{
-			content:       in.Content,
-			kind:          in.Kind,
-			importance:    in.Importance,
-			importanceSet: in.ImportanceSet,
-			source:        in.Source,
-			sourceSet:     in.Source != "",
-			scope:         in.Scope,
-			supersedes:    in.Supersedes,
-		}, cwd)
-		if err != nil {
-			return writeResult{}, err
-		}
-		if existing {
-			note := fmt.Sprintf("already known m%d", mem.Id)
-			if in.ImportanceSet {
-				note += fmt.Sprintf(" · importance → %g", in.Importance)
-			}
-			if in.Source != "" {
-				note += " · source updated"
-			}
-			return writeResult{reply: note, mem: mem, existing: true}, nil
-		}
-		return writeResult{reply: fmt.Sprintf("learned m%d (%s · %s · %g)", mem.Id, mem.ScopeLabel, mem.Kind, mem.Importance), mem: mem}, nil
-	})
-	if err != nil {
-		return "", nil, false, err
-	}
-	return res.reply, res.mem, res.existing, nil
+	return remember(ctx, db, cwd, "learn", "learned", in.Content, in.Kind, in.Importance, in.ImportanceSet, in.Source, in.Scope, in.Supersedes)
 }
 
 func Reflect(ctx context.Context, db store.DB, cwd string, in ReflectInput) (string, *remdom.Memory, bool, error) {
-	if in.Content == "" {
-		return "", nil, false, fmt.Errorf("rem: action 'reflect' requires content")
+	return remember(ctx, db, cwd, "reflect", "reflected", in.Content, kindReflection, in.Importance, in.ImportanceSet, in.Source, in.Scope, nil)
+}
+
+func remember(ctx context.Context, db store.DB, cwd, verb, verbPast, content, kind string, importance float64, importanceSet bool, source, scope string, supersedes []int64) (string, *remdom.Memory, bool, error) {
+	if content == "" {
+		return "", nil, false, fmt.Errorf("rem: action '%s' requires content", verb)
 	}
-	if len(in.Content) > maxContentBytes {
-		return "", nil, false, fmt.Errorf("rem: content must be at most %d bytes, got %d", maxContentBytes, len(in.Content))
+	if len(content) > maxContentBytes {
+		return "", nil, false, fmt.Errorf("rem: content must be at most %d bytes, got %d", maxContentBytes, len(content))
 	}
 	res, err := transact(ctx, db, func(bound context.Context, tx *sql.Tx) (writeResult, error) {
 		mem, existing, err := storeOrTouch(bound, writeShape{
-			content:       in.Content,
-			kind:          kindReflection,
-			importance:    in.Importance,
-			importanceSet: in.ImportanceSet,
-			source:        in.Source,
-			sourceSet:     in.Source != "",
-			scope:         in.Scope,
+			content:       content,
+			kind:          kind,
+			importance:    importance,
+			importanceSet: importanceSet,
+			source:        source,
+			sourceSet:     source != "",
+			scope:         scope,
+			supersedes:    supersedes,
 		}, cwd)
 		if err != nil {
 			return writeResult{}, err
 		}
 		if existing {
 			note := fmt.Sprintf("already known m%d", mem.Id)
-			if in.ImportanceSet {
-				note += fmt.Sprintf(" · importance → %g", in.Importance)
+			if importanceSet {
+				note += fmt.Sprintf(" · importance → %g", importance)
 			}
-			if in.Source != "" {
+			if source != "" {
 				note += " · source updated"
 			}
 			return writeResult{reply: note, mem: mem, existing: true}, nil
 		}
-		return writeResult{reply: fmt.Sprintf("reflected m%d (%s · %s · %g)", mem.Id, mem.ScopeLabel, mem.Kind, mem.Importance), mem: mem}, nil
+		return writeResult{reply: fmt.Sprintf("%s m%d (%s · %s · %g)", verbPast, mem.Id, mem.ScopeLabel, mem.Kind, mem.Importance), mem: mem}, nil
 	})
 	if err != nil {
 		return "", nil, false, err

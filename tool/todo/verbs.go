@@ -102,7 +102,12 @@ func (a todo) Release(ctx context.Context, scope, id string) (string, error) {
 	if err := withID("release", id); err != nil {
 		return "", err
 	}
-	return todostore.Release(ctx, a.db, p, id, sessionOf(ctx))
+	reply, err := todostore.Release(ctx, a.db, p, id, sessionOf(ctx))
+	if err != nil {
+		return reply, err
+	}
+	a.wakeRouter()
+	return reply, nil
 }
 
 func (a todo) Retry(ctx context.Context, scope, id string) (string, error) {
@@ -113,7 +118,12 @@ func (a todo) Retry(ctx context.Context, scope, id string) (string, error) {
 	if err := withID("retry", id); err != nil {
 		return "", err
 	}
-	return todostore.Retry(ctx, a.db, p, id, sessionOf(ctx))
+	reply, err := todostore.Retry(ctx, a.db, p, id, sessionOf(ctx))
+	if err != nil {
+		return reply, err
+	}
+	a.wakeRouter()
+	return reply, nil
 }
 
 func (a todo) Move(ctx context.Context, scope, id string, pos int) (string, error) {
@@ -220,5 +230,10 @@ func (a todo) Reject(ctx context.Context, scope, id, reason string) (string, err
 	if reason == "" {
 		return "", fmt.Errorf("action 'reject' requires a reason")
 	}
-	return todostore.Reject(ctx, a.db, p, id, reason, sessionOf(ctx))
+	reply, err := todostore.Reject(ctx, a.db, p, id, reason, sessionOf(ctx))
+	if err != nil {
+		return reply, err
+	}
+	a.wakeRouter()
+	return reply, nil
 }

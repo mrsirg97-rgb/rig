@@ -48,19 +48,6 @@ type StartOpts struct {
 	Budget float64
 }
 
-type Worker struct {
-	ID        int
-	Role      string
-	Model     string
-	Task      string
-	Heartbeat time.Time
-	Tool      string
-	ToolAt    time.Time
-	Done      int
-	Failed    int
-	State     string
-}
-
 type Opts struct {
 	TodoDB       store.DB
 	SchedDB      sched.DB
@@ -102,7 +89,7 @@ type Controller struct {
 	role       string
 	model      string
 
-	view        atomic.Pointer[[]Worker]
+	view        atomic.Pointer[[]core.SwarmWorker]
 	dispatching atomic.Bool
 }
 
@@ -134,7 +121,7 @@ func New(o Opts) *Controller {
 		panic("swarm: the controller posts on the loop and speaks in a room; both are constructor arguments")
 	}
 	c := &Controller{opts: o, retries: map[string]int{}, rejects: map[string]int{}}
-	c.view.Store(&[]Worker{})
+	c.view.Store(&[]core.SwarmWorker{})
 	c.self = o.Room.Add(SupervisorID)
 	c.self.Subscribe(context.Background(), c.receive)
 	return c
@@ -145,12 +132,23 @@ func (c *Controller) post(fn func()) {
 }
 
 func (c *Controller) call(fn func()) {
+	if !c.engineCall(fn, false) {
+		fn()
+	}
+}
+
+func (c *Controller) callStopping(fn func()) { c.engineCall(fn, true) }
+
+func (c *Controller) engineCall(fn func(), stopping bool) bool {
 	done := make(chan struct{})
 	if c.opts.Engine.Add(evt.Func(func(context.Context) { fn(); close(done) }), rig.PriorityFleet) == 0 {
-		fn()
-		return
+		if stopping {
+			fn()
+		}
+		return false
 	}
 	<-done
+	return true
 }
 
 func (c *Controller) receive(err error, messages ...broadcast.Message) {
@@ -184,9 +182,9 @@ func (c *Controller) receive(err error, messages ...broadcast.Message) {
 }
 
 func (c *Controller) refresh() {
-	out := make([]Worker, len(c.workers))
+	out := make([]core.SwarmWorker, len(c.workers))
 	for i, w := range c.workers {
-		out[i] = Worker{
+		out[i] = core.SwarmWorker{
 			ID: w.id, Role: w.role, Model: modelName(w.model), Task: w.task,
 			Heartbeat: w.heartbeat, Done: w.done, Failed: w.failed, State: w.state,
 			Tool: w.tool, ToolAt: w.toolAt,
@@ -280,13 +278,13 @@ func (c *Controller) modelFor(role, override string) (string, error) {
 	return "", nil
 }
 
-func (c *Controller) List() []Worker {
-	return append([]Worker(nil), (*c.view.Load())...)
+func (c *Controller) List() []core.SwarmWorker {
+	return append([]core.SwarmWorker(nil), (*c.view.Load())...)
 }
 
 func (c *Controller) Stop() (string, error) {
 	var cancel context.CancelFunc
-	c.call(func() { cancel = c.cancel })
+	c.callStopping(func() { cancel = c.cancel })
 	if cancel == nil {
 		return "", errors.New("swarm: no swarm running")
 	}
@@ -296,7 +294,7 @@ func (c *Controller) Stop() (string, error) {
 	var ended []string
 	var proj todostore.Project
 	var architect string
-	c.call(func() {
+	c.callStopping(func() {
 		count = len(c.workers)
 		proj, architect = c.proj, c.architect
 		for _, w := range c.workers {
@@ -313,7 +311,7 @@ func (c *Controller) Stop() (string, error) {
 	if _, err := todostore.Reap(context.Background(), c.opts.TodoDB, proj, ended, architect); err != nil {
 		return "", fmt.Errorf("swarm: stop: release: %w", err)
 	}
-	c.call(func() {
+	c.callStopping(func() {
 		c.emit()
 		c.say(evt.LevelSuccess, "/swarm exited — %d %s stopped", count, plural(count, "worker"))
 	})
@@ -325,15 +323,7 @@ func (c *Controller) emit() {
 }
 
 func (c *Controller) status() core.SwarmStatus {
-	rows := c.List()
-	workers := make([]core.SwarmWorker, len(rows))
-	for i, w := range rows {
-		workers[i] = core.SwarmWorker{
-			ID: w.ID, Role: w.Role, Task: w.Task,
-			Heartbeat: w.Heartbeat, Done: w.Done, Failed: w.Failed, State: w.State,
-			Tool: w.Tool, ToolAt: w.ToolAt,
-		}
-	}
+	workers := c.List()
 	counts, err := todostore.Counts(context.Background(), c.opts.TodoDB, c.proj)
 	if err != nil {
 		return core.SwarmStatus{Workers: workers}

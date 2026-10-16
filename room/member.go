@@ -23,7 +23,6 @@ const (
 	PriorityOutside = 0
 	PriorityChild   = 20
 	PriorityFleet   = 30
-	PriorityReturn  = 70
 	PriorityTurn    = 90
 )
 
@@ -45,7 +44,6 @@ var codecOf = Codec
 
 type Member interface {
 	Id() int64
-	Seated() bool
 	Close()
 	Gone() <-chan struct{}
 	Ask(f func()) bool
@@ -67,12 +65,13 @@ type member struct {
 	listener net.Listener
 	mu       sync.Mutex
 	trs      []broadcast.Transport
+	closed   bool
 	gone     <-chan struct{}
 	cancel   context.CancelFunc
 }
 
 func New(home string, version string, places func(int64) int, effects func(self int64) broadcast.Effects, told func(evt.Notice)) (Member, error) {
-	dir := filepath.Join(home, "room")
+	dir := roomDir(home)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return nil, err
 	}
@@ -146,6 +145,10 @@ func New(home string, version string, places func(int64) int, effects func(self 
 				}
 				continue
 			}
+			if ctx.Err() != nil {
+				conn.Close()
+				return
+			}
 			tr := broadcast.NewPipeTransport(0, conn, enc)
 			m.track(tr)
 			claim.Accept(tr)
@@ -167,6 +170,8 @@ func New(home string, version string, places func(int64) int, effects func(self 
 	return m, nil
 }
 
+func roomDir(home string) string { return filepath.Join(home, "room") }
+
 func mine(id int64, members []int64) int {
 	n := 0
 	for _, other := range members {
@@ -181,6 +186,7 @@ func (m *member) Close() {
 	m.cancel()
 	m.listener.Close()
 	m.mu.Lock()
+	m.closed = true
 	trs := m.trs
 	m.trs = nil
 	m.mu.Unlock()
@@ -188,14 +194,18 @@ func (m *member) Close() {
 		tr.Close()
 	}
 	if m.version != "" {
-		os.Remove(filepath.Join(m.home, "room", strconv.FormatInt(m.id, 10)+sidecarExt))
+		os.Remove(filepath.Join(roomDir(m.home), strconv.FormatInt(m.id, 10)+sidecarExt))
 	}
 }
 
 func (m *member) track(tr broadcast.Transport) {
 	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.closed {
+		tr.Close()
+		return
+	}
 	m.trs = append(m.trs, tr)
-	m.mu.Unlock()
 }
 
 func (m *member) Id() int64 { return m.id }
@@ -213,11 +223,6 @@ func (m *member) Ask(f func()) bool {
 	}
 }
 
-func (m *member) Seated() bool {
-	seated := false
-	return m.Ask(func() { seated = m.claim.Seated() }) && seated
-}
-
 func (m *member) Claim(key int64, priority int, talk int64, posted func(mint broadcast.Mint, admitted bool)) {
 	m.claim.Claim(key, priority, talk, posted)
 }
@@ -229,25 +234,21 @@ func (m *member) Act(payload evt.Signal, key int64, priority int, posted func(ad
 }
 
 func (m *member) Holders(key int64) []broadcast.Operation {
-	var out []broadcast.Operation
-	if !m.Ask(func() { out = m.claim.Holders(key) }) {
-		return nil
-	}
-	return out
+	return ask(m, func() []broadcast.Operation { return m.claim.Holders(key) })
 }
 
 func (m *member) Waiting(key int64) []broadcast.Operation {
-	var out []broadcast.Operation
-	if !m.Ask(func() { out = m.claim.Waiting(key) }) {
-		return nil
-	}
-	return out
+	return ask(m, func() []broadcast.Operation { return m.claim.Waiting(key) })
 }
 
 func (m *member) Live() []int64 {
-	var out []int64
-	if !m.Ask(func() { out = m.claim.Live() }) {
-		return nil
+	return ask(m, func() []int64 { return m.claim.Live() })
+}
+
+func ask[T any](m *member, f func() T) T {
+	var out T
+	if !m.Ask(func() { out = f() }) {
+		return out
 	}
 	return out
 }
@@ -261,7 +262,7 @@ func (m *member) Admits(version string) bool {
 		return false
 	}
 	for _, peer := range peers {
-		if !declares(filepath.Join(m.home, "room", strconv.FormatInt(peer, 10)+sidecarExt), version) {
+		if !declares(filepath.Join(roomDir(m.home), strconv.FormatInt(peer, 10)+sidecarExt), version) {
 			return false
 		}
 	}

@@ -2,7 +2,6 @@ package tui
 
 import (
 	"strconv"
-	"strings"
 )
 
 const (
@@ -130,5 +129,3 @@ func displayWidth(s string) int {
 func RemoveColor(s string) string {
 	return sgrRe.ReplaceAllString(s, "")
 }
-
-var _ = strings.TrimSpace

@@ -314,8 +314,8 @@ func TestResumeRebuildsTheTranscript(t *testing.T) {
 	if asst.Reasoning != "the thinking behind the calls" {
 		t.Fatalf("the reasoning must rebuild: %q", asst.Reasoning)
 	}
-	if len(asst.ToolCalls) != 2 || asst.ToolCalls[0].ID != "c1" || asst.ToolCalls[1].ID != "c2" {
-		t.Fatalf("the calls must rebuild in row order: %+v", asst.ToolCalls)
+	if len(asst.ToolCalls) != 1 || asst.ToolCalls[0].ID != "c1" {
+		t.Fatalf("only the landed call rebuilds (the dangling one has no result to answer): %+v", asst.ToolCalls)
 	}
 	if string(asst.ToolCalls[0].Args) != `{"cmd":"ls"}` {
 		t.Fatalf("the args must reparse to raw JSON: %q", asst.ToolCalls[0].Args)
@@ -338,7 +338,7 @@ func TestResumeRebuildsTheTranscript(t *testing.T) {
 	}
 }
 
-func TestResumeDanglingCallSurvives(t *testing.T) {
+func TestResumeDropsTheDanglingCall(t *testing.T) {
 	db := openState(t)
 	seedSession(t, db, "resume-dangle")
 
@@ -364,8 +364,8 @@ func TestResumeDanglingCallSurvives(t *testing.T) {
 	for _, c := range asst.ToolCalls {
 		ids = append(ids, c.ID)
 	}
-	if strings.Join(ids, ",") != "c1,c2" {
-		t.Fatalf("both calls must survive the projection (dangling kept), got %v", ids)
+	if strings.Join(ids, ",") != "c1" {
+		t.Fatalf("the projection keeps only calls whose result landed, got %v", ids)
 	}
 	if toolForC2 {
 		t.Fatal("the dangling call must not gain a synthesized result")
@@ -382,5 +382,38 @@ func TestResumeUnknownIdFailsLoud(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "no such session") || !strings.Contains(err.Error(), "nope") {
 		t.Fatalf("the failure must name the gap and the id, got %v", err)
+	}
+}
+
+func TestResumeSkipsAnEmptiedAssistantRow(t *testing.T) {
+	db := openState(t)
+	ctx := context.Background()
+	sid := "resume-empty-assistant"
+	if err := state.RecordSession(ctx, db, sid, "/tmp/wt", "model-x", "0.1.0"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := state.RecordMessage(ctx, db, sid, "user", "go", nil, nil, nil); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := state.RecordMessage(ctx, db, sid, "assistant", "", nil, nil, nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := state.RecordToolCall(ctx, db, sid, 2, "c3", "bash", `{"cmd":"ls"}`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := state.RecordMessage(ctx, db, sid, "user", "after", nil, nil, nil); err != nil {
+		t.Fatal(err)
+	}
+	sess, err := state.Resume(ctx, db, sid)
+	if err != nil {
+		t.Fatalf("resume: %v", err)
+	}
+	for _, m := range sess.Messages {
+		if m.Role == core.RoleAssistant && m.Content == "" && m.Reasoning == "" && len(m.ToolCalls) == 0 {
+			t.Fatalf("an assistant row left with nothing after the dangling drop must not ride the transcript: %+v", m)
+		}
+	}
+	if len(sess.Messages) != 2 {
+		t.Fatalf("the transcript = %d messages, want the two user rows only", len(sess.Messages))
 	}
 }

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -13,6 +14,7 @@ import (
 	"testing"
 
 	"github.com/mrsirg97-rgb/rig/v3/config"
+	"github.com/mrsirg97-rgb/rig/v3/models"
 	"github.com/mrsirg97-rgb/rig/v3/plugins"
 	"github.com/mrsirg97-rgb/rig/v3/testenv"
 )
@@ -263,7 +265,7 @@ func TestMigrationRenamesTheOldHomeOnce(t *testing.T) {
 	if _, err := os.Stat(oldHome); !os.IsNotExist(err) {
 		t.Fatalf("the old home must be gone after the rename (stat: %v)", err)
 	}
-	cfg, err := config.Load(home, t.TempDir())
+	cfg, err := config.Load(home)
 	if err != nil {
 		t.Fatalf("config.Load: %v", err)
 	}
@@ -700,5 +702,34 @@ func TestCapPluginsAppliesInFileOrderAndNamesTheReason(t *testing.T) {
 	}
 	if got := capPlugins(reps, 0); got[3].Skipped {
 		t.Fatal("no cap, nothing skipped")
+	}
+}
+
+func TestAModelSwitchKeepsThePluginTools(t *testing.T) {
+	r := testRoot(nullFrontend{})
+	storeRoot(t, r)
+	r.pluginsHome = t.TempDir()
+	wire(r)
+	if _, err := r.swapPlugins(context.Background(), []plugins.Report{
+		{Name: "pluggy", Description: "a plugin", File: "pluggy.py", Schema: json.RawMessage(`{}`)},
+	}); err != nil {
+		t.Fatalf("swapPlugins: %v", err)
+	}
+	table, err := models.New(
+		defaultRow(),
+		models.Model{Role: models.RoleInteractive, ID: "other", Window: 65536, MaxTokens: 8192, Reserve: 8192, KeepRecent: 16384},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r.runtime = table
+	if _, ok := r.live.Tool("pluggy"); !ok {
+		t.Fatal("the plugin sits in the live table after the swap")
+	}
+	if _, err := r.switchModel(context.Background(), "other"); err != nil {
+		t.Fatalf("switchModel: %v", err)
+	}
+	if _, ok := r.live.Tool("pluggy"); !ok {
+		t.Fatal("a model switch must keep the plugin tools")
 	}
 }

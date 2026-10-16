@@ -15,6 +15,7 @@ import (
 
 	"github.com/mrsirg97-rgb/evt"
 	"github.com/mrsirg97-rgb/rig/v3/core"
+	"github.com/mrsirg97-rgb/rig/v3/provider/wire"
 )
 
 type wireStyle struct {
@@ -63,8 +64,12 @@ func (p *provider) Stream(ctx context.Context, req core.Request) (<-chan evt.Sig
 
 	ch := make(chan evt.Signal, 4)
 	emit := func(ev evt.Signal) {
-		ch <- ev
+		select {
+		case ch <- ev:
+		case <-ctx.Done():
+		}
 	}
+	send := func(ev evt.Signal) { ch <- ev }
 
 	go func() {
 		defer close(ch)
@@ -91,7 +96,7 @@ func (p *provider) Stream(ctx context.Context, req core.Request) (<-chan evt.Sig
 			resp, err := p.client.Do(httpReq)
 			if err != nil {
 				if ctx.Err() != nil {
-					emit(core.Done{Usage: usage, Model: model})
+					send(core.Done{Usage: usage, Model: model})
 					return
 				}
 				emit(core.Fault{Err: fmt.Errorf("openai: transport: %w", err)})
@@ -107,11 +112,11 @@ func (p *provider) Stream(ctx context.Context, req core.Request) (<-chan evt.Sig
 			}
 			if (resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode >= 500) && attempts < bound {
 				attempts++
-				wait := time.Duration(float64(p.base*(1<<(attempts-1))) * (1 + p.jitter()))
+				wait := wire.Backoff(p.base, p.jitter, attempts, resp.Header)
 				resp.Body.Close()
 				select {
 				case <-ctx.Done():
-					emit(core.Done{Usage: usage, Model: model})
+					send(core.Done{Usage: usage, Model: model})
 					return
 				case <-time.After(wait):
 				}
@@ -140,7 +145,7 @@ func (p *provider) Stream(ctx context.Context, req core.Request) (<-chan evt.Sig
 				pending   map[int]*core.ToolCall
 				finishing string
 			)
-			fault := func(err error) { emit(core.Fault{Err: err}) }
+			fault := func(err error) { send(core.Fault{Err: err}) }
 
 			for scanner.Scan() {
 				if idle != nil {
@@ -153,10 +158,9 @@ func (p *provider) Stream(ctx context.Context, req core.Request) (<-chan evt.Sig
 				if strings.HasPrefix(line, ":") {
 					continue
 				}
-				payload, ok := sseData(line)
+				payload, ok := wire.SSEData(line)
 				if !ok {
-					fault(fmt.Errorf("openai: unrecognized stream line: %q", line))
-					return
+					continue
 				}
 				if payload == "[DONE]" {
 					break
@@ -169,15 +173,21 @@ func (p *provider) Stream(ctx context.Context, req core.Request) (<-chan evt.Sig
 				if chunk.Model != "" {
 					model = chunk.Model
 				}
-				if chunk.Usage != nil {
-					usage = core.Usage{
-						Prompt:          chunk.Usage.PromptTokens,
-						Completion:      chunk.Usage.CompletionTokens,
-						CacheRead:       chunk.Usage.PromptTokensDetails.CachedTokens,
-						CacheWrite:      chunk.Usage.PromptTokensDetails.CacheWriteTokens,
-						Cost:            chunk.Usage.Cost,
-						PromptPerSecond: usage.PromptPerSecond,
-						DecodePerSecond: usage.DecodePerSecond,
+				if cu := chunk.Usage; cu != nil {
+					if cu.PromptTokens != 0 {
+						usage.Prompt = cu.PromptTokens
+					}
+					if cu.CompletionTokens != 0 {
+						usage.Completion = cu.CompletionTokens
+					}
+					if cu.PromptTokensDetails.CachedTokens != 0 {
+						usage.CacheRead = cu.PromptTokensDetails.CachedTokens
+					}
+					if cu.PromptTokensDetails.CacheWriteTokens != 0 {
+						usage.CacheWrite = cu.PromptTokensDetails.CacheWriteTokens
+					}
+					if cu.Cost != 0 {
+						usage.Cost = cu.Cost
 					}
 				}
 				if chunk.Timings != nil {
@@ -185,8 +195,11 @@ func (p *provider) Stream(ctx context.Context, req core.Request) (<-chan evt.Sig
 					usage.DecodePerSecond = chunk.Timings.PredictedPerSecond
 				}
 				for _, choice := range chunk.Choices {
-					if text, d := p.reasoningDelta(choice.Delta); text != "" || len(d) > 0 {
+					text, d := p.reasoningDelta(choice.Delta)
+					if len(d) > 0 {
 						emit(core.ReasoningDelta{Text: text, Details: d})
+					} else if text != "" {
+						emit(core.ReasoningDelta{Text: text})
 					}
 					if choice.Delta.Content != "" {
 						emit(core.TextDelta{Text: choice.Delta.Content})
@@ -202,7 +215,7 @@ func (p *provider) Stream(ctx context.Context, req core.Request) (<-chan evt.Sig
 
 			if err := scanner.Err(); err != nil {
 				if ctx.Err() != nil {
-					emit(core.Done{Usage: usage, Model: model})
+					send(core.Done{Usage: usage, Model: model})
 					return
 				}
 				if idleClosed.Load() {
@@ -214,7 +227,7 @@ func (p *provider) Stream(ctx context.Context, req core.Request) (<-chan evt.Sig
 			}
 			if finishing == "" {
 				if ctx.Err() != nil {
-					emit(core.Done{Usage: usage, Model: model})
+					send(core.Done{Usage: usage, Model: model})
 					return
 				}
 				fault(fmt.Errorf("openai: stream truncated: no finish marker"))
@@ -222,15 +235,18 @@ func (p *provider) Stream(ctx context.Context, req core.Request) (<-chan evt.Sig
 			}
 			for _, idx := range sortedPending(pending) {
 				call := pending[idx]
-				if len(call.Args) == 0 && finishing == "stop" {
-					call.Args = json.RawMessage("{}")
-				}
-				if !json.Valid(call.Args) && (len(call.Args) > 0 || finishing == "length") {
+				if len(call.Args) == 0 {
+					if finishing == "length" {
+						call.Cut = finishing
+					} else {
+						call.Args = json.RawMessage("{}")
+					}
+				} else if !json.Valid(call.Args) {
 					call.Cut = finishing
 				}
 				emit(core.ToolCallEvent{Call: *call})
 			}
-			emit(core.Done{StopReason: finishing, Usage: usage, Model: model})
+			send(core.Done{StopReason: finishing, Usage: usage, Model: model})
 			return
 		}
 	}()
@@ -243,13 +259,6 @@ func (p *provider) reasoningDelta(d wireDelta) (string, json.RawMessage) {
 		return d.Reasoning, d.ReasoningDetails
 	}
 	return d.ReasoningContent, nil
-}
-
-func sseData(line string) (string, bool) {
-	if !strings.HasPrefix(line, "data:") {
-		return "", false
-	}
-	return strings.TrimSpace(strings.TrimPrefix(line, "data:")), true
 }
 
 func accumulate(pending *map[int]*core.ToolCall, dc wireDeltaCall) {

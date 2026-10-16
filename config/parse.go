@@ -13,7 +13,7 @@ import (
 func parseSettings(data []byte, path string) (Settings, error) {
 	var keys map[string]json.RawMessage
 	if err := json.Unmarshal(data, &keys); err != nil {
-		return Settings{}, fmt.Errorf("config: %s: expected a JSON object", path)
+		return Settings{}, fmt.Errorf("config: %s: expected a JSON object: %w", path, err)
 	}
 	var unknown []string
 	for k := range keys {
@@ -134,7 +134,7 @@ func parseSettings(data []byte, path string) (Settings, error) {
 		}
 	}
 	if raw, ok := keys["sandboxBinds"]; ok {
-		v, err := jsonStringArray(raw, "sandboxBinds")
+		v, err := jsonStringArray(raw, "sandboxBinds", "paths")
 		if err != nil {
 			return Settings{}, fmt.Errorf("config: %s: %v", path, err)
 		}
@@ -222,10 +222,22 @@ func parseSettings(data []byte, path string) (Settings, error) {
 	if raw, ok := keys["plugins"]; ok {
 		var obj map[string]json.RawMessage
 		if err := json.Unmarshal(raw, &obj); err != nil {
-			return Settings{}, fmt.Errorf("config: %s: plugins: expected an object", path)
+			return Settings{}, fmt.Errorf("config: %s: plugins: expected an object: %w", path, err)
+		}
+		known := []string{"enabled", "max"}
+		knownSet := map[string]bool{"enabled": true, "max": true}
+		var unknown []string
+		for k := range obj {
+			if !knownSet[k] {
+				unknown = append(unknown, k)
+			}
+		}
+		if len(unknown) > 0 {
+			sort.Strings(unknown)
+			return Settings{}, fmt.Errorf("config: %s: plugins: unknown key %q (known: %s)", path, unknown[0], strings.Join(known, ", "))
 		}
 		if e, ok := obj["enabled"]; ok {
-			v, err := jsonStringArray(e, "plugins.enabled")
+			v, err := jsonStringArray(e, "plugins.enabled", "names")
 			if err != nil {
 				return Settings{}, fmt.Errorf("config: %s: %v", path, err)
 			}
@@ -382,11 +394,15 @@ func jsonInt(raw json.RawMessage) (int, error) {
 }
 
 func jsonFloat(raw json.RawMessage) (float64, error) {
-	var v float64
+	var v any
 	if err := json.Unmarshal(raw, &v); err != nil {
+		return 0, err
+	}
+	f, ok := v.(float64)
+	if !ok {
 		return 0, fmt.Errorf("expected a number, got %s", gojson(v))
 	}
-	return v, nil
+	return f, nil
 }
 
 func jsonBool(raw json.RawMessage) (bool, error) {
@@ -402,33 +418,17 @@ func jsonBool(raw json.RawMessage) (bool, error) {
 }
 
 func jsonAllow(raw json.RawMessage) ([]string, error) {
-	var v any
-	if err := json.Unmarshal(raw, &v); err != nil {
-		return nil, err
-	}
-	arr, ok := v.([]any)
-	if !ok {
-		return nil, fmt.Errorf("allow: expected an array of tool names, got %s", gojson(v))
-	}
-	out := make([]string, 0, len(arr))
-	for i, el := range arr {
-		str, ok := el.(string)
-		if !ok {
-			return nil, fmt.Errorf("allow[%d]: expected a string, got %s", i, gojson(el))
-		}
-		out = append(out, str)
-	}
-	return out, nil
+	return jsonStringArray(raw, "allow", "tool names")
 }
 
-func jsonStringArray(raw json.RawMessage, key string) ([]string, error) {
+func jsonStringArray(raw json.RawMessage, key, what string) ([]string, error) {
 	var v any
 	if err := json.Unmarshal(raw, &v); err != nil {
 		return nil, err
 	}
 	arr, ok := v.([]any)
 	if !ok {
-		return nil, fmt.Errorf("%s: expected an array of paths, got %s", key, gojson(v))
+		return nil, fmt.Errorf("%s: expected an array of %s, got %s", key, what, gojson(v))
 	}
 	out := make([]string, 0, len(arr))
 	for i, el := range arr {

@@ -1,4 +1,58 @@
 # Changelog
+## [3.2.4]: the audit comes due, round two
+
+The 3.2.3 read-only audit's HIGH and MED findings, fixed red-first
+across every package. `loop` prompts the frontend again when a turn
+faults — but the cancel-before-check made the fault arm unreachable, so
+a frontend that died re-prompted forever; the cancel now defers and a
+dead frontend ends the run. `rig serve` opened the todo store without
+`EdgeMigration` while `Open` stamps the version anyway: a v3 store
+joining a mesh was stamped v4 with `task_deps` missing — the serve open
+now carries the full set. Compaction re-minted the ordering facts: the
+snapshot never carried `createdSeq`/`finishedSeq`, so `/todo list` and
+the finished order drifted after every compact (the snapshot carries
+them now, and the inline complete/accept arms stamp `finishedSeq`);
+resume dropped its dangling tool calls instead of handing the provider
+a call with no result; `Move` to the same position logs no event;
+`Reap` mints releases in id order; a stat failure is no longer read as
+"file absent" at open or at migration. The scheduler re-reads the
+crontab before consuming a once-line, so a line installed while the
+worker ran survives the fire. `rem recall` refuses an unknown scope
+instead of defaulting to workspace. The swarm router claimed by scraping
+a prose reply — a compaction footer broke the handout — it takes a
+typed `ClaimTask` now; the reviewer re-arms the board after settling
+part of it and clears its verdict map when a fire dies; `Stop` mutates
+inline only as the writer it is, not as a second one. The web SSE hub
+kept cut marks only for the newest ring frame, so a reconnect after a
+finished run replayed text already shown, and a slow subscriber lost the
+newest delta — frames carry their cuts now and overflow drops the
+oldest. The outside claim gate honors the room's admission. `read` and
+`edit` refuse what they cannot bound: `/dev/zero`, FIFOs and 500 GB
+logs hung turns because the file tools were the only unbounded,
+ctx-blind I/O; the python kernel no longer boots and dispatches for a
+caller whose ctx died in the queue; a queued worker whose spawn errors
+publishes its `WorkerDone` instead of ghosting the band; todo release,
+retry and reject wake the router like create, complete and fail. A
+rate-limited gateway that names its wait is obeyed: `Retry-After` rides
+the retry sleep up to `MaxRetryAfterWait` (the header-timeout ceiling,
+five minutes) — a server saying "come back in four minutes" is waited
+out instead of hammered by a backoff that would give up first. The
+openai twin answers `tool_calls` with `{}` args instead of faulting,
+skips SSE field lines, merges usage instead of overwriting it, and
+anthropic settles prompt and cost on cancel and truncate. Aliases moved
+into the model `Table` — one resolution shape, collisions refused at
+load; provider slugs are validated by rule, not enum. `cmd/rig` parses
+subcommand flags properly, routes every store open through one door,
+and defers on exit because `rigMain` exists now. Plugins load siblings
+(`sys.path` gains the plugin dirs, `sys.modules` is inserted before
+`exec_module`, reload evicts every old stem). `room` reports a dead mesh
+link, refuses `Recent(-1)`, closes conns in flight at `Close`, and lost
+its dead vocabulary. evt 0.4.6 settles its callers on a stopped engine
+— the `<-Settled()` hang the drain and delegate could hit is gone — and
+a receiver ctx clears only its own receiver. The measured block is
+recomputed from the stores (60,752 turns) and the version test pins
+3.2.4.
+
 ## [3.2.3]: the row lets go
 
 A held item on the band row no longer stays for the rest of the session:

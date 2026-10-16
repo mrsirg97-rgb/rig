@@ -17,7 +17,6 @@ const (
 )
 
 type Door interface {
-	Id() int64
 	Close()
 	Machines() []string
 	Horizon() int64
@@ -50,7 +49,7 @@ type door struct {
 	in      map[int64]map[broadcast.Mint]*repost
 }
 
-func NewDoor(member Member, cfg broadcast.MeshConfig, remote, home []int64) (Door, error) {
+func NewDoor(member Member, cfg broadcast.MeshConfig, remote, home []int64, told func(evt.Notice)) (Door, error) {
 	engine := evt.NewEngine()
 	ctx, cancel := context.WithCancel(context.Background())
 	d := &door{
@@ -80,13 +79,15 @@ func NewDoor(member Member, cfg broadcast.MeshConfig, remote, home []int64) (Doo
 	}
 	probe.Close()
 	d.mesh = broadcast.NewMesh(broadcast.MemberOf([]byte(cfg.Machine)), cfg)
-	go func() { _ = d.mesh.Start(ctx) }()
+	go func() {
+		if err := d.mesh.Start(ctx); err != nil && ctx.Err() == nil && told != nil {
+			told(evt.Notice{Source: "room", Level: evt.LevelError, Text: "mesh: the gossip link died: " + err.Error()})
+		}
+	}()
 	go engine.Start(ctx)
 	go d.poll(ctx)
 	return d, nil
 }
-
-func (d *door) Id() int64 { return d.member.Id() }
 
 func (d *door) Machines() []string { return d.mesh.Machines() }
 

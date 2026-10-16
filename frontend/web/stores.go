@@ -47,7 +47,7 @@ func (c *storeCache) state(cwd string) (store.DB, error) {
 
 func (c *storeCache) todo(cwd string) (store.DB, error) {
 	path := todostore.FilePath(c.home)
-	return c.open(path, todostore.Statements(), todostore.SchemaVersion, todostore.Migration(cwd, filepath.Dir(path)), todostore.ReviewMigration)
+	return c.open(path, todostore.Statements(), todostore.SchemaVersion, todostore.Migration(cwd, filepath.Dir(path)), todostore.ReviewMigration, todostore.EdgeMigration)
 }
 
 func (c *storeCache) scheduler() (store.DB, error) {

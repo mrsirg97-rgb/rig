@@ -240,7 +240,10 @@ func foldLegacy(tx *sql.Tx, dir string) (int, int, error) {
 		for _, suffix := range []string{"", "-wal", "-shm"} {
 			src := filepath.Join(dir, name+suffix)
 			if _, err := os.Stat(src); err != nil {
-				continue
+				if os.IsNotExist(err) {
+					continue
+				}
+				return 0, 0, fmt.Errorf("todo: migration: %w", err)
 			}
 			if err := os.Rename(src, filepath.Join(dir, name+".migrated"+suffix)); err != nil {
 				return 0, 0, fmt.Errorf("todo: migration: %w", err)

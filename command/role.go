@@ -9,7 +9,7 @@ import (
 
 type roleCmd struct{}
 
-func (roleCmd) Sub() []Sub { return RoleHints() }
+func (roleCmd) Sub() []Sub { return roleSubs() }
 
 func (roleCmd) Name() string { return "role" }
 
@@ -18,7 +18,7 @@ func (roleCmd) Description() string {
 }
 
 func (roleCmd) Run(ctx context.Context, args string, env any) (string, error) {
-	e, err := EnvOf(env)
+	e, err := envOf(env)
 	if err != nil {
 		return "", err
 	}

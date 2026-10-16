@@ -94,3 +94,12 @@ func TestServedRequestsReadOnlyTheFilesTail(t *testing.T) {
 		t.Fatalf("the newest row must be last: %+v", got[len(got)-1])
 	}
 }
+
+func TestRecentAsksForNoRecordsAndGetsNone(t *testing.T) {
+	home := t.TempDir()
+	for _, n := range []int{0, -5} {
+		if got := Recent(home, "model", n); got != nil {
+			t.Fatalf("Recent with n=%d returns %v, want none (a negative ask must not panic)", n, got)
+		}
+	}
+}

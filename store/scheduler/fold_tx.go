@@ -75,7 +75,6 @@ func maybeCompact(bound context.Context, tx *sql.Tx, f *fold, session string) er
 	if e != nil {
 		return e
 	}
-	f.compactSeq = seq
 	f.maxSeq = seq
 	for _, j := range f.jobs {
 		j.CreatedSeq = seq

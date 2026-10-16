@@ -12,6 +12,7 @@ import (
 
 	"github.com/mrsirg97-rgb/rig/v3/core"
 	"github.com/mrsirg97-rgb/rig/v3/provider/openai"
+	openaiwire "github.com/mrsirg97-rgb/rig/v3/provider/wire"
 )
 
 func sseServer(t *testing.T, body string) *httptest.Server {
@@ -336,7 +337,7 @@ func TestAStallingServerBoundsTheWaitForHeaders(t *testing.T) {
 		srv.Close()
 	}()
 
-	p := openai.NewWithHeaderTimeout(srv.URL, "local", 50*time.Millisecond)
+	p := openai.NewWithConfig(openai.Config{BaseURL: srv.URL, Model: "local", HeaderTimeout: 50 * time.Millisecond})
 	start := time.Now()
 	events, err := drain(t, context.Background(), p, userReq())
 	if err != nil {
@@ -370,7 +371,7 @@ func TestALocalRowKeepsWaitingForHeadersPastTheOldBound(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	tight := openai.NewWithHeaderTimeout(srv.URL, "local", 50*time.Millisecond)
+	tight := openai.NewWithConfig(openai.Config{BaseURL: srv.URL, Model: "local", HeaderTimeout: 50 * time.Millisecond})
 	events, err := drain(t, context.Background(), tight, userReq())
 	if err != nil {
 		t.Fatalf("stream: %v", err)
@@ -387,7 +388,7 @@ func TestALocalRowKeepsWaitingForHeadersPastTheOldBound(t *testing.T) {
 	loose := openai.NewWithConfig(openai.Config{
 		BaseURL:       srv.URL,
 		Model:         "local",
-		HeaderTimeout: openai.HeaderTimeoutOff,
+		HeaderTimeout: openaiwire.HeaderTimeoutOff,
 	})
 	events, err = drain(t, context.Background(), loose, userReq())
 	if err != nil {

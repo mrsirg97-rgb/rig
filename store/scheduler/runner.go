@@ -422,7 +422,11 @@ func RunJob(key string, opts RunOpts) error {
 	}
 
 	if job.At != nil {
-		if err := installRemoved(opts.Crontab, text, key, opts.RigHome); err != nil {
+		fresh, ferr := opts.Crontab.List()
+		if ferr != nil {
+			return fmt.Errorf("run-job: crontab: %w", ferr)
+		}
+		if err := installRemoved(opts.Crontab, fresh, key, opts.RigHome); err != nil {
 			return err
 		}
 	}

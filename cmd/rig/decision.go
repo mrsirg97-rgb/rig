@@ -60,13 +60,9 @@ func (r *dbReviews) Settled(ctx context.Context, site string, q decision.Questio
 	return decisionstore.Settled(ctx, r.db, site, q, state)
 }
 
-func (r *root) reviewFire(home string, db store.DB, swapURL, self, cfgDir, sandbox string, sandboxBinds []string) decision.Fire {
+func (r *root) reviewFire(home string, db store.DB, swapURL, self, cfgDir, sandbox string, sandboxBinds []string, del func(sched.DelegateInput) (sched.DelegateResult, error)) decision.Fire {
 	return func(ctx context.Context, prompt string, voice broadcast.Member) (string, error) {
-		delegate := r.delegate
-		if delegate == nil {
-			delegate = sched.Delegate
-		}
-		res, err := delegate(sched.DelegateInput{
+		res, err := del(sched.DelegateInput{
 			DB:            db,
 			Home:          home,
 			Session:       core.NewSession().ID,

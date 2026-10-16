@@ -43,6 +43,9 @@ func Record(home, model string, s Served) error {
 }
 
 func Recent(home, model string, n int) []Served {
+	if n <= 0 {
+		return nil
+	}
 	out := []Served{}
 	f, err := os.Open(servedPath(home, model))
 	if err != nil {

@@ -17,7 +17,7 @@ func (compactCmd) Run(ctx context.Context, args string, env any) (string, error)
 	if args != "" {
 		return "", errors.New("compact: usage: compact")
 	}
-	e, err := EnvOf(env)
+	e, err := envOf(env)
 	if err != nil {
 		return "", err
 	}

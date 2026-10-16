@@ -47,7 +47,7 @@ func decisionTrain(args []string) int {
 		fmt.Fprintln(os.Stderr, "rig:", err)
 		return 1
 	}
-	cfg, err := config.Load(cfgDir, cwd)
+	cfg, err := config.Load(cfgDir)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "rig:", err)
 		return 1
@@ -64,9 +64,8 @@ func decisionTrain(args []string) int {
 		fmt.Fprintln(os.Stderr, "rig: decision train:", err)
 		return 1
 	}
-	decdb, _, _, err := store.Open(decPath, decisionstore.Statements(), decisionstore.SchemaVersion, decisionstore.Migration())
+	decdb, err := openStore("decision", decPath, decisionstore.Statements(), decisionstore.SchemaVersion, decisionstore.Migration())
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "rig: decision train: decision store:", err)
 		return 1
 	}
 	defer decdb.DB.Close()

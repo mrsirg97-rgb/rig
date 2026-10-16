@@ -27,6 +27,7 @@ import (
 	"github.com/mrsirg97-rgb/rig/v3/policy/operator"
 	"github.com/mrsirg97-rgb/rig/v3/provider/anthropic"
 	"github.com/mrsirg97-rgb/rig/v3/provider/openai"
+	prowire "github.com/mrsirg97-rgb/rig/v3/provider/wire"
 	machineroom "github.com/mrsirg97-rgb/rig/v3/room"
 	"github.com/mrsirg97-rgb/rig/v3/store"
 	remdom "github.com/mrsirg97-rgb/rig/v3/store/rem/domain"
@@ -44,7 +45,6 @@ type root struct {
 	kids      *children
 	priority  int
 	agents    string
-	project   string
 	allow     []string
 	retries   int
 	rounds    int
@@ -62,13 +62,11 @@ type root struct {
 
 	drec decision.Recorder
 
-	proposals  decision.Proposer
-	decQ       *decision.Queue
-	decRev     *decision.Reviewer
-	packScorer *decision.PackScorer
-	decide     decision.Decide
-	delegate   func(sched.DelegateInput) (sched.DelegateResult, error)
-	eco        *plugins.Ecosystem
+	proposals decision.Proposer
+	decQ      *decision.Queue
+	decRev    *decision.Reviewer
+	decide    decision.Decide
+	eco       *plugins.Ecosystem
 
 	pluginsDir string
 	rigHome    string
@@ -150,11 +148,6 @@ func wire(r *root) *rig.Kernel {
 		mw = r.canonicalMiddleware()
 	}
 
-	project, err := config.ProjectAgents(r.rigHome, r.cwd)
-	if err != nil {
-		panic("rig: wire: " + err.Error())
-	}
-	r.project = project
 	r.fullSystem = r.buildSystem()
 	provider, pol := r.buildPair()
 	fe := r.frontend()
@@ -185,6 +178,10 @@ func (r *root) buildSystem() string {
 	if mw == nil {
 		mw = r.canonicalMiddleware()
 	}
+	project, err := config.ProjectAgents(r.rigHome, r.cwd)
+	if err != nil {
+		panic("rig: system: " + err.Error())
+	}
 	parts := make([]string, 0, 6)
 	if r.system != "" {
 		parts = append(parts, r.system)
@@ -198,8 +195,8 @@ func (r *root) buildSystem() string {
 	if r.agents != "" {
 		parts = append(parts, r.agents)
 	}
-	if r.project != "" {
-		parts = append(parts, r.project)
+	if project != "" {
+		parts = append(parts, project)
 	}
 	parts = append(parts, asyncSection())
 	parts = append(parts, idsSection())
@@ -302,7 +299,7 @@ func (r *root) menuAllow() []string {
 }
 
 func (r *root) buildProvider() core.Provider {
-	headerTimeout := openai.HeaderTimeoutOff
+	headerTimeout := prowire.HeaderTimeoutOff
 	if r.row.Remote {
 		headerTimeout = 0
 	}
@@ -390,11 +387,6 @@ func (r *root) swapIn(s *core.Session, rec2 *state.Recorder) {
 	r.k.Frontend = r.frontend()
 	r.k.Session = s
 
-	project, err := config.ProjectAgents(r.rigHome, r.cwd)
-	if err != nil {
-		panic("rig: wire: " + err.Error())
-	}
-	r.project = project
 	r.fullSystem = r.buildSystem()
 	provider, pol := r.buildPair()
 	r.k.Provider = provider

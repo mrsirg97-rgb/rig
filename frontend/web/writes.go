@@ -90,7 +90,7 @@ func (s *Server) handleSchedulerCreate(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handlePluginsCreate(w http.ResponseWriter, r *http.Request) {
-	ctx, cancel := s.readCtx(r)
+	_, cancel := s.readCtx(r)
 	defer cancel()
 	if !s.originOK(r) {
 		writeErr(w, http.StatusForbidden, "origin mismatch (same-origin only)")
@@ -178,6 +178,5 @@ func (s *Server) handlePluginsCreate(w http.ResponseWriter, r *http.Request) {
 		rel = path
 	}
 	reply := "created '" + name + "' in " + filepath.ToSlash(rel) + " (the pending zone: move it into plugins/ and reload to load)"
-	_ = ctx
 	writeJSON(w, http.StatusOK, map[string]any{"name": name, "file": path, "reply": reply})
 }

@@ -9,10 +9,6 @@ func wireMessages(msgs []core.Message) []wireMessage {
 	return wireMessagesStyled(msgs, nil, wireStyle{reasoning: "reasoning_content"})
 }
 
-func wireMessagesWith(msgs []core.Message, imgs *imageStore) []wireMessage {
-	return wireMessagesStyled(msgs, imgs, wireStyle{reasoning: "reasoning_content"})
-}
-
 func wireMessagesStyled(msgs []core.Message, imgs *imageStore, style wireStyle) []wireMessage {
 	out := make([]wireMessage, 0, len(msgs))
 	var pending []orderedMessage

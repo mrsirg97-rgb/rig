@@ -70,7 +70,7 @@ func (pluginsCmd) Run(ctx context.Context, args string, env any) (string, error)
 }
 
 func move(ctx context.Context, env any, verb, name, from, to string) (string, error) {
-	e, err := EnvOf(env)
+	e, err := envOf(env)
 	if err != nil {
 		return "", err
 	}
@@ -93,7 +93,7 @@ func move(ctx context.Context, env any, verb, name, from, to string) (string, er
 }
 
 func listPlugins(env any) (string, error) {
-	e, err := EnvOf(env)
+	e, err := envOf(env)
 	if err != nil {
 		return "", err
 	}
@@ -149,7 +149,7 @@ func pluginID(p PluginInfo) string {
 }
 
 func reload(env any, ctx context.Context) (string, error) {
-	e, err := EnvOf(env)
+	e, err := envOf(env)
 	if err != nil {
 		return "", err
 	}
@@ -160,7 +160,7 @@ func reload(env any, ctx context.Context) (string, error) {
 }
 
 func create(env any, ctx context.Context, text string) (string, error) {
-	e, err := EnvOf(env)
+	e, err := envOf(env)
 	if err != nil {
 		return "", err
 	}
@@ -178,7 +178,7 @@ func create(env any, ctx context.Context, text string) (string, error) {
 }
 
 func zoneList(env any, zone string) (string, error) {
-	e, err := EnvOf(env)
+	e, err := envOf(env)
 	if err != nil {
 		return "", err
 	}
@@ -229,7 +229,7 @@ func descriptionOf(path string) string {
 }
 
 func approve(ctx context.Context, env any, name string) (string, error) {
-	e, err := EnvOf(env)
+	e, err := envOf(env)
 	if err != nil {
 		return "", err
 	}

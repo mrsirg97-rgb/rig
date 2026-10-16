@@ -10,36 +10,40 @@ import (
 	"github.com/mrsirg97-rgb/rig/v3/frontend/tui"
 	"github.com/mrsirg97-rgb/rig/v3/frontend/web"
 	"github.com/mrsirg97-rgb/rig/v3/store"
+	"github.com/mrsirg97-rgb/rig/v3/store/state"
 )
 
 func tuiStatusIn(r *root, db store.DB) func(context.Context) tui.StatusIn {
-	return func(context.Context) tui.StatusIn {
-		return r.statusNow(db)
+	return func(ctx context.Context) tui.StatusIn {
+		b, _ := r.statusNow(ctx, db)
+		return b
 	}
 }
 
-func (r *root) statusNow(db store.DB) tui.StatusIn {
+func (r *root) statusNow(ctx context.Context, db store.DB) (tui.StatusIn, error) {
 	eff := r.effort
 	if eff == "" {
 		eff = r.row.Effort
 	}
 	b := tui.StatusIn{Model: r.activeID, Effort: eff, Window: r.row.Window, Role: r.role, Approve: r.approve, Workers: "resident"}
 	if r.session == nil {
-		return b
+		return b, nil
 	}
 	b.Session = r.session.ID
-	if err := db.QueryRowContext(context.Background(),
-		`SELECT COALESCE(SUM(u.prompt), 0), COALESCE(SUM(u.completion), 0), COALESCE(SUM(u.cache_read), 0), COALESCE(SUM(u.cost), 0)
-		 FROM usage u JOIN messages m ON m.seq = u.message_seq
-		 WHERE m.session_id = ?`, r.session.ID).Scan(&b.Up, &b.Down, &b.CacheRead, &b.Cost); err != nil {
-		return b
+	totals, err := state.UsageTotalsFor(ctx, db, r.session.ID)
+	if err != nil {
+		return b, err
 	}
-	return b
+	b.Up, b.Down, b.CacheRead, b.Cost = totals.Prompt, totals.Completion, totals.CacheRead, totals.Cost
+	return b, nil
 }
 
 func (r *root) statusSnapshot(ctx context.Context, db store.DB) (tui.StatusIn, bool) {
 	done := make(chan tui.StatusIn, 1)
-	r.engine.Add(evt.Func(func(context.Context) { done <- r.statusNow(db) }), rig.PriorityRead)
+	r.engine.Add(evt.Func(func(engineCtx context.Context) {
+		b, _ := r.statusNow(engineCtx, db)
+		done <- b
+	}), rig.PriorityRead)
 	select {
 	case s := <-done:
 		return s, true

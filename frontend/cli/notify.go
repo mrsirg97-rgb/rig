@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"github.com/mrsirg97-rgb/rig/v3/core"
 	"io"
-	"strconv"
 
 	"github.com/mrsirg97-rgb/evt"
 )
@@ -42,8 +41,8 @@ func (c *cli) Notify(ev evt.Signal) {
 	case core.Compacted:
 
 		fmt.Fprintf(c.out, "⧉ compact: -%s kept %s · summary ↑%s ↓%s\n",
-			formatTokens(e.Dropped), formatTokens(e.Kept),
-			formatTokens(e.Usage.Prompt), formatTokens(e.Usage.Completion))
+			core.FormatTokens(e.Dropped), core.FormatTokens(e.Kept),
+			core.FormatTokens(e.Usage.Prompt), core.FormatTokens(e.Usage.Completion))
 	case core.Fault:
 		fmt.Fprintf(c.out, "\n[fault] %v\n", e.Err)
 	case evt.Notice:
@@ -63,20 +62,7 @@ func (c *cli) Notify(ev evt.Signal) {
 			hit = int(int64(c.cacheRead) * 100 / int64(c.prompt))
 		}
 		fmt.Fprintf(c.out, "↑%s ↓%s · cache %s %d%%\n",
-			formatTokens(c.prompt), formatTokens(c.completion), formatTokens(c.cacheRead), hit)
+			core.FormatTokens(c.prompt), core.FormatTokens(c.completion), core.FormatTokens(c.cacheRead), hit)
 		c.prompt, c.completion, c.cacheRead = 0, 0, 0
-	}
-}
-
-func formatTokens(n int) string {
-	switch {
-	case n < 1000:
-		return strconv.Itoa(n)
-	case n < 10000:
-		return fmt.Sprintf("%.1fk", float64(n)/1000)
-	case n < 1000000:
-		return fmt.Sprintf("%dk", (n+500)/1000)
-	default:
-		return fmt.Sprintf("%.1fM", float64(n)/1000000)
 	}
 }

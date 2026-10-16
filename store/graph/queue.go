@@ -19,7 +19,7 @@ import (
 
 const QueueCap = 256
 
-const ReadCap = 1 << 20
+const ReadCeiling = 1 << 20
 
 type Queue struct {
 	ch      chan string
@@ -68,8 +68,8 @@ func NewQueue(home string, voice broadcast.Member, opts ...Option) *Queue {
 		said:    map[string]bool{},
 		lspGone: map[string]bool{},
 		servers: defaultServers(),
-		itemCap: ReadCap,
-		loadCap: ReadCap,
+		itemCap: ReadCeiling,
+		loadCap: ReadCeiling,
 	}
 	for _, opt := range opts {
 		opt(q)

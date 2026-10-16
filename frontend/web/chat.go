@@ -17,7 +17,6 @@ type chat struct {
 	wake  chan struct{}
 
 	mu          sync.Mutex
-	reading     bool
 	cancel      context.CancelFunc
 	turnCtx     context.Context
 	steeredLive bool
@@ -32,7 +31,7 @@ type chat struct {
 
 	hub  sync.Mutex
 	subs map[chan []byte]struct{}
-	ring [][]byte
+	ring []frame
 	seq  int64
 	last map[string]any
 	cuts []cut
@@ -86,11 +85,9 @@ func (c *chat) Input(ctx context.Context) (string, error) {
 	if cancel, ok := core.InterruptFrom(ctx); ok {
 		c.cancel = cancel
 	}
-	c.reading = true
 	c.mu.Unlock()
 	defer func() {
 		c.mu.Lock()
-		c.reading = false
 		c.mu.Unlock()
 	}()
 	for {

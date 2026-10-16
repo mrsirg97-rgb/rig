@@ -48,21 +48,7 @@ func Zone(home, dir, zone string) ([]string, error) {
 }
 
 func List(home, dir string) ([]string, error) {
-	zoneDir := filepath.Join(home, dir)
-	entries, err := os.ReadDir(zoneDir)
-	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return nil, nil
-		}
-		return nil, err
-	}
-	var files []string
-	for _, e := range entries {
-		if !e.IsDir() && strings.HasSuffix(e.Name(), ".py") {
-			files = append(files, filepath.Join(zoneDir, e.Name()))
-		}
-	}
-	return files, nil
+	return Zone(home, dir, "")
 }
 
 func Check(reports []Report, natives map[string]bool) error {
@@ -128,7 +114,7 @@ func WritePending(home, dir string, natives map[string]bool, name, source string
 		return "", false, fmt.Errorf("the source is required")
 	}
 	if len(source) > maxSourceBytes {
-		return "", false, fmt.Errorf("the source is %d bytes; the ceiling is %d bytes (the tool-result cap)", len(source), maxSourceBytes)
+		return "", false, fmt.Errorf("the source is %d bytes; the ceiling is %d bytes (the source ceiling: discovery reads a plugin whole)", len(source), maxSourceBytes)
 	}
 	if err := contractRefusal(c, source); err != nil {
 		return "", false, err

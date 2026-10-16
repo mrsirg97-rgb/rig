@@ -43,6 +43,11 @@ type RecallInput struct {
 }
 
 func Recall(ctx context.Context, db store.DB, cwd string, in RecallInput) (string, []Hit, error) {
+	switch in.Scope {
+	case "", "workspace", "global", "all":
+	default:
+		return "", nil, fmt.Errorf("rem: unknown recall scope %q (the internal vocabulary is workspace, global, or all)", in.Scope)
+	}
 	k := in.K
 	if k <= 0 {
 		k = 10

@@ -54,22 +54,23 @@ import (
 	webtool "github.com/mrsirg97-rgb/rig/v3/tool/web"
 )
 
-const Version = "3.2.3"
+const Version = "3.2.4"
 
-func claimPriority(prompt string, served bool) int {
+func claimPriority(prompt string, served bool) (int, error) {
 	if v := os.Getenv("RIG_PRIORITY"); v != "" {
 		n, err := strconv.Atoi(v)
-		if err == nil && n >= 0 {
-			return n
+		if err != nil || n < 0 {
+			return 0, fmt.Errorf("RIG_PRIORITY: expected a non-negative integer, got %q", v)
 		}
+		return n, nil
 	}
 	if served {
-		return machineroom.PriorityOutside
+		return machineroom.PriorityOutside, nil
 	}
 	if prompt != "" {
-		return machineroom.PriorityFleet
+		return machineroom.PriorityFleet, nil
 	}
-	return machineroom.PriorityTurn
+	return machineroom.PriorityTurn, nil
 }
 
 func openStore(label, path string, statements []string, version int, migrate ...func(*sql.Tx, int, int) (string, error)) (store.DB, error) {
@@ -91,26 +92,26 @@ func openStore(label, path string, statements []string, version int, migrate ...
 	return db, nil
 }
 
-func main() {
+func rigMain() int {
 	if i := execDoor(os.Args, os.Getenv(sched.LandlockEnv)); i >= 0 {
 		if err := sched.ApplyLandlock(os.Getenv(sched.LandlockEnv)); err != nil {
 			fmt.Fprintln(os.Stderr, "rig:", err)
-			os.Exit(1)
+			return 1
 		}
 		runtime.LockOSThread()
 		argv := os.Args[i+1:]
 		if len(argv) == 0 {
 			fmt.Fprintln(os.Stderr, "rig: -exec needs a command")
-			os.Exit(1)
+			return 1
 		}
 		resolved, err := exec.LookPath(argv[0])
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "rig: -exec: %v\n", err)
-			os.Exit(1)
+			return 1
 		}
 		if err := syscall.Exec(resolved, argv, os.Environ()); err != nil {
 			fmt.Fprintf(os.Stderr, "rig: -exec: %v\n", err)
-			os.Exit(1)
+			return 1
 		}
 	}
 
@@ -118,6 +119,8 @@ func main() {
 	model := flag.String("model", "", "model name; precedence: flag > RIG_MODEL > settings.json model (no default; a run without one refuses)")
 	system := flag.String("system", "", "system prompt; precedence: flag > RIG_SYSTEM > settings.json system > the embedded default")
 	allow := flag.String("allow", "", "comma-separated allow-list of tool names; precedence: flag > RIG_ALLOW > settings.json allow > the embedded default")
+	rounds := flag.Int("rounds", 0, "tool-call rounds per turn (0 is no cap); precedence: flag > RIG_ROUNDS > settings.json rounds")
+	resultCap := flag.Int("result-cap", 0, "bytes a tool result may carry; precedence: flag > RIG_RESULT_CAP > settings.json resultCap")
 	retries := flag.Int("retries", 0, "repetition bound on identical failing calls (cleared on success); precedence: flag > RIG_RETRIES > settings.json retries > the embedded default")
 	effort := flag.String("effort", "", "reasoning effort level for the session's requests; precedence: flag > RIG_EFFORT > the model row")
 	prompt := flag.String("p", "", "one-shot: run the single prompt and exit (the scheduler's worker path)")
@@ -130,7 +133,7 @@ func main() {
 
 	if *showVersion {
 		fmt.Printf("rig %s\n", Version)
-		return
+		return 0
 	}
 
 	if *updateFlag {
@@ -138,7 +141,7 @@ func main() {
 		if err == nil {
 			if home, herr := rigHome(); herr == nil {
 				cfg.home = home
-				if loaded, lerr := config.Load(home, "."); lerr == nil {
+				if loaded, lerr := config.Load(home); lerr == nil {
 					cfg.key = loaded.Settings.UpdateKey
 				}
 			}
@@ -149,9 +152,9 @@ func main() {
 		}
 		if err != nil {
 			fmt.Fprintln(os.Stderr, "rig:", err)
-			os.Exit(1)
+			return 1
 		}
-		return
+		return 0
 	}
 
 	if *prompt != "" {
@@ -175,6 +178,13 @@ func main() {
 		serveAddr = addr
 		if *prompt != "" {
 			fmt.Fprintln(os.Stderr, "rig serve: -p is not available with serve (the page is the prompt)")
+			os.Exit(2)
+		}
+	}
+
+	if serveAddr == "" {
+		if rest := flag.Args(); len(rest) > 0 {
+			fmt.Fprintf(os.Stderr, "rig: %q is not a command (run-job, decision, serve)\n", rest[0])
 			os.Exit(2)
 		}
 	}
@@ -207,18 +217,18 @@ func main() {
 	cwd, err := os.Getwd()
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "rig:", err)
-		os.Exit(1)
+		return 1
 	}
 
 	cfgDir, err := rigHome()
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "rig:", err)
-		os.Exit(1)
+		return 1
 	}
-	cfg, err := config.Load(cfgDir, cwd)
+	cfg, err := config.Load(cfgDir)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "rig:", err)
-		os.Exit(1)
+		return 1
 	}
 	for _, n := range cfg.Notices {
 		fmt.Fprintln(os.Stderr, "rig:", n)
@@ -242,7 +252,7 @@ func main() {
 	}
 	if modelID == "" {
 		fmt.Fprintln(os.Stderr, "rig: no model: set --model, RIG_MODEL, or the model key in settings.json; there is no embedded default")
-		os.Exit(1)
+		return 1
 	}
 	systemPrompt := envOr("RIG_SYSTEM", cfg.Settings.System)
 	if passed["system"] {
@@ -259,35 +269,53 @@ func main() {
 			allowList = splitCSV(*allow)
 		}
 	}
-	envInt := func(key string, def int) int {
+	envInt := func(key string, def int) (int, bool) {
 		v := os.Getenv(key)
 		if v == "" {
-			return def
+			return def, true
 		}
 		n, aerr := strconv.Atoi(v)
 		if aerr != nil {
 			fmt.Fprintf(os.Stderr, "rig: %s: expected an integer, got %q\n", key, v)
-			os.Exit(1)
+			return 0, false
 		}
 		if n < 0 {
 			fmt.Fprintf(os.Stderr, "rig: %s: expected a non-negative integer, got %d\n", key, n)
-			os.Exit(1)
+			return 0, false
 		}
-		return n
+		return n, true
 	}
-	retriesN := envInt("RIG_RETRIES", cfg.Settings.Retries)
-	if passed["retries"] {
-		retriesN = *retries
+	retriesN := *retries
+	if !passed["retries"] {
+		n, ok := envInt("RIG_RETRIES", cfg.Settings.Retries)
+		if !ok {
+			return 1
+		}
+		retriesN = n
 	}
-	roundsN := envInt("RIG_ROUNDS", cfg.Settings.Rounds)
-	resultCapN := envInt("RIG_RESULT_CAP", cfg.Settings.ResultCap)
+	roundsN := *rounds
+	if !passed["rounds"] {
+		n, ok := envInt("RIG_ROUNDS", cfg.Settings.Rounds)
+		if !ok {
+			return 1
+		}
+		roundsN = n
+	}
+	resultCapN := *resultCap
+	if !passed["result-cap"] {
+		n, ok := envInt("RIG_RESULT_CAP", cfg.Settings.ResultCap)
+		if !ok {
+			return 1
+		}
+		resultCapN = n
+	}
 
 	row := resolveModel(modelID, cfg.Models)
 	if os.Getenv(sched.DelegateEnv) != "" {
 		row = row.Capped(cfg.Settings.WorkerWindow)
 		if err := row.Check(); err != nil {
 			fmt.Fprintf(os.Stderr, "rig: settings workerWindow %d: %v\n", cfg.Settings.WorkerWindow, err)
-			os.Exit(1)
+			return 1
 		}
 	}
 
@@ -298,7 +326,7 @@ func main() {
 	if effortLevel != "" {
 		if err := command.CheckEffort(row.Efforts, effortLevel, row.ID); err != nil {
 			fmt.Fprintln(os.Stderr, "rig:", err)
-			os.Exit(1)
+			return 1
 		}
 	}
 
@@ -315,7 +343,7 @@ func main() {
 	})
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "rig:", err)
-		os.Exit(1)
+		return 1
 	}
 	defer machine.Close()
 	defer kids.close()
@@ -327,7 +355,7 @@ func main() {
 
 	rdb, err := openStore("rem", remstore.FilePath(cfgDir), remstore.Statements(), remstore.SchemaVersion, remstore.Migration(cwd))
 	if err != nil {
-		os.Exit(1)
+		return 1
 	}
 	defer rdb.DB.Close()
 
@@ -335,11 +363,11 @@ func main() {
 	self, err := os.Executable()
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "rig:", err)
-		os.Exit(1)
+		return 1
 	}
 	scdb, err := openStore("scheduler", filepath.Join(schedHome, "global.sqlite"), sched.Statements(), sched.SchemaVersion, sched.Migration(schedHome, cfgDir, self+" run-job", sched.RealCrontab("")))
 	if err != nil {
-		os.Exit(1)
+		return 1
 	}
 	defer scdb.DB.Close()
 
@@ -352,26 +380,21 @@ func main() {
 	defer stop()
 
 	rt := runtimeTable(cfg.Models, modelID, row)
+	wiring := workerWiring{
+		DB: scdb, Home: schedHome, RigHome: cfgDir, StateDir: filepath.Join(cfgDir, "sessions"),
+		SwapURL: swapURL, WorkerCmd: []string{self}, DefaultModel: modelID,
+		Sandbox: cfg.Settings.Sandbox, SandboxBinds: cfg.Settings.SandboxBinds, Allow: allowList,
+		Fetch: sched.RealFetch(0), Spawn: sched.RealSpawn, Models: func() models.Table { return rt }, Room: fleetroom,
+	}
 	piped := *prompt != ""
 	handoff := evt.NewCap(engine, cfg.Settings.MaxWorkers)
 	del := delegate.New(delegate.Opts{
-		Ctx:          ctx,
-		Await:        piped,
-		DB:           scdb,
-		Home:         schedHome,
-		RigHome:      cfgDir,
-		StateDir:     filepath.Join(cfgDir, "sessions"),
-		SwapURL:      swapURL,
-		WorkerCmd:    []string{self},
-		DefaultModel: modelID,
-		Sandbox:      cfg.Settings.Sandbox,
-		SandboxBinds: cfg.Settings.SandboxBinds,
-		Allow:        allowList,
-		Fetch:        sched.RealFetch(0),
-		Spawn:        sched.RealSpawn,
-		Models:       func() models.Table { return rt },
-		Room:         fleetroom,
-		Cap:          handoff,
+		Ctx: ctx, Await: piped,
+		DB: wiring.DB, Home: wiring.Home, RigHome: wiring.RigHome, StateDir: wiring.StateDir,
+		SwapURL: wiring.SwapURL, WorkerCmd: wiring.WorkerCmd, DefaultModel: wiring.DefaultModel,
+		Sandbox: wiring.Sandbox, SandboxBinds: wiring.SandboxBinds, Allow: wiring.Allow,
+		Fetch: wiring.Fetch, Spawn: wiring.Spawn, Models: wiring.Models, Room: wiring.Room,
+		Cap: handoff,
 	})
 
 	py := pythontool.New(del)
@@ -405,7 +428,7 @@ func main() {
 	pluginFiles, err := plugins.List(cfgDir, "plugins")
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "rig:", err)
-		os.Exit(1)
+		return 1
 	}
 	decisionURL := cfg.Settings.DecisionURL
 	if v := os.Getenv("RIG_DECISION_URL"); v != "" {
@@ -421,7 +444,7 @@ func main() {
 	fleet, err := sched.Fleet()
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "rig:", err)
-		os.Exit(1)
+		return 1
 	}
 	fleet, verdictOn := fleetEnds(fleet, allowList)
 	if verdictOn {
@@ -432,50 +455,47 @@ func main() {
 		pluginReports, err = plugins.DiscoverChecked(context.Background(), py, pluginFiles, native, plugins.PluginContract)
 		if err != nil {
 			fmt.Fprintln(os.Stderr, "rig:", err)
-			os.Exit(1)
+			return 1
 		}
 	}
-	pluginTools := make([]core.Tool, 0, len(pluginReports))
-	pluginInfos := make([]command.PluginInfo, 0, len(pluginReports))
 	pluginReports = capPlugins(pluginReports, cfg.Settings.Plugins.Max)
 	for _, rep := range pluginReports {
-		info := command.PluginInfo{
-			Name: rep.Name, Description: rep.Description, File: rep.File,
-			Skipped: rep.Skipped, Reason: rep.Reason,
+		if rep.Skipped {
+			fmt.Fprintf(os.Stderr, "rig: plugins: %s: %s\n", filepath.Base(rep.File), rep.Reason)
 		}
-		pluginInfos = append(pluginInfos, info)
-		if info.Skipped {
-			fmt.Fprintf(os.Stderr, "rig: plugins: %s: %s\n", filepath.Base(rep.File), info.Reason)
-			continue
-		}
-		pluginTools = append(pluginTools, plugins.New(rep.Name, rep.Description, rep.File, rep.Schema, py))
 	}
 
 	if err := plugins.Check(pluginReports, native); err != nil {
 		fmt.Fprintln(os.Stderr, "rig:", err)
-		os.Exit(1)
+		return 1
 	}
 
 	sdb, err := openStore("state", state.StorePath(cfgDir, cwd), state.Statements(), state.SchemaVersion, state.Migration())
 	if err != nil {
-		os.Exit(1)
+		return 1
 	}
 	defer sdb.DB.Close()
 
 	todoPath := todostore.FilePath(cfgDir)
 	tdb, err := openStore("todo", todoPath, todostore.Statements(), todostore.SchemaVersion, todostore.Migration(cwd, filepath.Dir(todoPath)), todostore.ReviewMigration, todostore.EdgeMigration)
 	if err != nil {
-		os.Exit(1)
+		return 1
 	}
 	defer tdb.DB.Close()
 
 	decdb, err := openStore("decision", decisionstore.FilePath(cfgDir), decisionstore.Statements(), decisionstore.SchemaVersion, decisionstore.Migration())
 	if err != nil {
-		os.Exit(1)
+		return 1
 	}
 	defer decdb.DB.Close()
 
 	drec := decisionstore.Recorder{DB: decdb, Scope: scope.Key(cwd), Voice: voice}
+	prio, prioErr := claimPriority(*prompt, serveAddr != "")
+	if prioErr != nil {
+		fmt.Fprintln(os.Stderr, "rig:", prioErr)
+		return 1
+	}
+
 	r := &root{
 		pluginMax:  cfg.Settings.Plugins.Max,
 		baseURL:    baseURLV,
@@ -507,14 +527,12 @@ func main() {
 			"read": file.NewRead(), "write": file.NewWrite(), "edit": file.NewEdit(),
 			"sessions": sessionstool.New(cfgDir, cwd),
 		},
-		pluginTools: pluginTools,
 		pluginsHome: cfgDir,
-		pluginInfos: pluginInfos,
 		engine:      engine,
 		room:        fleetroom,
 		machine:     machine,
 		kids:        kids,
-		priority:    claimPriority(*prompt, serveAddr != ""),
+		priority:    prio,
 	}
 
 	r.tools["scheduler"] = schedapi.New(scdb, sched.RealCrontab(""), self+" run-job", modelID, cfgDir)
@@ -533,27 +551,16 @@ func main() {
 	}
 	if delegateOn {
 		r.swarm = swarm.New(swarm.Opts{
-			TodoDB:  tdb,
-			SchedDB: scdb,
-			Home:    schedHome,
+			TodoDB: tdb, SchedDB: wiring.DB, Home: wiring.Home,
 			Project: func(ctx context.Context, session string) (todostore.Project, error) {
 				return sessionQueue(ctx, sdb, cwd, session)
 			},
-			Cwd:          cwd,
-			WorkerCmd:    []string{self},
-			Fetch:        sched.RealFetch(0),
-			Spawn:        sched.RealSpawn,
-			SwapURL:      swapURL,
-			Sandbox:      cfg.Settings.Sandbox,
-			SandboxBinds: cfg.Settings.SandboxBinds,
-			RigHome:      cfgDir,
-			StateDir:     filepath.Join(cfgDir, "sessions"),
-			Allow:        allowList,
-			DefaultModel: modelID,
-			Models:       func() models.Table { return r.runtime },
-			Engine:       r.engine,
-			Room:         r.room,
-			Cap:          handoff,
+			Cwd:       cwd,
+			WorkerCmd: wiring.WorkerCmd, Fetch: wiring.Fetch, Spawn: wiring.Spawn, SwapURL: wiring.SwapURL,
+			Sandbox: wiring.Sandbox, SandboxBinds: wiring.SandboxBinds, RigHome: wiring.RigHome, StateDir: wiring.StateDir,
+			Allow: wiring.Allow, DefaultModel: wiring.DefaultModel,
+			Models: func() models.Table { return r.runtime },
+			Engine: r.engine, Room: r.room, Cap: handoff,
 		})
 	}
 	r.swarmWhy = swarmWhy
@@ -562,10 +569,6 @@ func main() {
 		todoWake = r.swarm.Wake
 	}
 	r.tools["todo"] = todoapi.New(tdb, todoapi.Mode(piped), todoWake)
-
-	for _, t := range pluginTools {
-		r.tools[t.Name()] = t
-	}
 
 	r.natives = native
 	r.eco = plugins.NewEcosystem(cfgDir, r.natives, py, r.swapPlugins, func() (string, error) {
@@ -584,10 +587,10 @@ func main() {
 		if cfg.Settings.Mesh != nil {
 			remote, home := meshKeys(cfg.Models)
 			mesh := cfg.Settings.Mesh
-			d, derr := machineroom.NewDoor(machine, machineroom.MeshConfig(mesh.Listen, mesh.Peers, time.Duration(mesh.Period)*time.Millisecond, mesh.Window), remote, home)
+			d, derr := machineroom.NewDoor(machine, machineroom.MeshConfig(mesh.Listen, mesh.Peers, time.Duration(mesh.Period)*time.Millisecond, mesh.Window), remote, home, func(n evt.Notice) { fmt.Fprintln(os.Stderr, "rig:", n.Text) })
 			if derr != nil {
 				fmt.Fprintln(os.Stderr, "rig serve:", derr)
-				os.Exit(1)
+				return 1
 			}
 			door = d
 			defer door.Close()
@@ -609,7 +612,7 @@ func main() {
 		})
 		if werr != nil {
 			fmt.Fprintln(os.Stderr, "rig serve:", werr)
-			os.Exit(1)
+			return 1
 		}
 		webSrv = srv
 		fe = srv
@@ -618,14 +621,14 @@ func main() {
 	} else if *prompt != "" {
 		if err := oneshot.ErrPrompt(*prompt); err != nil {
 			fmt.Fprintln(os.Stderr, "rig:", err)
-			os.Exit(1)
+			return 1
 		}
 		fe = &oneshot.OneShot{Prompt: *prompt, Out: os.Stdout, Err: os.Stderr, Fleet: fleet}
 	} else if *tuiMode == "true" || (*tuiMode == "auto" && tui.IsTerminal(os.Stdout.Fd())) {
 		th, terr := tui.ResolveTheme(cfg.Settings.Theme, cfg.Theme, tuiTrueColor())
 		if terr != nil {
 			fmt.Fprintln(os.Stderr, "rig:", terr)
-			os.Exit(1)
+			return 1
 		}
 		var idleStop func()
 		if stopWorkers != nil || decisionURL != "" {
@@ -657,7 +660,7 @@ func main() {
 		dec, derr := decision.NewHTTP(decision.HTTPOptions{URL: decisionURL})
 		if derr != nil {
 			fmt.Fprintln(os.Stderr, "rig: decision:", derr)
-			os.Exit(1)
+			return 1
 		}
 		dtool, derr := decision.NewDecide(decision.DecideOptions{
 			Decider:  dec,
@@ -666,7 +669,7 @@ func main() {
 		})
 		if derr != nil {
 			fmt.Fprintln(os.Stderr, "rig: decision:", derr)
-			os.Exit(1)
+			return 1
 		}
 		r.decide = dtool
 		reviews := &dbReviews{db: decdb}
@@ -677,7 +680,7 @@ func main() {
 			r.decQ = decision.NewQueue(dec, sink, reviews, drec, nil, voice)
 		} else {
 			rev := decision.NewReviewer(ctx, r.engine, reviews,
-				r.reviewFire(schedHome, scdb, swapURL, self, cfgDir, cfg.Settings.Sandbox, cfg.Settings.SandboxBinds),
+				r.reviewFire(schedHome, scdb, swapURL, self, cfgDir, cfg.Settings.Sandbox, cfg.Settings.SandboxBinds, sched.Delegate),
 				cfg.Settings.ReviewBatchOrDefault(), row, fleetroom, scope.Key(cwd))
 			r.decRev = rev
 			r.decQ = decision.NewQueue(dec, sink, reviews, drec, rev.Land, voice)
@@ -686,13 +689,12 @@ func main() {
 		psc, perr := decision.NewPackScorer(dec, sink, land, voice, rig.DefaultParallel)
 		if perr != nil {
 			fmt.Fprintln(os.Stderr, "rig: decision:", perr)
-			os.Exit(1)
+			return 1
 		}
-		r.packScorer = psc
 		packScorer = psc
 		r.proposals = r.decQ
 	}
-	opts := []graph.Option{graph.WithPackCaps(graph.ReadCap, resultCapN)}
+	opts := []graph.Option{graph.WithPackCaps(graph.ReadCeiling, resultCapN)}
 	if packScorer != nil {
 		opts = append(opts, graph.WithScorer(packScorer))
 	}
@@ -706,7 +708,7 @@ func main() {
 	if err != nil {
 		closeFrontend()
 		fmt.Fprintln(os.Stderr, "rig:", err)
-		os.Exit(1)
+		return 1
 	}
 	if *sessionID != "" {
 		session.ID = *sessionID
@@ -719,11 +721,12 @@ func main() {
 	}); ok {
 		r.askDoor = a.Ask
 	}
-	proj, perr := sessionQueue(context.Background(), sdb, cwd, session.ID)
-	if perr != nil {
-		fmt.Fprintln(os.Stderr, "rig: todo queue:", perr)
+	startupRows, serr := state.ListSessions(context.Background(), sdb, state.ListCap)
+	if serr != nil {
+		fmt.Fprintln(os.Stderr, "rig: todo queue:", serr)
 	}
-	if note, e := reapClaims(context.Background(), sdb, tdb, cwd, proj, session.ID); e != nil {
+	proj := projectForRow(startupRows, cwd, session.ID)
+	if note, e := reapClaims(context.Background(), tdb, startupRows, proj, session.ID); e != nil {
 		fmt.Fprintln(os.Stderr, "rig: todo reap:", e)
 	} else if note != "" {
 		fmt.Fprintln(os.Stderr, "rig: todo:", note)
@@ -732,6 +735,10 @@ func main() {
 	r.rec = rec
 
 	k := wire(r)
+	if _, perr := r.swapPlugins(context.Background(), pluginReports); perr != nil {
+		fmt.Fprintln(os.Stderr, "rig: plugins:", perr)
+		return 1
+	}
 
 	go gq.Run(ctx)
 	if r.decQ != nil {
@@ -782,6 +789,8 @@ func main() {
 
 	if runErr != nil || faulted {
 		closeFrontend()
-		os.Exit(1)
+		return 1
 	}
+	return 0
 }
+func main() { os.Exit(rigMain()) }

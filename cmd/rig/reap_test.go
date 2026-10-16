@@ -73,7 +73,11 @@ func TestReapAtOpenReleasesClaimsOwnedByEndedSessions(t *testing.T) {
 		t.Fatalf("start live: %v", err)
 	}
 
-	note, err := reapClaims(ctx, sdb, tdb, cwd, proj, "current-session")
+	rows, rerr := state.ListSessions(ctx, sdb, state.ListCap)
+	if rerr != nil {
+		t.Fatalf("list: %v", rerr)
+	}
+	note, err := reapClaims(ctx, tdb, rows, proj, "current-session")
 	if err != nil {
 		t.Fatalf("reap: %v", err)
 	}
@@ -151,7 +155,11 @@ func TestReapAtOpenIsIdleWhenNoSessionsHaveEnded(t *testing.T) {
 	if _, err := todostore.Start(ctx, tdb, proj, id, liveID, false); err != nil {
 		t.Fatalf("start: %v", err)
 	}
-	note, err := reapClaims(ctx, sdb, tdb, cwd, proj, "current-session")
+	rows, rerr := state.ListSessions(ctx, sdb, state.ListCap)
+	if rerr != nil {
+		t.Fatalf("list: %v", rerr)
+	}
+	note, err := reapClaims(ctx, tdb, rows, proj, "current-session")
 	if err != nil {
 		t.Fatalf("reap: %v", err)
 	}

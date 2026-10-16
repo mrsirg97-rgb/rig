@@ -136,8 +136,10 @@ func TestDiscoverCellCarriesTheFiles(t *testing.T) {
 		"not isinstance(_v, str)",
 		"not isinstance(_v, dict)",
 		"not callable(_v)",
-		"_rig_sys.modules[_rig_n] = _rig_m",
-		`set(globals().get("__rig_plugins__", {})) - set(_rig_next)`,
+		"_rig_sys.modules[_rig_n] = _rig_m\n        _rig_s.loader.exec_module(_rig_m)",
+		"_rig_sys.path.insert(0, _rig_d)",
+		`for _rig_n in set(globals().get("__rig_plugins__", {})):`,
+		"_rig_sys.modules.pop(_rig_n, None)",
 		"__rig_plugins__",
 		`_rig_j.dumps(_rig_report)`,
 	} {
@@ -344,5 +346,40 @@ func TestAKernelReportThatOmitsAFileSkipsItLoud(t *testing.T) {
 	}
 	if ghost := reports[1]; !ghost.Skipped || !strings.Contains(ghost.Reason, "omitted") {
 		t.Fatalf("the omitted file must skip loud: %+v", ghost)
+	}
+}
+
+func TestAPluginImportingASiblingLoads(t *testing.T) {
+	py, err := exec.LookPath("python3")
+	if err != nil {
+		t.Skip("no python3 on PATH; the discovery cell needs one")
+	}
+	dir := t.TempDir()
+	sibling := filepath.Join(dir, "z_sibling.py")
+	alpha := filepath.Join(dir, "alpha.py")
+	if err := os.WriteFile(sibling, []byte("TAG = 'sibling'\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	src := "import z_sibling\nDESCRIPTION = z_sibling.TAG\nSCHEMA = {}\ndef run(args):\n    return z_sibling.TAG\n"
+	if err := os.WriteFile(alpha, []byte(src), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	out, err := exec.Command(py, "-c", discoveryCell([]string{alpha, sibling}, PluginContract)).Output()
+	if err != nil {
+		t.Fatalf("the cell must run: %v (%s)", err, strings.TrimSpace(string(out)))
+	}
+	var reports []wireReport
+	if err := json.Unmarshal([]byte(strings.TrimSpace(string(out))), &reports); err != nil {
+		t.Fatalf("the report = %q: %v", string(out), err)
+	}
+	byName := map[string]wireReport{}
+	for _, rep := range reports {
+		byName[rep.Name] = rep
+	}
+	if rep, ok := byName["alpha"]; !ok || !rep.OK {
+		t.Fatalf("the importing plugin must load: %+v", byName["alpha"])
+	}
+	if rep, ok := byName["z_sibling"]; ok && strings.Contains(rep.Error, "ModuleNotFoundError") {
+		t.Fatalf("the sibling must import cleanly: %+v", rep)
 	}
 }

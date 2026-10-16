@@ -7,12 +7,17 @@ import (
 )
 
 func runtimeTable(t models.Table, active string, resolved models.Model) models.Table {
-	if base, ok := t.Get(active); ok && reflect.DeepEqual(base, resolved) {
+	base, ok := t.Get(active)
+	if ok && reflect.DeepEqual(base, resolved) {
 		return t
+	}
+	canonical := active
+	if ok {
+		canonical = base.ID
 	}
 	rows := make([]models.Model, 0, len(t.Known())+1)
 	for _, id := range t.Known() {
-		if id == active {
+		if id == canonical {
 			continue
 		}
 		m, ok := t.Get(id)
