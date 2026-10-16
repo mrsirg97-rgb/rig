@@ -104,7 +104,11 @@ the five signals the instances exchange beside the protocol's own.
   gone stale past the window), and the sweep's other two loops —
   posting and releasing the mirrored holds as the local holders change —
   surface only here; a horizon event would be a new `evt` release, not
-  a fix.
+  a fix. A repost the mesh released without its local admission leaves
+  at the sweep, and a repost whose entry left still releases the home
+  room's claim when its admission lands (the pin answers, the entry is
+  gone, the claim ends at its own priority) — a forgotten repost never
+  becomes a hold nobody releases.
 
 ## How it is consumed
 

@@ -1,11 +1,13 @@
 package room
 
 import (
+	"context"
 	"net"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/mrsirg97-rgb/evt"
 	"github.com/mrsirg97-rgb/evt/broadcast"
 )
 
@@ -302,6 +304,71 @@ func TestTheRoomSWireCarriesNoMeshSignal(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "does not cross a transport") {
 		t.Fatalf("the mesh's tick must not cross the unix room's wire: %v", err)
 	}
+}
+
+func doorInEntries(t *testing.T, d Door, key int64) int {
+	t.Helper()
+	dd, ok := d.(*door)
+	if !ok {
+		t.Fatal("the door is not the unexported door")
+	}
+	done := make(chan int, 1)
+	dd.engine.Add(evt.Func(func(context.Context) { done <- len(dd.in[key]) }), PriorityFleet)
+	select {
+	case n := <-done:
+		return n
+	case <-time.After(5 * time.Second):
+		t.Fatal("the door's engine never answered")
+	}
+	return -1
+}
+
+func TestTheSweepForgetsARepostReleasedWithoutItsAdmission(t *testing.T) {
+	home := t.TempDir()
+	ma := doorMember(t, home)
+	defer ma.Close()
+	mb, err := New(home, JobStatusSince, func(int64) int { return 1 }, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer mb.Close()
+	mc := doorMember(t, t.TempDir())
+	defer mc.Close()
+	key := KeyOf("the-model")
+	addrs := doorPorts(t, 2)
+	db, err := NewDoor(ma, doorConfig("a", addrs[0], []string{addrs[1]}), nil, []int64{key})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	dc, err := NewDoor(mc, doorConfig("c", addrs[1], []string{addrs[0]}), []int64{key}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer dc.Close()
+
+	held := make(chan broadcast.Mint, 1)
+	mb.Claim(key, PriorityTurn, 0, func(m broadcast.Mint, ok bool) { held <- m })
+	his := <-held
+	t.Cleanup(func() { mb.Release(his, PriorityTurn) })
+
+	claimed := make(chan broadcast.Mint, 1)
+	mc.Claim(key, PriorityTurn, 0, func(m broadcast.Mint, ok bool) { claimed <- m })
+	mint := <-claimed
+
+	doorAwait(t, "the home door to carry the repost unadmitted behind the seat holder", func() bool {
+		h, machine, _ := db.Holding(key, mint)
+		return !h && machine != ""
+	})
+	mc.Release(mint, PriorityTurn)
+
+	doorAwait(t, "the sweep to forget the repost the mesh released unadmitted", func() bool {
+		return doorInEntries(t, db, key) == 0
+	})
+	mb.Release(his, PriorityTurn)
+	doorAwait(t, "the repost whose entry left still ends when its admission lands", func() bool {
+		return len(ma.Holders(key)) == 0
+	})
 }
 
 func TestAJoinerNeverLearnsHoldsOlderThanTheWindow(t *testing.T) {
