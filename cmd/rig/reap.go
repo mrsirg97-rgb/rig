@@ -9,26 +9,24 @@ import (
 	todostore "github.com/mrsirg97-rgb/rig/v3/store/todo"
 )
 
-func sessionQueue(ctx context.Context, sdb store.DB, cwd, session string) (todostore.Project, error) {
-	if session != "" {
-		rows, err := state.ListSessions(ctx, sdb, state.ListCap)
-		if err != nil {
-			return todostore.ProjectOf(cwd), fmt.Errorf("the session's recorded queue binding: %w", err)
-		}
-		for _, row := range rows {
-			if row.ID == session && row.Cwd != "" {
-				return todostore.ProjectOf(row.Cwd), nil
-			}
+func projectForRow(rows []state.SessionRow, cwd, session string) todostore.Project {
+	for _, row := range rows {
+		if row.ID == session && row.Cwd != "" {
+			return todostore.ProjectOf(row.Cwd)
 		}
 	}
-	return todostore.ProjectOf(cwd), nil
+	return todostore.ProjectOf(cwd)
 }
 
-func reapClaims(ctx context.Context, sdb, tdb store.DB, cwd string, proj todostore.Project, session string) (string, error) {
+func sessionQueue(ctx context.Context, sdb store.DB, cwd, session string) (todostore.Project, error) {
 	rows, err := state.ListSessions(ctx, sdb, state.ListCap)
 	if err != nil {
-		return "", err
+		return todostore.ProjectOf(cwd), fmt.Errorf("the session's recorded queue binding: %w", err)
 	}
+	return projectForRow(rows, cwd, session), nil
+}
+
+func reapClaims(ctx context.Context, tdb store.DB, rows []state.SessionRow, proj todostore.Project, session string) (string, error) {
 	var ended []string
 	for _, r := range rows {
 		if r.Exit != "" && r.Exit != "open" {

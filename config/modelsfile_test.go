@@ -15,19 +15,20 @@ func TestModelsMalformedNamesFileRowAndField(t *testing.T) {
 		content string
 		want    string
 	}{
-		{"not an array", `{"id": "x"}`, `expected a JSON array of model rows`},
-		{"row not an object", `[1]`, `row 1: expected a JSON object`},
+		{"not an array", `{"id": "x"}`, `expected a JSON array of model rows: json: cannot unmarshal object into Go value of type []json.RawMessage`},
+		{"row not an object", `[1]`, `row 1: expected a JSON object: json: cannot unmarshal number into Go value of type map[string]json.RawMessage`},
 		{"missing id", `[{"window": 100, "maxTokens": 1, "reserve": 1, "keepRecent": 1}]`, `row 1: "id" is required`},
 		{"duplicate id", `[{"id": "local", "window": 100, "maxTokens": 1, "reserve": 1, "keepRecent": 1}, {"id": "local", "window": 200, "maxTokens": 1, "reserve": 1, "keepRecent": 1}]`, `row 2: duplicate id "local"`},
 		{"unknown role", `[{"id": "x", "window": 100, "maxTokens": 1, "reserve": 1, "keepRecent": 1, "role": "boss"}]`, `row 1: role: "boss" (allowed: interactive, worker)`},
 		{"bad int", `[{"id": "x", "window": "big", "maxTokens": 1, "reserve": 1, "keepRecent": 1}]`, `row 1: window: expected an integer, got "big"`},
+		{"null price", `[{"id": "x", "window": 100, "maxTokens": 1, "reserve": 1, "keepRecent": 1, "provider": "anthropic", "inputPrice": null}]`, `row 1: inputPrice: expected a number, got null`},
 		{"unknown row key", `[{"id": "x", "window": 100, "maxTokens": 1, "reserve": 1, "keepRecent": 1, "winodw": 1}]`, `row 1: unknown key "winodw" (known: aliases, apiKey, baseUrl, cacheControl, cacheReadPrice, cacheWritePrice, command, concurrency, effort, efforts, environment, id, inputPrice, keepRecent, maxTokens, outputPrice, places, port, provider, providerPin, reasoning, remote, reserve, retries, role, stopGrace, thinkingBudget, vision, window)`},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			dir := t.TempDir()
 			p := write(t, dir, "models.json", c.content)
-			err := loadErr(t, dir, t.TempDir())
+			err := loadErr(t, dir)
 			if err.Error() != "config: "+p+": "+c.want {
 				t.Fatalf("the voice = %q, want %q", err, "config: "+p+": "+c.want)
 			}
@@ -36,7 +37,7 @@ func TestModelsMalformedNamesFileRowAndField(t *testing.T) {
 }
 
 func TestEmbeddedModelsTableIsEmpty(t *testing.T) {
-	cfg := load(t, t.TempDir(), t.TempDir())
+	cfg := load(t, t.TempDir())
 	if got := cfg.Models.Known(); len(got) != 0 {
 		t.Fatalf("a fresh install lists %v: the table is the operator's file, nothing else", got)
 	}
@@ -45,7 +46,7 @@ func TestEmbeddedModelsTableIsEmpty(t *testing.T) {
 func TestModelsFileRowsAreTheTableVerbatim(t *testing.T) {
 	dir := t.TempDir()
 	write(t, dir, "models.json", `[{"id": "local", "window": 65536, "maxTokens": 8192, "reserve": 8192, "keepRecent": 16384, "role": "interactive", "efforts": ["low", "medium", "xhigh"]}, {"id": "brain", "window": 262144, "maxTokens": 16384, "reserve": 16384, "keepRecent": 32768}]`)
-	cfg := load(t, dir, t.TempDir())
+	cfg := load(t, dir)
 	if got := cfg.Models.Known(); !reflect.DeepEqual(got, []string{"brain", "local"}) {
 		t.Fatalf("known = %v, want the two rows the file wrote, in id order", got)
 	}
@@ -69,7 +70,7 @@ func TestModelsFileRowsAreTheTableVerbatim(t *testing.T) {
 func TestModelsFileRowMissingItsNumbersRefusesNamingThem(t *testing.T) {
 	dir := t.TempDir()
 	p := write(t, dir, "models.json", `[{"id": "brain", "window": 262144}]`)
-	err := loadErr(t, dir, t.TempDir())
+	err := loadErr(t, dir)
 	if err.Error() != "config: "+p+": row 1: \"maxTokens\" is required" {
 		t.Fatalf("the voice = %q, want the missing field named", err)
 	}
@@ -78,7 +79,7 @@ func TestModelsFileRowMissingItsNumbersRefusesNamingThem(t *testing.T) {
 func TestModelsMergeViolationRefuses(t *testing.T) {
 	dir := t.TempDir()
 	p := write(t, dir, "models.json", `[{"id": "local", "window": 65536, "maxTokens": 8192, "reserve": 81920, "keepRecent": 16384}]`)
-	err := loadErr(t, dir, t.TempDir())
+	err := loadErr(t, dir)
 	want := "config: " + p + ": local: Reserve 81920 must be in [0, Window 65536): as large as the window, the trigger fires at every estimate (the pi shape)"
 	if err.Error() != want {
 		t.Fatalf("the voice = %q, want %q", err, want)
@@ -88,7 +89,7 @@ func TestModelsMergeViolationRefuses(t *testing.T) {
 func TestModelsVisionKeyDefaultsFalse(t *testing.T) {
 	dir := t.TempDir()
 	write(t, dir, "models.json", `[{"id": "local", "window": 65536, "maxTokens": 8192, "reserve": 8192, "keepRecent": 16384}]`)
-	m, ok := load(t, dir, t.TempDir()).Models.Get("local")
+	m, ok := load(t, dir).Models.Get("local")
 	if !ok {
 		t.Fatal("the file's row is gone")
 	}
@@ -100,7 +101,7 @@ func TestModelsVisionKeyDefaultsFalse(t *testing.T) {
 func TestModelsVisionKeySetsTheRow(t *testing.T) {
 	dir := t.TempDir()
 	write(t, dir, "models.json", `[{"id": "local", "window": 65536, "maxTokens": 8192, "reserve": 8192, "keepRecent": 16384, "vision": true}]`)
-	m, ok := load(t, dir, t.TempDir()).Models.Get("local")
+	m, ok := load(t, dir).Models.Get("local")
 	if !ok || !m.Vision {
 		t.Fatalf("vision = %+v, want the row to carry it", m)
 	}
@@ -109,7 +110,7 @@ func TestModelsVisionKeySetsTheRow(t *testing.T) {
 func TestModelsVisionKeyIsPresenceAware(t *testing.T) {
 	home := t.TempDir()
 	write(t, home, "models.json", `[{"id": "visionary", "window": 32768, "maxTokens": 4096, "reserve": 4096, "keepRecent": 8192, "vision": true}, {"id": "plain", "window": 32768, "maxTokens": 4096, "reserve": 4096, "keepRecent": 8192, "vision": false}]`)
-	cfg := load(t, home, t.TempDir())
+	cfg := load(t, home)
 	if m, _ := cfg.Models.Get("visionary"); !m.Vision {
 		t.Fatal("a row carries the flag")
 	}
@@ -129,7 +130,7 @@ func TestModelsVisionKeyRefusesANonBoolean(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			dir := t.TempDir()
 			p := write(t, dir, "models.json", content)
-			err := loadErr(t, dir, t.TempDir())
+			err := loadErr(t, dir)
 			if !strings.Contains(err.Error(), "vision") {
 				t.Fatalf("the refusal names the field: %v", err)
 			}
@@ -143,7 +144,7 @@ func TestModelsVisionKeyRefusesANonBoolean(t *testing.T) {
 func TestModelsHostedRowKeys(t *testing.T) {
 	dir := t.TempDir()
 	write(t, dir, "models.json", `[{"id": "brain", "window": 262144, "maxTokens": 16384, "reserve": 16384, "keepRecent": 32768, "provider": "openrouter", "baseUrl": "https://openrouter.ai/api/v1", "apiKey": "sk-test", "concurrency": 4, "reasoning": "reasoning", "providerPin": "Together", "cacheControl": true}]`)
-	cfg := load(t, dir, t.TempDir())
+	cfg := load(t, dir)
 	m, ok := cfg.Models.Get("brain")
 	if !ok {
 		t.Fatalf("the hosted row must be added")
@@ -163,21 +164,21 @@ func TestModelsHostedRowKeys(t *testing.T) {
 func TestModelsHostedRowInvariantsRefuse(t *testing.T) {
 	dir := t.TempDir()
 	p := write(t, dir, "models.json", `[{"id": "brain", "window": 262144, "maxTokens": 16384, "reserve": 16384, "keepRecent": 32768, "remote": true}]`)
-	err := loadErr(t, dir, t.TempDir())
+	err := loadErr(t, dir)
 	if err.Error() != "config: "+p+": brain: a remote row needs a baseUrl (the endpoint it runs against)" {
 		t.Fatalf("the voice = %q, want the missing baseUrl named", err)
 	}
 
 	dir2 := t.TempDir()
 	p2 := write(t, dir2, "models.json", `[{"id": "brain", "window": 262144, "maxTokens": 16384, "reserve": 16384, "keepRecent": 32768, "provider": "deepseek", "baseUrl": "https://api.deepseek.com", "cacheControl": true}]`)
-	err = loadErr(t, dir2, t.TempDir())
+	err = loadErr(t, dir2)
 	if err.Error() != "config: "+p2+": brain: cacheControl needs the openrouter or anthropic provider (provider: \"deepseek\")" {
 		t.Fatalf("the voice = %q, want the cacheControl refusal", err)
 	}
 
 	dir3 := t.TempDir()
 	p3 := write(t, dir3, "models.json", `[{"id": "brain", "window": 262144, "maxTokens": 16384, "reserve": 16384, "keepRecent": 32768, "provider": "deepseek", "baseUrl": "https://api.deepseek.com", "providerPin": ["X"]}]`)
-	err = loadErr(t, dir3, t.TempDir())
+	err = loadErr(t, dir3)
 	if err.Error() != "config: "+p3+": brain: providerPin is openrouter-only (provider: \"deepseek\")" {
 		t.Fatalf("the voice = %q, want the providerPin refusal", err)
 	}

@@ -263,7 +263,7 @@ func TestMigrationRenamesTheOldHomeOnce(t *testing.T) {
 	if _, err := os.Stat(oldHome); !os.IsNotExist(err) {
 		t.Fatalf("the old home must be gone after the rename (stat: %v)", err)
 	}
-	cfg, err := config.Load(home, t.TempDir())
+	cfg, err := config.Load(home)
 	if err != nil {
 		t.Fatalf("config.Load: %v", err)
 	}

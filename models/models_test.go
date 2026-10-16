@@ -449,3 +449,65 @@ func TestCappedLeavesARowWithoutThinkingBudgetAlone(t *testing.T) {
 		}
 	}
 }
+
+func TestAliasesResolveAndCollide(t *testing.T) {
+	tbl, err := models.New(
+		models.Model{ID: "brain", Window: 8192, MaxTokens: 1024, Reserve: 64, KeepRecent: 128, Role: models.RoleInteractive, Aliases: []string{"brain-fast", "brain-1"}},
+		models.Model{ID: "brain-fast-2", Window: 8192, MaxTokens: 1024, Reserve: 64, KeepRecent: 128, Role: models.RoleInteractive, Aliases: []string{"brain-faster"}},
+	)
+	if err != nil {
+		t.Fatalf("new: %v", err)
+	}
+	if m, ok := tbl.Get("brain-fast"); !ok || m.ID != "brain" {
+		t.Fatal("an alias must resolve to its row")
+	}
+	if _, ok := tbl.Get("brain-1"); !ok {
+		t.Fatal("a second alias must resolve")
+	}
+	if _, err := models.New(
+		models.Model{ID: "a", Window: 8192, MaxTokens: 1024, Reserve: 64, KeepRecent: 128, Role: models.RoleInteractive, Aliases: []string{"b"}},
+		models.Model{ID: "b", Window: 8192, MaxTokens: 1024, Reserve: 64, KeepRecent: 128, Role: models.RoleInteractive},
+	); err == nil {
+		t.Fatal("an alias that names a row must refuse the table")
+	}
+	if _, err := models.New(
+		models.Model{ID: "a", Window: 8192, MaxTokens: 1024, Reserve: 64, KeepRecent: 128, Role: models.RoleInteractive, Aliases: []string{"x"}},
+		models.Model{ID: "b", Window: 8192, MaxTokens: 1024, Reserve: 64, KeepRecent: 128, Role: models.RoleInteractive, Aliases: []string{"x"}},
+	); err == nil {
+		t.Fatal("one alias owned by two rows must refuse the table")
+	}
+	if _, err := models.New(models.Model{ID: "a", Window: 8192, MaxTokens: 1024, Reserve: 64, KeepRecent: 128, Role: models.RoleInteractive, Aliases: []string{" padded "}}); err == nil {
+		t.Fatal("a padded alias is not a name")
+	}
+}
+
+func TestProviderEffortAndPriceGuards(t *testing.T) {
+	base := models.Model{ID: "a", Window: 8192, MaxTokens: 1024, Reserve: 64, KeepRecent: 128, Role: models.RoleInteractive, Remote: true, BaseURL: "https://x.example/v1"}
+	m := base
+	m.Provider = "Anthropic"
+	if err := m.Check(); err == nil {
+		t.Fatal("a provider name is a lowercase slug")
+	}
+	m = base
+	m.Provider = "deepseek"
+	if err := m.Check(); err != nil {
+		t.Fatalf("a hosted provider slug must load: %v", err)
+	}
+	m = base
+	m.Efforts = []string{"low", "high"}
+	m.Effort = "medium"
+	if err := m.Check(); err == nil {
+		t.Fatal("the row's default effort must be one of its efforts")
+	}
+	m = base
+	m.Provider = "anthropic"
+	m.InputPrice = -0.01
+	if err := m.Check(); err == nil {
+		t.Fatal("a negative price is not a price")
+	}
+	m = base
+	m.Port = 70000
+	if err := m.Check(); err == nil {
+		t.Fatal("a port past 65535 is not a port")
+	}
+}

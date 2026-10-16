@@ -19,18 +19,18 @@ func write(t *testing.T, dir, name, content string) string {
 	return p
 }
 
-func load(t *testing.T, dir, cwd string) *config.Config {
+func load(t *testing.T, dir string) *config.Config {
 	t.Helper()
-	cfg, err := config.Load(dir, cwd)
+	cfg, err := config.Load(dir)
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
 	return cfg
 }
 
-func loadErr(t *testing.T, dir, cwd string) error {
+func loadErr(t *testing.T, dir string) error {
 	t.Helper()
-	_, err := config.Load(dir, cwd)
+	_, err := config.Load(dir)
 	if err == nil {
 		t.Fatalf("Load = ok, want a refusal")
 	}
@@ -38,7 +38,7 @@ func loadErr(t *testing.T, dir, cwd string) error {
 }
 
 func TestLoadAbsentFilesIsSilent(t *testing.T) {
-	cfg := load(t, t.TempDir(), t.TempDir())
+	cfg := load(t, t.TempDir())
 	if cfg.Settings.BaseURL == "" || cfg.Settings.System == "" {
 		t.Fatalf("absent files must resolve to the embedded values, got %+v", cfg.Settings)
 	}
@@ -59,15 +59,15 @@ func TestLoadAbsentFilesIsSilent(t *testing.T) {
 func TestLoadEmptyDirIsSilent(t *testing.T) {
 	empty := t.TempDir()
 	absent := t.TempDir()
-	a := load(t, empty, t.TempDir())
-	b := load(t, absent, t.TempDir())
+	a := load(t, empty)
+	b := load(t, absent)
 	if !reflect.DeepEqual(a, b) {
 		t.Fatalf("an empty config dir must be silent (the same result as absent):\nempty: %+v\nabsent: %+v", a, b)
 	}
 }
 
 func TestEmbeddedDefaultsAreTheV020Values(t *testing.T) {
-	cfg := load(t, t.TempDir(), t.TempDir())
+	cfg := load(t, t.TempDir())
 	s := cfg.Settings
 	if s.BaseURL != "http://127.0.0.1:8090/v1" {
 		t.Fatalf("baseUrl = %q, want the 0.2.0 flag default", s.BaseURL)
@@ -126,7 +126,7 @@ func TestSettingsMalformedNamesFileAndField(t *testing.T) {
 		{"retries overflow", `{"retries": 1e300}`, `retries: expected an integer within the platform range, got 1e+300`},
 		{"rounds overflow", `{"rounds": 1e300}`, `rounds: expected an integer within the platform range, got 1e+300`},
 		{"unknown key", `{"allowd": ["bash"]}`, `unknown key "allowd" (known: allow, approve, baseUrl, decisionUnit, decisionUrl, defaultJobModel, maxWorkers, mesh, model, plugins, python, reviewBatch, resultCap, retries, rounds, sandbox, sandboxBinds, searxngUrl, swapUrl, system, theme, trafilatura, trainPython, updateKey, webFetchProxy, workerWindow, workers)`},
-		{"not an object", `[1]`, `expected a JSON object`},
+		{"not an object", `[1]`, `expected a JSON object: json: cannot unmarshal array into Go value of type map[string]json.RawMessage`},
 		{"allow element", `{"allow": ["bash", "read", 5]}`, `allow[2]: expected a string, got 5`},
 		{"sandbox value", `{"sandbox": "maybe"}`, `sandbox: expected "jailed", "landlock", or "off", got "maybe"`},
 		{"sandboxBinds element", `{"sandboxBinds": ["/dev/nvidia0", 5]}`, `sandboxBinds[1]: expected a string, got 5`},
@@ -136,7 +136,7 @@ func TestSettingsMalformedNamesFileAndField(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			dir := t.TempDir()
 			p := write(t, dir, "settings.json", c.content)
-			err := loadErr(t, dir, t.TempDir())
+			err := loadErr(t, dir)
 			if err.Error() != "config: "+p+": "+c.want {
 				t.Fatalf("the voice = %q, want %q", err, "config: "+p+": "+c.want)
 			}
@@ -147,7 +147,7 @@ func TestSettingsMalformedNamesFileAndField(t *testing.T) {
 func TestSettingsZeroDescendsToEmbedded(t *testing.T) {
 	dir := t.TempDir()
 	write(t, dir, "settings.json", `{"retries": 0, "model": ""}`)
-	cfg := load(t, dir, t.TempDir())
+	cfg := load(t, dir)
 	if cfg.Settings.Retries != 3 {
 		t.Fatalf("retries = %d, want the embedded 3 (zero descends)", cfg.Settings.Retries)
 	}
@@ -157,20 +157,20 @@ func TestSettingsZeroDescendsToEmbedded(t *testing.T) {
 }
 
 func TestApproveDefaultsToAuto(t *testing.T) {
-	cfg := load(t, t.TempDir(), t.TempDir())
+	cfg := load(t, t.TempDir())
 	if cfg.Settings.Approve != "auto" {
 		t.Fatalf("approve = %q, want the embedded default auto", cfg.Settings.Approve)
 	}
 	dir := t.TempDir()
 	write(t, dir, "settings.json", `{"approve": "manual"}`)
-	cfg = load(t, dir, t.TempDir())
+	cfg = load(t, dir)
 	if cfg.Settings.Approve != "manual" {
 		t.Fatalf("approve = %q, want the file's manual", cfg.Settings.Approve)
 	}
 }
 
 func TestSandboxDefaultsToJailed(t *testing.T) {
-	cfg := load(t, t.TempDir(), t.TempDir())
+	cfg := load(t, t.TempDir())
 	if cfg.Settings.Sandbox != "jailed" {
 		t.Fatalf("sandbox = %q, want the embedded default jailed (fail closed is the default)", cfg.Settings.Sandbox)
 	}
@@ -180,7 +180,7 @@ func TestSandboxDefaultsToJailed(t *testing.T) {
 
 	dir := t.TempDir()
 	write(t, dir, "settings.json", `{"sandbox": "off", "sandboxBinds": ["/dev/nvidia0", "/data:rw"]}`)
-	cfg = load(t, dir, t.TempDir())
+	cfg = load(t, dir)
 	if cfg.Settings.Sandbox != "off" {
 		t.Fatalf("sandbox = %q, want the file's off (the operator's explicit act)", cfg.Settings.Sandbox)
 	}
@@ -193,7 +193,7 @@ func TestSandboxDefaultsToJailed(t *testing.T) {
 func TestSandboxLandlockIsASetting(t *testing.T) {
 	dir := t.TempDir()
 	write(t, dir, "settings.json", `{"sandbox": "landlock"}`)
-	cfg := load(t, dir, t.TempDir())
+	cfg := load(t, dir)
 	if cfg.Settings.Sandbox != "landlock" {
 		t.Fatalf("sandbox = %q, want the file's landlock", cfg.Settings.Sandbox)
 	}
@@ -202,7 +202,7 @@ func TestSandboxLandlockIsASetting(t *testing.T) {
 func TestSandboxBindsEmptyDescends(t *testing.T) {
 	dir := t.TempDir()
 	write(t, dir, "settings.json", `{"sandbox": "off", "sandboxBinds": []}`)
-	cfg := load(t, dir, t.TempDir())
+	cfg := load(t, dir)
 	if cfg.Settings.Sandbox != "off" {
 		t.Fatalf("sandbox = %q, want the file's off", cfg.Settings.Sandbox)
 	}
@@ -214,13 +214,13 @@ func TestSandboxBindsEmptyDescends(t *testing.T) {
 func TestSettingsUpdateKeyIsAKnownKey(t *testing.T) {
 	dir := t.TempDir()
 	write(t, dir, "settings.json", `{"updateKey": "untrusted comment: minisign public key\nRWTkAAAA"}`)
-	cfg := load(t, dir, t.TempDir())
+	cfg := load(t, dir)
 	if cfg.Settings.UpdateKey != "untrusted comment: minisign public key\nRWTkAAAA" {
 		t.Fatalf("updateKey = %q, want the file's key", cfg.Settings.UpdateKey)
 	}
 	const pinned = "untrusted comment: minisign public key BB2AF5880C258058\n" +
 		"RWRYgCUMiPUqu6L/QoFGWokhOpP7onxuvDR6fWCyy2V1g3GvpY4WICi9"
-	if got := load(t, t.TempDir(), t.TempDir()); got.Settings.UpdateKey != pinned {
+	if got := load(t, t.TempDir()); got.Settings.UpdateKey != pinned {
 		t.Fatalf("updateKey = %q, want the embedded pinned release key %q (a fresh home falls back to it; no pinned key means -update refuses)", got.Settings.UpdateKey, pinned)
 	}
 }
@@ -228,7 +228,7 @@ func TestSettingsUpdateKeyIsAKnownKey(t *testing.T) {
 func TestSettingsThemeIsAKnownKey(t *testing.T) {
 	dir := t.TempDir()
 	write(t, dir, "settings.json", `{"theme": "paper"}`)
-	cfg := load(t, dir, t.TempDir())
+	cfg := load(t, dir)
 	if cfg.Settings.Theme != "paper" {
 		t.Fatalf("theme = %q, want paper", cfg.Settings.Theme)
 	}
@@ -236,7 +236,7 @@ func TestSettingsThemeIsAKnownKey(t *testing.T) {
 
 func TestSettingsWorkersIsATriState(t *testing.T) {
 	t.Run("absent is unset (the capability decides)", func(t *testing.T) {
-		cfg := load(t, t.TempDir(), t.TempDir())
+		cfg := load(t, t.TempDir())
 		if cfg.Settings.Workers != nil {
 			t.Fatalf("workers = %v, want nil (no embedded default writes over the read)", *cfg.Settings.Workers)
 		}
@@ -244,7 +244,7 @@ func TestSettingsWorkersIsATriState(t *testing.T) {
 	t.Run("false is the operator's off", func(t *testing.T) {
 		dir := t.TempDir()
 		write(t, dir, "settings.json", `{"workers": false}`)
-		cfg := load(t, dir, t.TempDir())
+		cfg := load(t, dir)
 		if cfg.Settings.Workers == nil || *cfg.Settings.Workers {
 			t.Fatalf("workers = %v, want false", cfg.Settings.Workers)
 		}
@@ -252,7 +252,7 @@ func TestSettingsWorkersIsATriState(t *testing.T) {
 	t.Run("true is explicit but still capability-gated", func(t *testing.T) {
 		dir := t.TempDir()
 		write(t, dir, "settings.json", `{"workers": true}`)
-		cfg := load(t, dir, t.TempDir())
+		cfg := load(t, dir)
 		if cfg.Settings.Workers == nil || !*cfg.Settings.Workers {
 			t.Fatalf("workers = %v, want true", cfg.Settings.Workers)
 		}
@@ -260,7 +260,7 @@ func TestSettingsWorkersIsATriState(t *testing.T) {
 	t.Run("a non-bool refuses by name", func(t *testing.T) {
 		dir := t.TempDir()
 		write(t, dir, "settings.json", `{"workers": "off"}`)
-		_, err := config.Load(dir, t.TempDir())
+		_, err := config.Load(dir)
 		if err == nil || !strings.Contains(err.Error(), "workers") {
 			t.Fatalf("the refusal must name the key, got %v", err)
 		}
@@ -270,11 +270,11 @@ func TestSettingsWorkersIsATriState(t *testing.T) {
 func TestDecisionURLWiresTheProposer(t *testing.T) {
 	dir := t.TempDir()
 	write(t, dir, "settings.json", `{"decisionUrl": "http://127.0.0.1:8712"}`)
-	cfg := load(t, dir, t.TempDir())
+	cfg := load(t, dir)
 	if cfg.Settings.DecisionURL != "http://127.0.0.1:8712" {
 		t.Fatalf("decisionUrl = %q, want the file's URL", cfg.Settings.DecisionURL)
 	}
-	if cfg := load(t, t.TempDir(), t.TempDir()); cfg.Settings.DecisionURL != "" {
+	if cfg := load(t, t.TempDir()); cfg.Settings.DecisionURL != "" {
 		t.Fatalf("absent decisionUrl = %q, want empty (unset: no proposer)", cfg.Settings.DecisionURL)
 	}
 }
@@ -283,7 +283,7 @@ func TestSettingsPresenceKeysInFileAreExplicit(t *testing.T) {
 	t.Run("webFetchProxy empty is the choice", func(t *testing.T) {
 		dir := t.TempDir()
 		write(t, dir, "settings.json", `{"webFetchProxy": ""}`)
-		cfg := load(t, dir, t.TempDir())
+		cfg := load(t, dir)
 		if cfg.Settings.WebFetchProxy == nil {
 			t.Fatalf("webFetchProxy = nil, want set-empty (direct egress is the choice)")
 		}
@@ -294,7 +294,7 @@ func TestSettingsPresenceKeysInFileAreExplicit(t *testing.T) {
 	t.Run("trafilatura empty is the choice", func(t *testing.T) {
 		dir := t.TempDir()
 		write(t, dir, "settings.json", `{"trafilatura": ""}`)
-		cfg := load(t, dir, t.TempDir())
+		cfg := load(t, dir)
 		if cfg.Settings.Trafilatura == nil {
 			t.Fatalf("trafilatura = nil, want set-empty (the stdlib pass is the choice)")
 		}
@@ -303,7 +303,7 @@ func TestSettingsPresenceKeysInFileAreExplicit(t *testing.T) {
 		}
 	})
 	t.Run("absent keys take the embedded", func(t *testing.T) {
-		cfg := load(t, t.TempDir(), t.TempDir())
+		cfg := load(t, t.TempDir())
 		if cfg.Settings.WebFetchProxy == nil || *cfg.Settings.WebFetchProxy != "http://127.0.0.1:8889" {
 			t.Fatalf("absent webFetchProxy = %v, want the embedded proxy", cfg.Settings.WebFetchProxy)
 		}
@@ -321,11 +321,11 @@ func TestPluginsEnabledKeyIsRetired(t *testing.T) {
 		}
 	}
 	write(`{"plugins": {"enabled": ["x"]}}`)
-	if _, err := config.Load(home, t.TempDir()); err == nil || !strings.Contains(err.Error(), "retired") || !strings.Contains(err.Error(), "plugins/disabled/") {
+	if _, err := config.Load(home); err == nil || !strings.Contains(err.Error(), "retired") || !strings.Contains(err.Error(), "plugins/disabled/") {
 		t.Fatalf("a non-empty enabled list must refuse naming the move, got %v", err)
 	}
 	write(`{"plugins": {"enabled": [], "max": 3}}`)
-	cfg, err := config.Load(home, t.TempDir())
+	cfg, err := config.Load(home)
 	if err != nil {
 		t.Fatalf("an empty enabled list is dropped, got %v", err)
 	}
@@ -335,7 +335,7 @@ func TestPluginsEnabledKeyIsRetired(t *testing.T) {
 }
 
 func TestReviewBatchDefaultsToThree(t *testing.T) {
-	cfg := load(t, t.TempDir(), t.TempDir())
+	cfg := load(t, t.TempDir())
 	if got := cfg.Settings.ReviewBatchOrDefault(); got != 3 {
 		t.Fatalf("absent reviewBatch = %d, want the default 3 (a glance at the queue mid-work)", got)
 	}
@@ -348,14 +348,14 @@ func TestReviewBatchIsTheOperators(t *testing.T) {
 	t.Run("25 rows a bite", func(t *testing.T) {
 		dir := t.TempDir()
 		write(t, dir, "settings.json", `{"reviewBatch": 25}`)
-		if got := load(t, dir, t.TempDir()).Settings.ReviewBatchOrDefault(); got != 25 {
+		if got := load(t, dir).Settings.ReviewBatchOrDefault(); got != 25 {
 			t.Fatalf("reviewBatch = %d, want 25", got)
 		}
 	})
 	t.Run("zero is the reviewer off", func(t *testing.T) {
 		dir := t.TempDir()
 		write(t, dir, "settings.json", `{"reviewBatch": 0}`)
-		if got := load(t, dir, t.TempDir()).Settings.ReviewBatchOrDefault(); got != 0 {
+		if got := load(t, dir).Settings.ReviewBatchOrDefault(); got != 0 {
 			t.Fatalf("reviewBatch = %d, want 0 (the reviewer stays off)", got)
 		}
 	})
@@ -375,7 +375,7 @@ func TestReviewBatchRefusesByName(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			dir := t.TempDir()
 			p := write(t, dir, "settings.json", c.content)
-			err := loadErr(t, dir, t.TempDir())
+			err := loadErr(t, dir)
 			if err.Error() != "config: "+p+": "+c.want {
 				t.Fatalf("the voice = %q, want %q", err, "config: "+p+": "+c.want)
 			}
@@ -386,57 +386,57 @@ func TestReviewBatchRefusesByName(t *testing.T) {
 func TestSettingsCarryTheTrainingKeys(t *testing.T) {
 	dir := t.TempDir()
 	write(t, dir, "settings.json", `{"trainPython": "/h/laya/.venv-train/bin/python", "decisionUnit": "/h/.config/systemd/user/laya.service"}`)
-	cfg := load(t, dir, t.TempDir())
+	cfg := load(t, dir)
 	if cfg.Settings.TrainPython != "/h/laya/.venv-train/bin/python" {
 		t.Fatalf("trainPython = %q, want the interpreter", cfg.Settings.TrainPython)
 	}
 	if cfg.Settings.DecisionUnit != "/h/.config/systemd/user/laya.service" {
 		t.Fatalf("decisionUnit = %q, want the unit file", cfg.Settings.DecisionUnit)
 	}
-	fresh := load(t, t.TempDir(), t.TempDir())
+	fresh := load(t, t.TempDir())
 	if fresh.Settings.TrainPython != "" || fresh.Settings.DecisionUnit != "" {
 		t.Fatalf("a fresh home carries no training keys: %+v", fresh.Settings)
 	}
 }
 
 func TestMaxWorkersIsTheOperators(t *testing.T) {
-	cfg := load(t, t.TempDir(), t.TempDir())
+	cfg := load(t, t.TempDir())
 	if cfg.Settings.MaxWorkers != 0 {
 		t.Fatalf("absent maxWorkers = %d, want 0 (no cap)", cfg.Settings.MaxWorkers)
 	}
 	dir := t.TempDir()
 	write(t, dir, "settings.json", `{"maxWorkers": 3}`)
-	cfg = load(t, dir, t.TempDir())
+	cfg = load(t, dir)
 	if cfg.Settings.MaxWorkers != 3 {
 		t.Fatalf("maxWorkers = %d, want 3", cfg.Settings.MaxWorkers)
 	}
 	dir = t.TempDir()
 	write(t, dir, "settings.json", `{"maxWorkers": -1}`)
-	if _, err := config.Load(dir, t.TempDir()); err == nil || !strings.Contains(err.Error(), "maxWorkers: expected a non-negative number (0 = no cap), got -1") {
+	if _, err := config.Load(dir); err == nil || !strings.Contains(err.Error(), "maxWorkers: expected a non-negative number (0 = no cap), got -1") {
 		t.Fatalf("a negative cap refuses naming the key: %v", err)
 	}
 }
 
 func TestWorkerWindowIsTheOperators(t *testing.T) {
-	cfg := load(t, t.TempDir(), t.TempDir())
+	cfg := load(t, t.TempDir())
 	if cfg.Settings.WorkerWindow != 0 {
 		t.Fatalf("absent workerWindow = %d, want 0 (the row's window)", cfg.Settings.WorkerWindow)
 	}
 	dir := t.TempDir()
 	write(t, dir, "settings.json", `{"workerWindow": 131072}`)
-	cfg = load(t, dir, t.TempDir())
+	cfg = load(t, dir)
 	if cfg.Settings.WorkerWindow != 131072 {
 		t.Fatalf("workerWindow = %d, want 131072", cfg.Settings.WorkerWindow)
 	}
 	dir = t.TempDir()
 	write(t, dir, "settings.json", `{"workerWindow": -1}`)
-	if _, err := config.Load(dir, t.TempDir()); err == nil || !strings.Contains(err.Error(), "workerWindow: expected a non-negative number (0 = the row's window), got -1") {
+	if _, err := config.Load(dir); err == nil || !strings.Contains(err.Error(), "workerWindow: expected a non-negative number (0 = the row's window), got -1") {
 		t.Fatalf("a negative window refuses naming the key: %v", err)
 	}
 }
 
 func TestMeshIsAbsentByDefault(t *testing.T) {
-	cfg := load(t, t.TempDir(), t.TempDir())
+	cfg := load(t, t.TempDir())
 	if cfg.Settings.Mesh != nil {
 		t.Fatalf("absent mesh = %v, want nil (3.0.4 is byte-for-byte without the setting)", cfg.Settings.Mesh)
 	}
@@ -445,7 +445,7 @@ func TestMeshIsAbsentByDefault(t *testing.T) {
 func TestMeshParsesTheDoorSConfig(t *testing.T) {
 	dir := t.TempDir()
 	write(t, dir, "settings.json", `{"mesh": {"room": "operator", "listen": "100.118.31.66:7780", "peers": ["100.120.230.71:7780"], "period": 500, "window": 6}}`)
-	cfg := load(t, dir, t.TempDir())
+	cfg := load(t, dir)
 	m := cfg.Settings.Mesh
 	if m == nil {
 		t.Fatal("mesh = nil, want the door's config")
@@ -464,7 +464,7 @@ func TestMeshParsesTheDoorSConfig(t *testing.T) {
 func TestMeshDefaultsAreTheMeasuredNumbers(t *testing.T) {
 	dir := t.TempDir()
 	write(t, dir, "settings.json", `{"mesh": {"room": "operator", "listen": "100.118.31.66:7780"}}`)
-	cfg := load(t, dir, t.TempDir())
+	cfg := load(t, dir)
 	m := cfg.Settings.Mesh
 	if m.Period != config.DefaultMeshPeriod {
 		t.Fatalf("period = %d, want %d (the tailnet's ping measured 96ms and the period holds a gossip round comfortably)", m.Period, config.DefaultMeshPeriod)
@@ -477,7 +477,7 @@ func TestMeshDefaultsAreTheMeasuredNumbers(t *testing.T) {
 func TestMeshRefusesUnknownKeys(t *testing.T) {
 	dir := t.TempDir()
 	write(t, dir, "settings.json", `{"mesh": {"room": "operator", "listen": "100.118.31.66:7780", "mode": "on"}}`)
-	err := loadErr(t, dir, t.TempDir())
+	err := loadErr(t, dir)
 	if !strings.Contains(err.Error(), `mesh: unknown key "mode" (known: listen, peers, period, room, window)`) {
 		t.Fatalf("an unknown mesh key refuses naming the known ones: %v", err)
 	}
@@ -486,7 +486,7 @@ func TestMeshRefusesUnknownKeys(t *testing.T) {
 func TestMeshIterationsIsRefusedByName(t *testing.T) {
 	dir := t.TempDir()
 	write(t, dir, "settings.json", `{"mesh": {"room": "operator", "listen": "100.118.31.66:7780", "iterations": 500000}}`)
-	err := loadErr(t, dir, t.TempDir())
+	err := loadErr(t, dir)
 	if !strings.Contains(err.Error(), `mesh: unknown key "iterations" (known: listen, peers, period, room, window)`) {
 		t.Fatalf("a file that still carries iterations is refused by name: %v", err)
 	}
@@ -495,13 +495,13 @@ func TestMeshIterationsIsRefusedByName(t *testing.T) {
 func TestMeshRequiresListen(t *testing.T) {
 	dir := t.TempDir()
 	write(t, dir, "settings.json", `{"mesh": {"listen": "100.118.31.66:7780"}}`)
-	cfg := load(t, dir, t.TempDir())
+	cfg := load(t, dir)
 	if cfg.Settings.Mesh == nil || cfg.Settings.Mesh.Listen != "100.118.31.66:7780" {
 		t.Fatalf("a mesh without a room loads — the room is the operators' agreement, nothing reads it: %v", cfg.Settings.Mesh)
 	}
 	dir = t.TempDir()
 	write(t, dir, "settings.json", `{"mesh": {"room": "operator"}}`)
-	err := loadErr(t, dir, t.TempDir())
+	err := loadErr(t, dir)
 	if !strings.Contains(err.Error(), "mesh: listen is required") {
 		t.Fatalf("a mesh without a door address refuses: %v", err)
 	}
@@ -511,7 +511,7 @@ func TestMeshListenIsOneAddress(t *testing.T) {
 	for _, addr := range []string{"0.0.0.0:7780", ":7780", "[::]:7780", "100.118.31.66"} {
 		dir := t.TempDir()
 		write(t, dir, "settings.json", `{"mesh": {"room": "operator", "listen": "`+addr+`"}}`)
-		err := loadErr(t, dir, t.TempDir())
+		err := loadErr(t, dir)
 		if err == nil {
 			t.Fatalf("listen %q loads, want a refusal (the door binds one address the tailnet reaches)", addr)
 		}
@@ -521,13 +521,13 @@ func TestMeshListenIsOneAddress(t *testing.T) {
 func TestMeshPeersAreAddresses(t *testing.T) {
 	dir := t.TempDir()
 	write(t, dir, "settings.json", `{"mesh": {"room": "operator", "listen": "100.118.31.66:7780", "peers": ["100.120.230.71"]}}`)
-	err := loadErr(t, dir, t.TempDir())
+	err := loadErr(t, dir)
 	if !strings.Contains(err.Error(), "mesh.peers: peers[0]") {
 		t.Fatalf("a peer without a port refuses naming the entry: %v", err)
 	}
 	dir = t.TempDir()
 	write(t, dir, "settings.json", `{"mesh": {"room": "operator", "listen": "100.118.31.66:7780", "peers": ["100.120.230.71:7780"]}}`)
-	cfg := load(t, dir, t.TempDir())
+	cfg := load(t, dir)
 	if len(cfg.Settings.Mesh.Peers) != 1 {
 		t.Fatalf("peers = %v, want the other machine's door", cfg.Settings.Mesh.Peers)
 	}
@@ -536,13 +536,13 @@ func TestMeshPeersAreAddresses(t *testing.T) {
 func TestMeshWindowAndPeriodArePositive(t *testing.T) {
 	dir := t.TempDir()
 	write(t, dir, "settings.json", `{"mesh": {"room": "operator", "listen": "100.118.31.66:7780", "window": 0}}`)
-	err := loadErr(t, dir, t.TempDir())
+	err := loadErr(t, dir)
 	if !strings.Contains(err.Error(), "mesh.window: expected a positive number (the horizon window in ticks), got 0") {
 		t.Fatalf("a zero window refuses: %v", err)
 	}
 	dir = t.TempDir()
 	write(t, dir, "settings.json", `{"mesh": {"room": "operator", "listen": "100.118.31.66:7780", "period": 0}}`)
-	err = loadErr(t, dir, t.TempDir())
+	err = loadErr(t, dir)
 	if !strings.Contains(err.Error(), "mesh.period: expected a positive number (the machine's clock period in milliseconds), got 0") {
 		t.Fatalf("a zero period refuses: %v", err)
 	}

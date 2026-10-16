@@ -17,7 +17,7 @@ func (newCmd) Run(ctx context.Context, args string, env any) (string, error) {
 	if args != "" {
 		return "", errors.New("new: usage: new")
 	}
-	e, err := EnvOf(env)
+	e, err := envOf(env)
 	if err != nil {
 		return "", err
 	}

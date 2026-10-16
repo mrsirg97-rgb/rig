@@ -781,7 +781,7 @@ func TestAgentsOrderAgainstGuidelines(t *testing.T) {
 func TestRowEnvBeatsFileForActiveID(t *testing.T) {
 	dir := t.TempDir()
 	writeModelRows(t, dir, `{"id": "local", "window": 32768, "maxTokens": 8192, "reserve": 8192, "keepRecent": 16384}`)
-	cfg, err := config.Load(dir, t.TempDir())
+	cfg, err := config.Load(dir)
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
@@ -960,7 +960,7 @@ func TestRetiredWorkersFileIsNamedOnceAtStart(t *testing.T) {
 
 func TestSchedulerCreateWithoutAModelStoresTheUnnamedJob(t *testing.T) {
 	dir := t.TempDir()
-	if _, err := config.Load(dir, t.TempDir()); err != nil {
+	if _, err := config.Load(dir); err != nil {
 		t.Fatalf("Load: %v", err)
 	}
 
@@ -1077,7 +1077,7 @@ func TestNegativeEnvBoundsRefuseLoud(t *testing.T) {
 func TestModelsFileRowListsAndSwitches(t *testing.T) {
 	dir := t.TempDir()
 	writeModelRows(t, dir, localModelRow, `{"id": "brain", "window": 262144, "maxTokens": 16384, "reserve": 16384, "keepRecent": 32768, "role": "worker"}`)
-	cfg, err := config.Load(dir, t.TempDir())
+	cfg, err := config.Load(dir)
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
@@ -1118,7 +1118,7 @@ func TestModelsFileRowListsAndSwitches(t *testing.T) {
 }
 
 func TestEmbeddedAllowIsTheNativeSet(t *testing.T) {
-	cfg, err := config.Load(t.TempDir(), t.TempDir())
+	cfg, err := config.Load(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1152,7 +1152,7 @@ func TestEmbeddedAllowGrowsWithTheFleet(t *testing.T) {
 		[]byte(`{"model": "local", "slots": 1}`), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	cfg, err := config.Load(dir, t.TempDir())
+	cfg, err := config.Load(dir)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1180,7 +1180,7 @@ func TestOperatorAllowStandsAsWritten(t *testing.T) {
 		[]byte(`{"allow": ["bash", "read"]}`), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	cfg, err := config.Load(dir, t.TempDir())
+	cfg, err := config.Load(dir)
 	if err != nil {
 		t.Fatal(err)
 	}

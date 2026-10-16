@@ -2,7 +2,7 @@ package main
 
 import (
 	"context"
-	"fmt"
+	"errors"
 
 	"github.com/mrsirg97-rgb/rig/v3/command"
 	"github.com/mrsirg97-rgb/rig/v3/plugins"
@@ -38,7 +38,9 @@ func (r *root) swapPlugins(ctx context.Context, reports []plugins.Report) (strin
 			Skipped: rep.Skipped, Reason: rep.Reason,
 		})
 		if !rep.Skipped {
-			tools = append(tools, plugins.New(rep.Name, rep.Description, rep.File, rep.Schema, r.py))
+			tool := plugins.New(rep.Name, rep.Description, rep.File, rep.Schema, r.py)
+			tools = append(tools, tool)
+			r.tools[rep.Name] = tool
 		}
 	}
 	names := make([]string, 0, len(reports))
@@ -72,22 +74,8 @@ func (r *root) redoPlugins(ctx context.Context) error {
 }
 
 func (r *root) reloadPlugins(ctx context.Context) (string, error) {
-	files, err := plugins.List(r.pluginsHome, "plugins")
-	if err != nil {
-		return "", fmt.Errorf("plugins: reload: %v", err)
+	if r.eco == nil {
+		return "", errors.New("plugins: no ecosystem (the root did not wire one)")
 	}
-	reports := make([]plugins.Report, 0)
-	if len(files) > 0 {
-		reports, err = plugins.DiscoverChecked(ctx, r.py, files, r.natives, plugins.PluginContract)
-		if err != nil {
-			if plugins.IsNameCollision(err) {
-				return "", err
-			}
-			return "", fmt.Errorf("plugins: reload: %v", err)
-		}
-	}
-	if err := plugins.Check(reports, r.natives); err != nil {
-		return "", err
-	}
-	return r.swapPlugins(ctx, reports)
+	return r.eco.Reload(ctx)
 }

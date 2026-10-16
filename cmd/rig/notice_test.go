@@ -80,13 +80,13 @@ func TestANoticeWithNoRecorderYetGoesToStderr(t *testing.T) {
 func TestTheReviewFireNamesNoModelAndFallsBackToTheSessionsOwn(t *testing.T) {
 	var seen sched.DelegateInput
 	r := &root{activeID: "ox-alpha", cwd: t.TempDir()}
-	r.delegate = func(in sched.DelegateInput) (sched.DelegateResult, error) {
+	del := func(in sched.DelegateInput) (sched.DelegateResult, error) {
 		seen = in
 		return sched.DelegateResult{Model: "ox-alpha", Exit: 0}, nil
 	}
 	fleet(r)
 	voice := r.room.Mint()
-	fire := r.reviewFire(t.TempDir(), store.DB{}, "http://127.0.0.1:1", "rig", t.TempDir(), "", nil)
+	fire := r.reviewFire(t.TempDir(), store.DB{}, "http://127.0.0.1:1", "rig", t.TempDir(), "", nil, del)
 	model, err := fire(context.Background(), "review these", voice)
 	if err != nil {
 		t.Fatal(err)

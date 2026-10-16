@@ -15,18 +15,24 @@ func (themeCmd) Description() string {
 	return "the colors: bare shows the preset, /theme <warm|cool|custom> sets it"
 }
 
-func (themeCmd) Sub() []Sub {
-	return []Sub{
-		{Name: "warm", Desc: "the default palette"},
-		{Name: "cool", Desc: "the cool palette"},
-		{Name: "custom", Desc: "your own theme.json in the rig home"},
-	}
+var themePresetsList = []Sub{
+	{Name: "warm", Desc: "the default palette"},
+	{Name: "cool", Desc: "the cool palette"},
+	{Name: "custom", Desc: "your own theme.json in the rig home"},
 }
 
-func themePresets() string { return "warm, cool, custom" }
+func (themeCmd) Sub() []Sub { return append([]Sub(nil), themePresetsList...) }
+
+func themePresets() string {
+	names := make([]string, 0, len(themePresetsList))
+	for _, p := range themePresetsList {
+		names = append(names, p.Name)
+	}
+	return strings.Join(names, ", ")
+}
 
 func (themeCmd) Run(ctx context.Context, args string, env any) (string, error) {
-	e, err := EnvOf(env)
+	e, err := envOf(env)
 	if err != nil {
 		return "", err
 	}
@@ -49,7 +55,14 @@ func (themeCmd) Run(ctx context.Context, args string, env any) (string, error) {
 		}
 	}
 	name := fields[0]
-	if name != "warm" && name != "cool" && name != "custom" {
+	known := false
+	for _, p := range themePresetsList {
+		if p.Name == name {
+			known = true
+			break
+		}
+	}
+	if !known {
 		return "", fmt.Errorf("theme: %q is not a preset (%s)", name, themePresets())
 	}
 	if err := e.SetTheme(ctx, name); err != nil {

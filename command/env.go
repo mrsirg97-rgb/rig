@@ -104,7 +104,7 @@ type Env struct {
 	DecisionTrain func(ctx context.Context, trainer string) (string, error)
 }
 
-func EnvOf(env any) (*Env, error) {
+func envOf(env any) (*Env, error) {
 	e, ok := env.(*Env)
 	if !ok {
 		return nil, fmt.Errorf("command: env is *command.Env (got %T)", env)

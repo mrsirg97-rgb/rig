@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -14,27 +15,32 @@ import (
 	"github.com/mrsirg97-rgb/rig/v3/decision"
 	"github.com/mrsirg97-rgb/rig/v3/models"
 	machineroom "github.com/mrsirg97-rgb/rig/v3/room"
-	"github.com/mrsirg97-rgb/rig/v3/store"
 	decisionstore "github.com/mrsirg97-rgb/rig/v3/store/decision"
 	sched "github.com/mrsirg97-rgb/rig/v3/store/scheduler"
 )
 
 func runJob(args []string) int {
-	if len(args) < 1 {
+	fs := flag.NewFlagSet("rig run-job", flag.ContinueOnError)
+	fs.Usage = func() { fmt.Fprintln(os.Stderr, "rig: usage: run-job <key>") }
+	if err := fs.Parse(args); err != nil {
+		return 2
+	}
+	rest := fs.Args()
+	if len(rest) == 0 {
 		fmt.Fprintln(os.Stderr, "rig: usage: run-job <key>")
 		return 2
 	}
+	if len(rest) > 1 {
+		fmt.Fprintf(os.Stderr, "rig: run-job: unexpected %q (the key is the one positional; the job's knobs live in its row)\n", rest[1])
+		return 2
+	}
+	key := rest[0]
 	cfgDir, err := rigHome()
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "rig:", err)
 		return 1
 	}
-	cwd, err := os.Getwd()
-	if err != nil {
-		fmt.Fprintln(os.Stderr, "rig:", err)
-		return 1
-	}
-	cfg, err := config.Load(cfgDir, cwd)
+	cfg, err := config.Load(cfgDir)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "rig:", err)
 		return 1
@@ -84,13 +90,12 @@ func runJob(args []string) int {
 	tell := jobTeller(machine, voice)
 	if err := os.MkdirAll(filepath.Dir(decPath), 0o755); err != nil {
 		fmt.Fprintln(os.Stderr, "rig: decision store:", err)
-	} else if jdb, _, _, jerr := store.Open(decPath, decisionstore.Statements(), decisionstore.SchemaVersion, decisionstore.Migration()); jerr != nil {
-		fmt.Fprintln(os.Stderr, "rig: decision store:", jerr)
+	} else if jdb, jerr := openStore("decision", decPath, decisionstore.Statements(), decisionstore.SchemaVersion, decisionstore.Migration()); jerr != nil {
 	} else {
 		defer jdb.DB.Close()
 		jobDecisions = decisionstore.Recorder{DB: jdb, Voice: voice}
 	}
-	if err := sched.RunJob(args[0], sched.RunOpts{
+	if err := sched.RunJob(key, sched.RunOpts{
 		Home:      home,
 		Crontab:   sched.RealCrontab(""),
 		Fetch:     sched.RealFetch(0),

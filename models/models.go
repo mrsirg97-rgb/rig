@@ -108,8 +108,8 @@ func (m Model) Check() error {
 	if m.CacheControl && m.Provider != "openrouter" && m.Provider != "anthropic" {
 		return fmt.Errorf("models: %s: cacheControl needs the openrouter or anthropic provider (provider: %q)", m.ID, m.Provider)
 	}
-	if m.Port < 0 {
-		return fmt.Errorf("models: %s: port %d must be >= 0", m.ID, m.Port)
+	if m.Port < 0 || m.Port > 65535 {
+		return fmt.Errorf("models: %s: port %d must be in [0, 65535]", m.ID, m.Port)
 	}
 	if m.Port == 0 && (m.Command != "" || len(m.Env) > 0 || m.StopGrace > 0 || m.Places > 0) {
 		return fmt.Errorf("models: %s: a child row needs a port", m.ID)
@@ -125,6 +125,26 @@ func (m Model) Check() error {
 	if m.StopGrace < 0 {
 		return fmt.Errorf("models: %s: stopGrace %d must be >= 0", m.ID, m.StopGrace)
 	}
+	if m.Provider != "" && (strings.ToLower(m.Provider) != m.Provider || strings.ContainsAny(m.Provider, " /_")) {
+		return fmt.Errorf("models: %s: provider %q must be a lowercase slug (the wire branches on anthropic and openrouter; any other name only marks a remote row)", m.ID, m.Provider)
+	}
+	if m.Effort != "" && len(m.Efforts) > 0 {
+		known := false
+		for _, e := range m.Efforts {
+			if e == m.Effort {
+				known = true
+				break
+			}
+		}
+		if !known {
+			return fmt.Errorf("models: %s: effort %q is not one of the row's efforts %v", m.ID, m.Effort, m.Efforts)
+		}
+	}
+	for _, a := range m.Aliases {
+		if a == "" || strings.TrimSpace(a) != a {
+			return fmt.Errorf("models: %s: alias %q is empty or padded (aliases are names)", m.ID, a)
+		}
+	}
 	if m.Provider == "anthropic" && m.Reasoning != "" {
 		return fmt.Errorf("models: %s: reasoning is openai-wire naming (provider: %q; the thinking blocks carry their own)", m.ID, m.Provider)
 	}
@@ -137,6 +157,9 @@ func (m Model) Check() error {
 		{"cacheReadPrice", m.CacheReadPrice},
 		{"cacheWritePrice", m.CacheWritePrice},
 	} {
+		if p.price < 0 {
+			return fmt.Errorf("models: %s: %s %v must be >= 0", m.ID, p.name, p.price)
+		}
 		if p.price != 0 && m.Provider != "anthropic" {
 			return fmt.Errorf("models: %s: %s is anthropic-only (provider: %q)", m.ID, p.name, m.Provider)
 		}
@@ -181,10 +204,13 @@ func normalize(m Model) Model {
 	return m
 }
 
-type Table struct{ rows map[string]Model }
+type Table struct {
+	rows    map[string]Model
+	aliases map[string]string
+}
 
 func New(rows ...Model) (Table, error) {
-	t := Table{rows: map[string]Model{}}
+	t := Table{rows: map[string]Model{}, aliases: map[string]string{}}
 	for _, m := range rows {
 		m = normalize(m)
 		if err := m.Check(); err != nil {
@@ -195,12 +221,29 @@ func New(rows ...Model) (Table, error) {
 		}
 		t.rows[m.ID] = m
 	}
+	for _, m := range rows {
+		for _, a := range m.Aliases {
+			if _, clash := t.rows[a]; clash {
+				return Table{}, fmt.Errorf("models: %s: alias %q names a row (aliases resolve only where no id lives)", m.ID, a)
+			}
+			if owner, clash := t.aliases[a]; clash {
+				return Table{}, fmt.Errorf("models: %s: alias %q is already %s's", m.ID, a, owner)
+			}
+			t.aliases[a] = m.ID
+		}
+	}
 	return t, nil
 }
 
 func (t Table) Get(id string) (Model, bool) {
-	m, ok := t.rows[id]
-	return m, ok
+	if m, ok := t.rows[id]; ok {
+		return m, true
+	}
+	if canon, ok := t.aliases[id]; ok {
+		m, ok := t.rows[canon]
+		return m, ok
+	}
+	return Model{}, false
 }
 
 func (t Table) Known() []string {

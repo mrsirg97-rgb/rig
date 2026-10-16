@@ -64,7 +64,7 @@ func CheckEffort(levels []string, level, model string) error {
 }
 
 func (effortCmd) Run(ctx context.Context, args string, env any) (string, error) {
-	e, err := EnvOf(env)
+	e, err := envOf(env)
 	if err != nil {
 		return "", err
 	}

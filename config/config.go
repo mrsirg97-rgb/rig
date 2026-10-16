@@ -9,7 +9,7 @@ import (
 	"github.com/mrsirg97-rgb/rig/v3/models"
 )
 
-func Load(dir, cwd string) (*Config, error) {
+func Load(dir string) (*Config, error) {
 	s, fileAllow, err := loadSettings(dir)
 	if err != nil {
 		return nil, err
@@ -51,9 +51,6 @@ func Load(dir, cwd string) (*Config, error) {
 	}
 	ag, err := readAgents(dir)
 	if err != nil {
-		return nil, err
-	}
-	if _, err := ProjectAgents(dir, cwd); err != nil {
 		return nil, err
 	}
 	return &Config{Settings: s, Models: t, Agents: ag, Theme: th, Notices: notices}, nil

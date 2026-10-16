@@ -30,7 +30,7 @@ func (sessionsCmd) Description() string {
 }
 
 func (sessionsCmd) Run(ctx context.Context, args string, env any) (string, error) {
-	e, err := EnvOf(env)
+	e, err := envOf(env)
 	if err != nil {
 		return "", err
 	}
@@ -83,7 +83,7 @@ func (sessionsCmd) Run(ctx context.Context, args string, env any) (string, error
 		if liveTurn(e) {
 			return "", errors.New("sessions: a turn is live; steer or interrupt first")
 		}
-		if e.Session != nil && fields[1] == e.Session().ID {
+		if cur := e.Session(); cur != nil && fields[1] == cur.ID {
 			return "", fmt.Errorf("sessions: already the current session: %s", fields[1])
 		}
 		if e.SessionResume == nil {
@@ -96,8 +96,8 @@ func (sessionsCmd) Run(ctx context.Context, args string, env any) (string, error
 			e.Steer.ClearSlot()
 		}
 		n := 0
-		if e.Session != nil {
-			n = len(e.Session().Messages)
+		if cur := e.Session(); cur != nil {
+			n = len(cur.Messages)
 		}
 		return fmt.Sprintf("sessions: resumed %s (%d messages)", fields[1], n), nil
 	}

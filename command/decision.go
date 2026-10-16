@@ -27,7 +27,7 @@ func (decisionCmd) Run(ctx context.Context, args string, env any) (string, error
 	if len(fields) != 2 || fields[0] != "train" {
 		return "", errors.New(decisionUsage)
 	}
-	e, err := EnvOf(env)
+	e, err := envOf(env)
 	if err != nil {
 		return "", err
 	}

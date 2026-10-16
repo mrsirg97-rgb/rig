@@ -95,7 +95,7 @@ func rowsCarriedConcurrency(docs []rowDoc) bool {
 func parseRows(data []byte, path string) ([]rowDoc, error) {
 	var raws []json.RawMessage
 	if err := json.Unmarshal(data, &raws); err != nil {
-		return nil, fmt.Errorf("config: %s: expected a JSON array of model rows", path)
+		return nil, fmt.Errorf("config: %s: expected a JSON array of model rows: %w", path, err)
 	}
 	rowErr := func(n int, format string, a ...any) error {
 		return fmt.Errorf("config: %s: row %d: %s", path, n, fmt.Sprintf(format, a...))
@@ -105,7 +105,7 @@ func parseRows(data []byte, path string) ([]rowDoc, error) {
 		n := i + 1
 		var keys map[string]json.RawMessage
 		if err := json.Unmarshal(raw, &keys); err != nil {
-			return nil, rowErr(n, "expected a JSON object")
+			return nil, rowErr(n, "expected a JSON object: %v", err)
 		}
 		var unknown []string
 		for k := range keys {
@@ -168,9 +168,9 @@ func parseRows(data []byte, path string) ([]rowDoc, error) {
 			d.effort = &v
 		}
 		if rawEfforts, ok := keys["efforts"]; ok {
-			var list []string
-			if err := json.Unmarshal(rawEfforts, &list); err != nil {
-				return nil, rowErr(n, "efforts: expected a JSON array of level names")
+			list, err := jsonStringArray(rawEfforts, "efforts", "level names")
+			if err != nil {
+				return nil, rowErr(n, "%v", err)
 			}
 			d.efforts = &list
 		}
@@ -273,9 +273,9 @@ func parseRows(data []byte, path string) ([]rowDoc, error) {
 			d.command = &v
 		}
 		if rawEnv, ok := keys["environment"]; ok {
-			var list []string
-			if err := json.Unmarshal(rawEnv, &list); err != nil {
-				return nil, rowErr(n, "environment: expected a JSON array of KEY=value strings")
+			list, err := jsonStringArray(rawEnv, "environment", "KEY=value strings")
+			if err != nil {
+				return nil, rowErr(n, "%v", err)
 			}
 			d.environment = &list
 		}
@@ -287,9 +287,9 @@ func parseRows(data []byte, path string) ([]rowDoc, error) {
 			d.port = &v
 		}
 		if rawAliases, ok := keys["aliases"]; ok {
-			var list []string
-			if err := json.Unmarshal(rawAliases, &list); err != nil {
-				return nil, rowErr(n, "aliases: expected a JSON array of names")
+			list, err := jsonStringArray(rawAliases, "aliases", "names")
+			if err != nil {
+				return nil, rowErr(n, "%v", err)
 			}
 			d.aliases = &list
 		}
