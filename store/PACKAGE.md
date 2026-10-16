@@ -45,7 +45,8 @@ seams the generated stack executes through.
   and a fresh one created; quarantined names the aside so callers surface
   it. The `-wal`/`-shm` sidecars move with the main file (a fresh store
   must never adopt a stale WAL, and the quarantined pair is the
-  operator's evidence). Never silently truncated. The integrity probe
+  operator's evidence): only a NotExist Stat skips the rename — any other
+  Stat failure fails closed naming the path, never read as absence. Never silently truncated. The integrity probe
   is `PRAGMA quick_check` — every btree, not just the schema page — so
   page-level corruption quarantines too. A schema/policy error surfaces
   and is never quarantined.

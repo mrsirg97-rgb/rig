@@ -67,6 +67,9 @@ func quarantine(path, aside string) error {
 	for _, suffix := range []string{"", "-wal", "-shm"} {
 		src := path + suffix
 		if _, err := os.Stat(src); err != nil {
+			if !os.IsNotExist(err) {
+				return fmt.Errorf("stat %s: %w", src, err)
+			}
 			continue
 		}
 		if err := os.Rename(src, aside+suffix); err != nil {

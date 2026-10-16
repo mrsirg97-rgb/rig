@@ -143,6 +143,22 @@ func TestOpenRunsTheMigrationBodyOnAFreshStoreAtTheWantedVersion(t *testing.T) {
 	}
 }
 
+func TestQuarantineFailsClosedWhenASidecarStatFails(t *testing.T) {
+	dir := t.TempDir()
+	notADir := filepath.Join(dir, "not-a-dir")
+	if err := os.WriteFile(notADir, []byte("a regular file where the store's directory should be"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(notADir, "corrupt.sqlite")
+	err := quarantine(path, path+".corrupt-1")
+	if err == nil {
+		t.Fatal("a sidecar Stat failure that is not NotExist must not read as absence: a stale WAL would stay beside the fresh store")
+	}
+	if !strings.Contains(err.Error(), path) {
+		t.Errorf("the refusal must name the path it could not stat: %v", err)
+	}
+}
+
 func TestOpenQuarantinesCorruptFile(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "corrupt.sqlite")
