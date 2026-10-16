@@ -4,6 +4,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -83,6 +84,57 @@ exit 0
 	case <-done:
 	case <-time.After(10 * time.Second):
 		t.Fatal("the slow probe never finished after the release")
+	}
+}
+
+func probeCount(t *testing.T, log string) int {
+	t.Helper()
+	b, err := os.ReadFile(log)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return strings.Count(string(b), "ran\n")
+}
+
+func TestATransientProbeFailureIsNotMemoized(t *testing.T) {
+	bin := t.TempDir()
+	base := t.TempDir()
+	log := filepath.Join(base, "log")
+	dir := filepath.Join(base, "dir")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	shimGit(t, bin, "echo ran >> \"$PROBE_LOG\"\nexit \"$EXIT_CODE\"\n")
+	t.Setenv("PROBE_LOG", log)
+	t.Setenv("EXIT_CODE", "90")
+	for i := 0; i < 2; i++ {
+		if got := Path(dir); got != dir {
+			t.Fatalf("a failed probe must leave the cwd fallback: %q", got)
+		}
+	}
+	if got := probeCount(t, log); got != 2 {
+		t.Fatalf("a transient failure must not be memoized: %d probes for two calls, want 2", got)
+	}
+}
+
+func TestExit128MemoizesTheCwdFallback(t *testing.T) {
+	bin := t.TempDir()
+	base := t.TempDir()
+	log := filepath.Join(base, "log")
+	dir := filepath.Join(base, "dir")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	shimGit(t, bin, "echo ran >> \"$PROBE_LOG\"\nexit \"$EXIT_CODE\"\n")
+	t.Setenv("PROBE_LOG", log)
+	t.Setenv("EXIT_CODE", "128")
+	for i := 0; i < 2; i++ {
+		if got := Path(dir); got != dir {
+			t.Fatalf("outside a repo the scope must fall back to the cwd: %q", got)
+		}
+	}
+	if got := probeCount(t, log); got != 1 {
+		t.Fatalf("exit 128 is a property of the cwd and must be memoized: %d probes for two calls, want 1", got)
 	}
 }
 

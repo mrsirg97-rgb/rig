@@ -3,6 +3,7 @@ package scope
 import (
 	"crypto/sha1"
 	"encoding/hex"
+	"errors"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -21,22 +22,27 @@ type memoT[V any] struct {
 	vals map[string]V
 }
 
-func (m *memoT[V]) get(key string, probe func() V) V {
+func (m *memoT[V]) get(key string, probe func() (V, bool)) V {
 	m.mu.Lock()
 	v, ok := m.vals[key]
 	m.mu.Unlock()
 	if ok {
 		return v
 	}
-	v = probe()
+	v, keep := probe()
 	m.mu.Lock()
 	if stored, ok := m.vals[key]; ok {
 		v = stored
-	} else {
+	} else if keep {
 		m.vals[key] = v
 	}
 	m.mu.Unlock()
 	return v
+}
+
+func permanent(err error) bool {
+	var exit *exec.ExitError
+	return errors.As(err, &exit) && exit.ExitCode() == 128
 }
 
 var (
@@ -49,9 +55,10 @@ func Path(cwd string) string {
 	if cwd == "" || cwd == Global {
 		return cwd
 	}
-	return paths.get(cwd, func() string {
+	return paths.get(cwd, func() (string, bool) {
 		v := cwd
-		if out, err := exec.Command("git", "-C", cwd, "rev-parse", "--git-common-dir").Output(); err == nil {
+		out, err := exec.Command("git", "-C", cwd, "rev-parse", "--git-common-dir").Output()
+		if err == nil {
 			p := strings.TrimSpace(string(out))
 			if p != "" && !strings.HasPrefix(p, "-") && !strings.Contains(p, "\n") {
 				if !filepath.IsAbs(p) {
@@ -62,8 +69,9 @@ func Path(cwd string) string {
 					v = real
 				}
 			}
+			return v, true
 		}
-		return v
+		return v, permanent(err)
 	})
 }
 
@@ -78,10 +86,11 @@ func Worktree(cwd string) string {
 	if cwd == "" {
 		return ""
 	}
-	return wts.get(cwd, func() string {
+	return wts.get(cwd, func() (string, bool) {
 		common := Path(cwd)
 		v := Label(cwd)
-		if out, err := exec.Command("git", "-C", cwd, "rev-parse", "--git-dir").Output(); err == nil {
+		out, err := exec.Command("git", "-C", cwd, "rev-parse", "--git-dir").Output()
+		if err == nil {
 			p := strings.TrimSpace(string(out))
 			if p != "" && !strings.HasPrefix(p, "-") && !strings.Contains(p, "\n") {
 				if !filepath.IsAbs(p) {
@@ -97,8 +106,9 @@ func Worktree(cwd string) string {
 					}
 				}
 			}
+			return v, true
 		}
-		return v
+		return v, permanent(err)
 	})
 }
 
@@ -121,11 +131,13 @@ func Bare(cwd string) bool {
 	if cwd == "" || cwd == Global {
 		return false
 	}
-	return bares.get(cwd, func() bool {
+	return bares.get(cwd, func() (bool, bool) {
 		bare := false
-		if out, err := exec.Command("git", "-C", cwd, "rev-parse", "--is-bare-repository").Output(); err == nil {
+		out, err := exec.Command("git", "-C", cwd, "rev-parse", "--is-bare-repository").Output()
+		if err == nil {
 			bare = strings.TrimSpace(string(out)) == "true"
+			return bare, true
 		}
-		return bare
+		return bare, permanent(err)
 	})
 }
