@@ -295,6 +295,9 @@ func (p *provider) cost(u core.Usage) float64 {
 func (p *provider) backoff(attempts int, h http.Header) time.Duration {
 	if v := h.Get("Retry-After"); v != "" {
 		if n, err := strconv.ParseFloat(strings.TrimSpace(v), 64); err == nil && n >= 0 {
+			if n >= float64(maxRetryAfterWait/time.Second) {
+				return maxRetryAfterWait
+			}
 			wait := time.Duration(n * float64(time.Second))
 			if wait > maxRetryAfterWait {
 				wait = maxRetryAfterWait
