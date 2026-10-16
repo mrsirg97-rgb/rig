@@ -72,9 +72,7 @@ the five signals the instances exchange beside the protocol's own.
   acknowledgement of a terminal job status — two mesh periods, the
   proposal round and the vote round a pin needs, derived from the
   settings' period (250 ms by default) — then proceeds loud: the runner
-  goes on and the status may be lost. `SetCodec`
-  swaps the encoder later joins build their transports with and returns
-  the restore; it exists for the mixed-version tests.
+  goes on and the status may be lost.
 - The priorities: outside 0, child 20, fleet 30, delegate's return 70,
   the operator's turn 90.
 - The door (3.1.0): `NewDoor(member, cfg, remote, home)` — the machine's

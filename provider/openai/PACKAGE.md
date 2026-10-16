@@ -56,10 +56,12 @@ adapter's problem; the loop sees `evt.Signal` only.
   run, which matters where no interrupt handle exists (the headless
   worker). The plain path is `http.DefaultTransport`'s clone, so the
   dial and TLS-handshake bounds survive; the stream after the headers
-  is unbounded, so a long generation keeps streaming; a
-  `Client.Timeout` would kill it.
-- A transport error emits `Fault` (or closes the channel torn-down, with
-  no `Done`/`Fault`, when the ctx is dead). A non-2xx status emits `Fault`
+  carries the 10-minute idle bound (an idle gap that long cuts the
+  stream with a `Fault`), so a long generation keeps streaming while
+  the model is speaking; a `Client.Timeout` would kill it.
+- A transport error emits `Fault` (and a stream cut by the ctx emits
+  `Done`, so the turn always ends — the shape the anthropic twin
+  documents too). A non-2xx status emits `Fault`
   with a response snippet read capped at 256 bytes: the error body is
   untrusted, so the cap is the most a hostile endpoint can make the
   process hold, and the same read decides the every-row empty-5xx retry.
