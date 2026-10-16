@@ -114,8 +114,9 @@ func runJob(args []string) int {
 }
 
 func jobTeller(machine machineroom.Member, voice broadcast.Member) func(machineroom.JobStatus) {
+	gate := machine != nil && machine.Admits(machineroom.JobStatusSince)
 	return func(status machineroom.JobStatus) {
-		if machine == nil || !machine.Admits(machineroom.JobStatusSince) {
+		if !gate {
 			return
 		}
 		posted := make(chan struct{})

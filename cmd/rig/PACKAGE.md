@@ -48,7 +48,11 @@ sees core and models and nothing else.
   lifecycle in its own file (own stores, own record — it must not touch
   the REPL's closure order): opens the one
   `global.sqlite`, parses the crontab key `jN` only, its own record, the
-  busy policy, the worker jail (SPEC_SANDBOX 1, 5). The session's five
+  busy policy, the worker jail (SPEC_SANDBOX 1, 5). The job teller asks
+  the room's `Admits` gate once at its build — the gate answers whether
+  the room carries the JobStatus feature at all, and the runner's room
+  is fixed for the job's life — never per post, where every status would
+  walk the live peers and a sidecar read apiece. The session's five
   stores (rem, scheduler, state, todo, decision) open through one
   `openStore` helper: the MkdirAll, the loud open refusal, the
   quarantine line, and the migration report print once, in one shape.

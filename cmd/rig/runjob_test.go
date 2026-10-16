@@ -14,11 +14,25 @@ import (
 
 type muteMember struct {
 	machineroom.Member
+	asks int
 }
 
-func (m *muteMember) Admits(version string) bool { return version == machineroom.JobStatusSince }
+func (m *muteMember) Admits(version string) bool {
+	m.asks++
+	return version == machineroom.JobStatusSince
+}
 
 func (m *muteMember) Act(payload evt.Signal, key int64, priority int, posted func(admitted bool)) {}
+
+func TestTheTellerAsksTheRoomGateOnceNotPerPost(t *testing.T) {
+	stub := &muteMember{}
+	tell := jobTeller(stub, nil)
+	tell(machineroom.JobStatus{Job: "j1", State: machineroom.JobRunning})
+	tell(machineroom.JobStatus{Job: "j2", State: machineroom.JobRunning})
+	if stub.asks != 1 {
+		t.Fatalf("the room gate was asked %d times across two posts, want once at the teller's build", stub.asks)
+	}
+}
 
 type tellFixture struct {
 	notices chan evt.Notice
