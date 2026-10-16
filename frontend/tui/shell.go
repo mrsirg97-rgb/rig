@@ -42,6 +42,8 @@ type tui struct {
 	bandLive      bool
 	bandFrame     int
 	bandCalls     map[string]bandCall
+	bandWork      map[string]bandWork
+	bandShown     string
 	now           func() time.Time
 	aside         string
 	asideAt       time.Time

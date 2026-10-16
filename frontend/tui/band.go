@@ -15,6 +15,12 @@ type bandItem struct {
 	text   string
 }
 
+type bandWork struct {
+	label   string
+	workers int
+	since   time.Time
+}
+
 type bandCall struct {
 	call string
 	at   time.Time
@@ -45,9 +51,62 @@ func bandEvent(slot, text string) bandItem {
 	return bandItem{slot: slot, text: text}
 }
 
-func (t *tui) bandStatusItem(key, prefix, call string, at time.Time) bandItem {
-	return bandItem{status: true, key: key, slot: SlotWarn,
-		text: prefix + bandCallCut(call) + " · " + swarmAge(t.now().Sub(at))}
+func (t *tui) bandStatusItem(key, prefix, call string) bandItem {
+	return bandItem{status: true, key: key, slot: SlotWarn, text: prefix + bandCallCut(call)}
+}
+
+func (t *tui) bandWorksLocked(key, label string, workers int, since time.Time) {
+	if workers < 0 {
+		if _, ok := t.bandWork[key]; !ok {
+			return
+		}
+		delete(t.bandWork, key)
+		t.stopFrameTickerLocked()
+		if !t.bandLive && len(t.live.lines) > 0 {
+			t.live.draw("", t.liveLinesLocked(), t.statusLineLocked())
+		}
+		return
+	}
+	if t.bandWork == nil {
+		t.bandWork = map[string]bandWork{}
+	}
+	if w, ok := t.bandWork[key]; ok {
+		since = w.since
+	} else if since.IsZero() {
+		since = t.now()
+	}
+	t.bandWork[key] = bandWork{label: label, workers: workers, since: since}
+	t.startFrameTickerLocked()
+}
+
+func (t *tui) bandSummaryLocked() string {
+	var latest bandWork
+	found := false
+	for _, w := range t.bandWork {
+		if !found || w.since.After(latest.since) || (w.since.Equal(latest.since) && w.label < latest.label) {
+			latest, found = w, true
+		}
+	}
+	if !found {
+		return ""
+	}
+	text := latest.label
+	if latest.workers > 0 {
+		text += " · " + strconv.Itoa(latest.workers) + " " + wordFor(latest.workers)
+	}
+	return text + " · " + swarmAge(t.now().Sub(latest.since))
+}
+
+func (t *tui) bandSummaryMovedLocked() bool {
+	if t.bandLive {
+		return false
+	}
+	text := t.bandSummaryLocked()
+	if text == t.bandShown {
+		return false
+	}
+	t.bandShown = text
+	return true
 }
 
 func (t *tui) bandWorkerCallLocked(key, prefix, call string, at time.Time) {
@@ -62,7 +121,7 @@ func (t *tui) bandWorkerCallLocked(key, prefix, call string, at time.Time) {
 		t.bandCalls = map[string]bandCall{}
 	}
 	t.bandCalls[key] = seen
-	t.bandQueueLocked(t.bandStatusItem(key, prefix, call, at))
+	t.bandQueueLocked(t.bandStatusItem(key, prefix, call))
 }
 
 func (t *tui) bandQueueLocked(item bandItem) {
@@ -125,9 +184,13 @@ func (t *tui) breatheBandLocked() {
 func (t *tui) bandRowLocked() string {
 	text := bandCut(t.bandHold.text, t.live.width)
 	var row string
+	t.bandShown = t.bandSummaryLocked()
+	summary := bandCut(t.bandShown, t.live.width)
 	switch {
 	case t.bandLive:
 		row = t.theme.BreathPaint(t.bandHold.slot, t.bandFrame, text)
+	case summary != "":
+		row = t.theme.Paint(SlotDim, summary)
 	case text != "":
 		row = t.theme.Paint(SlotDim, text)
 	default:

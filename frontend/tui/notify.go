@@ -404,20 +404,31 @@ func (t *tui) trackStatusLocked(st core.SwarmStatus) {
 	}
 	if len(st.Workers) == 0 {
 		t.swarm, t.delegate = st, st
+		t.bandWorksLocked("delegating", "", -1, time.Time{})
+		t.bandWorksLocked("swarm", "", -1, time.Time{})
 		return
 	}
-	running := 0
+	label := "swarm"
+	if delegate {
+		label = "delegating"
+	}
+	running, active := 0, 0
 	for _, w := range st.Workers {
-		if w.State == "running" {
+		switch w.State {
+		case "running":
 			running++
+			active++
+		case "queued":
+			active++
 		}
 	}
 	if running > 0 && !swarmAnyRunning(before.Workers) {
-		label := "swarm"
-		if delegate {
-			label = "delegating"
-		}
 		t.bandQueueLocked(bandEvent(SlotText, label+" · "+strconv.Itoa(running)+" "+wordFor(running)))
+	}
+	if active > 0 {
+		t.bandWorksLocked(label, label, running, time.Time{})
+	} else {
+		t.bandWorksLocked(label, "", -1, time.Time{})
 	}
 	if delegate {
 		t.delegate = st
@@ -435,6 +446,7 @@ func (t *tui) trackStatusLocked(st core.SwarmStatus) {
 func (t *tui) jobLocked(st machineroom.JobStatus) {
 	switch st.State {
 	case machineroom.JobRunning:
+		t.bandWorksLocked("job/"+st.Job, "job "+st.Job, st.Workers, st.Started)
 		if st.Call == "" {
 			text := "scheduled job"
 			if st.Workers > 0 {
@@ -445,8 +457,10 @@ func (t *tui) jobLocked(st machineroom.JobStatus) {
 		}
 		t.bandWorkerCallLocked("job/"+st.Job, st.Job+" #1 ", st.Call, st.CallAt)
 	case machineroom.JobDone:
+		t.bandWorksLocked("job/"+st.Job, "", -1, time.Time{})
 		t.bandQueueLocked(bandEvent(SlotSuccess, "job "+st.Job+" done · "+swarmAge(st.Ended.Sub(st.Started))))
 	case machineroom.JobFailed:
+		t.bandWorksLocked("job/"+st.Job, "", -1, time.Time{})
 		text := "job " + st.Job + " failed"
 		if st.Reason != "" {
 			text += " · " + st.Reason

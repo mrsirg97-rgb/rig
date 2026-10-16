@@ -1,4 +1,22 @@
 # Changelog
+## [3.2.1]: the row rests on the work
+
+Between breaths the band row now rests on the work in flight instead of
+the last item: `<type> · <workers> · <time>` — `delegating · 2 workers ·
+1m`, `swarm · 3 workers · 40s`, `job j8 · 1 worker · 3m` — dimmed, the
+time counted from the work's start and read when the row is drawn, so it
+moves while the row rests. 3.2.0 computed a call's age once, when the
+item was made, so every call read `· 0s`; a call is now `#<worker>
+<call>` and the clock lives on the resting row. With several kinds of
+work in flight the row names the one that started last; with nothing in
+flight it holds the last item dimmed and the ticker stops. While only
+the resting row moves, the ticker repaints it when its text changes, not
+every frame. The tests: the phone mockups at 52 columns with the resting
+row, eight calls in one breath, the interleave, and the resting row
+counting 0s, 7s, 1m, a worker leaving, a job starting later taking the
+row, its done handing it back, and the ticker resting once nothing is in
+flight.
+
 ## [3.2.0]: the row
 
 Everything happening in the background — a delegate's or a swarm's start,
