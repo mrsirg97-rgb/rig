@@ -546,7 +546,7 @@ A pinned one-line header via scroll region is named future work
 (`-pin-header`), not built: inside a margin region most terminals
 drop scrolled lines from scrollback, which trades away decision 1.
 
-### 3a. The band row and the transcript notice, amended 1.5.4, 2.14.7, 3.2.0, 3.2.1
+### 3a. The band row and the transcript notice, amended 1.5.4, 2.14.7, 3.2.0, 3.2.1, 3.2.3
 
 The status string is a newline-joined footer already; under the status
 rows sits one row that never goes away, carrying everything that
@@ -580,8 +580,11 @@ delegating · 1 worker
 - The row shows the breathing item on the ember's curve in the item's
   slot — a call in the warn slot, a notice in its level's slot, a
   start in the text slot, a done in the success slot, a failure in the
-  fault slot — then holds it dimmed until the next one, `—` before the
-  first. One breath is `emberBreathStops` (12) × `animPeriod` (120 ms)
+  fault slot — then holds it dimmed for `bandRestPeriod` (30 s) and
+  fades to `—`, `—` before the first; the next item cancels the rest.
+  The rest rides its own timer, not the frame ticker (amended 3.2.3: the
+  held item stayed for the rest of the session until the next one, so a
+  stale notice read as current). One breath is `emberBreathStops` (12) × `animPeriod` (120 ms)
   of the frame ticker's animation, and it runs whether or not a turn,
   a compaction or an aside is live: the row is not the indicator's.
 - Between breaths the row rests on the work in flight, dimmed:
@@ -593,8 +596,8 @@ delegating · 1 worker
   last. The workers count the running ones; a delegate or a swarm is
   in flight while any worker runs or waits, a job from its running
   act to its done or failed act. With nothing in flight the row
-  holds the last item dimmed, `—` before the first, and the ticker
-  stops. While only the resting row moves, the ticker repaints it
+  holds the last item dimmed until its rest fades it, `—` before the
+  first and after, and the ticker stops. While only the resting row moves, the ticker repaints it
   when its text changes, not every frame (amended 3.2.1: the call's
   age, computed once when the item was made, always read `0s`; the
   time moved to the resting row, where it is read live).
