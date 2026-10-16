@@ -925,6 +925,29 @@ func TestSwarmRetriesAreKeyedByTaskAcrossWorkers(t *testing.T) {
 	}
 }
 
+func TestSwarmStartRefusesADeadSwarmContext(t *testing.T) {
+	h := newHarness(t)
+	ctx, cancel := context.WithCancel(core.WithSession(context.Background(), core.NewSession()))
+	if _, err := h.ctl.Start(ctx, swarm.StartOpts{Count: 1, Role: "worker"}); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	cancel()
+	h.waitFor(t, "the worker exits with the swarm's context", func() bool {
+		rows := h.ctl.List()
+		return len(rows) == 1 && rows[0].State == swarm.StateExited
+	})
+	_, err := h.ctl.Start(ctx, swarm.StartOpts{Count: 1, Role: "worker"})
+	if err == nil {
+		t.Fatal("a start against a swarm whose context died must refuse, not report added agents that exit instantly")
+	}
+	if !strings.Contains(err.Error(), "stop the swarm") {
+		t.Errorf("the refusal must name the door: %v", err)
+	}
+	if rows := h.ctl.List(); len(rows) != 1 {
+		t.Errorf("a refused start must add nothing: %+v", rows)
+	}
+}
+
 func TestSwarmStartAndStopReplyVoice(t *testing.T) {
 	h := newHarness(t)
 	reply := h.start(t, swarm.StartOpts{Count: 1, Role: "worker"})

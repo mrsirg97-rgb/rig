@@ -8,9 +8,11 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
+	"github.com/mrsirg97-rgb/evt"
 	"github.com/mrsirg97-rgb/evt/broadcast"
 	rig "github.com/mrsirg97-rgb/rig/v3"
 	"github.com/mrsirg97-rgb/rig/v3/models"
@@ -128,6 +130,88 @@ func TestAJobStatusCrossesTheMachineRoom(t *testing.T) {
 	}
 	if states[0] != machineroom.JobRunning || states[1] != machineroom.JobDone {
 		t.Fatalf("the statuses arrived %v, want running then done", states)
+	}
+}
+
+func TestTheEndJobsDrainRidesTheRoomSMemberLeftSignal(t *testing.T) {
+	home := t.TempDir()
+	engine, fleetroom := newFleet()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go engine.Start(ctx)
+	voice := fleetroom.Add(rig.MemberDecision)
+	var ended []machineroom.JobStatus
+	var mu sync.Mutex
+	fleetroom.Add(rig.MemberFrontend).Subscribe(ctx, func(err error, messages ...broadcast.Message) {
+		for _, m := range messages {
+			if st, ok := m.Signal().(machineroom.JobStatus); ok {
+				mu.Lock()
+				ended = append(ended, st)
+				mu.Unlock()
+			}
+		}
+	})
+	var a, b machineroom.Member
+	ka := newChildren(home, models.Table{}, nil, nil, voice)
+	t.Cleanup(ka.close)
+	a, err := machineroom.New(home, machineroom.JobStatusSince, ka.places, ka.effects, func(n evt.Notice) {
+		ka.left(n, a)
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	kb := newChildren(home, models.Table{}, nil, func() { b.Close() }, nil)
+	t.Cleanup(kb.close)
+	b, err = machineroom.New(home, machineroom.JobStatusSince, kb.places, kb.effects, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	deadline := time.Now().Add(10 * time.Second)
+	for time.Now().Before(deadline) && (len(a.Live()) != 1 || len(b.Live()) != 1) {
+		time.Sleep(25 * time.Millisecond)
+	}
+	if len(a.Live()) != 1 || len(b.Live()) != 1 {
+		t.Fatal("the members must see each other before the runner leaves")
+	}
+
+	b.Act(machineroom.JobStatus{Job: "j1", State: machineroom.JobRunning,
+		Started: time.Date(2026, 8, 15, 12, 0, 0, 0, time.UTC), Workers: 1},
+		machineroom.KeyOf("job/j1"), machineroom.PriorityFleet, func(bool) {})
+	deadline = time.Now().Add(10 * time.Second)
+	for time.Now().Before(deadline) {
+		mu.Lock()
+		n := len(ended)
+		mu.Unlock()
+		if n == 1 {
+			break
+		}
+		time.Sleep(25 * time.Millisecond)
+	}
+	mu.Lock()
+	if len(ended) != 1 || ended[0].State != machineroom.JobRunning {
+		mu.Unlock()
+		t.Fatalf("the survivor's row breathes the running act: %v", ended)
+	}
+	mu.Unlock()
+
+	b.Close()
+	deadline = time.Now().Add(10 * time.Second)
+	for time.Now().Before(deadline) {
+		mu.Lock()
+		n := len(ended)
+		mu.Unlock()
+		if n == 2 {
+			break
+		}
+		time.Sleep(25 * time.Millisecond)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if len(ended) != 2 {
+		t.Fatalf("the room's member-left signal must end the runner's job: %v", ended)
+	}
+	if ended[1].State != machineroom.JobFailed || ended[1].Reason != "runner left" {
+		t.Fatalf("the end is failed, runner left: %+v", ended[1])
 	}
 }
 

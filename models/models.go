@@ -152,6 +152,19 @@ func (m Model) Capped(window int) Model {
 	m.Reserve = scale(m.Reserve)
 	m.KeepRecent = scale(m.KeepRecent)
 	m.MaxTokens = max(scale(m.MaxTokens), 1)
+	if m.ThinkingBudget > 0 {
+		m.ThinkingBudget = scale(m.ThinkingBudget)
+		if m.ThinkingBudget >= m.MaxTokens {
+			m.ThinkingBudget = m.MaxTokens - 1
+		}
+		if m.ThinkingBudget < thinkingBudgetFloor {
+			if m.MaxTokens > thinkingBudgetFloor {
+				m.ThinkingBudget = thinkingBudgetFloor
+			} else {
+				m.ThinkingBudget = 0
+			}
+		}
+	}
 	m.Window = window
 	return m
 }

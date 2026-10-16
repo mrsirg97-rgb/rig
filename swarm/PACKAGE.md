@@ -17,7 +17,9 @@ everything the supervisor says is a `broadcast` message.
   swarm works its bound queue, and the supervisor's doors attribute to
   it. Against a running swarm a start adds (the roles mix), and the
   reply is one phrasing either way: `swarm: added N agents (role X ·
-  model M)`. `StartOpts.Budget` (dollars) caps the router's claims — the
+  model M)`. Against a swarm whose context died without a Stop the
+  start refuses — `swarm: the swarm's context died: stop the swarm and
+  start again` — and adds nothing. `StartOpts.Budget` (dollars) caps the router's claims — the
   spend is summed from each delegate result's cost and at the cap the
   router stops claiming with the notice `swarm: budget reached — $X.XX /
   $Y.YY — the swarm stops claiming`. A start resets the spend and the
@@ -37,10 +39,19 @@ everything the supervisor says is a `broadcast` message.
 - One worker owns one identity (a minted session id, stable for its
   life) and one goroutine, because the spawn waits on the world: build
   the brief from `todo.Task`, spawn a one-shot `rig -p` through the
-  delegate seam, finish the task itself (workers `complete` in worker
-  mode, reviewers take the `core.Verdict` the worker's `verdict` tool
-  sent through the pipe and `accept`/`reject`), then post the settle to
-  the loop and wait for it. A reviewer's allow list gains `verdict`.
+  delegate seam under the work cap (`Opts.Cap`), finish the task itself
+  (workers `complete` in worker mode, reviewers take the `core.Verdict`
+  the worker's `verdict` tool sent through the pipe and
+  `accept`/`reject`), then post the settle to the loop and wait for it.
+  The cap protocol: the work closure runs at most once (a swap decides
+  the winner; the loser no-ops), and the caller tells a submission it
+  holds the slot (settled before `Submit` returned — the fast path,
+  the caller's to resolve) from one the cap runs (queued) by the
+  settled channel's state at submit return, a non-blocking select — so
+  a queued submission the cap starts in the window is run once, not
+  twice. `Release` goes only to a submission that took a slot: a queued
+  one the cap settled stopped never started, and releasing it would
+  unwind the started count and loosen the cap for good. A reviewer's allow list gains `verdict`.
   Each worker is a room member by its id and the spawn carries that
   member (`DelegateInput.Member`): the child heartbeats on the fleet
   pipe and `Delegate` publishes each frame as the worker, so the
@@ -60,7 +71,12 @@ everything the supervisor says is a `broadcast` message.
   task across the swarm; a second death fails the task (workers) or
   rejects it with the reason (reviewers). The reject doors are capped
   per task: the third rejection fails it with a note instead of
-  returning it to the workers. A dispatch refused because the worker's
+  returning it to the workers. The two budgets are per task-life on the
+  board and retire together at the task's terminal — a verdict
+  accepted, or the task failed and out of the workers' hands — so a
+  controller's lifetime holds an entry only for the tasks still owed a
+  retry or a verdict; a rejection, a release, or a completion that
+  hands the task to review is not a terminal and retires nothing. A dispatch refused because the worker's
   model is not resident (`sched.ErrNotResident`) releases the claim,
   stops that worker with a notice naming the holder, and fails nothing.
 - What the supervisor says, it publishes to the room as `Notice` with

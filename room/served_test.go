@@ -1,9 +1,63 @@
 package room
 
 import (
+	"bytes"
+	"encoding/json"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 )
+
+const servedRowLen = 256
+
+func paddedServedRow(t *testing.T, at time.Time, prompt int) []byte {
+	t.Helper()
+	base, err := json.Marshal(Served{At: at, Priority: PriorityTurn, Prompt: prompt, Cached: 1, Completion: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	line := append([]byte{}, base[:len(base)-1]...)
+	line = append(line, `,"pad":"`...)
+	pad := servedRowLen - len(line) - len("\"}\n")
+	if pad < 0 {
+		t.Fatalf("the served row cannot hold its pad: %d bytes", len(base))
+	}
+	line = append(line, bytes.Repeat([]byte{' '}, pad)...)
+	line = append(line, '"', '}', '\n')
+	if len(line) != servedRowLen {
+		t.Fatalf("the served row must be exactly %d bytes, got %d", servedRowLen, len(line))
+	}
+	return line
+}
+
+func TestServedRequestsReadTheRecordTheTailStartsOn(t *testing.T) {
+	home := t.TempDir()
+	at := time.Date(2026, 10, 12, 21, 0, 0, 0, time.UTC)
+	first, err := json.Marshal(Served{At: at, Priority: PriorityTurn, Prompt: 1, Cached: 1, Completion: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	data := append([]byte{}, first...)
+	data = append(data, '\n')
+	rows := servedTail / servedRowLen
+	for i := 0; i < rows; i++ {
+		data = append(data, paddedServedRow(t, at.Add(time.Duration(i)*time.Second), 100+i)...)
+	}
+	if err := os.MkdirAll(filepath.Join(home, "logs"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(servedPath(home, "m"), data, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	got := Recent(home, "m", rows+1)
+	if len(got) != rows {
+		t.Fatalf("the record the tail's cut starts on must read back: %d of %d rows", len(got), rows)
+	}
+	if got[0].Prompt != 100 || got[len(got)-1].Prompt != 100+rows-1 {
+		t.Fatalf("the window must hold the tail's rows oldest last: %+v", got[0])
+	}
+}
 
 func TestServedRequestsReadBackNewestLast(t *testing.T) {
 	home := t.TempDir()

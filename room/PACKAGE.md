@@ -27,10 +27,20 @@ the five signals the instances exchange beside the protocol's own.
   of spinning. The start time's read fails loud too: a join whose
   `/proc/self/stat` cannot be read has no identity to sit under. The
   scan after the listen skips the peer whose dial refuses.
-  Nothing mints until `Settle`, called after the last `Subscribe`.
+  Nothing mints until `Settle`, called after the last `Subscribe`. The
+  accept loop classifies: a closed listener or a gone member ends it;
+  any other error — the fd table full, the transient — is said loud
+  through `told` at error level (naming the member and the error) and
+  retried after `acceptBackoff`, one mesh period, the only duration the
+  operator's row owns: a busy loop must not spin, and a momentary
+  exhaustion must not stop a member its socket and sidecar still
+  advertise.
 - `KeyOf(model string)` and `TableKey()`: the keys the claims and the
   child operations ride, hashed from the model's id and the table's
-  name.
+  name. `MemberLeftNotice` is the machine room's member-leave notice
+  text — the one evt's claimant publishes when a peer's transport ends
+  (evt broadcast's `left`) — named here so the instances' end-jobs
+  drain matches the room's word instead of a copy of it.
 - `Answers(port int)`: the row's port probed once, at join when the room
   is empty — what is resident is read from the world, never replayed.
 - `Loading(port int)`: whether the child's `/health` says 503 — the port
@@ -39,7 +49,10 @@ the five signals the instances exchange beside the protocol's own.
   (3.0.2): one line per request a rig served, appended to
   `~/.rig/logs/<model id>.served` by the instance that made it and read
   from the file's last 64 KB by the dashboard — what a model is doing is
-  read from the world, like its residency.
+  read from the world, like its residency. The tail's first line is
+  dropped only when the cut landed inside a record: one byte is peeked
+  before the window, and a cut landing exactly on a record boundary
+  keeps that record.
 - The signals: `StartChild`, `StopChild`, `SwapChild` (`Swap() bool`),
   `TableChange` (one row's raw JSON), `Update` and `JobStatus` (3.2.0:
   a scheduled job's state crossing processes — the job's id, the
@@ -52,9 +65,14 @@ the five signals the instances exchange beside the protocol's own.
   peer's sidecar and answers whether the room's slowest member still
   declares at least it — a missing, empty or unreadable sidecar refuses,
   fail closed — which is the gate a poster of a new act checks before
-  it posts (SPEC_ROOM, "the version a member declares"). `SetCodec`
-  swaps the encoder later joins build their transports with and returns
-  the restore; it exists for the mixed-version tests.
+  it posts (SPEC_ROOM, "the version a member declares"). The walk rides
+  `Ask`, so a gone member refuses — past `Close` the read fails and the
+  answer is false, never the vacuous true of a walk over nothing. The
+  run-job teller waits `JobStatusPostWait` for the posted
+  acknowledgement of a terminal job status — two mesh periods, the
+  proposal round and the vote round a pin needs, derived from the
+  settings' period (250 ms by default) — then proceeds loud: the runner
+  goes on and the status may be lost.
 - The priorities: outside 0, child 20, fleet 30, delegate's return 70,
   the operator's turn 90.
 - The door (3.1.0): `NewDoor(member, cfg, remote, home)` — the machine's
@@ -87,7 +105,11 @@ the five signals the instances exchange beside the protocol's own.
   gone stale past the window), and the sweep's other two loops —
   posting and releasing the mirrored holds as the local holders change —
   surface only here; a horizon event would be a new `evt` release, not
-  a fix.
+  a fix. A repost the mesh released without its local admission leaves
+  at the sweep, and a repost whose entry left still releases the home
+  room's claim when its admission lands (the pin answers, the entry is
+  gone, the claim ends at its own priority) — a forgotten repost never
+  becomes a hold nobody releases.
 
 ## How it is consumed
 

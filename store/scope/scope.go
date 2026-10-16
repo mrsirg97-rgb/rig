@@ -3,6 +3,7 @@ package scope
 import (
 	"crypto/sha1"
 	"encoding/hex"
+	"errors"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -16,39 +17,62 @@ func ShortHash(s string) string {
 	return hex.EncodeToString(d[:])[:12]
 }
 
-type cacheT struct {
+type memoT[V any] struct {
 	mu   sync.Mutex
-	vals map[string]string
-	bare map[string]bool
-	wt   map[string]string
+	vals map[string]V
 }
 
-var cache = cacheT{vals: map[string]string{}, bare: map[string]bool{}, wt: map[string]string{}}
+func (m *memoT[V]) get(key string, probe func() (V, bool)) V {
+	m.mu.Lock()
+	v, ok := m.vals[key]
+	m.mu.Unlock()
+	if ok {
+		return v
+	}
+	v, keep := probe()
+	m.mu.Lock()
+	if stored, ok := m.vals[key]; ok {
+		v = stored
+	} else if keep {
+		m.vals[key] = v
+	}
+	m.mu.Unlock()
+	return v
+}
+
+func permanent(err error) bool {
+	var exit *exec.ExitError
+	return errors.As(err, &exit) && exit.ExitCode() == 128
+}
+
+var (
+	paths = memoT[string]{vals: map[string]string{}}
+	wts   = memoT[string]{vals: map[string]string{}}
+	bares = memoT[bool]{vals: map[string]bool{}}
+)
 
 func Path(cwd string) string {
 	if cwd == "" || cwd == Global {
 		return cwd
 	}
-	cache.mu.Lock()
-	defer cache.mu.Unlock()
-	if v, ok := cache.vals[cwd]; ok {
-		return v
-	}
-	v := cwd
-	if out, err := exec.Command("git", "-C", cwd, "rev-parse", "--git-common-dir").Output(); err == nil {
-		p := strings.TrimSpace(string(out))
-		if p != "" && !strings.HasPrefix(p, "-") && !strings.Contains(p, "\n") {
-			if !filepath.IsAbs(p) {
-				p = filepath.Join(cwd, p)
+	return paths.get(cwd, func() (string, bool) {
+		v := cwd
+		out, err := exec.Command("git", "-C", cwd, "rev-parse", "--git-common-dir").Output()
+		if err == nil {
+			p := strings.TrimSpace(string(out))
+			if p != "" && !strings.HasPrefix(p, "-") && !strings.Contains(p, "\n") {
+				if !filepath.IsAbs(p) {
+					p = filepath.Join(cwd, p)
+				}
+				v = filepath.Clean(p)
+				if real, err := filepath.EvalSymlinks(v); err == nil {
+					v = real
+				}
 			}
-			v = filepath.Clean(p)
-			if real, err := filepath.EvalSymlinks(v); err == nil {
-				v = real
-			}
+			return v, true
 		}
-	}
-	cache.vals[cwd] = v
-	return v
+		return v, permanent(err)
+	})
 }
 
 func Key(cwd string) string {
@@ -62,32 +86,30 @@ func Worktree(cwd string) string {
 	if cwd == "" {
 		return ""
 	}
-	common := Path(cwd)
-	cache.mu.Lock()
-	defer cache.mu.Unlock()
-	if v, ok := cache.wt[cwd]; ok {
-		return v
-	}
-	v := Label(cwd)
-	if out, err := exec.Command("git", "-C", cwd, "rev-parse", "--git-dir").Output(); err == nil {
-		p := strings.TrimSpace(string(out))
-		if p != "" && !strings.HasPrefix(p, "-") && !strings.Contains(p, "\n") {
-			if !filepath.IsAbs(p) {
-				p = filepath.Join(cwd, p)
-			}
-			if real, err := filepath.EvalSymlinks(p); err == nil {
-				p = real
-			}
-			if rel, err := filepath.Rel(common, p); err == nil {
-				parts := strings.Split(rel, string(filepath.Separator))
-				if len(parts) == 2 && parts[0] == "worktrees" {
-					v = parts[1]
+	return wts.get(cwd, func() (string, bool) {
+		common := Path(cwd)
+		v := Label(cwd)
+		out, err := exec.Command("git", "-C", cwd, "rev-parse", "--git-dir").Output()
+		if err == nil {
+			p := strings.TrimSpace(string(out))
+			if p != "" && !strings.HasPrefix(p, "-") && !strings.Contains(p, "\n") {
+				if !filepath.IsAbs(p) {
+					p = filepath.Join(cwd, p)
+				}
+				if real, err := filepath.EvalSymlinks(p); err == nil {
+					p = real
+				}
+				if rel, err := filepath.Rel(common, p); err == nil {
+					parts := strings.Split(rel, string(filepath.Separator))
+					if len(parts) == 2 && parts[0] == "worktrees" {
+						v = parts[1]
+					}
 				}
 			}
+			return v, true
 		}
-	}
-	cache.wt[cwd] = v
-	return v
+		return v, permanent(err)
+	})
 }
 
 func Label(cwd string) string {
@@ -109,15 +131,13 @@ func Bare(cwd string) bool {
 	if cwd == "" || cwd == Global {
 		return false
 	}
-	cache.mu.Lock()
-	defer cache.mu.Unlock()
-	if v, ok := cache.bare[cwd]; ok {
-		return v
-	}
-	bare := false
-	if out, err := exec.Command("git", "-C", cwd, "rev-parse", "--is-bare-repository").Output(); err == nil {
-		bare = strings.TrimSpace(string(out)) == "true"
-	}
-	cache.bare[cwd] = bare
-	return bare
+	return bares.get(cwd, func() (bool, bool) {
+		bare := false
+		out, err := exec.Command("git", "-C", cwd, "rev-parse", "--is-bare-repository").Output()
+		if err == nil {
+			bare = strings.TrimSpace(string(out)) == "true"
+			return bare, true
+		}
+		return bare, permanent(err)
+	})
 }

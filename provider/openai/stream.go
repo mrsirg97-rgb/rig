@@ -222,6 +222,9 @@ func (p *provider) Stream(ctx context.Context, req core.Request) (<-chan evt.Sig
 			}
 			for _, idx := range sortedPending(pending) {
 				call := pending[idx]
+				if len(call.Args) == 0 && finishing == "stop" {
+					call.Args = json.RawMessage("{}")
+				}
 				if !json.Valid(call.Args) && (len(call.Args) > 0 || finishing == "length") {
 					call.Cut = finishing
 				}

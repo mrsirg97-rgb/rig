@@ -1,4 +1,58 @@
 # Changelog
+## [3.2.2]: the audit comes due
+
+This round is the correctness audit's findings, fixed red-first — every
+commit in the set carried a test that failed at the old code. The graph
+tap rides between the gates and the router now, where a resolved call
+passes: it sat innermost to `toolset.Resolve` since 2.9.0, and `Resolve`
+answers a table hit without calling next, so the code map never heard a
+native call again — the order test composes a populated table and a fake
+indexer, and a miss and a denial hold at both wirings. The drain waits
+on the cap with its eyes open: a queued work closure runs once (the
+caller told a started submission apart from a fast-path one by whether
+its settle was already closed), only a submission that took a slot gives
+it back, and the cap's `InFlight` no longer sinks below zero — before,
+a queued work the cap started in the caller's check window ran twice and
+a stopped one loosened the cap forever. The migration transaction
+re-reads the version it holds: a concurrent loser whose captured from
+the winner moved past runs nothing instead of re-applying a body that
+isn't idempotent (todo's review pairing duplicated its accepts
+silently), while a fresh store — minted at the wanted version — still
+folds. The capped row keeps its thinking budget in `Check`: the window
+scale skipped the budget, so an anthropic thinking row served under a
+smaller worker window refused every delegate worker boot; the budget now
+rides the same ratio and clamps into the range the api admits (the
+room-to-answer rule, the api floor, else no thinking). The end-jobs
+drain hangs off the room's own member-left word instead of a literal
+copied from the evt module, and a closed member refuses the gate — the
+live walk over nothing answered true. The run-job teller waits the room's
+derived post wait for a terminal status's acknowledgement and says the
+give-up loud instead of hanging forever; the accept loop classifies —
+a transient error says loud and retries after a period instead of
+benching the member its socket still advertises; and the teller asks the
+room's gate once at its build, not once per status on the wire. The
+scope probe runs outside the lock — a slow git no longer stalls every
+lookup — and a transient probe failure is no longer memoized (only exit
+128 names the cwd). A retry-after the conversion cannot hold waits the
+cap instead of a negative duration; a stop-finished call with no args
+arrives as `{}` like the anthropic twin; quarantine fails closed on a
+sidecar Stat it cannot read; `Open` refuses a path carrying `?` (the
+driver splits the DSN at it and opens a different file); a cap too
+small to carry the truncation marker cuts bare; the door's sweep
+forgets a repost the mesh released without its admission — and releases
+the pin a forgotten repost later earns, which the literal fix alone
+would have leaked into a ghost hold; the served tail keeps the record
+its window starts on; a start against a swarm whose context died
+refuses instead of spawning ghosts; and the retry and reject budgets
+retire at the task's terminal instead of accruing one entry per task
+for the controller's life. The tests: the populated-table tap order, the
+drain protocol's once-run and release accounting, the migration loser,
+the capped sweep over every window, the closed-member gate, the teller
+bound and its loud give-up, the transient accept, the gate asked once,
+the blocked-probe and exit-90 shims, the overflowing header, the empty
+object, the bare cut, the boundary record, the ghost hold, the dead
+context, and the retired budgets.
+
 ## [3.2.1]: the row rests on the work
 
 Between breaths the band row now rests on the work in flight instead of

@@ -160,6 +160,13 @@ func (d *door) entered(key int64, origin broadcast.Mint) func(broadcast.Mint, bo
 		d.engine.Add(evt.Func(func(context.Context) {
 			r, ok := d.in[key][origin]
 			if !ok {
+				for _, op := range d.member.Holders(key) {
+					if op.Mint() != claim {
+						continue
+					}
+					d.member.Release(claim, op.Priority())
+					break
+				}
 				return
 			}
 			r.claim = claim
@@ -301,6 +308,7 @@ func (d *door) sweep() {
 				continue
 			}
 			if r.released {
+				d.forget(key, mint)
 				continue
 			}
 			if r.admitted {

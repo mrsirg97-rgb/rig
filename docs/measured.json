@@ -1,10 +1,10 @@
 {
-  "measured_at": "2026-10-15",
-  "sessions": 2841,
-  "turns": 58031,
-  "prompt": 6566300296,
-  "completion": 37259857,
-  "cache_read": 6455478953,
+  "measured_at": "2026-10-16",
+  "sessions": 2868,
+  "turns": 58915,
+  "prompt": 6624395302,
+  "completion": 38041225,
+  "cache_read": 6512153481,
   "earliest_version": "0.2.0",
   "eras": [
     {

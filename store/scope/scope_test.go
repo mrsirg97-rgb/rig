@@ -4,8 +4,139 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
+	"time"
 )
+
+func shimGit(t *testing.T, bin, script string) {
+	t.Helper()
+	if err := os.WriteFile(filepath.Join(bin, "git"), []byte("#!/bin/sh\n"+script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+}
+
+func waitFor(t *testing.T, path string) {
+	t.Helper()
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		if _, err := os.Stat(path); err == nil {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("nothing ever showed up at %s", path)
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+}
+
+func TestPathReturnsFromCacheWhileAnotherProbeRuns(t *testing.T) {
+	bin := t.TempDir()
+	base := t.TempDir()
+	slow := filepath.Join(base, "slow")
+	other := filepath.Join(base, "other")
+	started := filepath.Join(base, "started")
+	release := filepath.Join(base, "release")
+	for _, dir := range []string{slow, other} {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	shimGit(t, bin, `if [ "$2" = "$SLOW_DIR" ]; then
+: > "$STARTED"
+until [ -f "$RELEASE" ]; do sleep 0.05; done
+fi
+exit 0
+`)
+	t.Setenv("SLOW_DIR", slow)
+	t.Setenv("STARTED", started)
+	t.Setenv("RELEASE", release)
+	t.Cleanup(func() { os.WriteFile(release, nil, 0o644) })
+
+	if got := Path(other); got != other {
+		t.Fatalf("the pass-through shim must leave the other cwd at its fallback: %q", got)
+	}
+
+	done := make(chan string, 1)
+	go func() { done <- Path(slow) }()
+	waitFor(t, started)
+	if _, err := os.Stat(release); err == nil {
+		t.Fatal("the slow probe was released before it could block")
+	}
+
+	got := make(chan string, 1)
+	go func() { got <- Path(other) }()
+	select {
+	case v := <-got:
+		if v != other {
+			t.Fatalf("the cached cwd must resolve to its memoized value: %q", v)
+		}
+		if _, err := os.Stat(release); err == nil {
+			t.Fatal("the cached cwd returned only after the slow probe ended: the cache lock rides the subprocess")
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("a pre-cached cwd did not return while another cwd's probe was in flight: the cache lock rides the subprocess")
+	}
+
+	os.WriteFile(release, nil, 0o644)
+	select {
+	case <-done:
+	case <-time.After(10 * time.Second):
+		t.Fatal("the slow probe never finished after the release")
+	}
+}
+
+func probeCount(t *testing.T, log string) int {
+	t.Helper()
+	b, err := os.ReadFile(log)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return strings.Count(string(b), "ran\n")
+}
+
+func TestATransientProbeFailureIsNotMemoized(t *testing.T) {
+	bin := t.TempDir()
+	base := t.TempDir()
+	log := filepath.Join(base, "log")
+	dir := filepath.Join(base, "dir")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	shimGit(t, bin, "echo ran >> \"$PROBE_LOG\"\nexit \"$EXIT_CODE\"\n")
+	t.Setenv("PROBE_LOG", log)
+	t.Setenv("EXIT_CODE", "90")
+	for i := 0; i < 2; i++ {
+		if got := Path(dir); got != dir {
+			t.Fatalf("a failed probe must leave the cwd fallback: %q", got)
+		}
+	}
+	if got := probeCount(t, log); got != 2 {
+		t.Fatalf("a transient failure must not be memoized: %d probes for two calls, want 2", got)
+	}
+}
+
+func TestExit128MemoizesTheCwdFallback(t *testing.T) {
+	bin := t.TempDir()
+	base := t.TempDir()
+	log := filepath.Join(base, "log")
+	dir := filepath.Join(base, "dir")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	shimGit(t, bin, "echo ran >> \"$PROBE_LOG\"\nexit \"$EXIT_CODE\"\n")
+	t.Setenv("PROBE_LOG", log)
+	t.Setenv("EXIT_CODE", "128")
+	for i := 0; i < 2; i++ {
+		if got := Path(dir); got != dir {
+			t.Fatalf("outside a repo the scope must fall back to the cwd: %q", got)
+		}
+	}
+	if got := probeCount(t, log); got != 1 {
+		t.Fatalf("exit 128 is a property of the cwd and must be memoized: %d probes for two calls, want 1", got)
+	}
+}
 
 func gitRepo(t *testing.T, dir string) {
 	t.Helper()

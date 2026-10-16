@@ -3,6 +3,7 @@ package swarm
 import (
 	"context"
 	"errors"
+	"sync/atomic"
 	"time"
 
 	"github.com/mrsirg97-rgb/evt"
@@ -57,8 +58,12 @@ func (c *Controller) work(w *worker, id string) workResult {
 		c.loud(w, "w%d: task %s: %v", w.id, id, err)
 		return workResult{}
 	}
+	var ran atomic.Bool
 	var res workResult
 	work := evt.Func(func(gate context.Context) {
+		if !ran.CompareAndSwap(false, true) {
+			return
+		}
 		if gate.Err() != nil {
 			res = workResult{holder: gate.Err()}
 			return
@@ -66,12 +71,15 @@ func (c *Controller) work(w *worker, id string) workResult {
 		res = c.delegateWork(w, id, task)
 	})
 	sub := c.opts.Cap.Submit(w.ctx, work, rig.PriorityFleet)
-	if !sub.Started() {
-		<-sub.Settled()
-	} else {
+	select {
+	case <-sub.Settled():
 		work.Resolve(w.ctx)
+	default:
+		<-sub.Settled()
 	}
-	sub.Release()
+	if sub.Started() {
+		sub.Release()
+	}
 	return res
 }
 
@@ -122,6 +130,8 @@ func (c *Controller) delegateWork(w *worker, id string, task todostore.TaskInfo)
 			_, err := todostore.Accept(w.ctx, c.opts.TodoDB, w.proj, id, w.identity)
 			if err != nil {
 				c.loud(w, "w%d: accept %s: %v", w.id, id, err)
+			} else {
+				c.retire(id)
 			}
 			return workResult{ok: err == nil}
 		}
@@ -198,6 +208,7 @@ func (c *Controller) failTask(w *worker, id string, noVerdict bool) {
 		c.loud(w, "w%d: fail %s: %v", w.id, id, err)
 		return
 	}
+	c.retire(id)
 	c.say(evt.LevelError, "%s failed — the worker died twice", id)
 }
 
@@ -209,6 +220,7 @@ func (c *Controller) rejectTask(w *worker, id, reason string) error {
 			c.loud(w, "w%d: fail %s: %v", w.id, id, err)
 			return err
 		}
+		c.retire(id)
 		c.say(evt.LevelError, "%s failed — the reviewer rejected this twice; the swarm failed it", id)
 		return nil
 	}
@@ -218,6 +230,11 @@ func (c *Controller) rejectTask(w *worker, id, reason string) error {
 	}
 	c.say(evt.LevelError, "%s rejected — %s", id, reason)
 	return nil
+}
+
+func (c *Controller) retire(id string) {
+	delete(c.retries, id)
+	delete(c.rejects, id)
 }
 
 func (c *Controller) note(w *worker, id, text string) {

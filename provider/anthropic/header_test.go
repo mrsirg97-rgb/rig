@@ -48,3 +48,18 @@ func TestBackoffCapsAHostileRetryAfterAtTheHeaderBound(t *testing.T) {
 		t.Fatalf("an honourable retry-after waits %s, want the seconds asked for", wait)
 	}
 }
+
+func TestBackoffClampsAnOverflowingRetryAfterToTheHeaderBound(t *testing.T) {
+	p := New(Config{Model: "m", RetryBase: time.Millisecond}).(*provider)
+	for _, v := range []string{"1e10", "infinity"} {
+		h := http.Header{}
+		h.Set("Retry-After", v)
+		wait := p.backoff(1, h)
+		if wait <= 0 {
+			t.Fatalf("retry-after %q waits %s; the conversion overflowed the cap comparison", v, wait)
+		}
+		if wait != maxRetryAfterWait {
+			t.Fatalf("retry-after %q waits %s, want the cap %s", v, wait, maxRetryAfterWait)
+		}
+	}
+}

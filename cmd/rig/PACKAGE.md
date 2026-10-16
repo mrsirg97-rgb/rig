@@ -48,7 +48,11 @@ sees core and models and nothing else.
   lifecycle in its own file (own stores, own record — it must not touch
   the REPL's closure order): opens the one
   `global.sqlite`, parses the crontab key `jN` only, its own record, the
-  busy policy, the worker jail (SPEC_SANDBOX 1, 5). The session's five
+  busy policy, the worker jail (SPEC_SANDBOX 1, 5). The job teller asks
+  the room's `Admits` gate once at its build — the gate answers whether
+  the room carries the JobStatus feature at all, and the runner's room
+  is fixed for the job's life — never per post, where every status would
+  walk the live peers and a sidecar read apiece. The session's five
   stores (rem, scheduler, state, todo, decision) open through one
   `openStore` helper: the MkdirAll, the loud open refusal, the
   quarantine line, and the migration report print once, in one shape.
@@ -146,14 +150,19 @@ sees core and models and nothing else.
   policy pair, the live tool table (SPEC_PLUGINS 8), and the
   middleware chain from `canonicalMiddleware` (middleware.go, the one
   place the order is written down and the order tests pin it):
-  [toolset.Resolve, approve.Gate (auto unless a frontend can ask),
+  [toolset.Resolve, index (the graph tap, when a code map is open),
+  approve.Gate (auto unless a frontend can ask),
   cutoff, perm.Plugins, perm.Allowlist, guard.Bound,
   guard.Rounds, guard.Cap, paths (the `~` boundary, outermost: every
   path is expanded before any validation)]. The order is load-bearing:
   paths expands `~` before any gate validates an argument; cutoff
   refuses a truncated call before approval spends a prompt on it; the
   permission gates deny before approval asks and before the retry guard
-  counts a failure; Cap truncates every reply, refusals included. A nil
+  counts a failure; the tap wraps Resolve, not the inside of it —
+  Resolve answers a table hit without calling `next`, so a link
+  innermost to it never runs, and the tap fires for every call that
+  passes the gates and resolves to a real tool, never for a refused
+  one; Cap truncates every reply, refusals included. A nil
   allow shuts the plugin door with the allowlist: the fire's worker
   (`-allow none`) executes nothing, plugins included.
   `buildSystem` harvests guidelines from the same constructor, so the

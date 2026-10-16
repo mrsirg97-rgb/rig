@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	_ "modernc.org/sqlite"
@@ -16,6 +17,9 @@ import (
 type DB = sqlx.DB
 
 func Open(path string, statements []string, wantVersion int, migrate ...func(*sql.Tx, int, int) (string, error)) (sqlx.DB, string, string, error) {
+	if strings.Contains(path, "?") {
+		return sqlx.DB{}, "", "", fmt.Errorf("store path %s carries '?': the driver would split the DSN at it and open a different file — rename the store", path)
+	}
 	existing, _ := fileSize(path)
 	var quarantined string
 	for attempt := 0; ; attempt++ {
@@ -67,6 +71,9 @@ func quarantine(path, aside string) error {
 	for _, suffix := range []string{"", "-wal", "-shm"} {
 		src := path + suffix
 		if _, err := os.Stat(src); err != nil {
+			if !os.IsNotExist(err) {
+				return fmt.Errorf("stat %s: %w", src, err)
+			}
 			continue
 		}
 		if err := os.Rename(src, aside+suffix); err != nil {
@@ -84,9 +91,20 @@ func migrateNow(raw *sql.DB, from, to int, migrate []func(*sql.Tx, int, int) (st
 	if err != nil {
 		return "", fmt.Errorf("migration: %w", err)
 	}
+	current, err := versionIn(tx)
+	if err != nil {
+		_ = tx.Rollback()
+		return "", err
+	}
+	if current > from && current >= to {
+		if err := tx.Commit(); err != nil {
+			return "", fmt.Errorf("migration: %w", err)
+		}
+		return "", nil
+	}
 	report := ""
 	for _, fn := range migrate {
-		r, err := fn(tx, from, to)
+		r, err := fn(tx, current, to)
 		if err != nil {
 			_ = tx.Rollback()
 			return "", err
@@ -98,7 +116,7 @@ func migrateNow(raw *sql.DB, from, to int, migrate []func(*sql.Tx, int, int) (st
 			report += r
 		}
 	}
-	if from < to {
+	if current < to {
 		if _, err := tx.Exec(`UPDATE meta SET value = ? WHERE key = 'schema_version'`, strconv.Itoa(to)); err != nil {
 			_ = tx.Rollback()
 			return "", fmt.Errorf("schema_version: %w", err)
@@ -108,6 +126,22 @@ func migrateNow(raw *sql.DB, from, to int, migrate []func(*sql.Tx, int, int) (st
 		return "", fmt.Errorf("migration: %w", err)
 	}
 	return report, nil
+}
+
+func versionIn(tx *sql.Tx) (int, error) {
+	var stored string
+	err := tx.QueryRow(`SELECT value FROM meta WHERE key = 'schema_version'`).Scan(&stored)
+	if err == sql.ErrNoRows {
+		return 0, fmt.Errorf("schema_version: the row vanished before the migration transaction")
+	}
+	if err != nil {
+		return 0, fmt.Errorf("schema_version: %w", err)
+	}
+	v, err := strconv.Atoi(stored)
+	if err != nil {
+		return 0, fmt.Errorf("schema_version: %w", err)
+	}
+	return v, nil
 }
 
 func integrity(raw *sql.DB) error {
