@@ -667,6 +667,25 @@ post-merge corrections)
   behind as evidence. Log names key on the run's start time, so the
   stream and the log share one base name, and prune keeps the two
   together.
+- The fire's story crosses to the operator, amended 3.2.0 (SPEC_ROOM,
+  "the version a member declares"; SPEC_TUI 3a): the runner posts
+  `room.JobStatus` acts through its `RunOpts.Tell` seam — the start when
+  the fire actually runs (after every skip gate, before the spawn; a
+  command job names zero workers, a model job names its one), each
+  `tool_start` frame the worker writes to the fleet pipe as the call
+  act, and the end once the run's outcome is known — done on exit 0,
+  failed naming `exit N` or the spawn error — posted before the record
+  and the logs, so the row's story never waits on the store's. The act
+  carries the job's id, the prompt's first line, the state, the started
+  and ended stamps, the failure's reason, the worker count, and the
+  worker's latest call with its stamp. The Tell checks the room's
+  version gate before each post, so a fire beside a 3.1.x instance
+  stays silent instead of cutting it off, and a Tell left nil — the
+  scheduler tool's own fires — runs as before. A runner that dies
+  without posting its end is ended by the room as `failed · runner
+  left` (SPEC_ROOM, amended 3.2.0); the fire's own record and log are
+  the store's story and the row's is the room's — neither waits for the
+  other.
 
 ## interfaces
 

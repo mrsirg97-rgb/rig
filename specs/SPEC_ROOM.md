@@ -973,6 +973,61 @@ operator at the end. evt imports
 only the standard library; rig takes no new dependency and no cgo; no
 comments in Go code; no Co-Authored-By or generated-with lines.
 
+### the version a member declares, amended 3.2.0
+
+Rig 3.2.0 adds a sixth act, `room/job-status` (the scheduled job's state
+crossing processes — SPEC_STATE's scheduler amendment; the TUI's band row
+breathes it, SPEC_TUI 3a). The act
+is new on the wire, and the room is full mesh: a frame an instance cannot
+decode closes the link, so a 3.1.x instance sitting in the room with a 3.2.0
+runner would lose its membership the first time a job fired. The gate is
+the declaration:
+
+- **A member declares its version at the join.** `room.New` takes the
+  version and writes it to `<room dir>/<member id>.version` beside the
+  socket before the member settles; `Close` removes it. An empty version
+  writes nothing — that is what a 3.1.x binary does, and the tests join
+  one with the 3.1.x registry through the codec seam (`room.SetCodec`,
+  a test-only swap of the encoder every later join builds its transports
+  with) to prove it.
+- **The runner asks the room before it posts.** `Member.Admits(version)`
+  reads every live peer's sidecar and answers whether the room's
+  slowest member still declares at least `version` — a missing, empty or
+  unreadable sidecar refuses, fail closed. The runner's `Tell` checks
+  `room.JobStatusSince` (the version that declared the act) before each
+  post, so a fire beside an old instance stays silent instead of
+  cutting it off; the start it drops is not replayed — the row's story
+  begins at the next fire, and the operator's room notice says nothing
+  because nothing broke.
+- **What actually happens on an undeclared kind** (the test, two real
+  members in one scratch room): the new member posts the act, the old
+  member's transport fails the decode and closes its link, the old
+  member's fold drops the poster and its `told` fires the room notice
+  `member left` — which the instance surfaces to the operator like any
+  room notice. The old instance keeps running alone; nothing it holds is
+  lost, because it was holding nothing the new member needed.
+- **`rig -update` drains first**: the drain posts `room/update` (declared
+  since 3.1.x, every version decodes it) and waits for the room to empty
+  before the binary is renamed, so the members that leave for the update
+  are gone before the new binary's first runner can fire. An old
+  instance that missed the act — the crash during an update, the machine
+  that slept — stays live, and the gate is what holds the runner back
+  while it does.
+- **A runner that dies without posting its end is ended by the room**
+  (3.2.0): each instance's children track the running jobs by the act's
+  origin, and the room's `member left` notice — which fires after the
+  fold has dropped the departed member's acts — has the survivors end
+  the origin's running jobs as `failed · runner left` and breathe the
+  end on their own band rows. No timeout, no poll: the leave is the
+  event, and a runner that posted its end first leaves no failure
+  behind.
+- **The window the gate does not close**: between `Admits` and the act
+  reaching its peers an old member may join, receive the act through the
+  join's checkpoint re-send, and drop. The -update flow makes it
+  unreachable in practice (an old binary joins only by starting, and the
+  update drained before the rename), and the cost is the room notice,
+  not lost work.
+
 ### what the mesh does not name
 
 A WebRTC transport (its own module later, `rig serve` the rendezvous that

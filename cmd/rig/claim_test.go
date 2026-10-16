@@ -51,8 +51,8 @@ func roomOf(t *testing.T, rows ...models.Model) (string, *children, machineroom.
 	if err != nil {
 		t.Fatal(err)
 	}
-	kids := newChildren(home, table, nil, nil)
-	m, err := machineroom.New(home, kids.places, kids.effects, nil)
+	kids := newChildren(home, table, nil, nil, nil)
+	m, err := machineroom.New(home, Version, kids.places, kids.effects, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -140,8 +140,8 @@ func TestAChildStillLoadingIsNotStartedTwice(t *testing.T) {
 	port := freePort(t)
 	marker := filepath.Join(home, "pids")
 	command := "echo $$ >> " + marker + "; exec sleep 300"
-	first := newChildren(home, models.Table{}, nil, nil)
-	second := newChildren(home, models.Table{}, nil, nil)
+	first := newChildren(home, models.Table{}, nil, nil, nil)
+	second := newChildren(home, models.Table{}, nil, nil, nil)
 	t.Cleanup(func() { first.close(); second.close() })
 	done := make(chan bool, 2)
 	go func() { done <- first.start("slow", port, command, nil, "") }()
@@ -169,7 +169,7 @@ func TestAChildStillLoadingIsNotStartedTwice(t *testing.T) {
 
 func TestAStalePidFileNamesNobody(t *testing.T) {
 	home := t.TempDir()
-	kids := newChildren(home, models.Table{}, nil, nil)
+	kids := newChildren(home, models.Table{}, nil, nil, nil)
 	t.Cleanup(kids.close)
 	if err := os.MkdirAll(filepath.Join(home, "logs"), 0o755); err != nil {
 		t.Fatal(err)

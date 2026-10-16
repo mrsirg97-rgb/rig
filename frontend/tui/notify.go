@@ -2,12 +2,13 @@ package tui
 
 import (
 	"context"
-	"github.com/mrsirg97-rgb/rig/v3/core"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/mrsirg97-rgb/evt"
+	"github.com/mrsirg97-rgb/rig/v3/core"
+	machineroom "github.com/mrsirg97-rgb/rig/v3/room"
 )
 
 func (t *tui) Notify(ev evt.Signal) {
@@ -105,7 +106,6 @@ func (t *tui) Notify(ev evt.Signal) {
 		t.commit(fault)
 		t.mu.Lock()
 		t.stopFrameTickerLocked()
-		t.kickNoticesLocked()
 		t.mu.Unlock()
 	case core.Compacting:
 
@@ -144,7 +144,6 @@ func (t *tui) Notify(ev evt.Signal) {
 		t.commit(chunk)
 		t.mu.Lock()
 		t.stopFrameTickerLocked()
-		t.kickNoticesLocked()
 		t.mu.Unlock()
 	case core.TurnEnd:
 
@@ -179,11 +178,14 @@ func (t *tui) Notify(ev evt.Signal) {
 		}
 		t.mu.Lock()
 		t.stopFrameTickerLocked()
-		t.kickNoticesLocked()
 		t.mu.Unlock()
 	case evt.Notice:
 		t.mu.Lock()
-		t.enqueueNoticeLocked(e)
+		t.bandQueueLocked(bandEvent(noticeSlot(e.Level), e.Source+": "+printable(e.Text)))
+		t.mu.Unlock()
+	case machineroom.JobStatus:
+		t.mu.Lock()
+		t.jobLocked(e)
 		t.mu.Unlock()
 	case core.Phase:
 		switch {
@@ -211,12 +213,6 @@ func (t *tui) Notify(ev evt.Signal) {
 	case core.SwarmStatus:
 		t.mu.Lock()
 		t.trackStatusLocked(e)
-		if t.bandsRunningLocked() {
-			t.startFrameTickerLocked()
-		} else {
-			t.stopFrameTickerLocked()
-		}
-		t.live.draw("", t.liveLinesLocked(), t.statusLineLocked())
 		t.mu.Unlock()
 	case core.WorkerDone:
 		t.mu.Lock()
@@ -311,7 +307,7 @@ type liveBlocks struct {
 func (t *tui) buildLiveLinesLocked(pendCap, menuCap, inputCap, previewCap int) ([]string, string, int, liveBlocks) {
 	var blocks liveBlocks
 	var lines []string
-	if t.turnLive || t.compacting || t.noticing || t.aside != "" || t.escArm > 0 {
+	if t.turnLive || t.compacting || t.aside != "" || t.escArm > 0 {
 
 		if pl, rows := t.pendingBlockLocked(pendCap); rows > 0 {
 			blocks.pendRows = rows
@@ -391,25 +387,7 @@ func (t *tui) statusLineLocked() string {
 	if rows := RenderStatusRows(t.theme, t.statusRows); rows != "" {
 		s += "\n" + rows
 	}
-	if band := t.bandLocked(time.Now()); band != "" {
-		s += "\n" + band
-	}
-	return s
-}
-
-func (t *tui) bandLocked(now time.Time) string {
-	band := RenderDelegateBand(t.theme, t.delegate, t.bandSinceLocked(), now)
-	if swarm := RenderSwarmBand(t.theme, t.swarm); swarm != "" {
-		if band != "" {
-			band += "\n"
-		}
-		band += swarm
-	}
-	return band
-}
-
-func (t *tui) bandsRunningLocked() bool {
-	return bandRunning(t.delegate) || swarmAnyRunning(t.swarm.Workers)
+	return s + "\n" + t.bandRowLocked()
 }
 
 func (t *tui) trackStatusLocked(st core.SwarmStatus) {
@@ -419,52 +397,62 @@ func (t *tui) trackStatusLocked(st core.SwarmStatus) {
 		ws[i] = w
 	}
 	st.Workers = ws
+	delegate := IsDelegateBand(st)
+	before := t.swarm
+	if delegate {
+		before = t.delegate
+	}
 	if len(st.Workers) == 0 {
-		t.swarm = st
-		t.delegate = st
-		t.bandSpawns = nil
+		t.swarm, t.delegate = st, st
 		return
 	}
-	if IsDelegateBand(st) {
+	running := 0
+	for _, w := range st.Workers {
+		if w.State == "running" {
+			running++
+		}
+	}
+	if running > 0 && !swarmAnyRunning(before.Workers) {
+		label := "swarm"
+		if delegate {
+			label = "delegating"
+		}
+		t.bandQueueLocked(bandEvent(SlotText, label+" · "+strconv.Itoa(running)+" "+wordFor(running)))
+	}
+	if delegate {
 		t.delegate = st
 	} else {
 		t.swarm = st
 	}
-	t.trackBandLocked(st)
-}
-
-func (t *tui) trackBandLocked(st core.SwarmStatus) {
-	if !IsDelegateBand(st) {
-		return
-	}
-	seen := map[int]bool{}
 	for _, w := range st.Workers {
-		if w.State != "running" || w.Heartbeat.IsZero() {
+		if w.Tool == "" {
 			continue
 		}
-		seen[w.ID] = true
-		if t.bandSpawns == nil {
-			t.bandSpawns = map[int]time.Time{}
-		}
-		if at, ok := t.bandSpawns[w.ID]; !ok || w.Heartbeat.Before(at) {
-			t.bandSpawns[w.ID] = w.Heartbeat
-		}
-	}
-	for id := range t.bandSpawns {
-		if !seen[id] {
-			delete(t.bandSpawns, id)
-		}
+		t.bandWorkerCallLocked(bandWorkerKey(delegate, w.ID), "#"+strconv.Itoa(w.ID)+" ", w.Tool, w.ToolAt)
 	}
 }
 
-func (t *tui) bandSinceLocked() time.Time {
-	var since time.Time
-	for _, at := range t.bandSpawns {
-		if since.IsZero() || at.Before(since) {
-			since = at
+func (t *tui) jobLocked(st machineroom.JobStatus) {
+	switch st.State {
+	case machineroom.JobRunning:
+		if st.Call == "" {
+			text := "scheduled job"
+			if st.Workers > 0 {
+				text += " · " + strconv.Itoa(st.Workers) + " " + wordFor(st.Workers)
+			}
+			t.bandQueueLocked(bandEvent(SlotText, text))
+			return
 		}
+		t.bandWorkerCallLocked("job/"+st.Job, st.Job+" #1 ", st.Call, st.CallAt)
+	case machineroom.JobDone:
+		t.bandQueueLocked(bandEvent(SlotSuccess, "job "+st.Job+" done · "+swarmAge(st.Ended.Sub(st.Started))))
+	case machineroom.JobFailed:
+		text := "job " + st.Job + " failed"
+		if st.Reason != "" {
+			text += " · " + st.Reason
+		}
+		t.bandQueueLocked(bandEvent(SlotError, text))
 	}
-	return since
 }
 
 func (t *tui) recaptureStatusLocked(in StatusIn, fresh bool) {

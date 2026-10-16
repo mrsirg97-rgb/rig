@@ -11,7 +11,7 @@ the five signals the instances exchange beside the protocol's own.
 ## What it includes
 
 - `Member`: `Id`, `Seated`, `Close`, `Gone`, `Ask`, `Claim`, `Release`,
-  `Act`, `Holders`, `Waiting`, `Live`, `Say` — the verbs the instance and
+  `Act`, `Holders`, `Waiting`, `Live` — the verbs the instance and
   the dashboard use. `Gone` closes when the member has left; `Ask` and
   the reads return at once then (false, or nothing) instead of waiting
   on an engine that stopped. A claim is final by acknowledgement; a member is
@@ -41,8 +41,20 @@ the five signals the instances exchange beside the protocol's own.
   from the file's last 64 KB by the dashboard — what a model is doing is
   read from the world, like its residency.
 - The signals: `StartChild`, `StopChild`, `SwapChild` (`Swap() bool`),
-  `TableChange` (one row's raw JSON) and `Update`, with `Codec` and
-  `Registry` declaring rig's five kinds beside `broadcast.Protocol()`'s.
+  `TableChange` (one row's raw JSON), `Update` and `JobStatus` (3.2.0:
+  a scheduled job's state crossing processes — the job's id, the
+  prompt's first line, `running`, `done` or `failed`, the started and
+  ended stamps, the failure's reason, the worker count, and the
+  worker's latest call with its stamp), with `Codec` and `Registry`
+  declaring rig's six kinds beside `broadcast.Protocol()`'s. `New` takes
+  the member's version and writes it to `<room dir>/<id>.version` beside
+  the socket (`Close` removes it); `Admits(version)` reads every live
+  peer's sidecar and answers whether the room's slowest member still
+  declares at least it — a missing, empty or unreadable sidecar refuses,
+  fail closed — which is the gate a poster of a new act checks before
+  it posts (SPEC_ROOM, "the version a member declares"). `SetCodec`
+  swaps the encoder later joins build their transports with and returns
+  the restore; it exists for the mixed-version tests.
 - The priorities: outside 0, child 20, fleet 30, delegate's return 70,
   the operator's turn 90.
 - The door (3.1.0): `NewDoor(member, cfg, remote, home)` — the machine's

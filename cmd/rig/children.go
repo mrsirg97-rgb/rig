@@ -32,6 +32,8 @@ type children struct {
 	rows      models.Table
 	loop      evt.Engine
 	leave     func()
+	fleet     broadcast.Member
+	jobs      map[int64]map[string]room.JobStatus
 	closed    bool
 	engine    evt.Engine
 	cancel    context.CancelFunc
@@ -39,11 +41,11 @@ type children struct {
 	startCeil time.Duration
 }
 
-func newChildren(home string, rows models.Table, loop evt.Engine, leave func()) *children {
+func newChildren(home string, rows models.Table, loop evt.Engine, leave func(), fleet broadcast.Member) *children {
 	engine := evt.NewEngine()
 	ctx, cancel := context.WithCancel(context.Background())
 	go engine.Start(ctx)
-	return &children{home: home, owned: make(map[string]int), rows: rows, loop: loop, leave: leave, engine: engine, cancel: cancel, startCeil: childStartCeil}
+	return &children{home: home, owned: make(map[string]int), rows: rows, loop: loop, leave: leave, fleet: fleet, engine: engine, cancel: cancel, startCeil: childStartCeil}
 }
 
 func (c *children) close() { c.cancel() }
@@ -119,6 +121,9 @@ func (c *children) Next(op broadcast.Operation) error {
 			return err
 		}
 		c.rows = merged
+	case room.JobStatus:
+		from := op.Origin()
+		c.engine.Add(evt.Func(func(context.Context) { c.jobStatus(act, from) }), room.PriorityFleet)
 	case room.Update:
 		if c.closed || c.leave == nil {
 			return nil
@@ -131,6 +136,60 @@ func (c *children) Next(op broadcast.Operation) error {
 		c.loop.Add(evt.Func(func(context.Context) { c.leave() }), room.PriorityTurn)
 	}
 	return nil
+}
+
+func (c *children) jobStatus(st room.JobStatus, from int64) {
+	switch st.State {
+	case room.JobRunning:
+		if c.jobs == nil {
+			c.jobs = map[int64]map[string]room.JobStatus{}
+		}
+		if c.jobs[from] == nil {
+			c.jobs[from] = map[string]room.JobStatus{}
+		}
+		c.jobs[from][st.Job] = st
+	case room.JobDone, room.JobFailed:
+		if set := c.jobs[from]; set != nil {
+			delete(set, st.Job)
+		}
+	}
+	c.sayJob(st)
+}
+
+func (c *children) sayJob(st room.JobStatus) {
+	if c.fleet == nil {
+		return
+	}
+	c.fleet.Publish(context.Background(), func(error) {}, broadcast.NewMessage(c.fleet.Id(), true, st))
+}
+
+func (c *children) endJobsOf(m room.Member) {
+	go func() {
+		live := map[int64]bool{}
+		for _, id := range m.Live() {
+			live[id] = true
+		}
+		c.engine.Add(evt.Func(func(context.Context) { c.endJobs(live) }), room.PriorityFleet)
+	}()
+}
+
+func (c *children) endJobs(live map[int64]bool) {
+	var ended []room.JobStatus
+	for origin, set := range c.jobs {
+		if live[origin] {
+			continue
+		}
+		for _, st := range set {
+			st.State = room.JobFailed
+			st.Reason = "runner left"
+			st.Ended = time.Now().UTC()
+			ended = append(ended, st)
+		}
+		delete(c.jobs, origin)
+	}
+	for _, st := range ended {
+		c.sayJob(st)
+	}
 }
 
 func (c *children) Previous(op broadcast.Operation) error { return nil }

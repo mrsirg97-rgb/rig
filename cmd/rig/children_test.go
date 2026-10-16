@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"net"
 	"os"
@@ -8,11 +9,14 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"testing"
 	"time"
 
+	"github.com/mrsirg97-rgb/evt"
 	"github.com/mrsirg97-rgb/evt/broadcast"
+	rig "github.com/mrsirg97-rgb/rig/v3"
 	"github.com/mrsirg97-rgb/rig/v3/models"
 	machineroom "github.com/mrsirg97-rgb/rig/v3/room"
 )
@@ -32,14 +36,14 @@ func TestAnActEffectRunsOnceOnItsOwner(t *testing.T) {
 	home := t.TempDir()
 	port := freePort(t)
 	marker := filepath.Join(home, "starts")
-	ka := newChildren(home, models.Table{}, nil, nil)
-	kb := newChildren(home, models.Table{}, nil, nil)
+	ka := newChildren(home, models.Table{}, nil, nil, nil)
+	kb := newChildren(home, models.Table{}, nil, nil, nil)
 	var a, b machineroom.Member
-	a, err := machineroom.New(home, ka.places, ka.effects, nil)
+	a, err := machineroom.New(home, Version, ka.places, ka.effects, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	b, err = machineroom.New(home, kb.places, kb.effects, nil)
+	b, err = machineroom.New(home, Version, kb.places, kb.effects, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -64,14 +68,14 @@ func TestAnActEffectRunsOnceOnItsOwner(t *testing.T) {
 func TestTheRoomEngineStaysFreeWhileAChildStarts(t *testing.T) {
 	home := t.TempDir()
 	port := freePort(t)
-	ka := newChildren(home, models.Table{}, nil, nil)
-	kb := newChildren(home, models.Table{}, nil, nil)
+	ka := newChildren(home, models.Table{}, nil, nil, nil)
+	kb := newChildren(home, models.Table{}, nil, nil, nil)
 	var a, b machineroom.Member
-	a, err := machineroom.New(home, ka.places, ka.effects, nil)
+	a, err := machineroom.New(home, Version, ka.places, ka.effects, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	b, err = machineroom.New(home, kb.places, kb.effects, nil)
+	b, err = machineroom.New(home, Version, kb.places, kb.effects, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -152,9 +156,9 @@ func TestAJoinerReadsTheWorld(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(home, "models.json"), table(rowOf("fake", port, 1), rowOf("other", port+7, 1)), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	ka := newChildren(home, loadRows(t, filepath.Join(home, "models.json")), nil, nil)
+	ka := newChildren(home, loadRows(t, filepath.Join(home, "models.json")), nil, nil, nil)
 	var a, b machineroom.Member
-	a, err := machineroom.New(home, ka.places, ka.effects, nil)
+	a, err := machineroom.New(home, Version, ka.places, ka.effects, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -181,8 +185,8 @@ func TestAJoinerReadsTheWorld(t *testing.T) {
 		_, err := os.Stat(filepath.Join(home, "logs", "fake.pid"))
 		return err == nil
 	})
-	kb := newChildren(home, loadRows(t, filepath.Join(home, "models.json")), nil, nil)
-	b, err = machineroom.New(home, kb.places, kb.effects, nil)
+	kb := newChildren(home, loadRows(t, filepath.Join(home, "models.json")), nil, nil, nil)
+	b, err = machineroom.New(home, Version, kb.places, kb.effects, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -219,14 +223,14 @@ func TestAJoinerReadsTheWorld(t *testing.T) {
 func TestTwoInstancesRaceToStartAModelAndOneChildRuns(t *testing.T) {
 	home := t.TempDir()
 	port := freePort(t)
-	ka := newChildren(home, models.Table{}, nil, nil)
-	kb := newChildren(home, models.Table{}, nil, nil)
+	ka := newChildren(home, models.Table{}, nil, nil, nil)
+	kb := newChildren(home, models.Table{}, nil, nil, nil)
 	var a, b machineroom.Member
-	a, err := machineroom.New(home, ka.places, ka.effects, nil)
+	a, err := machineroom.New(home, Version, ka.places, ka.effects, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	b, err = machineroom.New(home, kb.places, kb.effects, nil)
+	b, err = machineroom.New(home, Version, kb.places, kb.effects, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -262,14 +266,14 @@ func TestTwoInstancesRaceToStartAModelAndOneChildRuns(t *testing.T) {
 func TestASwapWaitsForTheHoldsAndThenSwaps(t *testing.T) {
 	home := t.TempDir()
 	oldPort, newPort := freePort(t), freePort(t)
-	ka := newChildren(home, models.Table{}, nil, nil)
-	kb := newChildren(home, models.Table{}, nil, nil)
+	ka := newChildren(home, models.Table{}, nil, nil, nil)
+	kb := newChildren(home, models.Table{}, nil, nil, nil)
 	var a, b machineroom.Member
-	a, err := machineroom.New(home, ka.places, ka.effects, nil)
+	a, err := machineroom.New(home, Version, ka.places, ka.effects, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	b, err = machineroom.New(home, kb.places, kb.effects, nil)
+	b, err = machineroom.New(home, Version, kb.places, kb.effects, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -309,7 +313,7 @@ func TestASwapWaitsForTheHoldsAndThenSwaps(t *testing.T) {
 func TestStartChildWaitsForThePortThenStops(t *testing.T) {
 	home := t.TempDir()
 	port := freePort(t)
-	kids := newChildren(home, models.Table{}, nil, nil)
+	kids := newChildren(home, models.Table{}, nil, nil, nil)
 	if !kids.start("fake", port, "python3 -m http.server ${PORT}", nil, "") {
 		t.Fatal("the child's port never answered")
 	}
@@ -332,11 +336,11 @@ func TestStartChildWaitsForThePortThenStops(t *testing.T) {
 func TestASecondInstanceStopsTheChild(t *testing.T) {
 	home := t.TempDir()
 	port := freePort(t)
-	first := newChildren(home, models.Table{}, nil, nil)
+	first := newChildren(home, models.Table{}, nil, nil, nil)
 	if !first.start("fake", port, "python3 -m http.server ${PORT}", nil, "") {
 		t.Fatal("the child's port never answered")
 	}
-	second := newChildren(home, models.Table{}, nil, nil)
+	second := newChildren(home, models.Table{}, nil, nil, nil)
 	second.stop("fake", 2)
 	if machineroom.Answers(port) {
 		t.Fatal("the second instance's stop must reach the child through the pid file")
@@ -346,13 +350,13 @@ func TestASecondInstanceStopsTheChild(t *testing.T) {
 func TestTheUpdateDrainsTheRoom(t *testing.T) {
 	home := t.TempDir()
 	var a, b machineroom.Member
-	ka := newChildren(home, models.Table{}, nil, nil)
-	a, err := machineroom.New(home, ka.places, ka.effects, nil)
+	ka := newChildren(home, models.Table{}, nil, nil, nil)
+	a, err := machineroom.New(home, Version, ka.places, ka.effects, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	kb := newChildren(home, models.Table{}, nil, func() { b.Close() })
-	b, err = machineroom.New(home, kb.places, kb.effects, nil)
+	kb := newChildren(home, models.Table{}, nil, func() { b.Close() }, nil)
+	b, err = machineroom.New(home, Version, kb.places, kb.effects, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -376,7 +380,7 @@ func TestTheUpdateDrainsTheRoom(t *testing.T) {
 func TestAChildThatLivesWithoutAnsweringFailsTheStartWithinTheBound(t *testing.T) {
 	home := t.TempDir()
 	port := freePort(t)
-	c := newChildren(home, models.Table{}, nil, nil)
+	c := newChildren(home, models.Table{}, nil, nil, nil)
 	t.Cleanup(c.close)
 	c.startCeil = 300 * time.Millisecond
 	done := make(chan bool, 1)
@@ -416,7 +420,7 @@ func dummyChild(t *testing.T) int {
 
 func TestAStopSignalsTheWorldsChildAndItsOwn(t *testing.T) {
 	home := t.TempDir()
-	c := newChildren(home, models.Table{}, nil, nil)
+	c := newChildren(home, models.Table{}, nil, nil, nil)
 	t.Cleanup(c.close)
 	mine := dummyChild(t)
 	theirs := dummyChild(t)
@@ -430,5 +434,165 @@ func TestAStopSignalsTheWorldsChildAndItsOwn(t *testing.T) {
 	c.stop("fake", 1)
 	if alive(mine) || alive(theirs) {
 		t.Fatalf("a stop must signal the instance's own child and the world's (mine %d alive %v, theirs %d alive %v)", mine, alive(mine), theirs, alive(theirs))
+	}
+}
+
+func TestARunnerLeavingEndsItsJobsAsRunnerLeft(t *testing.T) {
+	home := t.TempDir()
+	engine, fleetroom := newFleet()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go engine.Start(ctx)
+	voice := fleetroom.Add(rig.MemberDecision)
+	var ended []machineroom.JobStatus
+	var mu sync.Mutex
+	fleetroom.Add(rig.MemberFrontend).Subscribe(ctx, func(err error, messages ...broadcast.Message) {
+		for _, m := range messages {
+			if st, ok := m.Signal().(machineroom.JobStatus); ok {
+				mu.Lock()
+				ended = append(ended, st)
+				mu.Unlock()
+			}
+		}
+	})
+	var a, b machineroom.Member
+	ka := newChildren(home, models.Table{}, nil, nil, voice)
+	t.Cleanup(ka.close)
+	a, err := machineroom.New(home, Version, ka.places, ka.effects, func(n evt.Notice) {
+		if n.Source == "room" && n.Text == "member left" {
+			ka.endJobsOf(a)
+		}
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	kb := newChildren(home, models.Table{}, nil, func() { b.Close() }, nil)
+	t.Cleanup(kb.close)
+	b, err = machineroom.New(home, Version, kb.places, kb.effects, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	deadline := time.Now().Add(10 * time.Second)
+	for time.Now().Before(deadline) && (len(a.Live()) != 1 || len(b.Live()) != 1) {
+		time.Sleep(25 * time.Millisecond)
+	}
+	if len(a.Live()) != 1 || len(b.Live()) != 1 {
+		t.Fatal("the members must see each other before the runner leaves")
+	}
+
+	b.Act(machineroom.JobStatus{Job: "j1", State: machineroom.JobRunning,
+		Started: time.Date(2026, 8, 15, 12, 0, 0, 0, time.UTC), Workers: 1},
+		machineroom.KeyOf("job/j1"), machineroom.PriorityFleet, func(bool) {})
+	deadline = time.Now().Add(10 * time.Second)
+	for time.Now().Before(deadline) {
+		mu.Lock()
+		n := len(ended)
+		mu.Unlock()
+		if n == 1 {
+			break
+		}
+		time.Sleep(25 * time.Millisecond)
+	}
+	mu.Lock()
+	if len(ended) != 1 || ended[0].State != machineroom.JobRunning {
+		t.Fatalf("the survivor's row breathes the running act: %v", ended)
+	}
+	mu.Unlock()
+
+	b.Close()
+	deadline = time.Now().Add(10 * time.Second)
+	for time.Now().Before(deadline) {
+		mu.Lock()
+		n := len(ended)
+		mu.Unlock()
+		if n == 2 {
+			break
+		}
+		time.Sleep(25 * time.Millisecond)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if len(ended) != 2 {
+		t.Fatalf("the survivor ends the runner's job: %v", ended)
+	}
+	if ended[1].State != machineroom.JobFailed || ended[1].Reason != "runner left" {
+		t.Fatalf("the end is failed, runner left: %+v", ended[1])
+	}
+	if !ended[1].Ended.After(time.Date(2026, 8, 15, 11, 0, 0, 0, time.UTC)) {
+		t.Fatalf("the end is stamped now: %+v", ended[1])
+	}
+}
+
+func TestARunnerThatPostedItsEndLeavesWithoutAFailure(t *testing.T) {
+	home := t.TempDir()
+	engine, fleetroom := newFleet()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go engine.Start(ctx)
+	voice := fleetroom.Add(rig.MemberDecision)
+	var ended []machineroom.JobStatus
+	var mu sync.Mutex
+	fleetroom.Add(rig.MemberFrontend).Subscribe(ctx, func(err error, messages ...broadcast.Message) {
+		for _, m := range messages {
+			if st, ok := m.Signal().(machineroom.JobStatus); ok {
+				mu.Lock()
+				ended = append(ended, st)
+				mu.Unlock()
+			}
+		}
+	})
+	var a, b machineroom.Member
+	ka := newChildren(home, models.Table{}, nil, nil, voice)
+	t.Cleanup(ka.close)
+	a, err := machineroom.New(home, Version, ka.places, ka.effects, func(n evt.Notice) {
+		if n.Source == "room" && n.Text == "member left" {
+			ka.endJobsOf(a)
+		}
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	kb := newChildren(home, models.Table{}, nil, func() { b.Close() }, nil)
+	t.Cleanup(kb.close)
+	b, err = machineroom.New(home, Version, kb.places, kb.effects, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	deadline := time.Now().Add(10 * time.Second)
+	for time.Now().Before(deadline) && (len(a.Live()) != 1 || len(b.Live()) != 1) {
+		time.Sleep(25 * time.Millisecond)
+	}
+
+	started := time.Date(2026, 8, 15, 12, 0, 0, 0, time.UTC)
+	b.Act(machineroom.JobStatus{Job: "j1", State: machineroom.JobRunning, Started: started},
+		machineroom.KeyOf("job/j1"), machineroom.PriorityFleet, func(bool) {})
+	deadline = time.Now().Add(10 * time.Second)
+	for time.Now().Before(deadline) {
+		mu.Lock()
+		n := len(ended)
+		mu.Unlock()
+		if n == 1 {
+			break
+		}
+		time.Sleep(25 * time.Millisecond)
+	}
+	jobTeller(b)(machineroom.JobStatus{Job: "j1", State: machineroom.JobDone,
+		Started: started, Ended: started.Add(5 * time.Second)})
+	b.Close()
+	deadline = time.Now().Add(10 * time.Second)
+	for time.Now().Before(deadline) {
+		mu.Lock()
+		n := len(ended)
+		mu.Unlock()
+		if n >= 2 {
+			break
+		}
+		time.Sleep(25 * time.Millisecond)
+	}
+	time.Sleep(250 * time.Millisecond)
+	mu.Lock()
+	defer mu.Unlock()
+	if len(ended) != 2 || ended[0].State != machineroom.JobRunning || ended[1].State != machineroom.JobDone {
+		t.Fatalf("a runner that closes right after its done leaves running then done, no failure: %v", ended)
 	}
 }

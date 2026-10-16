@@ -43,7 +43,7 @@ func doorPorts(t *testing.T, n int) []string {
 
 func doorMember(t *testing.T, home string) Member {
 	t.Helper()
-	m, err := New(home, func(int64) int { return 1 }, nil, nil)
+	m, err := New(home, JobStatusSince, func(int64) int { return 1 }, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -95,7 +95,7 @@ func TestARepostReleasedBeforeItsAdmissionStillEnds(t *testing.T) {
 	home := t.TempDir()
 	ma := doorMember(t, home)
 	defer ma.Close()
-	mb, err := New(home, func(int64) int { return 1 }, nil, nil)
+	mb, err := New(home, JobStatusSince, func(int64) int { return 1 }, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

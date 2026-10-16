@@ -109,7 +109,17 @@ record nothing); a store error never changes the skip.
 A command job's fire skips the busy probe and
   the jail: `sh -c` over the stored line with the process environment,
   in the job's cwd — the payload is the operator's own, the same trust
-  the crontab line itself carries.
+  the crontab line itself carries. The runner's `RunOpts.Tell` (3.2.0)
+  carries the fire's story to the machine room as `room.JobStatus`
+  acts, keyed per job: the start when the fire actually runs (after
+  every skip gate, before the spawn; a command job names zero workers,
+  a model job names its one), each `tool_start` frame the worker
+  writes to the fleet pipe as the call act (the call's `BoundedCall`
+  and the arrival stamp), and the end once the run's outcome is known —
+  done on exit 0, failed naming `exit N` or the spawn error — before
+  the record and the logs are written, so the row's story never waits
+  on the store's. The Tell is nil-safe: a fire with no room tells
+  nothing and runs as before.
 - `delegate.go`: `Delegate` is `DelegateStart` and `Wait` (2.14.0,
   SPEC_DELEGATE 8). Everything that can refuse a delegation — the seams,
   the recursion marker, the residency gate, the ad-hoc record, the jail,

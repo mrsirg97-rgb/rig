@@ -470,7 +470,7 @@ func (r *root) deliver(ev evt.Signal) {
 		}
 	}()
 	switch ev.(type) {
-	case evt.Notice, core.SwarmStatus, core.Phase, core.WorkerDone:
+	case evt.Notice, core.SwarmStatus, core.Phase, core.WorkerDone, machineroom.JobStatus:
 	default:
 		return
 	}

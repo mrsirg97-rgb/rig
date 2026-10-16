@@ -66,7 +66,7 @@ func (t *tui) tickLoop() {
 			if live && now.Sub(lastAnim) >= animPeriod {
 				lastAnim = now
 				t.frame++
-				t.breatheNoticeLocked()
+				t.breatheBandLocked()
 				dirty = true
 			}
 			if live && dirty {
@@ -81,7 +81,7 @@ func (t *tui) tickLoop() {
 }
 
 func (t *tui) busyLocked() bool {
-	return t.turnLive || t.compacting || t.noticing || t.aside != "" || t.bandsRunningLocked() || t.escArm > 0
+	return t.turnLive || t.compacting || t.bandLive || t.aside != "" || t.escArm > 0
 }
 
 func (t *tui) winchLoop() {
@@ -101,45 +101,6 @@ func (t *tui) winchLoop() {
 			}
 			t.mu.Unlock()
 		}
-	}
-}
-
-func (t *tui) breatheNoticeLocked() {
-	if !t.noticing || t.turnLive || t.compacting || t.aside != "" {
-		return
-	}
-	t.noticeFrame++
-	if t.noticeFrame < emberBreathStops {
-		return
-	}
-	t.notices = t.notices[1:]
-	t.noticeFrame = 0
-	if len(t.notices) == 0 {
-		t.noticing = false
-		t.stopFrameTickerLocked()
-	}
-}
-
-func (t *tui) enqueueNoticeLocked(n evt.Notice) {
-	n.Text = printable(n.Text)
-	for _, q := range t.notices {
-		if q == n {
-			return
-		}
-	}
-	t.notices = append(t.notices, n)
-	t.kickNoticesLocked()
-}
-
-func (t *tui) kickNoticesLocked() {
-	if t.noticing || len(t.notices) == 0 || t.turnLive || t.compacting || t.aside != "" {
-		return
-	}
-	t.noticing = true
-	t.noticeFrame = 0
-	t.startFrameTickerLocked()
-	if len(t.live.lines) > 0 {
-		t.live.draw("", t.liveLinesLocked(), t.statusLineLocked())
 	}
 }
 
@@ -168,7 +129,6 @@ func (t *tui) endPhaseLocked() {
 	t.aside = ""
 	t.resetPhaseLocked()
 	t.stopFrameTickerLocked()
-	t.kickNoticesLocked()
 }
 
 func (t *tui) phaseFlows() bool {

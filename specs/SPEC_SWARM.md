@@ -323,30 +323,13 @@ due, so a streaming worker's per-chunk emits never fold the store (the
 `Counts` read runs at most four times a second, the forced frames
 besides). The snapshot carries the workers (the supervisor's List) and
 the bound queue's fold counts (`todo.Counts`: pending and review), and
-the TUI folds the latest into the footer below the existing status
-rows, separated by a short dim rule, while a swarm runs; zero rows and
-no rule when nothing runs:
-
-```
-····
-workers 2 · +3 ✓5 ✕1 · w2 t388 12s
-reviewer 1 · ⧗1 ✓1 ✕0 · w3 t386 4m
-```
-
-- `workers <n>` / `reviewer <n>`: the role's drain-worker count; `+<p>`
-  / `⧗<r>`: the bound queue's pending/review fold; `✓<d>` / `✕<f>`: the
-  role's summed counters. The role labels, the `+`/`⧗` markers and the
-  separators are dim, the counts text, `✓` the success slot, `✕` the
-  fault slot (the theme's glyph switch carries the ascii fallback).
-- The tail is the role's busiest worker — in flight first, then the
-  highest done+failed, ties by id — its current task (`—` when idle) and
-  heartbeat age (`12s`, `4m`, `1h`; `—` when none), dim.
-- A delegate's band is its own two rows (the head and the call row,
-  SPEC_TUI 3a), not the role rows: its snapshot carries every worker,
-  running and queued (2.14.9 queues the call past the `maxWorkers`
-  cap), and the head names the running count with the queued count when
-  one queues; the role-row tail and the `+`/`⧗` fold stay the swarm's
-  own.
+the TUI folds the latest into the band row (SPEC_TUI 3a): a swarm's
+start from nothing running becomes the event `swarm · n workers`, and
+each running worker's tool call is its own status item keyed by the
+worker's id — the role counts, the fold tallies and the busiest tail
+stay the swarm tool's story (`/swarm`), not the row's. A zero-row
+status is the publisher's "nothing running" and clears the swarm's
+slot (2.14.7).
 
 Rejected, named: the controller calling the frontend on every heartbeat
 (the band's cadence is the throttle, not the stream's); a transcript

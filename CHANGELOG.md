@@ -1,4 +1,79 @@
 # Changelog
+## [3.2.0]: the row
+
+Everything happening in the background — a delegate's or a swarm's start,
+a scheduled job's start and end, a worker's tool call, and every notice —
+now passes through one row under the status lines, one item at a time, in
+the order it happened, and the row never goes away: a dim rule over one
+line, the same height idle or busy. Items are events (never drop, keep
+their order, identical ones collapse) or status (a worker's newer tool
+call replaces that worker's call still waiting in the queue, so the
+backlog is at most one call per worker however fast calls arrive). The
+row shows the breathing item on the ember's curve in the item's slot,
+then holds it dimmed until the next one, `—` before the first; each
+breath is `emberBreathStops` (12) × `animPeriod` (120 ms) of the frame
+ticker, and it runs whether or not a turn, a compaction or an aside is
+live — the indicator row shows only the turn, the compaction and the
+phase now, and the old dance that parked notices behind a live row and
+kicked them on its end is gone. A call is `#<worker> <call> · <age>`,
+prefixed with the job's id for a scheduled job's worker (`j8 #1 …`), the
+call cut at 25 display columns with `…` on rune and display-width
+boundaries; the ages and durations are computed once when the item is
+made, because the row is a sequence of snapshots, not a live read. The
+delegate band's two rows and the swarm band's role rows fold into the
+row (the swarm tool keeps its own counts and tail), `room.Member.Say`
+leaves — it posted its notice as an act no fold's effects had a case
+for, and nothing called it — and the four golden streams update for the
+rule and the dash that are always there.
+
+The scheduled job's state crosses processes. A new machine-room act,
+`room/job-status`, carries the job's id, the prompt's first line,
+running, done or failed, the started and ended stamps, the failure's
+reason, the worker count, and the worker's latest call with its stamp,
+keyed per job. The runner posts it through a new `Tell` seam — the
+start when the fire actually runs (after every skip gate, before the
+spawn), each `tool_start` frame the worker writes to the fleet pipe as
+the call act, and the end once the run's outcome is known, before the
+record and the logs so the row's story never waits on the store's — and
+the Tell is nil-safe, so a fire with no room runs as before. `run-job`
+now joins the machine room whether or not the decision store opened
+(the room and the fleet engine were wedged inside the store's success
+branch, so a fire whose decision store failed told nothing to nobody);
+each instance's children publish each status into the instance's own
+local fleet, where the TUI's band row breathes the start, the calls and
+the end. Two real member processes on a scratch room dir are the test:
+the run-job process posts running then done and the instance process's
+frontend receives both, in that order.
+
+A member declares its version at the join, and a poster asks the room
+before it posts a new act. `room.New` takes the version and writes it
+to `<room dir>/<member id>.version` beside the socket; `Admits(version)`
+reads every live peer's sidecar and answers whether the room's slowest
+member still declares at least it — a missing, empty or unreadable
+sidecar refuses, fail closed. The runner's Tell checks the version that
+declared the act before each post, so a 3.1.x instance sitting beside a
+3.2.0 runner keeps its membership while the job statuses flow — the
+test joins a real member through the 3.1.x registry and shows what
+happens without the gate: the old member's transport fails the decode,
+closes its link, drops the poster and its told fires the room notice
+`member left`. The two races the tests caught are fixed with it: the
+accept-side transport took its codec from a package global at accept
+time (the member's encoder is now captured once at the join and every
+transport it builds uses it), and a sidecar written before the socket
+clobbered a sibling attempt's file (the write happens after the id is
+confirmed). `rig -update` drains the room before the binary renames, so
+the members that leave for the update are gone before the new binary's
+first runner fires — an old instance that missed the update act is
+exactly what the gate holds back.
+
+A runner that dies without posting its end is ended by the room, not by
+a timeout. Each instance's children track the running jobs by the act's
+origin, and the room's `member left` notice — which fires after the
+fold has dropped the departed member's acts — has the survivors end the
+origin's running jobs as `failed · runner left` and breathe the end on
+their own band rows. The leave is the event: no timeout, no poll, and a
+runner that posted its done end first leaves no failure behind.
+
 ## [3.1.2]: the engine runs once
 
 evt moves to v0.4.4. Its engine refused nothing on a second `Start`: a
