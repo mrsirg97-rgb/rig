@@ -26,11 +26,11 @@ func (r *root) canonicalMiddleware() []core.ToolMiddleware {
 		door = nil
 	}
 	var mw []core.ToolMiddleware
+	mw = append(mw, toolset.Resolve(r.live))
 	if r.graph != nil {
 		mw = append(mw, index.Middleware(r.graph))
 	}
 	mw = append(mw,
-		toolset.Resolve(r.live),
 		approve.Gate(func() string { return r.approve }, r.askDoor, r.isMutating, r.drec),
 		cutoff.Middleware(),
 		perm.Plugins(r.pluginsDir, r.drec),

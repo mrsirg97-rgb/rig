@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"github.com/mrsirg97-rgb/evt"
 	"github.com/mrsirg97-rgb/evt/broadcast"
-	"github.com/mrsirg97-rgb/rig/v3/store/graph"
 	"io"
 	"os"
 	"strings"
@@ -18,6 +17,7 @@ import (
 	"github.com/mrsirg97-rgb/rig/v3/decision"
 	"github.com/mrsirg97-rgb/rig/v3/imagemarker"
 	"github.com/mrsirg97-rgb/rig/v3/middleware/approve"
+	"github.com/mrsirg97-rgb/rig/v3/middleware/index"
 	"github.com/mrsirg97-rgb/rig/v3/middleware/toolset"
 	"github.com/mrsirg97-rgb/rig/v3/models"
 	"github.com/mrsirg97-rgb/rig/v3/plugins"
@@ -51,7 +51,7 @@ type root struct {
 	resultCap int
 
 	middleware []core.ToolMiddleware
-	graph      *graph.Queue
+	graph      index.Indexer
 
 	fe     core.Frontend
 	errOut io.Writer

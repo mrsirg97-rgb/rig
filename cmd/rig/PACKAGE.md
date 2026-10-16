@@ -146,14 +146,19 @@ sees core and models and nothing else.
   policy pair, the live tool table (SPEC_PLUGINS 8), and the
   middleware chain from `canonicalMiddleware` (middleware.go, the one
   place the order is written down and the order tests pin it):
-  [toolset.Resolve, approve.Gate (auto unless a frontend can ask),
+  [toolset.Resolve, index (the graph tap, when a code map is open),
+  approve.Gate (auto unless a frontend can ask),
   cutoff, perm.Plugins, perm.Allowlist, guard.Bound,
   guard.Rounds, guard.Cap, paths (the `~` boundary, outermost: every
   path is expanded before any validation)]. The order is load-bearing:
   paths expands `~` before any gate validates an argument; cutoff
   refuses a truncated call before approval spends a prompt on it; the
   permission gates deny before approval asks and before the retry guard
-  counts a failure; Cap truncates every reply, refusals included. A nil
+  counts a failure; the tap wraps Resolve, not the inside of it —
+  Resolve answers a table hit without calling `next`, so a link
+  innermost to it never runs, and the tap fires for every call that
+  passes the gates and resolves to a real tool, never for a refused
+  one; Cap truncates every reply, refusals included. A nil
   allow shuts the plugin door with the allowlist: the fire's worker
   (`-allow none`) executes nothing, plugins included.
   `buildSystem` harvests guidelines from the same constructor, so the
