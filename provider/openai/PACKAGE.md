@@ -97,7 +97,10 @@ adapter's problem; the loop sees `evt.Signal` only.
 - Tool calls accumulate by index across deltas (`accumulate`): every
   accumulated call is emitted, and a call whose args are invalid at
   stream end carries `Cut` set to the finish reason (a length-cut or
-  malformed call, never a `Fault`; `Done` follows). The root's cutoff
+  malformed call, never a `Fault`; `Done` follows). A call with no args
+  at all under a stop finish is emitted with `{}`, the anthropic
+  twin's empty-input mapping: empty args would ride uncut and fail the
+  door's StrictDecode. The root's cutoff
   link refuses a marked call before the tool, so the half of a call
   never executes or poisons the transcript (SPEC_HARDENING 10); a
   missing finish marker still faults "stream truncated".
