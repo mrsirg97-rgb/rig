@@ -37,10 +37,19 @@ everything the supervisor says is a `broadcast` message.
 - One worker owns one identity (a minted session id, stable for its
   life) and one goroutine, because the spawn waits on the world: build
   the brief from `todo.Task`, spawn a one-shot `rig -p` through the
-  delegate seam, finish the task itself (workers `complete` in worker
-  mode, reviewers take the `core.Verdict` the worker's `verdict` tool
-  sent through the pipe and `accept`/`reject`), then post the settle to
-  the loop and wait for it. A reviewer's allow list gains `verdict`.
+  delegate seam under the work cap (`Opts.Cap`), finish the task itself
+  (workers `complete` in worker mode, reviewers take the `core.Verdict`
+  the worker's `verdict` tool sent through the pipe and
+  `accept`/`reject`), then post the settle to the loop and wait for it.
+  The cap protocol: the work closure runs at most once (a swap decides
+  the winner; the loser no-ops), and the caller tells a submission it
+  holds the slot (settled before `Submit` returned — the fast path,
+  the caller's to resolve) from one the cap runs (queued) by the
+  settled channel's state at submit return, a non-blocking select — so
+  a queued submission the cap starts in the window is run once, not
+  twice. `Release` goes only to a submission that took a slot: a queued
+  one the cap settled stopped never started, and releasing it would
+  unwind the started count and loosen the cap for good. A reviewer's allow list gains `verdict`.
   Each worker is a room member by its id and the spawn carries that
   member (`DelegateInput.Member`): the child heartbeats on the fleet
   pipe and `Delegate` publishes each frame as the worker, so the

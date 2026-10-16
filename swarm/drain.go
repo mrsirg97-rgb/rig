@@ -3,6 +3,7 @@ package swarm
 import (
 	"context"
 	"errors"
+	"sync/atomic"
 	"time"
 
 	"github.com/mrsirg97-rgb/evt"
@@ -57,8 +58,12 @@ func (c *Controller) work(w *worker, id string) workResult {
 		c.loud(w, "w%d: task %s: %v", w.id, id, err)
 		return workResult{}
 	}
+	var ran atomic.Bool
 	var res workResult
 	work := evt.Func(func(gate context.Context) {
+		if !ran.CompareAndSwap(false, true) {
+			return
+		}
 		if gate.Err() != nil {
 			res = workResult{holder: gate.Err()}
 			return
@@ -66,12 +71,15 @@ func (c *Controller) work(w *worker, id string) workResult {
 		res = c.delegateWork(w, id, task)
 	})
 	sub := c.opts.Cap.Submit(w.ctx, work, rig.PriorityFleet)
-	if !sub.Started() {
-		<-sub.Settled()
-	} else {
+	select {
+	case <-sub.Settled():
 		work.Resolve(w.ctx)
+	default:
+		<-sub.Settled()
 	}
-	sub.Release()
+	if sub.Started() {
+		sub.Release()
+	}
 	return res
 }
 
