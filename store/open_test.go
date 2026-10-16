@@ -3,8 +3,10 @@ package store
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -46,6 +48,98 @@ func TestOpenInitializesSchemaVersion(t *testing.T) {
 		t.Fatal("version mismatch not refused")
 	} else if !strings.Contains(err.Error(), "8") || !strings.Contains(err.Error(), "7") {
 		t.Errorf("mismatch did not name both versions: %v", err)
+	}
+}
+
+func TestMigrateNowSkipsTheBodyWhenTheWinnerAlreadyCommitted(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "probe.sqlite")
+	runs := 0
+	body := func(tx *sql.Tx, from, to int) (string, error) {
+		runs++
+		if _, err := tx.Exec(`INSERT INTO meta (key, value) VALUES (?, ?)`,
+			fmt.Sprintf("migration-run:%d", runs), strconv.Itoa(from)); err != nil {
+			return "", err
+		}
+		if _, err := tx.Exec(`UPDATE meta SET value = ? WHERE key = 'schema_version'`, strconv.Itoa(to)); err != nil {
+			return "", err
+		}
+		return "migration: ran", nil
+	}
+	fresh, _, _, err := Open(path, probeDDL, 1)
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	if err := fresh.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, _, err := Open(path, probeDDL, 2, body); err != nil {
+		t.Fatalf("winner open: %v", err)
+	}
+	loser, _, _, err := Open(path, probeDDL, 2)
+	if err != nil {
+		t.Fatalf("loser open: %v", err)
+	}
+	defer loser.Close()
+	report, err := migrateNow(loser.DB, 1, 2, []func(*sql.Tx, int, int) (string, error){body})
+	if err != nil {
+		t.Fatalf("loser migration: %v", err)
+	}
+	if runs != 1 || report != "" {
+		t.Fatalf("the loser's stale capture (from=1) re-ran the committed body (runs=%d, report=%q)", runs, report)
+	}
+	var markers int
+	if err := loser.QueryRow(`SELECT COUNT(*) FROM meta WHERE key LIKE 'migration-run:%'`).Scan(&markers); err != nil {
+		t.Fatal(err)
+	}
+	if markers != 1 {
+		t.Fatalf("the body left %d markers, want exactly one: a silent duplicate apply", markers)
+	}
+}
+
+func TestMigrateNowPassesTheCurrentVersionToTheFns(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "probe.sqlite")
+	fresh, _, _, err := Open(path, probeDDL, 1)
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	if err := fresh.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, _, err := Open(path, probeDDL, 2, func(*sql.Tx, int, int) (string, error) { return "", nil }); err != nil {
+		t.Fatalf("partial winner open: %v", err)
+	}
+	partial, _, _, err := Open(path, probeDDL, 2)
+	if err != nil {
+		t.Fatalf("loser open: %v", err)
+	}
+	defer partial.Close()
+	got := 0
+	body := func(tx *sql.Tx, from, to int) (string, error) {
+		got = from
+		return "", nil
+	}
+	if _, err := migrateNow(partial.DB, 1, 3, []func(*sql.Tx, int, int) (string, error){body}); err != nil {
+		t.Fatalf("loser migration: %v", err)
+	}
+	if got != 2 {
+		t.Fatalf("the fns saw from=%d, want the version the winner committed (2), not the stale capture (1)", got)
+	}
+}
+
+func TestOpenRunsTheMigrationBodyOnAFreshStoreAtTheWantedVersion(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "probe.sqlite")
+	ran := 0
+	body := func(tx *sql.Tx, from, to int) (string, error) {
+		ran++
+		return "", nil
+	}
+	db, _, _, err := Open(path, probeDDL, 2, body)
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	defer db.Close()
+	if ran != 1 {
+		t.Fatalf("a fresh store minted at the wanted version must still run the body, ran %d times", ran)
 	}
 }
 
