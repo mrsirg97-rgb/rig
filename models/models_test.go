@@ -421,3 +421,31 @@ func TestCappedScalesTheBudgetsWithTheWindow(t *testing.T) {
 		}
 	}
 }
+
+func TestCappedScalesTheThinkingBudgetWithTheWindow(t *testing.T) {
+	row := models.Model{ID: "claude-thinking", Window: 200000, MaxTokens: 64000, Role: models.RoleWorker, Provider: "anthropic", ThinkingBudget: 60000}
+	got := row.Capped(32000)
+	if got.Window != 32000 || got.MaxTokens != 10240 {
+		t.Fatalf("capped = window %d max %d, want 32000/10240", got.Window, got.MaxTokens)
+	}
+	if err := got.Check(); err != nil {
+		t.Fatalf("a capped thinking row must check: %v", err)
+	}
+	if got.ThinkingBudget != 9600 {
+		t.Fatalf("thinkingBudget = %d, want the window-scaled 9600", got.ThinkingBudget)
+	}
+	for w := 1; w <= row.Window; w++ {
+		if err := row.Capped(w).Check(); err != nil {
+			t.Fatalf("a capped row must check at every window: window %d: %v", w, err)
+		}
+	}
+}
+
+func TestCappedLeavesARowWithoutThinkingBudgetAlone(t *testing.T) {
+	row := models.Model{ID: "huihui-alpha", Window: 393216, MaxTokens: 114688, Reserve: 114688, KeepRecent: 98304, Role: models.RoleInteractive}
+	for _, w := range []int{1, 131072, 393215} {
+		if got := row.Capped(w); got.ThinkingBudget != 0 {
+			t.Fatalf("Capped(%d) minted a thinking budget %d for a row without one", w, got.ThinkingBudget)
+		}
+	}
+}

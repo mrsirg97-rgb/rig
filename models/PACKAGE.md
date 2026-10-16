@@ -26,7 +26,13 @@ command reads this same table.
 - `Check`: the row's invariants, loud, naming the id and fields.
 - `Capped`: the row's budget scaled to a worker's window (`WorkerWindow`,
   SPEC_CONFIG 5): `Reserve`, `KeepRecent` and `MaxTokens` scale by the
-  ratio; `0` or a value at or past the row's window returns the row
+  ratio; `ThinkingBudget` scales by the same ratio and is clamped into
+  the range `Check` admits — at or over the scaled `MaxTokens` it takes
+  the largest legal budget (`MaxTokens-1`, the api requires room to
+  answer), under the api floor (`thinkingBudgetFloor`) it takes the
+  floor when the scaled `MaxTokens` leaves room for it and drops
+  thinking (`0`) when it does not. A row without a budget keeps none.
+  `0` or a value at or past the row's window returns the row
   unchanged.
 - `LowestEffort`: `Efforts[0]`, `""` when the row names none — the level
   the cheap calls (the compaction summary, the review fire) ask for; the
@@ -73,6 +79,10 @@ command reads this same table.
 - settings.json's `swapUrl` stays parsed and is no longer consulted
   (3.0.0): the provider sends to the model row's port directly, and the
   child half rides the models file instead.
+- `Capped` must leave the row `Check`-clean: the delegate-worker path
+  caps the row, `Check`s it and exits non-zero on a violation, so an
+  unscaled thinking budget sitting near `MaxTokens` would refuse every
+  worker boot under a smaller `WorkerWindow`.
 - `overlay` setter map uses closures over the `m` value: parse failure
   returns the raw error and a zero `Model`.
 - `Efforts` is the model's available effort levels in its own vocabulary
