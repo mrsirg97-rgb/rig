@@ -44,6 +44,8 @@ type tui struct {
 	bandCalls     map[string]bandCall
 	bandWork      map[string]bandWork
 	bandShown     string
+	bandRest      *time.Timer
+	bandRestUntil time.Time
 	now           func() time.Time
 	aside         string
 	asideAt       time.Time

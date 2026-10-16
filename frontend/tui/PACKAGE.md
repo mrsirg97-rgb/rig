@@ -58,19 +58,20 @@ width); no core or loop line (decision 10).
   worker however fast calls arrive. The row shows the breathing item
   (`BreathPaint` on the item's slot: a call in the warn slot, a notice
   in its level's slot, a start and a done in the text and success
-  slots, a failure in the fault slot), then holds it dimmed until the
-  next one, `—` before the first. Each breath is `emberBreathStops`
-  (12) × `animPeriod` (120 ms) of the ember's curve, riding the one
-  frame ticker; the breath runs whether or not a turn, a compaction or
-  an aside is live, and the ticker stops once the queue rests and the
-  row holds. A call is `#<worker> <call> · <age>`, prefixed with the
-  job's id for a scheduled job's worker (`j8 #1 …`), the call cut at
-  `bandCallCols` (25) display columns with `…` on rune and
-  display-width boundaries — 25 is the call width the 52-column phone
-  mockup shows, which leaves the row `j8 #1 ` + 25 + ` · 2s` = 36
-  columns at the phone's 52. The ages and the durations are computed
-  once, at the moment the item was made: the row is a sequence of
-  snapshots, not a live read.
+  slots, a failure in the fault slot), then holds it dimmed for
+  `bandRestPeriod` (30 s) on its own timer and fades to `—`, `—` before
+  the first; the next item cancels the rest. Each breath is
+  `emberBreathStops` (12) × `animPeriod` (120 ms) of the ember's curve,
+  riding the one frame ticker; the breath runs whether or not a turn, a
+  compaction or an aside is live, and the ticker stops once the queue
+  rests and the row holds. Between breaths the row rests on the work in
+  flight, `<type> · <workers> · <time>`, the time read when the row is
+  drawn. A call is `#<worker> <call>`, prefixed with the job's id for a
+  scheduled job's worker (`j8 #1 …`), the call cut at `bandCallCols`
+  (25) display columns with `…` on rune and display-width boundaries —
+  25 is the call width the 52-column phone mockup shows, which leaves
+  the row `j8 #1 ` + 25 = 31 columns at the phone's 52. A done item's
+  duration is computed once, when the item is made.
 - **Phases share the row too** (`frame.go`, `phasepreview.go`, 2.11.7):
   a `core.Phase` opening takes the indicator's row as `<name> · <elapsed>`
   on the ember when no turn owns it. Since 2.12.9 its deltas stream as a

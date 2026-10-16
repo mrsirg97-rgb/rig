@@ -1,4 +1,16 @@
 # Changelog
+## [3.2.3]: the row lets go
+
+A held item on the band row no longer stays for the rest of the session:
+after its breath it rests dimmed for `bandRestPeriod` (30 s) and fades to
+`—`, so a stale notice no longer reads as current. The rest rides its own
+timer, not the frame ticker — the ticker still stops once the queue
+rests — and the next item cancels it; the resting row's work in flight
+still wins while any is live. The tests: a notice held at 29 s and gone
+at 30 s, the ticker resting while the notice holds, and a second notice
+inside the rest restarting it. The TUI package doc drops the call age
+3.2.1 retired.
+
 ## [3.2.2]: the audit comes due
 
 This round is the correctness audit's findings, fixed red-first — every

@@ -8,6 +8,8 @@ import (
 
 const bandCallCols = 25
 
+const bandRestPeriod = 30 * time.Second
+
 type bandItem struct {
 	status bool
 	key    string
@@ -156,6 +158,7 @@ func (t *tui) bandKickLocked() {
 	t.bandQueue = t.bandQueue[1:]
 	t.bandFrame = 0
 	t.bandLive = true
+	t.bandWakeLocked()
 	t.startFrameTickerLocked()
 	if len(t.live.lines) > 0 {
 		t.live.draw("", t.liveLinesLocked(), t.statusLineLocked())
@@ -173,12 +176,49 @@ func (t *tui) breatheBandLocked() {
 	t.bandFrame = 0
 	t.bandLive = false
 	if len(t.bandQueue) == 0 {
+		t.bandRestLocked()
 		t.stopFrameTickerLocked()
 		return
 	}
 	t.bandHold = t.bandQueue[0]
 	t.bandQueue = t.bandQueue[1:]
 	t.bandLive = true
+}
+
+func (t *tui) bandRestLocked() {
+	t.bandWakeLocked()
+	t.bandRestUntil = t.now().Add(bandRestPeriod)
+	t.bandRest = time.AfterFunc(bandRestPeriod, t.bandFade)
+}
+
+func (t *tui) bandWakeLocked() {
+	if t.bandRest != nil {
+		t.bandRest.Stop()
+		t.bandRest = nil
+	}
+	t.bandRestUntil = time.Time{}
+}
+
+func (t *tui) bandFade() {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	select {
+	case <-t.closed:
+		return
+	default:
+	}
+	t.bandFadeLocked()
+}
+
+func (t *tui) bandFadeLocked() {
+	if t.bandLive || t.bandRestUntil.IsZero() || t.now().Before(t.bandRestUntil) {
+		return
+	}
+	t.bandWakeLocked()
+	t.bandHold = bandItem{}
+	if len(t.live.lines) > 0 {
+		t.live.draw("", t.liveLinesLocked(), t.statusLineLocked())
+	}
 }
 
 func (t *tui) bandRowLocked() string {

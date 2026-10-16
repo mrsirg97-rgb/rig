@@ -378,3 +378,86 @@ func TestTheRestingRowCountsTheWorkInFlight(t *testing.T) {
 	}
 	bandAwait(t, s, "job j8 done · 30s")
 }
+
+func bandAwaitRest(t *testing.T, s *scriptedSession) {
+	t.Helper()
+	deadline := time.Now().Add(3 * time.Second)
+	for {
+		s.fe.mu.Lock()
+		armed := s.fe.bandRest != nil
+		s.fe.mu.Unlock()
+		if armed {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("the breath ended without arming the rest")
+		}
+		time.Sleep(time.Millisecond)
+	}
+}
+
+func TestAHeldNoticeFadesToTheDashAfterItsRest(t *testing.T) {
+	th := oledTheme(t)
+	var elapsed atomic.Int64
+	s := newScriptedSession(t, th, WithWidth(52),
+		WithStatus(func(context.Context) StatusIn { return bandFixture() }),
+		WithNow(func() time.Time { return bandNow().Add(time.Duration(elapsed.Load())) }))
+	if got := s.prompt(promptMark(th), "go\n"); got != "go" {
+		t.Fatalf("prompt = %q", got)
+	}
+	s.fe.Notify(core.TurnEnd{Reason: core.TurnOver})
+	s.fe.Notify(evt.Notice{Source: "room", Text: "member joined"})
+	bandAwaitPaint(t, s, "room: member joined")
+	bandSettle(t, s)
+	bandAwaitRest(t, s)
+	bandAwait(t, s, "room: member joined")
+	s.fe.mu.Lock()
+	ticking := s.fe.tickStop != nil
+	s.fe.mu.Unlock()
+	if ticking {
+		t.Fatal("the held notice rests on a timer, not the frame ticker")
+	}
+
+	elapsed.Store(int64(bandRestPeriod - time.Second))
+	s.fe.bandFade()
+	bandAwait(t, s, "room: member joined")
+
+	elapsed.Store(int64(bandRestPeriod))
+	s.fe.bandFade()
+	bandAwait(t, s, "—")
+	s.fe.mu.Lock()
+	armed, hold := s.fe.bandRest != nil, s.fe.bandHold.text
+	s.fe.mu.Unlock()
+	if armed || hold != "" {
+		t.Fatalf("a faded row lets go of the notice: rest=%v hold=%q", armed, hold)
+	}
+}
+
+func TestANewNoticeRestartsTheRest(t *testing.T) {
+	th := oledTheme(t)
+	var elapsed atomic.Int64
+	s := newScriptedSession(t, th, WithWidth(52),
+		WithStatus(func(context.Context) StatusIn { return bandFixture() }),
+		WithNow(func() time.Time { return bandNow().Add(time.Duration(elapsed.Load())) }))
+	if got := s.prompt(promptMark(th), "go\n"); got != "go" {
+		t.Fatalf("prompt = %q", got)
+	}
+	s.fe.Notify(core.TurnEnd{Reason: core.TurnOver})
+	s.fe.Notify(evt.Notice{Source: "room", Text: "member joined"})
+	bandAwaitPaint(t, s, "room: member joined")
+	bandSettle(t, s)
+	bandAwaitRest(t, s)
+
+	elapsed.Store(int64(bandRestPeriod - time.Second))
+	s.fe.Notify(evt.Notice{Source: "room", Text: "member left"})
+	bandAwaitPaint(t, s, "room: member left")
+	bandSettle(t, s)
+	bandAwaitRest(t, s)
+	elapsed.Store(int64(bandRestPeriod))
+	s.fe.bandFade()
+	bandAwait(t, s, "room: member left")
+
+	elapsed.Store(int64(2*bandRestPeriod - time.Second))
+	s.fe.bandFade()
+	bandAwait(t, s, "—")
+}
