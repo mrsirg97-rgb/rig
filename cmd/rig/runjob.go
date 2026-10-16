@@ -80,12 +80,7 @@ func runJob(args []string) int {
 			}
 		}
 	})
-	tell := func(status machineroom.JobStatus) {
-		if machine == nil || !machine.Admits(machineroom.JobStatusSince) {
-			return
-		}
-		machine.Act(status, machineroom.KeyOf("job/"+status.Job), machineroom.PriorityFleet, func(bool) {})
-	}
+	tell := jobTeller(machine)
 	if err := os.MkdirAll(filepath.Dir(decPath), 0o755); err != nil {
 		fmt.Fprintln(os.Stderr, "rig: decision store:", err)
 	} else if jdb, _, _, jerr := store.Open(decPath, decisionstore.Statements(), decisionstore.SchemaVersion, decisionstore.Migration()); jerr != nil {
@@ -115,4 +110,17 @@ func runJob(args []string) int {
 		return 1
 	}
 	return 0
+}
+
+func jobTeller(machine machineroom.Member) func(machineroom.JobStatus) {
+	return func(status machineroom.JobStatus) {
+		if machine == nil || !machine.Admits(machineroom.JobStatusSince) {
+			return
+		}
+		posted := make(chan struct{})
+		machine.Act(status, machineroom.KeyOf("job/"+status.Job), machineroom.PriorityFleet, func(bool) { close(posted) })
+		if status.State != machineroom.JobRunning {
+			<-posted
+		}
+	}
 }

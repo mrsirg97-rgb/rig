@@ -563,9 +563,8 @@ func TestARunnerThatPostedItsEndLeavesWithoutAFailure(t *testing.T) {
 		time.Sleep(25 * time.Millisecond)
 	}
 
-	b.Act(machineroom.JobStatus{Job: "j1", State: machineroom.JobDone,
-		Started: time.Date(2026, 8, 15, 12, 0, 0, 0, time.UTC),
-		Ended:   time.Date(2026, 8, 15, 12, 0, 5, 0, time.UTC)},
+	started := time.Date(2026, 8, 15, 12, 0, 0, 0, time.UTC)
+	b.Act(machineroom.JobStatus{Job: "j1", State: machineroom.JobRunning, Started: started},
 		machineroom.KeyOf("job/j1"), machineroom.PriorityFleet, func(bool) {})
 	deadline = time.Now().Add(10 * time.Second)
 	for time.Now().Before(deadline) {
@@ -577,17 +576,23 @@ func TestARunnerThatPostedItsEndLeavesWithoutAFailure(t *testing.T) {
 		}
 		time.Sleep(25 * time.Millisecond)
 	}
-	mu.Lock()
-	if len(ended) != 1 || ended[0].State != machineroom.JobDone {
-		t.Fatalf("the survivor's row breathes the done act: %v", ended)
-	}
-	mu.Unlock()
-
+	jobTeller(b)(machineroom.JobStatus{Job: "j1", State: machineroom.JobDone,
+		Started: started, Ended: started.Add(5 * time.Second)})
 	b.Close()
+	deadline = time.Now().Add(10 * time.Second)
+	for time.Now().Before(deadline) {
+		mu.Lock()
+		n := len(ended)
+		mu.Unlock()
+		if n >= 2 {
+			break
+		}
+		time.Sleep(25 * time.Millisecond)
+	}
 	time.Sleep(250 * time.Millisecond)
 	mu.Lock()
 	defer mu.Unlock()
-	if len(ended) != 1 {
-		t.Fatalf("a runner that ended its jobs leaves no failure behind: %v", ended)
+	if len(ended) != 2 || ended[0].State != machineroom.JobRunning || ended[1].State != machineroom.JobDone {
+		t.Fatalf("a runner that closes right after its done leaves running then done, no failure: %v", ended)
 	}
 }

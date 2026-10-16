@@ -122,7 +122,8 @@ func (c *children) Next(op broadcast.Operation) error {
 		}
 		c.rows = merged
 	case room.JobStatus:
-		c.jobStatus(act, op.Origin())
+		from := op.Origin()
+		c.engine.Add(evt.Func(func(context.Context) { c.jobStatus(act, from) }), room.PriorityFleet)
 	case room.Update:
 		if c.closed || c.leave == nil {
 			return nil
@@ -162,9 +163,6 @@ func (c *children) sayJob(st room.JobStatus) {
 	c.fleet.Publish(context.Background(), func(error) {}, broadcast.NewMessage(c.fleet.Id(), true, st))
 }
 
-// endJobsOf ends the jobs a departing member was running. The told fires
-// on the machine's engine, so the live set is read on a goroutine and the
-// ending lands on the children's own engine, serialized with Next.
 func (c *children) endJobsOf(m room.Member) {
 	go func() {
 		live := map[int64]bool{}

@@ -21,14 +21,18 @@ type bandCall struct {
 }
 
 func bandCallCut(call string) string {
-	if runeWidthSum(call) <= bandCallCols {
-		return call
+	return bandCut(call, bandCallCols)
+}
+
+func bandCut(text string, cols int) string {
+	if cols < 1 || runeWidthSum(text) <= cols {
+		return text
 	}
 	var b strings.Builder
 	width := 0
-	for _, r := range call {
+	for _, r := range text {
 		w := runeWidth(r)
-		if width+w > bandCallCols-1 {
+		if width+w > cols-1 {
 			break
 		}
 		b.WriteRune(r)
@@ -119,12 +123,13 @@ func (t *tui) breatheBandLocked() {
 }
 
 func (t *tui) bandRowLocked() string {
+	text := bandCut(t.bandHold.text, t.live.width)
 	var row string
 	switch {
 	case t.bandLive:
-		row = t.theme.BreathPaint(t.bandHold.slot, t.bandFrame, t.bandHold.text)
-	case t.bandHold.text != "":
-		row = t.theme.Paint(SlotDim, t.bandHold.text)
+		row = t.theme.BreathPaint(t.bandHold.slot, t.bandFrame, text)
+	case text != "":
+		row = t.theme.Paint(SlotDim, text)
 	default:
 		row = t.theme.Paint(SlotDim, "—")
 	}

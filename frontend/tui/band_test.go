@@ -316,3 +316,18 @@ func TestBandCallCutHoldsRunesAndWidths(t *testing.T) {
 		}
 	}
 }
+
+func TestTheRowNeverWrapsOnAPhone(t *testing.T) {
+	s := bandSession(t, 52)
+	long := "rig was updated: this instance left the room, restart it"
+	s.fe.Notify(evt.Notice{Source: "room", Text: long})
+	bandAwaitPaint(t, s, "room: rig was updated")
+	bandSettle(t, s)
+	rows := bandFooter(t, bandScreen(t, s, 52), 5)
+	if WidthOf(rows[4]) > 52 || !strings.HasSuffix(rows[4], "…") {
+		t.Fatalf("the row must hold one phone row, cut with …: %q", rows[4])
+	}
+	if rows[3] == "" || !strings.HasPrefix(rows[4], "room: rig was updated") {
+		t.Fatalf("the footer shifted: %q", rows)
+	}
+}
