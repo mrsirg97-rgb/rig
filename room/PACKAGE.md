@@ -30,7 +30,10 @@ the five signals the instances exchange beside the protocol's own.
   Nothing mints until `Settle`, called after the last `Subscribe`.
 - `KeyOf(model string)` and `TableKey()`: the keys the claims and the
   child operations ride, hashed from the model's id and the table's
-  name.
+  name. `MemberLeftNotice` is the machine room's member-leave notice
+  text — the one evt's claimant publishes when a peer's transport ends
+  (evt broadcast's `left`) — named here so the instances' end-jobs
+  drain matches the room's word instead of a copy of it.
 - `Answers(port int)`: the row's port probed once, at join when the room
   is empty — what is resident is read from the world, never replayed.
 - `Loading(port int)`: whether the child's `/health` says 503 — the port

@@ -163,6 +163,13 @@ func (c *children) sayJob(st room.JobStatus) {
 	c.fleet.Publish(context.Background(), func(error) {}, broadcast.NewMessage(c.fleet.Id(), true, st))
 }
 
+func (c *children) left(n evt.Notice, m room.Member) {
+	if n.Source != "room" || n.Text != room.MemberLeftNotice {
+		return
+	}
+	c.endJobsOf(m)
+}
+
 func (c *children) endJobsOf(m room.Member) {
 	go func() {
 		live := map[int64]bool{}

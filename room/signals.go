@@ -55,6 +55,8 @@ const (
 	JobStatusSince = "3.2.0"
 )
 
+const MemberLeftNotice = "member left"
+
 type JobStatus struct {
 	evt.Mark
 	Job     string
