@@ -49,7 +49,10 @@ the five signals the instances exchange beside the protocol's own.
   (3.0.2): one line per request a rig served, appended to
   `~/.rig/logs/<model id>.served` by the instance that made it and read
   from the file's last 64 KB by the dashboard — what a model is doing is
-  read from the world, like its residency.
+  read from the world, like its residency. The tail's first line is
+  dropped only when the cut landed inside a record: one byte is peeked
+  before the window, and a cut landing exactly on a record boundary
+  keeps that record.
 - The signals: `StartChild`, `StopChild`, `SwapChild` (`Swap() bool`),
   `TableChange` (one row's raw JSON), `Update` and `JobStatus` (3.2.0:
   a scheduled job's state crossing processes — the job's id, the

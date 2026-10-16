@@ -57,6 +57,10 @@ func Recent(home, model string, n int) []Served {
 	if from < 0 {
 		from = 0
 	}
+	edge := from > 0
+	if edge {
+		from--
+	}
 	if _, err := f.Seek(from, io.SeekStart); err != nil {
 		return out
 	}
@@ -65,7 +69,7 @@ func Recent(home, model string, n int) []Served {
 		return out
 	}
 	lines := bytes.Split(bytes.TrimSpace(data), []byte{'\n'})
-	if from > 0 && len(lines) > 0 {
+	if edge && len(lines) > 0 && data[0] != '\n' {
 		lines = lines[1:]
 	}
 	if len(lines) > n {
