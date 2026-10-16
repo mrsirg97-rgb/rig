@@ -62,16 +62,11 @@ func TestCapBoundsTheRefusalContent(t *testing.T) {
 		t.Fatalf("the cap must not add an error to a passing tool: %v", err)
 	}
 
-	if strings.Contains(content, "eee") {
-		t.Fatalf("a tiny cap must elide the content whole, got %q", content)
-	}
 	if len(content) > 32 {
 		t.Fatalf("a tiny cap must stay under the wall, got %d bytes: %q", len(content), content)
 	}
-	for _, want := range []string{"[TRUNCATED]", "2000"} {
-		if !strings.Contains(content, want) {
-			t.Fatalf("the marker must survive a tiny cap and name the size, got %q", content)
-		}
+	if content != strings.Repeat("e", 32) {
+		t.Fatalf("below the marker the cut is bare: want the first 32 bytes of the content, got %q", content)
 	}
 }
 
@@ -104,5 +99,35 @@ func TestACapBelowItsMarkerStaysUnderTheWall(t *testing.T) {
 		if !utf8.ValidString(out) {
 			t.Fatalf("a cap below its marker must stay valid UTF-8, got %q", out)
 		}
+	}
+}
+
+func TestCapBelowTheMarkerCutsBare(t *testing.T) {
+	full := strings.Repeat("abcdefgh", 64)
+	var exec core.ToolExec = func(ctx context.Context, call core.ToolCall) (string, error) {
+		return full, nil
+	}
+	out, err := guard.Cap(10).Wrap(exec)(context.Background(), core.ToolCall{ID: "c", Name: "read", Args: json.RawMessage(`{}`)})
+	if err != nil {
+		t.Fatalf("the cap must not fail the turn: %v", err)
+	}
+	if out != full[:10] {
+		t.Fatalf("below the marker the cut is bare: want the first 10 bytes of the content, got %q", out)
+	}
+	if strings.HasPrefix(out, "[") {
+		t.Fatalf("a partial marker must not be emitted, got %q", out)
+	}
+	wide := strings.Repeat("é", 100)
+	out, err = guard.Cap(5).Wrap(func(ctx context.Context, call core.ToolCall) (string, error) {
+		return wide, nil
+	})(context.Background(), core.ToolCall{ID: "c2", Name: "read", Args: json.RawMessage(`{}`)})
+	if err != nil {
+		t.Fatalf("the cap must not fail the turn: %v", err)
+	}
+	if !utf8.ValidString(out) || len(out) > 5 {
+		t.Fatalf("the bare cut must stay rune-safe under the wall, got %d bytes: %q", len(out), out)
+	}
+	if strings.HasPrefix(out, "[") {
+		t.Fatalf("a partial marker must not be emitted, got %q", out)
 	}
 }

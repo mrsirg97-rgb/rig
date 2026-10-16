@@ -34,10 +34,10 @@ func truncate(content string, cap int) string {
 	n := len(content)
 	marker := fmt.Sprintf("[TRUNCATED] full %d bytes, kept the head and the tail, the middle elided\nre-read a narrower range (read offset/limit)\n", n)
 	if len(marker) > cap {
-		for cap > 0 && !utf8.RuneStart(marker[cap]) {
+		for cap > 0 && !utf8.RuneStart(content[cap]) {
 			cap--
 		}
-		return marker[:cap]
+		return content[:cap]
 	}
 	avail := cap - len(marker)
 	head := avail / 2

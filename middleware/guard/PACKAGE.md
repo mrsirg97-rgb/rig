@@ -85,7 +85,9 @@ that bounds every tool result before the transcript.
   concurrent batch calls the chain from many goroutines). The n+1th call
   and every call after it is refused without executing, and the refusal
   is both `content` and `error`.
-- `Cap`: `bytes < 1` clamps to 1: a tiny cap may elide the content whole
-  and return the marker alone (the marker names the full size). Every
-  tool's own cap stays; this is the wall behind them, so a result the
-  tool already capped can still be further bounded here.
+- `Cap`: `bytes < 1` clamps to 1: a cap below the marker's own size cuts
+  the content bare — a partial marker cannot name the full size, so no
+  marker is emitted below it, and the marker alone is returned at the
+  marker's exact fit. Every tool's own cap stays; this is the wall
+  behind them, so a result the tool already capped can still be further
+  bounded here.
