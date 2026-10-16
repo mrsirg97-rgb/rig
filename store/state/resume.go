@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"strings"
 
 	"github.com/mrsirg97-rgb/rig/v3/policy/compact"
 
@@ -73,7 +72,7 @@ func resumeIn(ctx context.Context, tx *sql.Tx, sessionID string) (*core.Session,
 
 	start := int64(0)
 	for _, m := range ms {
-		if m.role == "user" && strings.HasPrefix(m.content, compact.SummaryMarker) {
+		if m.role == "user" && compact.IsSummary(m.content) {
 			start = m.seq
 		}
 	}
@@ -141,8 +140,8 @@ func callsFor(ctx context.Context, tx *sql.Tx, messageSeq int64) ([]core.ToolCal
 		if err := rows.Scan(&id, &name, &args, &result); err != nil {
 			return nil, nil, fmt.Errorf("resume: %w", err)
 		}
-		calls = append(calls, core.ToolCall{ID: id, Name: name, Args: json.RawMessage(args)})
 		if result.Valid {
+			calls = append(calls, core.ToolCall{ID: id, Name: name, Args: json.RawMessage(args)})
 			landed = append(landed, landedResult{id: id, result: result.String})
 		}
 	}

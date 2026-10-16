@@ -96,10 +96,7 @@ func maybeCompact(bound context.Context, tx *sql.Tx, f *folded, session, scope s
 	f.maxSeq = seq
 	tsStr := nowRFC3339()
 	for _, ts := range f.tasks {
-		ts.createdSeq, ts.updatedSeq, ts.updatedTs = seq, seq, tsStr
-		if ts.status == statusDone {
-			ts.finishedSeq = seq
-		}
+		ts.updatedSeq, ts.updatedTs = seq, tsStr
 	}
 	if _, e := tx.Exec("DELETE FROM events WHERE scope = ? AND seq < ?", scope, seq); e != nil {
 		return "", fmt.Errorf("todo: compact: %w", e)
@@ -124,6 +121,7 @@ func snapshotOf(f *folded) []any {
 			"id": ts.id, "text": ts.text, "status": ts.status,
 			"pos": ts.pos - 1, "requires": link(ts.requires), "blocks": link(ts.blocks),
 			"owner": owner, "updatedTs": ts.updatedTs,
+			"createdSeq": ts.createdSeq, "finishedSeq": ts.finishedSeq,
 		}
 		if len(ts.notes) != 0 {
 			notes := []any{}
@@ -190,16 +188,18 @@ func (f *folded) applyCompactEvent(e eventRow) {
 		MaxID  int `json:"maxId"`
 		MaxPos int `json:"maxPos"`
 		Tasks  []struct {
-			ID        string  `json:"id"`
-			Text      string  `json:"text"`
-			Status    string  `json:"status"`
-			Requires  *string `json:"requires"`
-			DependsOn *string `json:"dependsOn"`
-			Blocks    *string `json:"blocks"`
-			Pos       int     `json:"pos"`
-			Owner     string  `json:"owner"`
-			UpdatedTs string  `json:"updatedTs"`
-			Notes     []struct {
+			ID          string  `json:"id"`
+			Text        string  `json:"text"`
+			Status      string  `json:"status"`
+			Requires    *string `json:"requires"`
+			DependsOn   *string `json:"dependsOn"`
+			Blocks      *string `json:"blocks"`
+			Pos         int     `json:"pos"`
+			Owner       string  `json:"owner"`
+			UpdatedTs   string  `json:"updatedTs"`
+			CreatedSeq  int64   `json:"createdSeq"`
+			FinishedSeq int64   `json:"finishedSeq"`
+			Notes       []struct {
 				Note    string `json:"note"`
 				Session string `json:"session"`
 				Ts      string `json:"ts"`
@@ -248,6 +248,7 @@ func (f *folded) applyCompactEvent(e eventRow) {
 				id: r.ID, text: r.Text, status: status,
 				pos: pos, requires: requires, blocks: blocks, owner: r.Owner,
 				updatedTs: updatedTs, notes: notes,
+				createdSeq: r.CreatedSeq, finishedSeq: r.FinishedSeq,
 			}
 		}
 		for _, ts := range tasks {
@@ -260,9 +261,11 @@ func (f *folded) applyCompactEvent(e eventRow) {
 		}
 	}
 	for _, ts := range tasks {
-		ts.createdSeq = e.seq
 		ts.updatedSeq = e.seq
-		if ts.status == statusDone {
+		if ts.createdSeq == 0 {
+			ts.createdSeq = e.seq
+		}
+		if ts.status == statusDone && ts.finishedSeq == 0 {
 			ts.finishedSeq = e.seq
 		}
 	}

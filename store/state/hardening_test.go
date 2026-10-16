@@ -314,8 +314,8 @@ func TestResumeRebuildsTheTranscript(t *testing.T) {
 	if asst.Reasoning != "the thinking behind the calls" {
 		t.Fatalf("the reasoning must rebuild: %q", asst.Reasoning)
 	}
-	if len(asst.ToolCalls) != 2 || asst.ToolCalls[0].ID != "c1" || asst.ToolCalls[1].ID != "c2" {
-		t.Fatalf("the calls must rebuild in row order: %+v", asst.ToolCalls)
+	if len(asst.ToolCalls) != 1 || asst.ToolCalls[0].ID != "c1" {
+		t.Fatalf("only the landed call rebuilds (the dangling one has no result to answer): %+v", asst.ToolCalls)
 	}
 	if string(asst.ToolCalls[0].Args) != `{"cmd":"ls"}` {
 		t.Fatalf("the args must reparse to raw JSON: %q", asst.ToolCalls[0].Args)
@@ -338,7 +338,7 @@ func TestResumeRebuildsTheTranscript(t *testing.T) {
 	}
 }
 
-func TestResumeDanglingCallSurvives(t *testing.T) {
+func TestResumeDropsTheDanglingCall(t *testing.T) {
 	db := openState(t)
 	seedSession(t, db, "resume-dangle")
 
@@ -364,8 +364,8 @@ func TestResumeDanglingCallSurvives(t *testing.T) {
 	for _, c := range asst.ToolCalls {
 		ids = append(ids, c.ID)
 	}
-	if strings.Join(ids, ",") != "c1,c2" {
-		t.Fatalf("both calls must survive the projection (dangling kept), got %v", ids)
+	if strings.Join(ids, ",") != "c1" {
+		t.Fatalf("the projection keeps only calls whose result landed, got %v", ids)
 	}
 	if toolForC2 {
 		t.Fatal("the dangling call must not gain a synthesized result")

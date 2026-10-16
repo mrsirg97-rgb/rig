@@ -196,8 +196,8 @@ func (q *Queue) packSymbol(ctx context.Context, db store.DB, root, module, targe
 		return "", err
 	}
 	out := b.String()
-	if len(out) > ReadCap {
-		out = truncateAt(out, ReadCap) + "\n[truncated at the read ceiling]"
+	if len(out) > ReadCeiling {
+		out = truncateAt(out, ReadCeiling) + "\n[truncated at the read ceiling]"
 	}
 	return out, nil
 }
@@ -240,11 +240,11 @@ func (q *Queue) packOne(ctx context.Context, db store.DB, root string, sym symRo
 		}
 		client = c
 	}
-	callers, err := queryEdges(ctx, db, `SELECT from_package, from_name, file, line FROM edges WHERE to_package = ? AND to_name = ? ORDER BY file, line`, sym.Package, sym.Name)
+	callers, err := queryEdges(ctx, db, `SELECT from_package, from_name, file, line FROM edges WHERE to_package = ? AND to_name = ? ORDER BY file, line LIMIT ?`, sym.Package, sym.Name, edgeLimit)
 	if err != nil {
 		return "", err
 	}
-	callees, err := queryEdges(ctx, db, `SELECT to_package, to_name, file, line FROM edges WHERE from_package = ? AND from_name = ? ORDER BY line`, sym.Package, sym.Name)
+	callees, err := queryEdges(ctx, db, `SELECT to_package, to_name, file, line FROM edges WHERE from_package = ? AND from_name = ? ORDER BY line LIMIT ?`, sym.Package, sym.Name, edgeLimit)
 	if err != nil {
 		return "", err
 	}
@@ -276,11 +276,11 @@ func (q *Queue) packOne(ctx context.Context, db store.DB, root string, sym symRo
 			return "", err
 		}
 	}
-	callers, err = queryEdges(ctx, db, `SELECT from_package, from_name, file, line FROM edges WHERE to_package = ? AND to_name = ? ORDER BY file, line`, sym.Package, sym.Name)
+	callers, err = queryEdges(ctx, db, `SELECT from_package, from_name, file, line FROM edges WHERE to_package = ? AND to_name = ? ORDER BY file, line LIMIT ?`, sym.Package, sym.Name, edgeLimit)
 	if err != nil {
 		return "", err
 	}
-	callees, err = queryEdges(ctx, db, `SELECT to_package, to_name, file, line FROM edges WHERE from_package = ? AND from_name = ? ORDER BY line`, sym.Package, sym.Name)
+	callees, err = queryEdges(ctx, db, `SELECT to_package, to_name, file, line FROM edges WHERE from_package = ? AND from_name = ? ORDER BY line LIMIT ?`, sym.Package, sym.Name, edgeLimit)
 	if err != nil {
 		return "", err
 	}
@@ -331,6 +331,10 @@ type edgeRow struct {
 	File    string
 	Line    int64
 }
+
+// edgeLimit bounds one symbol's caller or callee list: a list longer than
+// a screen is a directory, not an answer.
+const edgeLimit = 100
 
 func queryEdges(ctx context.Context, db store.DB, q string, args ...any) ([]edgeRow, error) {
 	rows, err := db.QueryContext(ctx, q, args...)

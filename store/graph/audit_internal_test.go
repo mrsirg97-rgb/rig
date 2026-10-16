@@ -124,19 +124,19 @@ func TestLspURIEscapesTheReservedGrammar(t *testing.T) {
 }
 
 func TestTheReadCeilingNeverSplitsARune(t *testing.T) {
-	ascii := strings.Repeat("a", ReadCap)
-	if got := truncateAt(ascii, ReadCap); len(got) != ReadCap {
+	ascii := strings.Repeat("a", ReadCeiling)
+	if got := truncateAt(ascii, ReadCeiling); len(got) != ReadCeiling {
 		t.Fatalf("ascii truncation len = %d, want the ceiling exact", len(got))
 	}
-	straddle := strings.Repeat("a", ReadCap-2) + "日日日"
-	got := truncateAt(straddle, ReadCap)
+	straddle := strings.Repeat("a", ReadCeiling-2) + "日日日"
+	got := truncateAt(straddle, ReadCeiling)
 	if !utf8.ValidString(got) {
 		t.Fatalf("the truncated pack is not valid UTF-8: len %d", len(got))
 	}
-	if len(got) > ReadCap {
+	if len(got) > ReadCeiling {
 		t.Fatalf("truncated len %d over the ceiling", len(got))
 	}
-	if got != strings.Repeat("a", ReadCap-2) {
+	if got != strings.Repeat("a", ReadCeiling-2) {
 		t.Fatalf("the truncation must fall back to the last whole rune, got len %d", len(got))
 	}
 }
@@ -198,7 +198,7 @@ func TestTheExactFitCandidateLoads(t *testing.T) {
 		t.Fatal(err)
 	}
 	exact := len(first) + len(second)
-	q := NewQueue(home, nil, WithPackCaps(exact, ReadCap))
+	q := NewQueue(home, nil, WithPackCaps(exact, ReadCeiling))
 	out, err := q.packTask(ctx, db, root, task)
 	if err != nil {
 		t.Fatalf("packTask: %v", err)

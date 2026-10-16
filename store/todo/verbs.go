@@ -144,6 +144,7 @@ func Complete(ctx context.Context, db store.DB, p Project, id, session string, w
 				return "", e
 			}
 			ts.status = statusDone
+			ts.finishedSeq = acceptSeq
 			ts.updatedSeq = acceptSeq
 			ts.updatedTs = nowRFC3339()
 		}
@@ -227,14 +228,33 @@ const MaxNoteLen = 1000
 
 const MaxTaskLen = MaxNoteLen
 
+// Claimed is the typed shape of a successful claim: the fleet takes this,
+// not the prose reply.
+type Claimed struct {
+	ID     string
+	Text   string
+	Status string
+}
+
 func Claim(ctx context.Context, db store.DB, p Project, session, status string) (string, error) {
+	reply, _, err := claim(ctx, db, p, session, status)
+	return reply, err
+}
+
+func ClaimTask(ctx context.Context, db store.DB, p Project, session, status string) (*Claimed, bool, error) {
+	_, c, err := claim(ctx, db, p, session, status)
+	return c, c != nil, err
+}
+
+func claim(ctx context.Context, db store.DB, p Project, session, status string) (string, *Claimed, error) {
 	if session == "" {
 		session = anon
 	}
 	if status != "" && status != statusReview {
-		return "", fmt.Errorf("todo: unknown claim status %q (only %s)", status, statusReview)
+		return "", nil, fmt.Errorf("todo: unknown claim status %q (only %s)", status, statusReview)
 	}
-	return mutate(ctx, db, p, func(bound context.Context, tx *sql.Tx, f *folded) (string, error) {
+	var out *Claimed
+	reply, err := mutate(ctx, db, p, func(bound context.Context, tx *sql.Tx, f *folded) (string, error) {
 		foot, e := maybeCompact(bound, tx, f, session, p.Key)
 		if e != nil {
 			return "", e
@@ -273,8 +293,10 @@ func Claim(ctx context.Context, db store.DB, p Project, session, status string) 
 		if e := rewrite(tx, f, p.Key); e != nil {
 			return "", e
 		}
+		out = &Claimed{ID: ts.id, Text: ts.text, Status: ts.status}
 		return withFoot(echoTask(f, session, ts.id, note, p.Dir), foot), nil
 	})
+	return reply, out, err
 }
 
 func Note(ctx context.Context, db store.DB, p Project, id, text, session string) (string, error) {
@@ -355,6 +377,7 @@ func Accept(ctx context.Context, db store.DB, p Project, id, session string) (st
 		}
 		ts.status = statusDone
 		ts.owner = ""
+		ts.finishedSeq = seq
 		ts.updatedSeq = seq
 		ts.updatedTs = nowRFC3339()
 		if e := rewrite(tx, f, p.Key); e != nil {
@@ -446,15 +469,17 @@ func Move(ctx context.Context, db store.DB, p Project, id string, pos int, sessi
 		if pos < 1 || pos > len(f.tasks) {
 			return "", fmt.Errorf("move position for '%s' must be between 1 and %d, got %d", id, len(f.tasks), pos)
 		}
+		if ts.pos == pos {
+			return withFoot(echoTask(f, session, id, "'"+id+"' is already at position "+strconv.Itoa(pos), ""), foot), nil
+		}
 		args, _ := json.Marshal(map[string]any{"id": id, "pos": pos})
 		seq := f.nextSeq()
 		if _, e := appendEvent(bound, seq, "move", string(args), session, p.Key); e != nil {
 			return "", e
 		}
-		if appliedMove(f, ts, pos) {
-			ts.updatedSeq = seq
-			ts.updatedTs = nowRFC3339()
-		}
+		appliedMove(f, ts, pos)
+		ts.updatedSeq = seq
+		ts.updatedTs = nowRFC3339()
 		if e := rewrite(tx, f, p.Key); e != nil {
 			return "", e
 		}
@@ -542,14 +567,20 @@ func Reap(ctx context.Context, db store.DB, p Project, ended []string, session s
 			return "", e
 		}
 		now := time.Now()
-		released := []string{}
-		for id, ts := range f.tasks {
+		var candidates []*taskState
+		for _, ts := range f.tasks {
 			if (ts.status != statusActive && ts.status != statusReview) || ts.owner == "" || ts.owner == session {
 				continue
 			}
 			if !dead[ts.owner] && !staleClaim(ts, now) {
 				continue
 			}
+			candidates = append(candidates, ts)
+		}
+		sort.Slice(candidates, func(i, j int) bool { return candidates[i].id < candidates[j].id })
+		released := []string{}
+		for _, ts := range candidates {
+			id := ts.id
 			owner := ts.owner
 			args, _ := json.Marshal(map[string]any{"id": id})
 			seq := f.nextSeq()

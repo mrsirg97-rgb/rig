@@ -83,5 +83,4 @@ func (f *fold) applyCompact(e eventRow) {
 		j.UpdatedSeq = e.seq
 	}
 	f.jobs = tasks
-	f.compactSeq = e.seq
 }

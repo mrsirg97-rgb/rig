@@ -19,7 +19,9 @@ import (
 
 const QueueCap = 256
 
-const ReadCap = 1 << 20
+// ReadCeiling is one read's ceiling in this package: the scanner buffer,
+// the LSP frame bound, and the pack reply's truncation wall share the number.
+const ReadCeiling = 1 << 20
 
 type Queue struct {
 	ch      chan string
@@ -68,8 +70,8 @@ func NewQueue(home string, voice broadcast.Member, opts ...Option) *Queue {
 		said:    map[string]bool{},
 		lspGone: map[string]bool{},
 		servers: defaultServers(),
-		itemCap: ReadCap,
-		loadCap: ReadCap,
+		itemCap: ReadCeiling,
+		loadCap: ReadCeiling,
 	}
 	for _, opt := range opts {
 		opt(q)

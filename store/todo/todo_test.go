@@ -2223,3 +2223,80 @@ func create(ctx context.Context, db store.DB, p todostore.Project, items []item,
 	}
 	return todostore.Read(ctx, db, p, session)
 }
+
+func TestCompactionKeepsTheOrderingFacts(t *testing.T) {
+	db := newDB(t)
+	ctx := context.Background()
+	reply, err := create(ctx, db, p, []item{{Text: "alpha"}, {Text: "beta"}, {Text: "gamma"}}, "s1")
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	a := taskIDText(t, reply, "alpha")
+	b := taskIDText(t, reply, "beta")
+	for _, id := range []string{a, b} {
+		if _, err := todostore.Complete(ctx, db, p, id, "s1", false); err != nil {
+			t.Fatal(err)
+		}
+	}
+	before, err := todostore.Read(ctx, db, p, "s1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Logf("before:\n%s", before)
+	age(t, db, 1010)
+	gammaID := taskIDText(t, before, "gamma")
+	if _, err := todostore.Start(ctx, db, p, gammaID, "s1", false); err != nil {
+		t.Fatalf("start %s: %v\nbefore:\n%s", gammaID, err, before)
+	}
+	if n := rawEventOps(t, db, "compact"); n == 0 {
+		t.Fatal("the log must have compacted")
+	}
+	after, err := todostore.Read(ctx, db, p, "s1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, reply := range []string{before, after} {
+		iBeta, iAlpha := strings.Index(reply, "t2 [x] beta"), strings.Index(reply, "t1 [x] alpha")
+		if iBeta == -1 || iAlpha == -1 || iBeta > iAlpha {
+			t.Fatalf("the finished order (beta finished after alpha) must hold, not be re-minted by compaction:\n%s", reply)
+		}
+	}
+	if !strings.Contains(after, "t3 [~] gamma") {
+		t.Fatalf("the started task must still be listed:\n%s", after)
+	}
+}
+
+func TestAMoveToTheSamePositionLogsNoEvent(t *testing.T) {
+	db := newDB(t)
+	ctx := context.Background()
+	reply, err := create(ctx, db, p, []item{{Text: "alpha"}}, "s1")
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	id := taskIDText(t, reply, "alpha")
+	before := eventCount(t, db)
+	if _, err := todostore.Move(ctx, db, p, id, 1, "s1"); err != nil {
+		t.Fatalf("move: %v", err)
+	}
+	if got := eventCount(t, db); got != before {
+		t.Fatalf("a move to the position the task already holds must log nothing: %d events, want %d", got, before)
+	}
+}
+
+func TestClaimTaskAnswersTypedAndNothingIsNotAnError(t *testing.T) {
+	db := newDB(t)
+	ctx := context.Background()
+	if c, ok, err := todostore.ClaimTask(ctx, db, p, "s1", ""); err != nil || ok || c != nil {
+		t.Fatalf("an empty board = (%v, %v, %v), want (nil, false, nil)", c, ok, err)
+	}
+	reply, err := create(ctx, db, p, []item{{Text: "dig"}}, "s1")
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	_ = reply
+	age(t, db, 1010)
+	c, ok, err := todostore.ClaimTask(ctx, db, p, "s1", "")
+	if err != nil || !ok || c == nil || c.ID != "t1" || c.Text != "dig" {
+		t.Fatalf("the typed claim = %+v (ok %v, err %v), want t1/dig claimed", c, ok, err)
+	}
+}

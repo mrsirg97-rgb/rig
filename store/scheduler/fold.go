@@ -31,9 +31,8 @@ type jobState struct {
 }
 
 type fold struct {
-	jobs       map[string]*jobState
-	maxSeq     int64
-	compactSeq int64
+	jobs   map[string]*jobState
+	maxSeq int64
 }
 
 func newFold() *fold {

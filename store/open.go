@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"os"
 	"strconv"
@@ -20,7 +21,10 @@ func Open(path string, statements []string, wantVersion int, migrate ...func(*sq
 	if strings.Contains(path, "?") {
 		return sqlx.DB{}, "", "", fmt.Errorf("store path %s carries '?': the driver would split the DSN at it and open a different file — rename the store", path)
 	}
-	existing, _ := fileSize(path)
+	existing, ferr := fileSize(path)
+	if ferr != nil && !errors.Is(ferr, os.ErrNotExist) {
+		return sqlx.DB{}, "", "", fmt.Errorf("store: %s: %w", path, ferr)
+	}
 	var quarantined string
 	for attempt := 0; ; attempt++ {
 		raw, err := sql.Open("sqlite", path+"?_txlock=immediate&_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)&_pragma=foreign_keys(ON)")
@@ -198,10 +202,10 @@ func apply(raw *sql.DB, statements []string) error {
 	return nil
 }
 
-func fileSize(path string) (int64, bool) {
+func fileSize(path string) (int64, error) {
 	fi, err := os.Stat(path)
 	if err != nil {
-		return 0, false
+		return 0, err
 	}
-	return fi.Size(), true
+	return fi.Size(), nil
 }

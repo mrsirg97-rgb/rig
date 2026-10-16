@@ -147,6 +147,7 @@ type fakeSpawn struct {
 	calls  []fakeCall
 	result sched.SpawnResult
 	err    error
+	during func()
 }
 
 type fakeCall struct {
@@ -157,6 +158,9 @@ type fakeCall struct {
 
 func (f *fakeSpawn) spawn(ctx context.Context, argv []string, cwd string, env []string, observe func([]byte)) (sched.SpawnResult, error) {
 	f.calls = append(f.calls, fakeCall{Argv: argv, Cwd: cwd, Ctx: ctx})
+	if f.during != nil {
+		f.during()
+	}
 	return f.result, f.err
 }
 
@@ -946,5 +950,25 @@ func TestNamedModelAnotherResidentStillSkipsNamingTheHolder(t *testing.T) {
 	}
 	if !strings.Contains(toString(rec.Args["reason"]), "held by glm5.3-flash") {
 		t.Fatalf("the skip must name the holder: %v", rec.Args["reason"])
+	}
+}
+
+func TestALongFireDoesNotClobberTheCrontab(t *testing.T) {
+	h, key := setupJob(t, realCwd(t, "job"), func(in *sched.CreateInput) {
+		in.Cron = "once"
+		in.At = "2026-08-16T03:07:00Z"
+	})
+	spawn := &fakeSpawn{result: sched.SpawnResult{Exit: 0}}
+	spawn.during = func() {
+		h.ct.mu.Lock()
+		defer h.ct.mu.Unlock()
+		h.ct.text += "5 3 * * * echo later\n"
+	}
+	mustOK(t, sched.RunJob(key, runOpts(h, nil, spawn, fetchOpts{})))
+	if !strings.Contains(h.ct.text, "echo later") {
+		t.Fatalf("a line installed while the worker ran must survive the once-line removal:\n%s", h.ct.text)
+	}
+	if strings.Contains(h.ct.text, "rig-scheduler:"+sched.TagHome(h.rigHome)+":") {
+		t.Fatalf("the fired once line must still be consumed:\n%s", h.ct.text)
 	}
 }

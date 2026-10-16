@@ -169,8 +169,8 @@ func (c *lspClient) readLoop(stdout io.Reader) {
 			c.die(err)
 			return
 		}
-		if n < 0 || n > ReadCap {
-			c.die(fmt.Errorf("Content-Length %d over the %d read ceiling", n, ReadCap))
+		if n < 0 || n > ReadCeiling {
+			c.die(fmt.Errorf("Content-Length %d over the %d read ceiling", n, ReadCeiling))
 			return
 		}
 		body := make([]byte, n)
