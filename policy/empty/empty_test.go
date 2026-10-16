@@ -13,7 +13,6 @@ import (
 	"github.com/mrsirg97-rgb/rig/v3"
 	"github.com/mrsirg97-rgb/rig/v3/core"
 	"github.com/mrsirg97-rgb/rig/v3/loop"
-	"github.com/mrsirg97-rgb/rig/v3/policy"
 	empty "github.com/mrsirg97-rgb/rig/v3/policy/empty"
 )
 
@@ -126,7 +125,7 @@ func (f *testFrontend) steal() context.CancelFunc {
 
 func run(t *testing.T, prov *scriptedProvider, fe *testFrontend) *rig.Kernel {
 	t.Helper()
-	k := rig.New(rig.WithProvider(empty.Decorator(prov)), rig.WithFrontend(fe), rig.WithPolicy(policy.Passthrough("")))
+	k := rig.New(rig.WithProvider(empty.Decorator(prov)), rig.WithFrontend(fe), rig.WithPolicy(passthrough{""}))
 	k.Session = core.NewSession()
 	if err := loop.Run(context.Background(), k); err != nil {
 		t.Fatalf("loop.Run: %v", err)
@@ -307,7 +306,7 @@ func TestCancelDuringResampleStopsClean(t *testing.T) {
 		{signal: func() { close(started) }, blockOn: block},
 	}}
 	fe := &testFrontend{inputs: []string{"go"}}
-	k := rig.New(rig.WithProvider(empty.Decorator(prov)), rig.WithFrontend(fe), rig.WithPolicy(policy.Passthrough("")))
+	k := rig.New(rig.WithProvider(empty.Decorator(prov)), rig.WithFrontend(fe), rig.WithPolicy(passthrough{""}))
 	k.Session = core.NewSession()
 	done := make(chan error, 1)
 	go func() { done <- loop.Run(context.Background(), k) }()
@@ -405,4 +404,14 @@ func TestAnInterruptedStreamStillEndsInItsTerminalEvent(t *testing.T) {
 			t.Fatal("the provider's Done on a cancel must reach the loop: the interrupted reply lands on it")
 		}
 	}
+}
+
+type passthrough struct{ system string }
+
+func (p passthrough) Assemble(ctx context.Context, s *core.Session) ([]core.Message, error) {
+	msgs := make([]core.Message, 0, len(s.Messages)+1)
+	if p.system != "" {
+		msgs = append(msgs, core.Message{Role: core.RoleSystem, Content: p.system})
+	}
+	return append(msgs, s.Messages...), nil
 }

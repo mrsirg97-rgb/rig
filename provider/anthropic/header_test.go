@@ -4,10 +4,12 @@ import (
 	"net/http"
 	"testing"
 	"time"
+
+	"github.com/mrsirg97-rgb/rig/v3/provider/wire"
 )
 
 func TestHeaderTimeoutOffIsNoBoundAndZeroIsTheDefault(t *testing.T) {
-	off, ok := New(Config{BaseURL: "http://x", Model: "m", HeaderTimeout: HeaderTimeoutOff}).(*provider)
+	off, ok := New(Config{BaseURL: "http://x", Model: "m", HeaderTimeout: wire.HeaderTimeoutOff}).(*provider)
 	if !ok {
 		t.Fatal("the provider type is fixed")
 	}
@@ -15,7 +17,7 @@ func TestHeaderTimeoutOffIsNoBoundAndZeroIsTheDefault(t *testing.T) {
 		t.Fatalf("HeaderTimeoutOff must leave the transport unbounded, got %s", got)
 	}
 	def := New(Config{BaseURL: "http://x", Model: "m"}).(*provider)
-	if got := def.client.Transport.(*http.Transport).ResponseHeaderTimeout; got != defaultHeaderTimeout {
+	if got := def.client.Transport.(*http.Transport).ResponseHeaderTimeout; got != wire.DefaultHeaderTimeout {
 		t.Fatalf("a zero config must take the five-minute bound, got %s", got)
 	}
 }
@@ -40,11 +42,11 @@ func TestBackoffCapsAHostileRetryAfterAtTheHeaderBound(t *testing.T) {
 	p := New(Config{Model: "m", RetryBase: time.Millisecond}).(*provider)
 	h := http.Header{}
 	h.Set("Retry-After", "999999")
-	if wait := p.backoff(1, h); wait != defaultHeaderTimeout {
-		t.Fatalf("a hostile retry-after waits %s, want the header bound's cap %s", wait, defaultHeaderTimeout)
+	if wait := wire.Backoff(p.base, p.jitter, 1, h); wait != wire.DefaultHeaderTimeout {
+		t.Fatalf("a hostile retry-after waits %s, want the header bound's cap %s", wait, wire.DefaultHeaderTimeout)
 	}
 	h.Set("Retry-After", "2")
-	if wait := p.backoff(1, h); wait != 2*time.Second {
+	if wait := wire.Backoff(p.base, p.jitter, 1, h); wait != 2*time.Second {
 		t.Fatalf("an honourable retry-after waits %s, want the seconds asked for", wait)
 	}
 }
@@ -54,12 +56,12 @@ func TestBackoffClampsAnOverflowingRetryAfterToTheHeaderBound(t *testing.T) {
 	for _, v := range []string{"1e10", "infinity"} {
 		h := http.Header{}
 		h.Set("Retry-After", v)
-		wait := p.backoff(1, h)
+		wait := wire.Backoff(p.base, p.jitter, 1, h)
 		if wait <= 0 {
 			t.Fatalf("retry-after %q waits %s; the conversion overflowed the cap comparison", v, wait)
 		}
-		if wait != maxRetryAfterWait {
-			t.Fatalf("retry-after %q waits %s, want the cap %s", v, wait, maxRetryAfterWait)
+		if wait != wire.MaxRetryAfterWait {
+			t.Fatalf("retry-after %q waits %s, want the cap %s", v, wait, wire.MaxRetryAfterWait)
 		}
 	}
 }

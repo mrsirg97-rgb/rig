@@ -2,7 +2,6 @@ package guard
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"sync"
 
@@ -44,7 +43,7 @@ func (r *rounds) Wrap(next core.ToolExec) core.ToolExec {
 				})
 			}
 			msg := fmt.Sprintf("round cap: %d tool calls is this turn's limit; stop calling tools and report, or ask the operator to raise it", r.limit)
-			return msg, errors.New(msg)
+			return core.Refusal(msg)
 		}
 		r.mu.Unlock()
 		return next(ctx, call)

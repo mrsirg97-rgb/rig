@@ -14,6 +14,12 @@ import (
 
 const SummaryMarker = "[compaction] "
 
+// IsSummary reads a transcript row as the policy wrote it: a user row whose
+// content carries the marker is the summary, not an operator's sentence.
+func IsSummary(content string) bool {
+	return strings.HasPrefix(content, SummaryMarker)
+}
+
 //go:embed summary_prompt.txt
 var summaryPrompt string
 
@@ -94,9 +100,6 @@ func (p *policy) compact(ctx context.Context) (core.Compacted, bool, error) {
 		return core.Compacted{}, false, nil
 	}
 	input := SummaryInput(older)
-	p.mu.Lock()
-	factor = p.factor
-	p.mu.Unlock()
 	est := int(float64(Estimate(input)) * factor)
 	if floor := p.summaryFloor(); p.row.Window-est < floor {
 		k := fitPrefix(older, factor, p.row.Window-floor)

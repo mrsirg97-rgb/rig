@@ -1,17 +1,18 @@
 package openai
 
 import (
+	openaiwire "github.com/mrsirg97-rgb/rig/v3/provider/wire"
 	"net/http"
 	"testing"
 )
 
 func TestHeaderTimeoutOffIsNoBoundAndZeroIsTheDefault(t *testing.T) {
-	off, ok := NewWithConfig(Config{BaseURL: "http://x", Model: "m", HeaderTimeout: HeaderTimeoutOff}).(*provider)
+	off, ok := NewWithConfig(Config{BaseURL: "http://x", Model: "m", HeaderTimeout: openaiwire.HeaderTimeoutOff}).(*provider)
 	if !ok {
 		t.Fatal("the provider type is fixed")
 	}
 	if got := off.client.Transport.(*http.Transport).ResponseHeaderTimeout; got != 0 {
-		t.Fatalf("HeaderTimeoutOff must leave the transport unbounded, got %s", got)
+		t.Fatalf("openaiwire.HeaderTimeoutOff must leave the transport unbounded, got %s", got)
 	}
 	def := NewWithConfig(Config{BaseURL: "http://x", Model: "m"}).(*provider)
 	if got := def.client.Transport.(*http.Transport).ResponseHeaderTimeout; got != defaultHeaderTimeout {

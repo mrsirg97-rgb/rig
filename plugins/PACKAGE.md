@@ -55,9 +55,9 @@ nothing else: the leaf discovers and wraps; the root (cmd/rig) wires.
   refusals, the mkdir + rename; never an unlink.
 - `WritePending(home, dir, natives, name, source, contract)`: the one
   pending-write shared with the web forge's save: the `PluginNameRe`
-  filename-stem rule, the native collision, the source ceiling (64 KiB —
-  the guard's tool-result cap: a plugin's source is model output,
-  bounded like any result), the contract's attrs read
+  filename-stem rule, the native collision, the source ceiling (64 KiB:
+  discovery reads a plugin whole, so a larger file refuses at the door),
+  the contract's attrs read
   off the source text (`def <name>(` for a callable, the bare name
   otherwise), `created` from a prior stat. Each surface keeps its own
   reply voice.

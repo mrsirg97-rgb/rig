@@ -45,10 +45,7 @@ func (p *policy) sizeOf(msgs []core.Message) int {
 
 func (p *policy) clampMaxTokens(size int) (int, error) {
 	budget := p.row.Window - size
-	threshold := p.row.Reserve / 4
-	if threshold > 256 {
-		threshold = 256
-	}
+	threshold := p.summaryFloor()
 	if budget < threshold {
 		return 0, fmt.Errorf("compact: %s: context exceeds the window even after compaction: request %d tokens against a window of %d (left %d < min %d); the kept batch is too large for the model",
 			p.row.ID, size, p.row.Window, budget, threshold)

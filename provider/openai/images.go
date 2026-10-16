@@ -1,15 +1,11 @@
 package openai
 
 import (
-	"crypto/sha256"
-	"encoding/base64"
-	"encoding/hex"
 	"encoding/json"
-	"os"
-	"strconv"
 
 	"github.com/mrsirg97-rgb/rig/v3/core"
 	"github.com/mrsirg97-rgb/rig/v3/imagemarker"
+	"github.com/mrsirg97-rgb/rig/v3/provider/wire"
 )
 
 const (
@@ -78,33 +74,11 @@ func imageMessage(store *imageStore, ref imagemarker.Ref) wireMessage {
 }
 
 func (s *imageStore) dataURL(ref imagemarker.Ref) (string, string) {
-	path := imagemarker.BlobPath(s.dir, ref.SHA256)
-	if path == "" {
-		return "", "the marker names no blob address"
+	_, encoded, note := wire.VerifyBlob(s.dir, ref, maxInlineBlobBytes, false)
+	if note != "" {
+		return "", note
 	}
-	note := "the image blob " + shortAddress(ref.SHA256)
-	info, err := os.Stat(path)
-	if err != nil {
-		return "", note + " is missing"
-	}
-	if info.Size() > maxInlineBlobBytes {
-		return "", note + " is " + strconv.FormatInt(info.Size(), 10) + " bytes, over the " + strconv.Itoa(maxInlineBlobBytes) + "-byte inline bound"
-	}
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return "", note + " is unreadable"
-	}
-	if sum := sha256.Sum256(data); hex.EncodeToString(sum[:]) != ref.SHA256 {
-		return "", note + " no longer matches its address"
-	}
-	return "data:" + ref.Mime + ";base64," + base64.StdEncoding.EncodeToString(data), ""
-}
-
-func shortAddress(sha string) string {
-	if len(sha) > 12 {
-		return sha[:12]
-	}
-	return sha
+	return "data:" + ref.Mime + ";base64," + encoded, ""
 }
 
 type callTable struct {

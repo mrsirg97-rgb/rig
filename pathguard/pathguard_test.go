@@ -193,3 +193,30 @@ func TestWithinFailureRefusesAMissingPathOutsideTheRoots(t *testing.T) {
 		t.Fatalf("a missing path outside both roots must name the containment rule, got %v", err)
 	}
 }
+
+func TestUnderIsThePrimitiveItClaimsToBe(t *testing.T) {
+	home := t.TempDir()
+	inside := filepath.Join(home, "projects", "rig")
+	if err := os.MkdirAll(inside, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if !pathguard.Under(home, inside) {
+		t.Fatal("a path under the root reads as under")
+	}
+	if pathguard.Under(home, filepath.Join(home, "..", "etc")) {
+		t.Fatal("a ..-prefixed sibling is not under")
+	}
+	if pathguard.Under("", inside) {
+		t.Fatal("an empty root admits nothing (deny by default)")
+	}
+	if pathguard.Under(home, "/somewhere/else") {
+		t.Fatal("a foreign absolute path is not under")
+	}
+	link := filepath.Join(t.TempDir(), "link")
+	if err := os.Symlink(home, link); err != nil {
+		t.Fatal(err)
+	}
+	if !pathguard.Under(link, inside) {
+		t.Fatal("a symlinked root resolves: the guard follows the root, not the escape")
+	}
+}

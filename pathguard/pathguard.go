@@ -40,18 +40,7 @@ func Within(path, sessionCwd, rigHome string) (string, error) {
 		}
 		return "", err
 	}
-	canonicalUnder := func(root string) bool {
-		if root == "" {
-			return false
-		}
-		resolvedRoot, err := filepath.EvalSymlinks(root)
-		if err != nil {
-			return false
-		}
-		rel, err := filepath.Rel(filepath.Clean(resolvedRoot), cwd)
-		return err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
-	}
-	if !canonicalUnder(sessionCwd) && !canonicalUnder(rigHome) {
+	if !Under(sessionCwd, cwd) && !Under(rigHome, cwd) {
 		return "", fmt.Errorf("workspace %q is outside the session's workspace (%s) and the rig home (%s)", cwd, sessionCwd, rigHome)
 	}
 	return cwd, nil

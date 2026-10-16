@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/mrsirg97-rgb/rig/v3/core"
+	"github.com/mrsirg97-rgb/rig/v3/provider/wire"
 )
 
 type provider struct {
@@ -45,7 +46,7 @@ type Config struct {
 }
 
 const (
-	defaultHeaderTimeout = 5 * time.Minute
+	defaultHeaderTimeout = wire.DefaultHeaderTimeout
 	defaultIdleTimeout   = 10 * time.Minute
 	defaultRetryBase     = 500 * time.Millisecond
 	defaultEmptyRetries  = 3
@@ -55,19 +56,9 @@ func New(baseURL, model string) core.Provider {
 	return NewWithTimeouts(baseURL, model, defaultHeaderTimeout, defaultIdleTimeout)
 }
 
-func NewWithHeaderTimeout(baseURL, model string, headerTimeout time.Duration) core.Provider {
-	return NewWithTimeouts(baseURL, model, headerTimeout, defaultIdleTimeout)
-}
-
 func NewWithTimeouts(baseURL, model string, headerTimeout, idleTimeout time.Duration) core.Provider {
 	return newProvider(baseURL, model, headerTimeout, idleTimeout, nil, Config{})
 }
-
-func NewWithVision(baseURL, model, blobsDir string) core.Provider {
-	return NewWithConfig(Config{BaseURL: baseURL, Model: model, BlobsDir: blobsDir})
-}
-
-const HeaderTimeoutOff time.Duration = -1
 
 func NewWithConfig(cfg Config) core.Provider {
 	idleTimeout := cfg.IdleTimeout

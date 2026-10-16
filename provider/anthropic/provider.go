@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/mrsirg97-rgb/rig/v3/core"
+	"github.com/mrsirg97-rgb/rig/v3/provider/wire"
 )
 
 type provider struct {
@@ -58,13 +59,11 @@ type Config struct {
 }
 
 const (
-	defaultBaseURL                     = "https://api.anthropic.com"
-	defaultVersion                     = "2023-06-01"
-	defaultHeaderTimeout               = 5 * time.Minute
-	defaultIdleTimeout                 = 10 * time.Minute
-	defaultRetryBase                   = 500 * time.Millisecond
-	maxRetryAfterWait                  = defaultHeaderTimeout
-	HeaderTimeoutOff     time.Duration = -1
+	defaultBaseURL       = "https://api.anthropic.com"
+	defaultVersion       = "2023-06-01"
+	defaultHeaderTimeout = wire.DefaultHeaderTimeout
+	defaultIdleTimeout   = 10 * time.Minute
+	defaultRetryBase     = 500 * time.Millisecond
 )
 
 func New(cfg Config) core.Provider {
