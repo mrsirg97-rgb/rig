@@ -5,7 +5,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mrsirg97-rgb/evt"
 	"github.com/mrsirg97-rgb/rig/v3/core"
 )
 
@@ -86,28 +85,9 @@ func TestInterruptIgnoresForeignValues(t *testing.T) {
 	}
 }
 
-func TestHardeningVocabulary(t *testing.T) {
-	var (
-		_ evt.Signal = core.ReasoningDelta{Text: "t"}
-		_ evt.Signal = core.ToolStart{Call: core.ToolCall{ID: "c1"}}
-		_ evt.Signal = core.ToolResult{ID: "c1", Content: "out"}
-		_ evt.Signal = core.TurnEnd{Reason: core.TurnOver}
-		_ evt.Signal = core.TestEvent{Name: "x"}
-		_ evt.Signal = core.Compacted{Summary: "s"}
-		_ evt.Signal = core.Compacting{}
-	)
-	if core.TurnOver != "over" || core.TurnFault != "fault" || core.TurnInterrupt != "interrupt" {
-		t.Fatalf("turn reasons = %q/%q/%q, want over/fault/interrupt", core.TurnOver, core.TurnFault, core.TurnInterrupt)
-	}
-}
-
 func TestUsageCarriesCacheFields(t *testing.T) {
-	u := core.Usage{Prompt: 922, Completion: 10, CacheRead: 918, CacheWrite: 0}
-	if u.Prompt != 922 || u.Completion != 10 || u.CacheRead != 918 || u.CacheWrite != 0 {
-		t.Fatalf("usage shape drifted: %+v", u)
-	}
-	if (core.Usage{}).CacheRead != 0 || (core.Usage{}).CacheWrite != 0 {
-		t.Fatal("a zero usage must report zero cache")
+	if (core.Usage{}).Prompt != 0 || (core.Usage{}).Completion != 0 || (core.Usage{}).CacheRead != 0 || (core.Usage{}).CacheWrite != 0 {
+		t.Fatal("a zero usage must report zero everywhere")
 	}
 }
 

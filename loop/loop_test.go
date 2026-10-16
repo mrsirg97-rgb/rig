@@ -989,3 +989,37 @@ func TestTheKernelsEngineIsTheLoopsAndTheFleetRunsBelowTheTurn(t *testing.T) {
 		t.Fatal("after the run the engine is stopped: a late post refuses")
 	}
 }
+
+type faultFrontend struct {
+	asks  int
+	fault error
+}
+
+func (f *faultFrontend) Input(ctx context.Context) (string, error) {
+	f.asks++
+	if f.asks == 1 {
+		return "go", nil
+	}
+	return "", f.fault
+}
+
+func (f *faultFrontend) Notify(ev evt.Signal) {}
+
+func TestAFrontendFaultEndsTheRun(t *testing.T) {
+	boom := errors.New("stdin closed sideways")
+	f := &faultFrontend{fault: boom}
+	p := &scriptedProvider{turns: []scriptedTurn{{events: []evt.Signal{textEv("ok"), doneEv()}}}}
+	k := rig.New(
+		rig.WithProvider(p),
+		rig.WithFrontend(f),
+		rig.WithPolicy(&transcriptPolicy{}),
+	)
+	k.Session = core.NewSession()
+	err := loop.Run(context.Background(), k)
+	if !errors.Is(err, boom) {
+		t.Fatalf("run must stop with the frontend's fault, got %v", err)
+	}
+	if f.asks != 2 {
+		t.Fatalf("a fault re-prompts exactly once, got %d asks", f.asks)
+	}
+}

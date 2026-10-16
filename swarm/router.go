@@ -38,19 +38,15 @@ func (c *Controller) dispatch() {
 		if w.role == RoleReviewer {
 			claimStatus = "review"
 		}
-		reply, err := todostore.Claim(ctx, c.opts.TodoDB, c.proj, w.identity, claimStatus)
+		task, ok, err := todostore.ClaimTask(ctx, c.opts.TodoDB, c.proj, w.identity, claimStatus)
 		if err != nil {
 			c.loud(w, "w%d: claim: %v", w.id, err)
 			return
 		}
-		if reply == "nothing to do" {
+		if !ok {
 			continue
 		}
-		id := claimID(reply)
-		if id == "" {
-			c.loud(w, "w%d: claim reply unreadable: %q", w.id, reply)
-			return
-		}
+		id := task.ID
 		w.task = id
 		select {
 		case w.tasks <- id:

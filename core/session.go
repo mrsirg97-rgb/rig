@@ -1,12 +1,9 @@
 package core
 
 import (
-	"bytes"
 	"context"
 	"crypto/rand"
-	"encoding/json"
 	"fmt"
-	"os"
 	"time"
 )
 
@@ -35,43 +32,6 @@ func mintSessionID() string {
 
 func (s *Session) Append(m Message) {
 	s.Messages = append(s.Messages, m)
-}
-
-func (s *Session) Save(path string) error {
-	data, err := json.Marshal(s)
-	if err != nil {
-		return fmt.Errorf("session save: %w", err)
-	}
-	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, data, 0o600); err != nil {
-		return fmt.Errorf("session save: %w", err)
-	}
-	if err := os.Rename(tmp, path); err != nil {
-		return fmt.Errorf("session save: %w", err)
-	}
-	return nil
-}
-
-func Load(path string) (*Session, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil, fmt.Errorf("session load: %w", err)
-	}
-	s := &Session{}
-	dec := json.NewDecoder(bytes.NewReader(data))
-	dec.DisallowUnknownFields()
-	if err := dec.Decode(s); err != nil {
-		return nil, fmt.Errorf("session load: %w", err)
-	}
-	if s.Files == nil {
-		s.Files = map[string]FileState{}
-	}
-	for i := range s.Messages {
-		if bytes.Equal(s.Messages[i].ReasoningDetails, []byte("null")) {
-			s.Messages[i].ReasoningDetails = nil
-		}
-	}
-	return s, nil
 }
 
 type contextKey int

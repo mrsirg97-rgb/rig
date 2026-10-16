@@ -3,6 +3,7 @@ package core
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"strconv"
 	"strings"
 	"time"
@@ -69,6 +70,21 @@ type Fault struct {
 	Err error
 
 	evt.Mark
+}
+
+// FormatTokens renders a token count for a status line: bare under a
+// thousand, k to a million, M beyond.
+func FormatTokens(n int) string {
+	switch {
+	case n < 1000:
+		return strconv.Itoa(n)
+	case n < 10000:
+		return fmt.Sprintf("%.1fk", float64(n)/1000)
+	case n < 1000000:
+		return fmt.Sprintf("%dk", (n+500)/1000)
+	default:
+		return fmt.Sprintf("%.1fM", float64(n)/1000000)
+	}
 }
 
 type Usage struct {
@@ -145,6 +161,7 @@ type Compacting struct {
 type SwarmWorker struct {
 	ID        int
 	Role      string
+	Model     string
 	Task      string
 	Heartbeat time.Time
 	Done      int
@@ -204,6 +221,9 @@ const MintHeader = "X-Rig-Mint"
 type mintKey struct{}
 
 func MintContext(ctx context.Context, mint broadcast.Mint) context.Context {
+	// a Mint is three integers: its marshal cannot fail. if that ever
+	// changes, a request that loses its mint header loses the ordering
+	// fact the room reads — the refusal belongs here, not at the wire.
 	encoded, err := json.Marshal(mint)
 	if err != nil {
 		return ctx
