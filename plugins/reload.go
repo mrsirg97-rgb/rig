@@ -13,8 +13,6 @@ import (
 
 var PluginNameRe = regexp.MustCompile(`^[a-z][a-z0-9_]{0,63}$`)
 
-// maxSourceBytes is the source ceiling: discovery reads a plugin whole,
-// so a pending file this large refuses at the door rather than at the kernel.
 const maxSourceBytes = 64 * 1024
 
 type nameCollisionError struct {

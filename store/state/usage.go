@@ -56,8 +56,6 @@ func SessionCost(ctx context.Context, db store.DB, sessionID string) (float64, e
 	return cost, nil
 }
 
-// UsageTotals is the one aggregate the status line reads: sums over a
-// session's usage rows, computed by the engine rather than shipped whole.
 type UsageTotals struct {
 	Prompt     int
 	Completion int

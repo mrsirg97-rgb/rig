@@ -26,3 +26,22 @@ func TestTheRuntimeTableServesTheBaseRowOnASwitch(t *testing.T) {
 		t.Fatalf("a later switch serves the base row, the launch overlay is not a dial: got %+v", got)
 	}
 }
+
+func TestTheRuntimeTableResolvesAnAliasActive(t *testing.T) {
+	base, err := models.New(
+		models.Model{Role: models.RoleInteractive, ID: "ox-alpha", Aliases: []string{"huihui-alpha"}, Window: 65536, MaxTokens: 8192, Reserve: 8192, KeepRecent: 16384},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	launch, _ := base.Get("huihui-alpha")
+	launch.MaxTokens = 4096
+	table := runtimeTable(base, "huihui-alpha", launch)
+	if n := len(table.Known()); n != 1 {
+		t.Fatalf("the alias active resolves to the one canonical row, got %d: %v", n, table.Known())
+	}
+	got, ok := table.Get("ox-alpha")
+	if !ok || got.MaxTokens != 4096 {
+		t.Fatalf("the canonical row carries the launch overlay: %+v", got)
+	}
+}

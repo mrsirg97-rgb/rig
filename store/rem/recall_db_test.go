@@ -205,3 +205,18 @@ func TestBrowseFiltersSupersededAndReinforces(t *testing.T) {
 		t.Fatalf("include_superseded must ride the browse arm too: %+v", hits2)
 	}
 }
+
+func TestRecallScopeWordsMatchTheGuard(t *testing.T) {
+	db := newDB(t)
+	learn(t, db, "/ws1", "the workspace scope speaks plainly about guard vocabulary", nil)
+	_, hits, err := Recall(context.Background(), db, "/ws1", RecallInput{Query: "guard vocabulary", K: 10, Scope: "workspace"})
+	if err != nil {
+		t.Fatalf("the workspace spelling must be accepted: %v", err)
+	}
+	if findContent(t, hits, "plainly") == nil {
+		t.Fatalf("the workspace spelling must answer like the empty scope: %+v", hits)
+	}
+	if _, _, err := Recall(context.Background(), db, "/ws1", RecallInput{Query: "guard", K: 10, Scope: "bogus"}); err == nil || !strings.Contains(err.Error(), "bogus") {
+		t.Fatalf("an unknown scope still refuses naming itself: %v", err)
+	}
+}

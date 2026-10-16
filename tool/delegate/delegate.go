@@ -303,8 +303,10 @@ func (a *adapter) run(ctx context.Context, c delegateCall) (string, error) {
 		if err != nil {
 			if !a.Await {
 				a.release(n)
+				a.fail(member, n, workerName(in), err)
+			} else {
+				a.end(member, n)
 			}
-			a.fail(member, n, workerName(in), err)
 			runErr = err
 			return
 		}

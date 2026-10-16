@@ -32,7 +32,11 @@ logs hung turns because the file tools were the only unbounded,
 ctx-blind I/O; the python kernel no longer boots and dispatches for a
 caller whose ctx died in the queue; a queued worker whose spawn errors
 publishes its `WorkerDone` instead of ghosting the band; todo release,
-retry and reject wake the router like create, complete and fail. The
+retry and reject wake the router like create, complete and fail. A
+rate-limited gateway that names its wait is obeyed: `Retry-After` rides
+the retry sleep up to `MaxRetryAfterWait` (the header-timeout ceiling,
+five minutes) — a server saying "come back in four minutes" is waited
+out instead of hammered by a backoff that would give up first. The
 openai twin answers `tool_calls` with `{}` args instead of faulting,
 skips SSE field lines, merges usage instead of overwriting it, and
 anthropic settles prompt and cost on cancel and truncate. Aliases moved

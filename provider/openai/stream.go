@@ -69,9 +69,6 @@ func (p *provider) Stream(ctx context.Context, req core.Request) (<-chan evt.Sig
 		case <-ctx.Done():
 		}
 	}
-	// terminal events ride the channel unconditionally: the consumer
-	// drains to the close, and a cancelled stream must still report its
-	// last Done or Fault.
 	send := func(ev evt.Signal) { ch <- ev }
 
 	go func() {
@@ -145,9 +142,8 @@ func (p *provider) Stream(ctx context.Context, req core.Request) (<-chan evt.Sig
 			}
 
 			var (
-				pending     map[int]*core.ToolCall
-				finishing   string
-				detailsSeen int
+				pending   map[int]*core.ToolCall
+				finishing string
 			)
 			fault := func(err error) { send(core.Fault{Err: err}) }
 
@@ -178,9 +174,6 @@ func (p *provider) Stream(ctx context.Context, req core.Request) (<-chan evt.Sig
 					model = chunk.Model
 				}
 				if cu := chunk.Usage; cu != nil {
-					// fields merge, never overwrite: a later chunk that
-					// carries an empty usage object must not zero the
-					// counts an earlier chunk already reported.
 					if cu.PromptTokens != 0 {
 						usage.Prompt = cu.PromptTokens
 					}
@@ -203,9 +196,8 @@ func (p *provider) Stream(ctx context.Context, req core.Request) (<-chan evt.Sig
 				}
 				for _, choice := range chunk.Choices {
 					text, d := p.reasoningDelta(choice.Delta)
-					if len(d) > detailsSeen {
-						emit(core.ReasoningDelta{Text: text, Details: d[detailsSeen:]})
-						detailsSeen = len(d)
+					if len(d) > 0 {
+						emit(core.ReasoningDelta{Text: text, Details: d})
 					} else if text != "" {
 						emit(core.ReasoningDelta{Text: text})
 					}
@@ -245,7 +237,7 @@ func (p *provider) Stream(ctx context.Context, req core.Request) (<-chan evt.Sig
 				call := pending[idx]
 				if len(call.Args) == 0 {
 					if finishing == "length" {
-						call.Cut = finishing // the args never arrived: no object to claim
+						call.Cut = finishing
 					} else {
 						call.Args = json.RawMessage("{}")
 					}

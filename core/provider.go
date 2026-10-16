@@ -72,8 +72,6 @@ type Fault struct {
 	evt.Mark
 }
 
-// FormatTokens renders a token count for a status line: bare under a
-// thousand, k to a million, M beyond.
 func FormatTokens(n int) string {
 	switch {
 	case n < 1000:
@@ -221,9 +219,6 @@ const MintHeader = "X-Rig-Mint"
 type mintKey struct{}
 
 func MintContext(ctx context.Context, mint broadcast.Mint) context.Context {
-	// a Mint is three integers: its marshal cannot fail. if that ever
-	// changes, a request that loses its mint header loses the ordering
-	// fact the room reads — the refusal belongs here, not at the wire.
 	encoded, err := json.Marshal(mint)
 	if err != nil {
 		return ctx

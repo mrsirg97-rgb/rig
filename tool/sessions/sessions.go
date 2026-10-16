@@ -16,7 +16,7 @@ import (
 	"github.com/mrsirg97-rgb/rig/v3/tool"
 )
 
-const latestFaultsRead = 1 // the summary names one fault per session: the newest
+const latestFaultsRead = 1
 
 const (
 	defaultN = 10

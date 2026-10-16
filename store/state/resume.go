@@ -94,6 +94,9 @@ func resumeIn(ctx context.Context, tx *sql.Tx, sessionID string) (*core.Session,
 				return nil, err
 			}
 			msg.ToolCalls = calls
+			if m.content == "" && msg.Reasoning == "" && len(calls) == 0 {
+				continue
+			}
 			sess.Append(msg)
 
 			for _, l := range landed {

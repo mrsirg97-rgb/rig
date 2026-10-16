@@ -19,8 +19,6 @@ import (
 
 const QueueCap = 256
 
-// ReadCeiling is one read's ceiling in this package: the scanner buffer,
-// the LSP frame bound, and the pack reply's truncation wall share the number.
 const ReadCeiling = 1 << 20
 
 type Queue struct {

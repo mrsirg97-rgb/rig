@@ -228,8 +228,6 @@ const MaxNoteLen = 1000
 
 const MaxTaskLen = MaxNoteLen
 
-// Claimed is the typed shape of a successful claim: the fleet takes this,
-// not the prose reply.
 type Claimed struct {
 	ID     string
 	Text   string
@@ -469,7 +467,7 @@ func Move(ctx context.Context, db store.DB, p Project, id string, pos int, sessi
 		if pos < 1 || pos > len(f.tasks) {
 			return "", fmt.Errorf("move position for '%s' must be between 1 and %d, got %d", id, len(f.tasks), pos)
 		}
-		if ts.pos == pos {
+		if !appliedMove(f, ts, pos) {
 			return withFoot(echoTask(f, session, id, "'"+id+"' is already at position "+strconv.Itoa(pos), ""), foot), nil
 		}
 		args, _ := json.Marshal(map[string]any{"id": id, "pos": pos})
@@ -477,7 +475,6 @@ func Move(ctx context.Context, db store.DB, p Project, id string, pos int, sessi
 		if _, e := appendEvent(bound, seq, "move", string(args), session, p.Key); e != nil {
 			return "", e
 		}
-		appliedMove(f, ts, pos)
 		ts.updatedSeq = seq
 		ts.updatedTs = nowRFC3339()
 		if e := rewrite(tx, f, p.Key); e != nil {

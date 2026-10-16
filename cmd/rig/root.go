@@ -173,9 +173,6 @@ func wire(r *root) *rig.Kernel {
 	return k
 }
 
-// buildSystem rebuilds from the workspace as it stands now: the walk for
-// the project's AGENTS.md rides here, so a /project move or a rebuilt
-// session never keeps the old workspace's contract.
 func (r *root) buildSystem() string {
 	mw := r.middleware
 	if mw == nil {

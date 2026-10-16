@@ -166,9 +166,13 @@ func (r *Reviewer) call(fn func()) {
 
 func (r *Reviewer) Land() { r.dirty.Store(true) }
 
-// clearVerdicts empties the verdict map on a fire that died before settle:
-// verdicts heard for one batch must not ride the next fire's reply.
 func (r *Reviewer) clearVerdicts() { r.verdicts = map[int64]core.Verdict{} }
+
+func (r *Reviewer) verdictCount() int {
+	n := 0
+	r.call(func() { n = len(r.verdicts) })
+	return n
+}
 
 func (r *Reviewer) Halt() {
 	r.fireMu.Lock()
@@ -217,6 +221,7 @@ func (r *Reviewer) bite() {
 		halted := fireCtx.Err() != nil
 		r.engine.Add(evt.Func(func(context.Context) {
 			if err != nil && halted {
+				r.clearVerdicts()
 				r.interrupted()
 				return
 			}
@@ -229,10 +234,6 @@ func (r *Reviewer) bite() {
 			n := r.settle(r.ctx, rows, all, reviewer)
 			r.settled(n, nil)
 			if n > 0 && len(all) > len(rows) {
-				// the batch settled something and the board holds more:
-				// the next wake must bite again, not wait for a Land.
-				// a fire that answered nothing stays quiet: garbage does
-				// not earn a retry.
 				r.dirty.Store(true)
 			}
 		}), rig.PriorityReview)

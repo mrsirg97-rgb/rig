@@ -1321,3 +1321,31 @@ func TestTheProjectContractFollowsTheWorkspaceAtWire(t *testing.T) {
 		t.Fatalf("a wire in another workspace reads that workspace's contract: %q", r.fullSystem)
 	}
 }
+
+func TestABadEnvBoundFailsTheStart(t *testing.T) {
+	for _, tc := range []struct{ env, value string }{{"RIG_ROUNDS", "abc"}, {"RIG_RESULT_CAP", "10k"}} {
+		t.Run(tc.env, func(t *testing.T) {
+			s := &bodySrv{reply: `data: {"choices":[{"delta":{"content":"pong"},"finish_reason":"stop"}],"usage":{"prompt_tokens":1,"completion_tokens":1}}` + "\n"}
+			srv := newBodySrv(t, s)
+			defer srv.Close()
+			bin := buildBin(t, t.TempDir())
+			cmd := exec.Command(bin, "-p", "hello", "-base-url", srv.URL+"/v1")
+			cmd.Dir = t.TempDir()
+			cmd.Env = append(rigEnv(t, shortTemp(t), ""), tc.env+"="+tc.value)
+			out, runErr := cmd.CombinedOutput()
+			if runErr == nil {
+				t.Fatalf("%s=%s must fail the start, not run with a fallback: %q", tc.env, tc.value, out)
+			}
+			ee, ok := runErr.(*exec.ExitError)
+			if !ok || ee.ExitCode() != 1 {
+				t.Fatalf("the start must exit 1, got %v: %q", runErr, out)
+			}
+			if !strings.Contains(string(out), "rig: "+tc.env) {
+				t.Fatalf("the voice must name the key: %q", out)
+			}
+			if s.bodiesAll() != nil && len(s.bodiesAll()) != 0 {
+				t.Fatalf("a bad bound must stop before the provider: %d bodies", len(s.bodiesAll()))
+			}
+		})
+	}
+}

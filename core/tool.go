@@ -19,7 +19,4 @@ type ToolSpec struct {
 	Schema      json.RawMessage
 }
 
-// Refusal is the house shape for a refusal the model must read: the same
-// words as content and as error, so the loop lands one and the retry guard
-// counts it. The error exists to travel the error channel, not to differ.
 func Refusal(msg string) (string, error) { return msg, errors.New(msg) }

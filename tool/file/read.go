@@ -20,9 +20,6 @@ import (
 
 const ReadCap = 1 << 20
 
-// maxEditBytes bounds what an edit may load: the edit holds the whole
-// file and its drift window in memory, so a pathological log stays out
-// of the address space.
 const maxEditBytes = 64 * ReadCap
 
 const readChunk = 64 * 1024
@@ -115,9 +112,6 @@ func capReply(content string, total, offset int) string {
 	return content[:cut] + fmt.Sprintf("\n[output truncated: %d of %d lines; continue at offset %d]", lines, total, offset+lines)
 }
 
-// ctxChunks bounds how long the streaming pass runs between looks at the
-// caller's context: one readChunk per chunk, so a turn interrupt lands
-// within a few hundred kilobytes of a long hash pass.
 const ctxChunks = 256
 
 type ctxReader struct {

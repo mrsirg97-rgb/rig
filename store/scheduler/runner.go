@@ -422,8 +422,6 @@ func RunJob(key string, opts RunOpts) error {
 	}
 
 	if job.At != nil {
-		// the crontab as it stands now: a tool in this worker's run may
-		// have installed lines the fire-start snapshot never saw.
 		fresh, ferr := opts.Crontab.List()
 		if ferr != nil {
 			return fmt.Errorf("run-job: crontab: %w", ferr)

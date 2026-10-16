@@ -7,10 +7,6 @@ import (
 	sched "github.com/mrsirg97-rgb/rig/v3/store/scheduler"
 )
 
-// workerWiring is the fleet's shared wiring: the delegate and the swarm are
-// children of the same session and take the same stores, homes, sandbox,
-// spawn seam, and model table. It is built once at the root; the two Opts
-// are filled from it.
 type workerWiring struct {
 	DB           store.DB
 	Home         string

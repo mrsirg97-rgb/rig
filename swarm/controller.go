@@ -133,12 +133,10 @@ func (c *Controller) post(fn func()) {
 
 func (c *Controller) call(fn func()) {
 	if !c.engineCall(fn, false) {
-		fn() // the engine was never wired (embedders): run inline
+		fn()
 	}
 }
 
-// callStopping is Stop's seam: with the fleet engine stopped the controller
-// is frozen to late callers, and only Stop may still mutate inline.
 func (c *Controller) callStopping(fn func()) { c.engineCall(fn, true) }
 
 func (c *Controller) engineCall(fn func(), stopping bool) bool {

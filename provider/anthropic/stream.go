@@ -283,9 +283,6 @@ func emitRecord(emit func(evt.Signal), b *blockState) {
 	emit(core.ReasoningDelta{Details: raw})
 }
 
-// settle folds the prompt the start event carried and the row's prices into
-// the usage a terminal Done reports: a cancelled or truncated stream still
-// bills what the endpoint already read.
 func (p *provider) settle(u core.Usage, input int) core.Usage {
 	u.Prompt = input + u.CacheRead + u.CacheWrite
 	u.Cost = p.cost(u)

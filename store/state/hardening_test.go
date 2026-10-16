@@ -384,3 +384,36 @@ func TestResumeUnknownIdFailsLoud(t *testing.T) {
 		t.Fatalf("the failure must name the gap and the id, got %v", err)
 	}
 }
+
+func TestResumeSkipsAnEmptiedAssistantRow(t *testing.T) {
+	db := openState(t)
+	ctx := context.Background()
+	sid := "resume-empty-assistant"
+	if err := state.RecordSession(ctx, db, sid, "/tmp/wt", "model-x", "0.1.0"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := state.RecordMessage(ctx, db, sid, "user", "go", nil, nil, nil); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := state.RecordMessage(ctx, db, sid, "assistant", "", nil, nil, nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := state.RecordToolCall(ctx, db, sid, 2, "c3", "bash", `{"cmd":"ls"}`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := state.RecordMessage(ctx, db, sid, "user", "after", nil, nil, nil); err != nil {
+		t.Fatal(err)
+	}
+	sess, err := state.Resume(ctx, db, sid)
+	if err != nil {
+		t.Fatalf("resume: %v", err)
+	}
+	for _, m := range sess.Messages {
+		if m.Role == core.RoleAssistant && m.Content == "" && m.Reasoning == "" && len(m.ToolCalls) == 0 {
+			t.Fatalf("an assistant row left with nothing after the dangling drop must not ride the transcript: %+v", m)
+		}
+	}
+	if len(sess.Messages) != 2 {
+		t.Fatalf("the transcript = %d messages, want the two user rows only", len(sess.Messages))
+	}
+}

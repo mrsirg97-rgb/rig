@@ -14,10 +14,6 @@ type cut struct {
 	end int
 }
 
-// frame is one ring entry: the marshalled newest shape of a run plus the
-// cut marks of every delta that coalesced into it. Replay trims on the
-// marks, so a reconnect mid-run gets the suffix it has not seen, not the
-// whole run.
 type frame struct {
 	raw  []byte
 	cuts []cut
@@ -59,8 +55,6 @@ func (c *chat) send(raw []byte) {
 		select {
 		case ch <- raw:
 		default:
-			// a slow subscriber loses its oldest held frame, never the
-			// newest: the newest carries the turn's progress.
 			select {
 			case <-ch:
 			default:
@@ -98,8 +92,6 @@ func (c *chat) subscribe(since int64) (chan []byte, [][]byte, int64) {
 	return ch, replay, c.seq
 }
 
-// seen trims a coalesced frame to the text a subscriber has not seen:
-// the suffix after the newest cut at or before its watermark.
 func (fr frame) seen(since int64) []byte {
 	for i := len(fr.cuts) - 1; i >= 0; i-- {
 		if fr.cuts[i].seq <= since {

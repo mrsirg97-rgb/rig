@@ -146,6 +146,7 @@ func New(home string, version string, places func(int64) int, effects func(self 
 				continue
 			}
 			if ctx.Err() != nil {
+				conn.Close()
 				return
 			}
 			tr := broadcast.NewPipeTransport(0, conn, enc)
@@ -201,7 +202,7 @@ func (m *member) track(tr broadcast.Transport) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if m.closed {
-		tr.Close() // the member closed while this conn was in flight
+		tr.Close()
 		return
 	}
 	m.trs = append(m.trs, tr)

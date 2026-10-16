@@ -14,8 +14,6 @@ import (
 
 const SummaryMarker = "[compaction] "
 
-// IsSummary reads a transcript row as the policy wrote it: a user row whose
-// content carries the marker is the summary, not an operator's sentence.
 func IsSummary(content string) bool {
 	return strings.HasPrefix(content, SummaryMarker)
 }

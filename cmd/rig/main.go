@@ -269,33 +269,45 @@ func rigMain() int {
 			allowList = splitCSV(*allow)
 		}
 	}
-	envInt := func(key string, def int) int {
+	envInt := func(key string, def int) (int, bool) {
 		v := os.Getenv(key)
 		if v == "" {
-			return def
+			return def, true
 		}
 		n, aerr := strconv.Atoi(v)
 		if aerr != nil {
 			fmt.Fprintf(os.Stderr, "rig: %s: expected an integer, got %q\n", key, v)
-			return 1
+			return 0, false
 		}
 		if n < 0 {
 			fmt.Fprintf(os.Stderr, "rig: %s: expected a non-negative integer, got %d\n", key, n)
-			return 1
+			return 0, false
 		}
-		return n
+		return n, true
 	}
 	retriesN := *retries
 	if !passed["retries"] {
-		retriesN = envInt("RIG_RETRIES", cfg.Settings.Retries)
+		n, ok := envInt("RIG_RETRIES", cfg.Settings.Retries)
+		if !ok {
+			return 1
+		}
+		retriesN = n
 	}
 	roundsN := *rounds
 	if !passed["rounds"] {
-		roundsN = envInt("RIG_ROUNDS", cfg.Settings.Rounds)
+		n, ok := envInt("RIG_ROUNDS", cfg.Settings.Rounds)
+		if !ok {
+			return 1
+		}
+		roundsN = n
 	}
 	resultCapN := *resultCap
 	if !passed["result-cap"] {
-		resultCapN = envInt("RIG_RESULT_CAP", cfg.Settings.ResultCap)
+		n, ok := envInt("RIG_RESULT_CAP", cfg.Settings.ResultCap)
+		if !ok {
+			return 1
+		}
+		resultCapN = n
 	}
 
 	row := resolveModel(modelID, cfg.Models)
@@ -547,7 +559,7 @@ func rigMain() int {
 			WorkerCmd: wiring.WorkerCmd, Fetch: wiring.Fetch, Spawn: wiring.Spawn, SwapURL: wiring.SwapURL,
 			Sandbox: wiring.Sandbox, SandboxBinds: wiring.SandboxBinds, RigHome: wiring.RigHome, StateDir: wiring.StateDir,
 			Allow: wiring.Allow, DefaultModel: wiring.DefaultModel,
-			Models: func() models.Table { return r.runtime }, // the swarm follows the live table; a model switch is the operator's act
+			Models: func() models.Table { return r.runtime },
 			Engine: r.engine, Room: r.room, Cap: handoff,
 		})
 	}

@@ -5,6 +5,7 @@ import (
 	"errors"
 
 	"github.com/mrsirg97-rgb/rig/v3/command"
+	"github.com/mrsirg97-rgb/rig/v3/core"
 	"github.com/mrsirg97-rgb/rig/v3/plugins"
 )
 
@@ -31,7 +32,7 @@ func capPlugins(reports []plugins.Report, max int) []plugins.Report {
 func (r *root) swapPlugins(ctx context.Context, reports []plugins.Report) (string, error) {
 	reports = capPlugins(reports, r.pluginMax)
 	infos := make([]command.PluginInfo, 0, len(reports))
-	tools := r.tableTools()
+	var pluginTools []core.Tool
 	for _, rep := range reports {
 		infos = append(infos, command.PluginInfo{
 			Name: rep.Name, Description: rep.Description, File: rep.File,
@@ -39,7 +40,7 @@ func (r *root) swapPlugins(ctx context.Context, reports []plugins.Report) (strin
 		})
 		if !rep.Skipped {
 			tool := plugins.New(rep.Name, rep.Description, rep.File, rep.Schema, r.py)
-			tools = append(tools, tool)
+			pluginTools = append(pluginTools, tool)
 			r.tools[rep.Name] = tool
 		}
 	}
@@ -49,7 +50,8 @@ func (r *root) swapPlugins(ctx context.Context, reports []plugins.Report) (strin
 			names = append(names, rep.Name)
 		}
 	}
-	r.live.Swap(tools, names...)
+	r.pluginTools = pluginTools
+	r.live.Swap(append(r.tableTools(), r.pluginTools...), names...)
 	r.pluginInfos = infos
 	return command.RenderPlugins(infos, "reload", r.pluginsHome), nil
 }

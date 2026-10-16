@@ -2156,6 +2156,9 @@ func TestCompactionCarriesTheIdAndPositionHighWater(t *testing.T) {
 		if _, err := todostore.Move(ctx, db, p, "t3", 1, "s1"); err != nil {
 			t.Fatal(err)
 		}
+		if _, err := todostore.Note(ctx, db, p, "t3", "tick", "s1"); err != nil {
+			t.Fatal(err)
+		}
 	}
 	if n := rawEventOps(t, db, "compact"); n == 0 {
 		t.Fatal("the log must have compacted")
@@ -2298,5 +2301,25 @@ func TestClaimTaskAnswersTypedAndNothingIsNotAnError(t *testing.T) {
 	c, ok, err := todostore.ClaimTask(ctx, db, p, "s1", "")
 	if err != nil || !ok || c == nil || c.ID != "t1" || c.Text != "dig" {
 		t.Fatalf("the typed claim = %+v (ok %v, err %v), want t1/dig claimed", c, ok, err)
+	}
+}
+
+func TestAMoveAfterAPruneMovesByRank(t *testing.T) {
+	db := newDB(t)
+	ctx := context.Background()
+	if _, err := create(ctx, db, p, []item{{Text: "a"}, {Text: "b"}, {Text: "c"}}, "s1"); err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	if _, err := todostore.Complete(ctx, db, p, "t1", "s1", false); err != nil {
+		t.Fatalf("complete: %v", err)
+	}
+	if _, err := todostore.Prune(ctx, db, p, "s1"); err != nil {
+		t.Fatalf("prune: %v", err)
+	}
+	if _, err := todostore.Move(ctx, db, p, "t2", 2, "s1"); err != nil {
+		t.Fatalf("move: %v", err)
+	}
+	if got := projTextOrder(t, db); !eqStrings(got, []string{"c", "b"}) {
+		t.Fatalf("a pruned board moves by rank, not by the sparse stored pos: %v", got)
 	}
 }

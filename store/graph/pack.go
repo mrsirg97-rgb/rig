@@ -332,8 +332,6 @@ type edgeRow struct {
 	Line    int64
 }
 
-// edgeLimit bounds one symbol's caller or callee list: a list longer than
-// a screen is a directory, not an answer.
 const edgeLimit = 100
 
 func queryEdges(ctx context.Context, db store.DB, q string, args ...any) ([]edgeRow, error) {

@@ -345,3 +345,37 @@ func TestHostedFaultsAreLoudAndBounded(t *testing.T) {
 		t.Fatalf("a 4xx other than 429 must fault immediately, got %v", ft.Err)
 	}
 }
+
+func TestReasoningDetailsArrivePerChunk(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		io.WriteString(w, strings.Join([]string{
+			`data: {"choices":[{"delta":{"reasoning":"one","reasoning_details":[{"id":"r1","text":"aaaaaaaaaaaaaaaaaaaa"}]}}]}`,
+			`data: {"choices":[{"delta":{"reasoning":"two","reasoning_details":[{"id":"r2"}]}}]}`,
+			`data: {"choices":[{"delta":{},"finish_reason":"stop"}]}`,
+			`data: [DONE]`,
+			"",
+		}, "\n"))
+	}))
+	defer srv.Close()
+
+	p := NewWithConfig(Config{BaseURL: srv.URL, Model: "m", Reasoning: "reasoning"})
+	events, err := hostedDrain(t, context.Background(), p, userReq())
+	if err != nil {
+		t.Fatalf("stream: %v", err)
+	}
+	var got []string
+	for _, ev := range events {
+		if r, ok := ev.(core.ReasoningDelta); ok && len(r.Details) > 0 {
+			got = append(got, string(r.Details))
+		}
+	}
+	want := []string{`[{"id":"r1","text":"aaaaaaaaaaaaaaaaaaaa"}]`, `[{"id":"r2"}]`}
+	if len(got) != len(want) {
+		t.Fatalf("each chunk's details arrive whole: %d arrivals (%v), want %d", len(got), got, len(want))
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("arrival %d = %s, want %s", i, got[i], want[i])
+		}
+	}
+}
