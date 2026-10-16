@@ -39,6 +39,10 @@ fallback stays for a real directory that is not a repo.
 
 ## Gotchas
 
+- The memo is one per probe (the path, the worktree, the bare answer),
+  and each holds its lock only around the map: the git subprocess runs
+  outside any lock, concurrent first probes of one cwd both run, and
+  the first storer wins (a later store of an existing key is a no-op).
 - The probe result is memoized per-cwd: the `PATH` it runs under is the
   caller's, so a test can point it at a fake `git`.
 - A relative common-dir output is resolved against the cwd: an output

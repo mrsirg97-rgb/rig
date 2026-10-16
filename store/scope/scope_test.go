@@ -5,7 +5,86 @@ import (
 	"os/exec"
 	"path/filepath"
 	"testing"
+	"time"
 )
+
+func shimGit(t *testing.T, bin, script string) {
+	t.Helper()
+	if err := os.WriteFile(filepath.Join(bin, "git"), []byte("#!/bin/sh\n"+script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+}
+
+func waitFor(t *testing.T, path string) {
+	t.Helper()
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		if _, err := os.Stat(path); err == nil {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("nothing ever showed up at %s", path)
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+}
+
+func TestPathReturnsFromCacheWhileAnotherProbeRuns(t *testing.T) {
+	bin := t.TempDir()
+	base := t.TempDir()
+	slow := filepath.Join(base, "slow")
+	other := filepath.Join(base, "other")
+	started := filepath.Join(base, "started")
+	release := filepath.Join(base, "release")
+	for _, dir := range []string{slow, other} {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	shimGit(t, bin, `if [ "$2" = "$SLOW_DIR" ]; then
+: > "$STARTED"
+until [ -f "$RELEASE" ]; do sleep 0.05; done
+fi
+exit 0
+`)
+	t.Setenv("SLOW_DIR", slow)
+	t.Setenv("STARTED", started)
+	t.Setenv("RELEASE", release)
+	t.Cleanup(func() { os.WriteFile(release, nil, 0o644) })
+
+	if got := Path(other); got != other {
+		t.Fatalf("the pass-through shim must leave the other cwd at its fallback: %q", got)
+	}
+
+	done := make(chan string, 1)
+	go func() { done <- Path(slow) }()
+	waitFor(t, started)
+	if _, err := os.Stat(release); err == nil {
+		t.Fatal("the slow probe was released before it could block")
+	}
+
+	got := make(chan string, 1)
+	go func() { got <- Path(other) }()
+	select {
+	case v := <-got:
+		if v != other {
+			t.Fatalf("the cached cwd must resolve to its memoized value: %q", v)
+		}
+		if _, err := os.Stat(release); err == nil {
+			t.Fatal("the cached cwd returned only after the slow probe ended: the cache lock rides the subprocess")
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("a pre-cached cwd did not return while another cwd's probe was in flight: the cache lock rides the subprocess")
+	}
+
+	os.WriteFile(release, nil, 0o644)
+	select {
+	case <-done:
+	case <-time.After(10 * time.Second):
+		t.Fatal("the slow probe never finished after the release")
+	}
+}
 
 func gitRepo(t *testing.T, dir string) {
 	t.Helper()
