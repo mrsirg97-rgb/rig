@@ -112,7 +112,7 @@ func TestTheFooterHoldsItsHeightThroughABand(t *testing.T) {
 		Review:  2,
 	})
 	breathe(t, s, emberBreathStops)
-	s.await("#2 read x · 0s")
+	s.await("#2 read x")
 	rows = screenAt(t, s, 60, 20)
 	if len(rows) != len(base) {
 		t.Fatalf("the call item must not grow the footer: %d rows, base %d", len(rows), len(base))

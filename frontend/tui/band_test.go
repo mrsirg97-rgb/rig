@@ -2,7 +2,9 @@ package tui
 
 import (
 	"context"
+	"strconv"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -130,30 +132,34 @@ func TestThePhoneMockupsRenderByteForByte(t *testing.T) {
 	breathe(t, s, 1)
 	bandAwaitPaint(t, s, th.BreathPaint(SlotText, 1, "delegating · 1 worker"))
 	bandSettle(t, s)
-	bandAwaitPaint(t, s, th.Paint(SlotDim, "delegating · 1 worker"))
+	bandAwaitPaint(t, s, th.Paint(SlotDim, "delegating · 1 worker · 0s"))
+	wantFooter(footer("delegating · 1 worker · 0s"))
 
 	s.fe.Notify(core.SwarmStatus{Workers: []core.SwarmWorker{
 		bandWorker(true, bandDelegateCall, bandNow().Add(-2*time.Second)),
 	}})
-	bandAwait(t, s, "#1 edit frontend/tui/band.g… · 2s")
-	wantFooter(footer("#1 edit frontend/tui/band.g… · 2s"))
+	bandAwait(t, s, "#1 edit frontend/tui/band.g…")
+	wantFooter(footer("#1 edit frontend/tui/band.g…"))
 	bandSettle(t, s)
+	bandAwait(t, s, "delegating · 1 worker · 0s")
 
 	s.fe.Notify(core.SwarmStatus{})
-	bandAwait(t, s, "#1 edit frontend/tui/band.g… · 2s")
-	wantFooter(footer("#1 edit frontend/tui/band.g… · 2s"))
-	bandAwaitPaint(t, s, th.Paint(SlotDim, "#1 edit frontend/tui/band.g… · 2s"))
+	bandAwait(t, s, "#1 edit frontend/tui/band.g…")
+	wantFooter(footer("#1 edit frontend/tui/band.g…"))
+	bandAwaitPaint(t, s, th.Paint(SlotDim, "#1 edit frontend/tui/band.g…"))
 
 	s.fe.Notify(machineroom.JobStatus{Job: "j8", State: machineroom.JobRunning, Workers: 1, Started: bandNow()})
 	bandAwait(t, s, "scheduled job · 1 worker")
 	wantFooter(footer("scheduled job · 1 worker"))
 	bandSettle(t, s)
+	bandAwait(t, s, "job j8 · 1 worker · 0s")
 
-	s.fe.Notify(machineroom.JobStatus{Job: "j8", State: machineroom.JobRunning, Workers: 1,
+	s.fe.Notify(machineroom.JobStatus{Job: "j8", State: machineroom.JobRunning, Workers: 1, Started: bandNow(),
 		Call: bandDelegateCall, CallAt: bandNow().Add(-2 * time.Second)})
-	bandAwait(t, s, "j8 #1 edit frontend/tui/band.g… · 2s")
-	wantFooter(footer("j8 #1 edit frontend/tui/band.g… · 2s"))
+	bandAwait(t, s, "j8 #1 edit frontend/tui/band.g…")
+	wantFooter(footer("j8 #1 edit frontend/tui/band.g…"))
 	bandSettle(t, s)
+	bandAwait(t, s, "job j8 · 1 worker · 0s")
 
 	s.fe.Notify(machineroom.JobStatus{Job: "j8", State: machineroom.JobDone,
 		Started: bandNow().Add(-8 * time.Minute), Ended: bandNow()})
@@ -168,41 +174,30 @@ func TestEightCallsInOneBreathLeaveOneQueuedAndTheLatestShows(t *testing.T) {
 	th := oledTheme(t)
 	s := bandSession(t, 52)
 	s.fe.Notify(core.SwarmStatus{Workers: []core.SwarmWorker{bandWorker(true, "", time.Time{})}})
-	var last string
 	for i := 0; i < 8; i++ {
-		call := bandDelegateCall + " " + strings.Repeat("x", i)
 		s.fe.Notify(core.SwarmStatus{Workers: []core.SwarmWorker{
-			bandWorker(true, call, bandNow().Add(-time.Duration(9-i)*time.Second)),
+			bandWorker(true, "read f"+strconv.Itoa(i), bandNow().Add(-time.Duration(9-i)*time.Second)),
 		}})
-		last = "#1 " + bandCallCut(call) + " · " + swarmAge(time.Duration(9-i)*time.Second)
 	}
 	s.fe.Notify(machineroom.JobStatus{Job: "j8", State: machineroom.JobDone,
 		Started: bandNow().Add(-8 * time.Minute), Ended: bandNow()})
 	for i := 0; i < 3; i++ {
 		bandSettle(t, s)
 	}
-	bandAwaitPaint(t, s, th.BreathPaint(SlotWarn, 1, "#1 "+bandCallCut(bandDelegateCall+" "+strings.Repeat("x", 7))+" · 2s"))
-	for i := 0; i < 7; i++ {
-		call := "#1 " + bandCallCut(bandDelegateCall+" "+strings.Repeat("x", i)) + " · " + swarmAge(time.Duration(9-i)*time.Second)
+	bandAwaitPaint(t, s, th.BreathPaint(SlotWarn, 1, "#1 read f7"))
+	for i := 1; i < 7; i++ {
+		call := "#1 read f" + strconv.Itoa(i)
 		if strings.Contains(s.out.String(), th.BreathPaint(SlotWarn, 1, call)) {
 			t.Fatalf("the replaced call %d breathed anyway:\n%s", i, s.out.String())
 		}
-		if strings.Contains(s.out.String(), th.Paint(SlotDim, call)) {
-			t.Fatalf("the replaced call %d held the row:\n%s", i, s.out.String())
-		}
 	}
-	bandAwaitPaint(t, s, th.Paint(SlotDim, "job j8 done · 8m"))
-	call := th.BreathPaint(SlotWarn, 11, "#1 "+bandCallCut(bandDelegateCall+" "+strings.Repeat("x", 7))+" · 2s")
-	done := th.Paint(SlotDim, "job j8 done · 8m")
+	bandAwaitPaint(t, s, th.BreathPaint(SlotSuccess, 11, "job j8 done · 8m"))
+	call := th.BreathPaint(SlotWarn, 11, "#1 read f7")
+	done := th.BreathPaint(SlotSuccess, 11, "job j8 done · 8m")
 	if strings.LastIndex(s.out.String(), call) > strings.LastIndex(s.out.String(), done) {
 		t.Fatalf("the done event must follow the latest call, not lead it")
 	}
-	if got := bandFooter(t, bandScreen(t, s, 52), 5)[4]; got != "job j8 done · 8m" {
-		t.Fatalf("the row settles on the done event, holds %q", got)
-	}
-	if got := bandFooter(t, bandScreen(t, s, 52), 5)[4]; got == last {
-		t.Fatalf("the latest call is %q, the row moved past it", last)
-	}
+	bandAwait(t, s, "delegating · 1 worker · 0s")
 }
 
 func TestADelegatesAndAJobsItemsInterleaveInArrivalOrder(t *testing.T) {
@@ -212,8 +207,8 @@ func TestADelegatesAndAJobsItemsInterleaveInArrivalOrder(t *testing.T) {
 	breaths := []string{
 		th.BreathPaint(SlotText, 11, "delegating · 1 worker"),
 		th.BreathPaint(SlotText, 11, "scheduled job · 1 worker"),
-		th.BreathPaint(SlotWarn, 11, "#1 "+bandCallCut(call)+" · 2s"),
-		th.BreathPaint(SlotWarn, 11, "j8 #1 "+bandCallCut(call)+" · 2s"),
+		th.BreathPaint(SlotWarn, 11, "#1 "+bandCallCut(call)),
+		th.BreathPaint(SlotWarn, 11, "j8 #1 "+bandCallCut(call)),
 		th.BreathPaint(SlotSuccess, 11, "job j8 done · 8m"),
 	}
 	s.fe.Notify(core.SwarmStatus{Workers: []core.SwarmWorker{bandWorker(true, "", time.Time{})}})
@@ -226,7 +221,7 @@ func TestADelegatesAndAJobsItemsInterleaveInArrivalOrder(t *testing.T) {
 	for i := 0; i < 5; i++ {
 		bandSettle(t, s)
 	}
-	bandAwaitPaint(t, s, th.Paint(SlotDim, "job j8 done · 8m"))
+	bandAwaitPaint(t, s, th.BreathPaint(SlotSuccess, 11, "job j8 done · 8m"))
 	stream := s.out.String()
 	at := -1
 	for i, want := range breaths {
@@ -236,9 +231,7 @@ func TestADelegatesAndAJobsItemsInterleaveInArrivalOrder(t *testing.T) {
 		}
 		at = at + 1 + next
 	}
-	if got := bandFooter(t, bandScreen(t, s, 52), 5)[4]; got != "job j8 done · 8m" {
-		t.Fatalf("the row rests on the last item, holds %q", got)
-	}
+	bandAwait(t, s, "delegating · 1 worker · 0s")
 }
 
 func th_(t *testing.T) Theme {
@@ -330,4 +323,58 @@ func TestTheRowNeverWrapsOnAPhone(t *testing.T) {
 	if rows[3] == "" || !strings.HasPrefix(rows[4], "room: rig was updated") {
 		t.Fatalf("the footer shifted: %q", rows)
 	}
+}
+
+func TestTheRestingRowCountsTheWorkInFlight(t *testing.T) {
+	th := oledTheme(t)
+	var elapsed atomic.Int64
+	s := newScriptedSession(t, th, WithWidth(52),
+		WithStatus(func(context.Context) StatusIn { return bandFixture() }),
+		WithNow(func() time.Time { return bandNow().Add(time.Duration(elapsed.Load())) }))
+	if got := s.prompt(promptMark(th), "go\n"); got != "go" {
+		t.Fatalf("prompt = %q", got)
+	}
+	s.fe.Notify(core.TurnEnd{Reason: core.TurnOver})
+	two := []core.SwarmWorker{bandWorker(true, "", time.Time{}), bandWorker(true, "", time.Time{})}
+	two[1].ID = 2
+	s.fe.Notify(core.SwarmStatus{Workers: two})
+	bandSettle(t, s)
+	bandAwait(t, s, "delegating · 2 workers · 0s")
+	elapsed.Store(int64(7 * time.Second))
+	breathe(t, s, 1)
+	bandAwait(t, s, "delegating · 2 workers · 7s")
+	s.fe.Notify(core.SwarmStatus{Workers: []core.SwarmWorker{bandWorker(true, "", time.Time{})}})
+	breathe(t, s, 1)
+	bandAwait(t, s, "delegating · 1 worker · 7s")
+	elapsed.Store(int64(75 * time.Second))
+	breathe(t, s, 1)
+	bandAwait(t, s, "delegating · 1 worker · 1m")
+
+	s.fe.Notify(machineroom.JobStatus{Job: "j8", State: machineroom.JobRunning, Workers: 1, Started: bandNow().Add(80 * time.Second)})
+	bandSettle(t, s)
+	elapsed.Store(int64(110 * time.Second))
+	breathe(t, s, 1)
+	bandAwait(t, s, "job j8 · 1 worker · 30s")
+
+	s.fe.Notify(machineroom.JobStatus{Job: "j8", State: machineroom.JobDone,
+		Started: bandNow().Add(80 * time.Second), Ended: bandNow().Add(110 * time.Second)})
+	bandSettle(t, s)
+	breathe(t, s, 1)
+	bandAwait(t, s, "delegating · 1 worker · 1m")
+
+	s.fe.Notify(core.SwarmStatus{})
+	deadline := time.Now().Add(3 * time.Second)
+	for {
+		s.fe.mu.Lock()
+		ticking := s.fe.tickStop != nil
+		s.fe.mu.Unlock()
+		if !ticking {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("the ticker must rest once no work is in flight")
+		}
+		time.Sleep(time.Millisecond)
+	}
+	bandAwait(t, s, "job j8 done · 30s")
 }

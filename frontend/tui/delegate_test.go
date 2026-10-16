@@ -65,10 +65,10 @@ func TestEachWorkersCallIsItsOwnItem(t *testing.T) {
 	if queued != 2 {
 		t.Fatalf("two workers' calls queue as two items beside the held start, got %d", queued)
 	}
-	if first != "#1 read core/provider.go · 30s" {
+	if first != "#1 read core/provider.go" {
 		t.Fatalf("the first worker's item: %q", first)
 	}
-	if second != "#2 edit tool/file/edit.go · 12s" {
+	if second != "#2 edit tool/file/edit.go" {
 		t.Fatalf("the second worker's item: %q", second)
 	}
 	s.fe.Notify(core.SwarmStatus{Workers: []core.SwarmWorker{
@@ -82,7 +82,7 @@ func TestEachWorkersCallIsItsOwnItem(t *testing.T) {
 	if queued != 2 {
 		t.Fatalf("a newer call replaces its worker's item in place, got %d", queued)
 	}
-	if first != "#1 read core/other.go · 5s" {
+	if first != "#1 read core/other.go" {
 		t.Fatalf("the replaced item: %q", first)
 	}
 }
@@ -141,7 +141,7 @@ func TestTheTickerRunsForBreathsNotBatches(t *testing.T) {
 	if live || running {
 		t.Fatalf("nothing breathes once the queue drains: live=%v ticker=%v", live, running)
 	}
-	if hold != "#1 read x · 0s" {
+	if hold != "#1 read x" {
 		t.Fatalf("the row holds the last item dimmed: %q", hold)
 	}
 }
@@ -426,7 +426,7 @@ func TestABigReturnPaintsThePreviewBound(t *testing.T) {
 	}
 }
 
-func TestTheCallRowPaintsTheCallWarnAndTheAgeDim(t *testing.T) {
+func TestTheCallRowPaintsTheCallWarn(t *testing.T) {
 	th, _ := ResolveTheme("oled", nil, true)
 	if th.Paint(SlotWarn, "x") == th.Paint(SlotDim, "x") {
 		t.Fatal("the theme must tell warn from dim for this test to mean anything")
@@ -439,10 +439,10 @@ func TestTheCallRowPaintsTheCallWarnAndTheAgeDim(t *testing.T) {
 	s.fe.mu.Lock()
 	item := s.fe.bandQueue[0]
 	s.fe.mu.Unlock()
-	if item.text != "#8 read core/provider.go · 12s" {
-		t.Fatalf("the call item carries the worker, the call and its age: %q", item.text)
+	if item.text != "#8 read core/provider.go" {
+		t.Fatalf("the call item carries the worker and the call: %q", item.text)
 	}
-	if th.Paint(item.slot, item.text) != th.Paint(SlotWarn, "#8 read core/provider.go · 12s") {
+	if th.Paint(item.slot, item.text) != th.Paint(SlotWarn, "#8 read core/provider.go") {
 		t.Fatalf("the call breathes in the warn slot: %q", item.slot)
 	}
 }

@@ -106,9 +106,9 @@ frontend/tui/         NEW package, main module (decision 10 names the
   phasepreview.go     the open phase's preview rows
   repaint.go          the full repaint (theme swap, resize)
   swarm.go            the band row's helpers: the role test, the rule,
-                      the counts, the age (3a)
+                      the counts, the age format (3a)
   band.go             the band row: the item queue, the breath, the
-                      call's cut (3a)
+                      call's cut, the resting row's work (3a)
   width.go            display width (SGR-stripped, runewidth)
   worker.go           the worker inbox drain and the return line
   wrap.go             the cell wrap for row painting
@@ -546,7 +546,7 @@ A pinned one-line header via scroll region is named future work
 (`-pin-header`), not built: inside a margin region most terminals
 drop scrolled lines from scrollback, which trades away decision 1.
 
-### 3a. The band row and the transcript notice, amended 1.5.4, 2.14.7, 3.2.0
+### 3a. The band row and the transcript notice, amended 1.5.4, 2.14.7, 3.2.0, 3.2.1
 
 The status string is a newline-joined footer already; under the status
 rows sits one row that never goes away, carrying everything that
@@ -572,7 +572,7 @@ delegating · 1 worker
   (`source: text`, identical ones collapsing). Status items replace:
   a worker's newer tool call replaces that worker's call still waiting
   in the queue, so the backlog is at most one call per worker however
-  fast calls arrive. A call is `#<worker> <call> · <age>`, prefixed
+  fast calls arrive. A call is `#<worker> <call>`, prefixed
   with the job's id for a scheduled job's worker (`j8 #1 …`), the call
   cut at `bandCallCols` (25) display columns with `…` on rune and
   display-width boundaries (go-runewidth, the way `width.go`
@@ -584,9 +584,20 @@ delegating · 1 worker
   first. One breath is `emberBreathStops` (12) × `animPeriod` (120 ms)
   of the frame ticker's animation, and it runs whether or not a turn,
   a compaction or an aside is live: the row is not the indicator's.
-  When the queue rests the ticker stops and the row holds the last
-  item dimmed. The ages and durations are computed once, when the item
-  is made — the row is a sequence of snapshots, not a live read.
+- Between breaths the row rests on the work in flight, dimmed:
+  `<type> · <workers> · <time>` — `delegating · 2 workers · 1m`,
+  `swarm · 3 workers · 40s`, `job j8 · 1 worker · 3m` (a command job
+  names no workers) — the time counted from the work's start and
+  read when the row is drawn, so it moves while the row rests. With
+  several kinds of work in flight the row names the one that started
+  last. The workers count the running ones; a delegate or a swarm is
+  in flight while any worker runs or waits, a job from its running
+  act to its done or failed act. With nothing in flight the row
+  holds the last item dimmed, `—` before the first, and the ticker
+  stops. While only the resting row moves, the ticker repaints it
+  when its text changes, not every frame (amended 3.2.1: the call's
+  age, computed once when the item was made, always read `0s`; the
+  time moved to the resting row, where it is read live).
 - The two publishers keep their own slots (2.14.7): a `core.SwarmStatus`
   routes by role — `delegate` rows to the delegate's slot, the rest to
   the swarm's — and a zero-row status is its publisher's "nothing
