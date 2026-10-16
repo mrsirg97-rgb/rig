@@ -71,7 +71,12 @@ everything the supervisor says is a `broadcast` message.
   task across the swarm; a second death fails the task (workers) or
   rejects it with the reason (reviewers). The reject doors are capped
   per task: the third rejection fails it with a note instead of
-  returning it to the workers. A dispatch refused because the worker's
+  returning it to the workers. The two budgets are per task-life on the
+  board and retire together at the task's terminal — a verdict
+  accepted, or the task failed and out of the workers' hands — so a
+  controller's lifetime holds an entry only for the tasks still owed a
+  retry or a verdict; a rejection, a release, or a completion that
+  hands the task to review is not a terminal and retires nothing. A dispatch refused because the worker's
   model is not resident (`sched.ErrNotResident`) releases the claim,
   stops that worker with a notice naming the holder, and fails nothing.
 - What the supervisor says, it publishes to the room as `Notice` with
