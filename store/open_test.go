@@ -159,6 +159,22 @@ func TestQuarantineFailsClosedWhenASidecarStatFails(t *testing.T) {
 	}
 }
 
+func TestOpenRefusesAPathCarryingAQueryMark(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "a?b.sqlite")
+	db, _, _, err := Open(path, probeDDL, 1)
+	if err == nil {
+		db.Close()
+		t.Fatalf("Open succeeded over a path carrying '?': the driver splits the DSN at the first '?' and opened %s instead", filepath.Join(dir, "a"))
+	}
+	if !strings.Contains(err.Error(), path) {
+		t.Errorf("the refusal must name the path: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "a")); !os.IsNotExist(err) {
+		t.Errorf("the refusal must come before anything is created: %v", err)
+	}
+}
+
 func TestOpenQuarantinesCorruptFile(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "corrupt.sqlite")

@@ -38,7 +38,9 @@ seams the generated stack executes through.
 - The pragmas ride the DSN (`_pragma=…`), applied by the driver at
   connection init, and ride it alone — a pragma `Exec`'d against one
   pooled connection would leave every other connection without it.
-  The cross-process posture (a
+  The DSN splits at the first `?`, so a path carrying one opens a
+  different file and Open refuses it, naming the path — rename the
+  store rather than escape it. The cross-process posture (a
   runner writing while a session reads) is WAL + busy_timeout +
   `_txlock=immediate` (every transaction takes the RESERVED lock at begin).
 - An existing corrupt file is quarantined aside as `<path>.corrupt-<ts>`

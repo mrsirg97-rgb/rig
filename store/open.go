@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	_ "modernc.org/sqlite"
@@ -16,6 +17,9 @@ import (
 type DB = sqlx.DB
 
 func Open(path string, statements []string, wantVersion int, migrate ...func(*sql.Tx, int, int) (string, error)) (sqlx.DB, string, string, error) {
+	if strings.Contains(path, "?") {
+		return sqlx.DB{}, "", "", fmt.Errorf("store path %s carries '?': the driver would split the DSN at it and open a different file — rename the store", path)
+	}
 	existing, _ := fileSize(path)
 	var quarantined string
 	for attempt := 0; ; attempt++ {
