@@ -255,7 +255,7 @@ func DelegateStart(in DelegateInput) (Delegation, error) {
 			proxy.Close()
 		}
 	}
-	if in.Member != nil {
+	if in.Member != nil && in.Command == "" {
 		pipe, err = openFleet(base, in.Member.Id(), func(messages ...broadcast.Message) {
 			in.Member.Publish(base, func(error) {}, messages...)
 		})

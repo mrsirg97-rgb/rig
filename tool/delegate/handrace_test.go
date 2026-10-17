@@ -2,6 +2,7 @@ package delegate_test
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -124,6 +125,107 @@ func (r *parkedRoom) Mint() broadcast.Member                                    
 func (r *parkedRoom) Remove(int64) bool                                            { return true }
 func (r *parkedRoom) Members() []int64                                             { return nil }
 func (r *parkedRoom) Broadcast(context.Context, int64, ...broadcast.Message) error { return nil }
+
+type racedSubmission struct {
+	started chan struct{}
+	settled chan struct{}
+}
+
+func newRacedSubmission() *racedSubmission {
+	return &racedSubmission{started: make(chan struct{}), settled: make(chan struct{})}
+}
+
+func (s *racedSubmission) Started() bool {
+	<-s.started
+	return true
+}
+
+func (s *racedSubmission) Settled() <-chan struct{} { return s.settled }
+
+func (s *racedSubmission) Stop() {}
+
+func (s *racedSubmission) Release() {}
+
+type racedCap struct {
+	mu        sync.Mutex
+	work      evt.Closure
+	sub       *racedSubmission
+	submitted chan struct{}
+}
+
+func (c *racedCap) Size() int     { return 1 }
+func (c *racedCap) InFlight() int { return 1 }
+func (c *racedCap) Queued() int   { return 0 }
+
+func (c *racedCap) Submit(ctx context.Context, work evt.Closure, priority int) evt.Submission {
+	c.mu.Lock()
+	c.work = work
+	c.mu.Unlock()
+	close(c.submitted)
+	return c.sub
+}
+
+func (c *racedCap) start() {
+	c.mu.Lock()
+	work := c.work
+	c.mu.Unlock()
+	go func() {
+		work.Resolve(context.Background())
+		close(c.sub.settled)
+	}()
+}
+
+func TestAQueuedWorkerTheCapStartedRunsOnce(t *testing.T) {
+	h := newHarness(t, "/ws/sess")
+	sub := newRacedSubmission()
+	rcap := &racedCap{sub: sub, submitted: make(chan struct{})}
+	h.cap = rcap
+	release := make(chan struct{})
+	spawn := &fakeSpawn{result: sched.SpawnResult{Exit: 0, Stdout: "done"}, block: release}
+	tool, fe := h.asyncTool(t, fakeFetch(""), spawn.spawn)
+
+	type outcome struct {
+		out string
+		err error
+	}
+	done := make(chan outcome, 1)
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				done <- outcome{err: fmt.Errorf("exec panicked after %d spawns: %v", spawn.count(), r)}
+			}
+		}()
+		out, err := tool.Exec(context.Background(), runArgs("the queued race"))
+		done <- outcome{out, err}
+	}()
+
+	<-rcap.submitted
+	rcap.start()
+	waitUntil(t, "the cap's runner at the spawn", func() bool { return spawn.count() == 1 })
+	close(sub.started)
+	close(release)
+	got := <-done
+	if got.err != nil {
+		t.Fatalf("the queued worker's start is one run, not two: %v", got.err)
+	}
+	if !strings.Contains(got.out, "worker #1 started") {
+		t.Fatalf("the hand-back is the started line: %q", got.out)
+	}
+	if n := spawn.count(); n != 1 {
+		t.Fatalf("one worker number is one spawn, got %d", n)
+	}
+	returns := waitForReturn(t, fe, 1)
+	if len(returns) != 1 {
+		t.Fatalf("one run hands back once, got %d: %+v", len(returns), returns)
+	}
+	if returns[0].N != 1 || returns[0].Exit != 0 || !strings.Contains(returns[0].Content, "done") {
+		t.Fatalf("the return is the run's: %+v", returns[0])
+	}
+	waitUntil(t, "the band clear", func() bool {
+		ss := fe.statuses()
+		return len(ss) > 0 && len(ss[len(ss)-1].Workers) == 0
+	})
+}
 
 func TestAQueuedWorkerThatStartsBeforeTheCallerBookkeepsStillReleasesItsPlace(t *testing.T) {
 	h := newHarness(t, "/ws/sess")

@@ -238,24 +238,29 @@ func RunJob(key string, opts RunOpts) error {
 		return room.JobStatus{Job: id, Prompt: firstLine(job.Prompt), State: room.JobRunning,
 			Started: startedTime, Workers: workers, Call: call, CallAt: callAt}
 	}
-	pipe, err = openFleet(ctx, runnerOrigin, func(messages ...broadcast.Message) {
-		for _, m := range messages {
-			if ts, ok := m.Signal().(core.ToolStart); ok {
-				tell(runStatus(ts.BoundedCall(), opts.Now().UTC()))
+	pipe, err = nil, nil
+	if command == "" {
+		pipe, err = openFleet(ctx, runnerOrigin, func(messages ...broadcast.Message) {
+			for _, m := range messages {
+				if ts, ok := m.Signal().(core.ToolStart); ok {
+					tell(runStatus(ts.BoundedCall(), opts.Now().UTC()))
+				}
 			}
+			if watch != nil {
+				watch.touch()
+			}
+		})
+		if err != nil {
+			if watch != nil {
+				watch.stop()
+			}
+			return fmt.Errorf("run-job: fleet: %w", err)
 		}
-		if watch != nil {
-			watch.touch()
-		}
-	})
-	if err != nil {
-		if watch != nil {
-			watch.stop()
-		}
-		return fmt.Errorf("run-job: fleet: %w", err)
 	}
 	abandon := func() {
-		pipe.close()
+		if pipe != nil {
+			pipe.close()
+		}
 		if watch != nil {
 			watch.stop()
 		}
@@ -359,8 +364,14 @@ func RunJob(key string, opts RunOpts) error {
 		stream.Write(p)
 	}
 	tell(runStatus("", time.Time{}))
-	res, err := opts.Spawn(WithPrompt(pipe.spawnCtx(), prompt), argv, job.Cwd, spawnEnv, observe)
-	pipe.close()
+	spawnCtx := ctx
+	if pipe != nil {
+		spawnCtx = pipe.spawnCtx()
+	}
+	res, err := opts.Spawn(WithPrompt(spawnCtx, prompt), argv, job.Cwd, spawnEnv, observe)
+	if pipe != nil {
+		pipe.close()
+	}
 	stream.Close()
 	os.Remove(streamPath)
 	if watch != nil {

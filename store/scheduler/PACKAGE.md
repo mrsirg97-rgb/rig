@@ -130,7 +130,10 @@ A command job's fire skips the busy probe and
   it) and a channel. The goroutine owns the spawn, the run log, the
   record, the pipe and the proxy, and the timeout context that only it
   may cancel; `Wait` reads the outcome once the log and the record are
-  on disk. `Delegate` keeps the synchronous shape verbatim for the
+  on disk. A command worker carries no fleet pipe (3.2.6): bash cannot
+  speak the frames, and a pipe it cannot speak is one a fork of the
+  shell can hold past the worker's exit, holding the run's result with
+  it. `Delegate` keeps the synchronous shape verbatim for the
   swarm, the review fire and the piped delegate tool, so there is one
   implementation of both. A `Delegation` is the handed-off worker:
   everything that could refuse it — the seams, the recursion marker,
@@ -339,7 +342,11 @@ A command job's fire skips the busy probe and
   reader's end-of-file before returning, so no frame is lost behind the
   result — including the `tool_start` frames a worker publishes for its
   own calls (2.14.0), which is what lets a delegated worker's band row
-  name the call it is in. The child side is `Fleet()`: with the env set it marks fd 3
+  name the call it is in, and the reviewer's verdict, whose delivery
+  precedes `Wait` so the review's origin check never drops it
+  (3.2.6). A command worker carries no pipe: bash cannot speak the
+  frames, and a pipe bash cannot speak is one a fork of the shell
+  inherits bare and holds past the worker's exit. The child side is `Fleet()`: with the env set it marks fd 3
   close-on-exec, so no tool's subprocess inherits the pipe, and returns
   the transport the one-shot frontend speaks through. `into` carries
   the fleet end onto a context the caller owns, so a worker that

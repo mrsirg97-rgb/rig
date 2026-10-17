@@ -262,10 +262,13 @@ func TestAHigherClaimEntersPastOneInFlight(t *testing.T) {
 
 func TestATransientAcceptErrorKeepsTheMemberAdmitting(t *testing.T) {
 	home := t.TempDir()
+	socketReady := make(chan struct{})
+	var socket string
 	old := acceptFrom
 	var calls int32
 	acceptFrom = func(l net.Listener) (net.Conn, error) {
-		if atomic.AddInt32(&calls, 1) == 1 {
+		<-socketReady
+		if l.Addr().String() == socket && atomic.AddInt32(&calls, 1) == 1 {
 			return nil, syscall.EMFILE
 		}
 		return old(l)
@@ -282,6 +285,8 @@ func TestATransientAcceptErrorKeepsTheMemberAdmitting(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(m.Close)
+	socket = filepath.Join(home, "room", fmt.Sprintf("%s-%d.sock", broadcast.EncodeID(m.Id()), os.Getpid()))
+	close(socketReady)
 	peer := newRoom(t, home, 1)
 	waitFor(t, "the peer to be admitted past the transient accept error", func() bool {
 		for _, id := range m.Live() {

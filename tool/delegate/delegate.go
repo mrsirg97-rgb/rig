@@ -8,6 +8,7 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 	"unicode/utf8"
 
@@ -291,7 +292,11 @@ func (a *adapter) run(ctx context.Context, c delegateCall) (string, error) {
 	var line string
 	var runErr error
 	var del sched.Delegation
+	var ran atomic.Bool
 	work := evt.Func(func(gate context.Context) {
+		if !ran.CompareAndSwap(false, true) {
+			return
+		}
 		if gate.Err() != nil {
 			a.fail(member, n, workerName(in), fmt.Errorf("delegate: worker #%d stopped while queued", n))
 			runErr = fmt.Errorf("delegate: %w", gate.Err())
@@ -352,7 +357,12 @@ func (a *adapter) run(ctx context.Context, c delegateCall) (string, error) {
 		}
 		return fmt.Sprintf("delegate: worker #%d queued · %d workers run at once (settings maxWorkers); it starts when one returns", n, a.Cap.Size()), nil
 	}
-	work.Resolve(ctx)
+	select {
+	case <-sub.Settled():
+		work.Resolve(ctx)
+	default:
+		<-sub.Settled()
+	}
 	return line, runErr
 }
 

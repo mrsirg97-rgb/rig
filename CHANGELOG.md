@@ -1,4 +1,54 @@
 # Changelog
+## [3.2.6]: a finished worker always hands back, and a queued worker runs once
+
+A finished worker always hands back. The evidence was a deferred bash
+on 3.2.4: the run recorded done and ok, its log complete on disk, no
+worker process alive, and the parent never published a WorkerDone — the
+band sat at `delegating · 1 worker` long after. The block was the fleet
+pipe: the hand-back waited for the pipe's reader to see end-of-file,
+and end-of-file rides every writer of the pipe — a command worker
+carried a pipe bash cannot speak, and its shell's forks inherited fd 3
+bare, so a background job held the write end long after the worker
+exited and held the run's result with it. A command worker now carries
+no pipe at all (bash cannot speak the frames, so there was nothing for
+it to lose), and a model worker keeps the pipe and drains it fully
+before `Wait` returns: the worker marks fd 3 close-on-exec at startup —
+the python kernel starts on first use, after that mark — so no holder
+outlives it, and the ordering holds: the reviewer's verdict frame
+arrives before `Wait` returns, where the review's origin check never
+drops it (a hand-back that outran the drain made `speak` reset before
+the verdict landed, and the row stayed pending). evt's pipe transport
+is untouched: its end-of-file is a true statement about the pipe; the
+bug was the hand-back waiting for it, and then the hand-back outrunning
+it. Red first: a command worker whose shell forks a child and exits 0 —
+the return lands while the fork still lives, and the spawn context and
+env carry no fleet pipe for it; and a model worker whose last frame is
+a verdict, sent after the spawn returned — the frame arrives before
+`Wait` returns (on the broken parent the verdict landed after the
+hand-back, and the review's origin check dropped it).
+
+A queued worker runs once. The cap's `startNext` and the caller's own
+`Resolve` could both fire when a slot freed between `Submit` and the
+caller's `Started` check, and `evt.Func.Resolve` is a bare call: two
+spawns under one worker number, and the second runner's watcher claimed
+a hand already taken and died of it. `delegate` now carries the
+compare-and-swap `swarm/drain.go` took in 3.2.2, and its started path
+waits on `Settled` the way the swarm's does, so the line and the error
+it returns are the one runner's writes. Red first: a cap of one, the
+slot freed in that window — the closure ran twice, and on the fix's
+parent the test binary died of the nil claim.
+
+The 3.2.4 accept test is deterministic: the injected EMFILE landed on
+whoever called `acceptFrom` first, and under load the peer's own accept
+loop took it, so the member under test never said the transient error
+loud. The wrapper now fails only the listener under test — it matches
+the member's socket path, learned before the peer joins, and the
+wrapper's read of it is ordered by the edge closed when the path is
+known. Proven with `-count=20` under `-race`, twice, and under the
+loaded full suite. The measured block is recomputed from the stores
+(61,209 turns) and the tree (50,150 lines of Go, 85,284 of tests), and
+the version test pins 3.2.6.
+
 ## [3.2.5]: the queue outlives the turn that queued it
 
 An async delegate that answered `queued` was a worker on borrowed

@@ -4,8 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"os"
+	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"testing"
 	"time"
 
@@ -427,6 +432,14 @@ func TestACommandWorkerHandsBackItsRun(t *testing.T) {
 	if deadline, ok := spawn.calls[0].Ctx.Deadline(); !ok {
 		t.Fatalf("the bound must ride the spawn context: %v", deadline)
 	}
+	if _, _, ok := sched.FleetFrom(spawn.calls[0].Ctx); ok {
+		t.Fatal("a command worker's shell cannot speak the fleet pipe, so it carries none")
+	}
+	for _, e := range spawn.calls[0].Env {
+		if strings.HasPrefix(e, sched.FleetEnv+"=") {
+			t.Fatalf("a command worker's env carries no fleet id: %q", e)
+		}
+	}
 	done := waitForReturn(t, fe, 1)
 	if done[0].Kind != core.KindCommand || done[0].RunID == "" {
 		t.Fatalf("the return names its kind and its run: %+v", done[0])
@@ -439,6 +452,153 @@ func TestACommandWorkerHandsBackItsRun(t *testing.T) {
 	}
 	if done[0].Task != "echo hi" {
 		t.Fatalf("the return's task is the command's first line: %q", done[0].Task)
+	}
+}
+
+func TestACommandWorkerHandsBackOnceItsProcessExits(t *testing.T) {
+	h := newHarness(t, "/ws/sess")
+	tool, fe := h.asyncTool(t, fakeFetch(""), sched.RealSpawn)
+	pidPath := filepath.Join(t.TempDir(), "child.pid")
+	command := fmt.Sprintf("sleep 15 >/dev/null 2>&1 & echo $! > %s; exit 0", pidPath)
+	out, err := tool.Exec(context.Background(), marshalArgs(map[string]any{"command": command}))
+	if err != nil {
+		t.Fatalf("hand-back: %v", err)
+	}
+	if !strings.HasPrefix(out, "delegate: worker #1 started · run ") {
+		t.Fatalf("the hand-back is the started line: %q", out)
+	}
+	var holder int
+	waitUntil(t, "the fd-3 holder the shell forked", func() bool {
+		b, err := os.ReadFile(pidPath)
+		if err != nil {
+			return false
+		}
+		pid, err := strconv.Atoi(strings.TrimSpace(string(b)))
+		if err != nil {
+			return false
+		}
+		holder = pid
+		return syscall.Kill(pid, 0) == nil
+	})
+	t.Cleanup(func() { _ = syscall.Kill(holder, syscall.SIGKILL) })
+	waitUntil(t, "the run's log with its exit", func() bool {
+		matches, _ := filepath.Glob(filepath.Join(h.home, "runs", "*", "*.log"))
+		if len(matches) != 1 {
+			return false
+		}
+		b, err := os.ReadFile(matches[0])
+		return err == nil && strings.Contains(string(b), "exit=0")
+	})
+	done := waitForReturn(t, fe, 1)
+	if len(done) != 1 {
+		t.Fatalf("the hand-back is one return, got %d: %+v", len(done), done)
+	}
+	if done[0].Kind != core.KindCommand || done[0].Exit != 0 || done[0].RunID == "" {
+		t.Fatalf("the return is the command worker's: %+v", done[0])
+	}
+	waitUntil(t, "the band clear", func() bool {
+		ss := fe.statuses()
+		return len(ss) > 0 && len(ss[len(ss)-1].Workers) == 0
+	})
+	if syscall.Kill(holder, 0) != nil {
+		t.Fatal("the return lands while the fork of the worker's shell still lives")
+	}
+}
+
+type heldPipeSpawn struct {
+	mu      sync.Mutex
+	pipe    broadcast.Transport
+	started chan struct{}
+}
+
+func (c *heldPipeSpawn) spawn(ctx context.Context, argv []string, cwd string, env []string, observe func([]byte)) (sched.SpawnResult, error) {
+	id, w, ok := sched.FleetFrom(ctx)
+	if !ok {
+		panic("a model worker's spawn context carries the fleet pipe")
+	}
+	dup, err := syscall.Dup(int(w.Fd()))
+	if err != nil {
+		panic(err)
+	}
+	wreg, werr := sched.Wire()
+	if werr != nil {
+		panic(werr)
+	}
+	pipe := broadcast.NewPipeTransport(id, os.NewFile(uintptr(dup), "fleet"), broadcast.NewJSONEncoder(wreg))
+	c.mu.Lock()
+	c.pipe = pipe
+	c.mu.Unlock()
+	close(c.started)
+	return sched.SpawnResult{Exit: 0, Stdout: "done"}, nil
+}
+
+func (c *heldPipeSpawn) send(ev evt.Signal) error {
+	c.mu.Lock()
+	pipe := c.pipe
+	c.mu.Unlock()
+	if pipe == nil {
+		return errors.New("the worker has not started")
+	}
+	sent := make(chan error, 1)
+	pipe.Send(context.Background(), func(err error) { sent <- err }, broadcast.NewMessage(pipe.Id(), true, ev))
+	return <-sent
+}
+
+func (c *heldPipeSpawn) closePipe() {
+	c.mu.Lock()
+	pipe := c.pipe
+	c.mu.Unlock()
+	if pipe != nil {
+		pipe.Close()
+	}
+}
+
+func TestAWorkerLastFrameArrivesBeforeWaitReturns(t *testing.T) {
+	h := newHarness(t, "/ws/sess")
+	room, fe := newFleetRoom(t)
+	spawn := &heldPipeSpawn{started: make(chan struct{})}
+	tool := h.newToolRoom(t, context.Background(), false, room, fakeFetch(""), spawn.spawn)
+	if _, err := tool.Exec(context.Background(), runArgs("the reviewer's sweep")); err != nil {
+		t.Fatalf("hand off: %v", err)
+	}
+	<-spawn.started
+	landed := false
+	deadline := time.Now().Add(500 * time.Millisecond)
+	for !landed && time.Now().Before(deadline) {
+		landed = len(fe.returns()) > 0
+		if !landed {
+			time.Sleep(2 * time.Millisecond)
+		}
+	}
+	if err := spawn.send(core.Verdict{Accept: true, Reason: "the rows read clean"}); err != nil {
+		t.Fatalf("the worker's last frame: %v", err)
+	}
+	waitUntil(t, "the verdict delivered", func() bool {
+		for _, ev := range fe.signals() {
+			if _, ok := ev.(core.Verdict); ok {
+				return true
+			}
+		}
+		return false
+	})
+	spawn.closePipe()
+	done := waitForReturn(t, fe, 1)
+	if len(done) != 1 {
+		t.Fatalf("one worker hands back once: %+v", done)
+	}
+	verdictAt, returnAt := -1, -1
+	for i, ev := range fe.signals() {
+		switch ev.(type) {
+		case core.Verdict:
+			verdictAt = i
+		case core.WorkerDone:
+			if returnAt == -1 {
+				returnAt = i
+			}
+		}
+	}
+	if verdictAt == -1 || returnAt == -1 || verdictAt > returnAt {
+		t.Fatalf("the worker's last frame must arrive before Wait returns: verdict at %d, first return at %d", verdictAt, returnAt)
 	}
 }
 

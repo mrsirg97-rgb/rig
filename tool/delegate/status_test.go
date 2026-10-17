@@ -78,6 +78,12 @@ func (r *recordFrontend) Notify(ev evt.Signal) {
 	r.mu.Unlock()
 }
 
+func (r *recordFrontend) signals() []evt.Signal {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return append([]evt.Signal{}, r.events...)
+}
+
 func (r *recordFrontend) statuses() []core.SwarmStatus {
 	r.mu.Lock()
 	defer r.mu.Unlock()
