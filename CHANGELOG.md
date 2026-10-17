@@ -1,4 +1,26 @@
 # Changelog
+## [3.2.5]: the queue outlives the turn that queued it
+
+An async delegate that answered `queued` was a worker on borrowed
+time. The hand-back ends its turn at once, the turn's context ends with
+it, and the cap's submission rode that context: when a running worker
+returned and freed a slot, the cap's `startNext` found the queued
+work's gate already dead and settled it — `delegate: worker #N stopped
+while queued`, seconds after each return, on every batch of a fan-out
+with more calls than slots. Fast models end turns in seconds, so nearly
+every queued worker died before it spawned; the 3.2.1 audit lost worker
+#4 the same way. The submission now takes the worker's own context as
+its gate — the one `StopAll` and the worker's own stop cancel, the same
+lifetime `swarm/drain.go` already submits under — while the awaited
+shape keeps the call's, since that call blocks on `Settled` and ends
+with its caller. Red first: fill the cap, queue an async delegate, end
+the turn that queued it, free the slot — the worker spawns and returns
+like any other (on the fix's parent it never spawned). The queued stop
+keeps its test: `StopAll` on a worker still in the queue settles it
+`stopped while queued`, never spawns it, and leaves the cap with no
+places in flight and no queues behind. The measured block is recomputed
+from the stores (61,054 turns) and the version test pins 3.2.5.
+
 ## [3.2.4]: the audit comes due, round two
 
 The 3.2.3 read-only audit's HIGH and MED findings, fixed red-first
