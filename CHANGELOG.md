@@ -5,22 +5,27 @@ A finished worker always hands back. The evidence was a deferred bash
 on 3.2.4: the run recorded done and ok, its log complete on disk, no
 worker process alive, and the parent never published a WorkerDone — the
 band sat at `delegating · 1 worker` long after. The block was the fleet
-pipe's tail: `DelegateStart`'s goroutine closed its write end and then
-waited for the reader's end-of-file before it handed the outcome to
-`Wait`, and end-of-file rides every writer of the pipe — the write end
-rides fd 3 bare, so a background job the worker's shell forked, or any
-descendant that inherited the descriptor, held it long after the worker
-exited, and the hand-back waited for it. The run's outcome is known the
-moment the process exits: the goroutine now hands it to `Wait` before
-touching the pipe, and the pipe's drain — the frames the worker already
-wrote, never more — waits out a tail the size of the spawn's own I/O
-bound (`spawnIOTail`, the bound `cmd.WaitDelay` already puts on I/O
-that outlives a process) before closing the transport, which wakes the
-reader. evt's pipe transport is untouched: its end-of-file is a true
-statement about the pipe; the bug was the hand-back waiting for it. Red
-first: a command worker whose shell forks a holder of fd 3 and exits 0
-— the return lands and the band clears while the holder still lives (on
-the fix's parent the return waited out the holder's life).
+pipe: the hand-back waited for the pipe's reader to see end-of-file,
+and end-of-file rides every writer of the pipe — a command worker
+carried a pipe bash cannot speak, and its shell's forks inherited fd 3
+bare, so a background job held the write end long after the worker
+exited and held the run's result with it. A command worker now carries
+no pipe at all (bash cannot speak the frames, so there was nothing for
+it to lose), and a model worker keeps the pipe and drains it fully
+before `Wait` returns: the worker marks fd 3 close-on-exec at startup —
+the python kernel starts on first use, after that mark — so no holder
+outlives it, and the ordering holds: the reviewer's verdict frame
+arrives before `Wait` returns, where the review's origin check never
+drops it (a hand-back that outran the drain made `speak` reset before
+the verdict landed, and the row stayed pending). evt's pipe transport
+is untouched: its end-of-file is a true statement about the pipe; the
+bug was the hand-back waiting for it, and then the hand-back outrunning
+it. Red first: a command worker whose shell forks a child and exits 0 —
+the return lands while the fork still lives, and the spawn context and
+env carry no fleet pipe for it; and a model worker whose last frame is
+a verdict, sent after the spawn returned — the frame arrives before
+`Wait` returns (on the broken parent the verdict landed after the
+hand-back, and the review's origin check dropped it).
 
 A queued worker runs once. The cap's `startNext` and the caller's own
 `Resolve` could both fire when a slot freed between `Submit` and the

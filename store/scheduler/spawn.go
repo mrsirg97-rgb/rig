@@ -61,8 +61,6 @@ func PromptFrom(ctx context.Context) (string, bool) {
 	return p, ok
 }
 
-const spawnIOTail = time.Second
-
 func RealSpawn(ctx context.Context, argv []string, cwd string, env []string, observe func([]byte)) (SpawnResult, error) {
 	if len(argv) == 0 {
 		return SpawnResult{}, errors.New("spawn: empty argv")
@@ -79,7 +77,7 @@ func RealSpawn(ctx context.Context, argv []string, cwd string, env []string, obs
 	}
 	cmd.Env = env
 	cmd.SysProcAttr = spawnSysProcAttr()
-	cmd.WaitDelay = spawnIOTail
+	cmd.WaitDelay = time.Second
 	cmd.Cancel = func() error {
 		if cmd.Process != nil {
 			return syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)

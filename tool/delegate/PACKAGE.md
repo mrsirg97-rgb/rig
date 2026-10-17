@@ -131,7 +131,8 @@ nothing scheduled) and a resumable transcript in the state store.
   worker exits, the turn's context not ruling the worker while the
   session's does, a queued worker starting when a slot frees after the
   turn that queued it ended, a command worker's return landing while a
-  holder of the pipe's write end still lives, `StopAll` ending every
+  fork of its shell still lives, a model worker's last frame arriving
+  before `Wait` returns, `StopAll` ending every
   worker, a failed worker's return naming its exit, the snapshot
   carrying each worker's last call), and over the real `RealSpawn` the
   idle interrupt killing
