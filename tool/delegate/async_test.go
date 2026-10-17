@@ -4,8 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"os"
+	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"testing"
 	"time"
 
@@ -439,6 +444,56 @@ func TestACommandWorkerHandsBackItsRun(t *testing.T) {
 	}
 	if done[0].Task != "echo hi" {
 		t.Fatalf("the return's task is the command's first line: %q", done[0].Task)
+	}
+}
+
+func TestACommandWorkerHandsBackOnceItsProcessExits(t *testing.T) {
+	h := newHarness(t, "/ws/sess")
+	tool, fe := h.asyncTool(t, fakeFetch(""), sched.RealSpawn)
+	pidPath := filepath.Join(t.TempDir(), "child.pid")
+	command := fmt.Sprintf("sleep 15 >/dev/null 2>&1 & echo $! > %s; exit 0", pidPath)
+	out, err := tool.Exec(context.Background(), marshalArgs(map[string]any{"command": command}))
+	if err != nil {
+		t.Fatalf("hand-back: %v", err)
+	}
+	if !strings.HasPrefix(out, "delegate: worker #1 started · run ") {
+		t.Fatalf("the hand-back is the started line: %q", out)
+	}
+	var holder int
+	waitUntil(t, "the fd-3 holder the shell forked", func() bool {
+		b, err := os.ReadFile(pidPath)
+		if err != nil {
+			return false
+		}
+		pid, err := strconv.Atoi(strings.TrimSpace(string(b)))
+		if err != nil {
+			return false
+		}
+		holder = pid
+		return syscall.Kill(pid, 0) == nil
+	})
+	t.Cleanup(func() { _ = syscall.Kill(holder, syscall.SIGKILL) })
+	waitUntil(t, "the run's log with its exit", func() bool {
+		matches, _ := filepath.Glob(filepath.Join(h.home, "runs", "*", "*.log"))
+		if len(matches) != 1 {
+			return false
+		}
+		b, err := os.ReadFile(matches[0])
+		return err == nil && strings.Contains(string(b), "exit=0")
+	})
+	done := waitForReturn(t, fe, 1)
+	if len(done) != 1 {
+		t.Fatalf("the hand-back is one return, got %d: %+v", len(done), done)
+	}
+	if done[0].Kind != core.KindCommand || done[0].Exit != 0 || done[0].RunID == "" {
+		t.Fatalf("the return is the command worker's: %+v", done[0])
+	}
+	waitUntil(t, "the band clear", func() bool {
+		ss := fe.statuses()
+		return len(ss) > 0 && len(ss[len(ss)-1].Workers) == 0
+	})
+	if syscall.Kill(holder, 0) != nil {
+		t.Fatal("the hand-back must land while the holder of the pipe's write end still lives")
 	}
 }
 

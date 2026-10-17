@@ -337,8 +337,8 @@ func DelegateStart(in DelegateInput) (Delegation, error) {
 		if cancel != nil {
 			cancel()
 		}
-		release()
 		done <- outcome
+		release()
 	}()
 
 	return Delegation{

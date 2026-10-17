@@ -7,6 +7,7 @@ import (
 	"os"
 	"strconv"
 	"syscall"
+	"time"
 
 	"github.com/mrsirg97-rgb/evt"
 	"github.com/mrsirg97-rgb/evt/broadcast"
@@ -160,6 +161,11 @@ func fleetEnv(p *fleetPipe) []string {
 
 func (p *fleetPipe) close() {
 	p.w.Close()
-	<-p.done
+	tail := time.NewTimer(spawnIOTail)
+	defer tail.Stop()
+	select {
+	case <-p.done:
+	case <-tail.C:
+	}
 	p.transport.Close()
 }
