@@ -1,4 +1,13 @@
 # Changelog
+## [3.2.7]: the measure catches the steer
+
+The 3.2.6 steer moved the tree after its freeze — the command worker's
+no-pipe change took more lines than the dropped tail bound returned —
+and the measured check refused the drift. The block is computed to be
+refused, not waved through: it is recomputed from the stores (61,400
+turns) and the tree (50,153 lines of Go, 85,395 of tests), and the
+version test pins 3.2.7.
+
 ## [3.2.6]: a finished worker always hands back, and a queued worker runs once
 
 A finished worker always hands back. The evidence was a deferred bash
