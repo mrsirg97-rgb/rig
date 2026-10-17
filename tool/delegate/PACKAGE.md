@@ -92,7 +92,14 @@ nothing scheduled) and a resumable transcript in the state store.
   `Submit` and its bookkeeping blocks at `claim` until the offer lands,
   so the work's `watch.Release()` never sees a missing submission and
   the cap's place releases exactly once. `StopAll`'s queued-stop rides
-  the same cell (a started submission no-ops on `Stop`).
+  the same cell (a started submission no-ops on `Stop`). The cap's
+  queue is gated by the worker's own context, not the call's, when the
+  hand-off is async (3.2.5): a call that answers `queued` ends its
+  turn at once, and a gate that dies with that turn settles the work
+  still sitting pending as `stopped while queued` — a death the worker
+  never earned and the model reads as a lost worker. The awaited shape
+  keeps the call's context, because that call blocks on `Settled` and
+  ends with its caller.
 - `band.go`: the swarm-band tracker — `workerState` and the
   receive/running/track/emit/snapshot surface — one file beside the door
   and the engine, the names and the behavior unchanged.
@@ -109,17 +116,18 @@ nothing scheduled) and a resumable transcript in the state store.
   per second with the exit's last frame always landing.
 - `delegate_test.go`, `turn_test.go`, `async_test.go`,
   `status_test.go`, `handrace_test.go`, `cap_test.go`: the failing-first
-  named cases over a fake `Spawn`
-  and `Fetch` (happy path, cwd refusal, busy refusal, the fan-out
-  overlap and the one-slot sequence, no-recursion, the cap), the
-  no-clock cases (no deadline on the spawn so a long worker returns,
-  `timeoutMs` refuses as an unknown field) and the hand-off cases (the
-  one-line hand-back before the worker exits, the turn's context not
-  ruling the worker while the session's does, `StopAll` ending every
-  worker, a failed worker's return naming its exit, the snapshot
-  carrying each worker's last call), and over the real `RealSpawn` the
-  idle interrupt killing the worker's whole process tree. `handrace_test`
-  parks the cap and the room's publishes to pin the interleaving: a
+  named cases over a fake `Spawn` and `Fetch` (happy path, cwd
+  refusal, busy refusal, the fan-out overlap and the one-slot
+  sequence, no-recursion, the cap), the no-clock cases (no deadline on
+  the spawn so a long worker returns, `timeoutMs` refuses as an unknown
+  field) and the hand-off cases (the one-line hand-back before the
+  worker exits, the turn's context not ruling the worker while the
+  session's does, a queued worker starting when a slot frees after the
+  turn that queued it ended, `StopAll` ending every worker, a failed
+  worker's return naming its exit, the snapshot carrying each worker's
+  last call), and over the real `RealSpawn` the idle interrupt killing
+  the worker's whole process tree. `handrace_test` parks the cap and
+  the room's publishes to pin the interleaving: a
   queued worker the cap starts before the caller's bookkeeping still
   claims its submission and releases its place exactly once.
   `cap_test` pins the rune-safe cut. Beside the

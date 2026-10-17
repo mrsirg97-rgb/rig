@@ -334,7 +334,11 @@ func (a *adapter) run(ctx context.Context, c delegateCall) (string, error) {
 			_, _ = a.settle(member, n, in, del)
 		}()
 	})
-	sub := a.Cap.Submit(ctx, work, rig.PriorityFleet)
+	gate := workerCtx
+	if a.Await {
+		gate = ctx
+	}
+	sub := a.Cap.Submit(gate, work, rig.PriorityFleet)
 	queued.offer(sub)
 	state := "running"
 	if !sub.Started() {
