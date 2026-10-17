@@ -366,6 +366,43 @@ func TestAQueuedWorkerStoppedBeforeItStartsReturnsAndNeverSpawns(t *testing.T) {
 	if !stopped {
 		t.Fatalf("the queued worker returns its stop: %+v", done)
 	}
+	waitUntil(t, "the cap empty of both places and queues", func() bool {
+		return h.cap.InFlight() == 0 && h.cap.Queued() == 0
+	})
+}
+
+func TestAQueuedWorkerOutlivesTheTurnThatQueuedIt(t *testing.T) {
+	h := newHarness(t, "/ws/sess")
+	h.cap = evt.NewCap(h.engine, 1)
+	release := make(chan struct{})
+	spawn := &fakeSpawn{result: sched.SpawnResult{Exit: 0, Stdout: "the queued answer"}, block: release}
+	tool, fe := h.asyncTool(t, fakeFetch(""), spawn.spawn)
+
+	if _, err := tool.Exec(context.Background(), runArgs("runs first")); err != nil {
+		t.Fatal(err)
+	}
+	turnCtx, endTurn := context.WithCancel(context.Background())
+	out, err := tool.Exec(turnCtx, runArgs("queued for a slot"))
+	if err != nil || !strings.Contains(out, "worker #2 queued") {
+		t.Fatalf("the second call queues: %q %v", out, err)
+	}
+	waitUntil(t, "the first worker's spawn", func() bool { return spawn.count() == 1 })
+
+	endTurn()
+	close(release)
+
+	done := waitForReturn(t, fe, 2)
+	if n := spawn.count(); n != 2 {
+		t.Fatalf("the queued worker starts when a slot frees: %d spawned", n)
+	}
+	for _, d := range done {
+		if d.Exit != 0 || !strings.Contains(d.Content, "the queued answer") {
+			t.Fatalf("the queued worker returns like any other: %+v", d)
+		}
+	}
+	waitUntil(t, "the cap empty of places and queues", func() bool {
+		return h.cap.InFlight() == 0 && h.cap.Queued() == 0
+	})
 }
 
 func TestACommandWorkerHandsBackItsRun(t *testing.T) {
