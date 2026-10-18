@@ -111,6 +111,31 @@ func TestTwoChipsThatShareANameSayWhich(t *testing.T) {
 	}
 }
 
+func TestTheBoardsPackageReadingYieldsToTheDiesOwnReport(t *testing.T) {
+	both := pickTemps([]chipTemps{
+		{name: "asusec", inputs: []tempInput{{"CPU Package", 73.0}}},
+		{name: "k10temp", inputs: []tempInput{{"Tctl", 70.6}}},
+		{name: "nvme0", inputs: []tempInput{{"Sensor 1", 59.9}}},
+	})
+	if len(both) != 2 {
+		t.Fatalf("the board reads the same die the CPU reports: %+v", both)
+	}
+	if both[0].Chip != "k10temp" || both[1].Chip != "nvme0" {
+		t.Fatalf("the die's own report survives: %+v", both)
+	}
+	alone := pickTemps([]chipTemps{{name: "asusec", inputs: []tempInput{{"CPU Package", 73.0}}}})
+	if len(alone) != 1 || alone[0].Chip != "asusec" {
+		t.Fatalf("a box with no die report still shows the board's: %+v", alone)
+	}
+	intel := pickTemps([]chipTemps{
+		{name: "asus", inputs: []tempInput{{"CPU Package", 71.0}}},
+		{name: "coretemp", inputs: []tempInput{{"Package id 0", 69.0}}},
+	})
+	if len(intel) != 1 || intel[0].Chip != "coretemp" {
+		t.Fatalf("the rule is the chip, not the board: %+v", intel)
+	}
+}
+
 func TestTheNvidiaCSV(t *testing.T) {
 	gpus := parseNvidiaCSV(`0, NVIDIA GeForce RTX 5090, 36, 38, 221.98, 29121, 32607
 1, NVIDIA GeForce RTX 3090, 9, 60, 149.19, 10997, 24576
@@ -133,6 +158,13 @@ func TestTheNvidiaCSV(t *testing.T) {
 	}
 	if n := len(parseNvidiaCSV("ERROR: Notification -- No devices were found.\n")); n != 0 {
 		t.Fatalf("a driver that answers an error renders no cards, got %d", n)
+	}
+	body, err := json.Marshal(gpus)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(body), `"pci_index":0`) {
+		t.Fatalf("the card's number is named for the enumeration it came from: %s", body)
 	}
 	var many strings.Builder
 	for i := 0; i < gpuRows+5; i++ {

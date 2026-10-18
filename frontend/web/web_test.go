@@ -1485,6 +1485,7 @@ func TestStaticAssets(t *testing.T) {
 			"parseTodo",
 			"parseScheduler",
 			"servedTable",
+			"pci_index",
 			"roomShown",
 			"fillTerm",
 			"progressBar",

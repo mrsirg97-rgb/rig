@@ -27,21 +27,45 @@ one band above the model cards; the package knows nothing of HTTP.
   samples, so `Report(nil)` carries a core count with no percent and
   byte totals with no rate. A first read after a page opens says
   nothing about speed rather than inventing a number from one point.
+- `NewSampler(read)` and `(*Sampler).Report(ctx)`: the stateful door the
+  dashboard holds. It keeps the previous sample behind its own mutex,
+  runs the read *outside* that lock — the lock covers the swap and the
+  fold, never the two-second `nvidia-smi` — and advances the held sample
+  only forward in time, so a read that arrives older answers no rate and
+  never becomes the window. A nil read is `Read` itself: a caller names a
+  source only to replace it.
 - The selection rules, all of them pure functions over parsed values:
   one temperature row per chip — its hottest *labelled* input, because a
   chip's several zones are one die's several corners and the hot one is
-  the news; one disk row per device, at its shortest mount point,
-  largest filesystem first, the filesystem allow-list refusing tmpfs
-  (RAM), overlay (one row per container), squashfs (a read-only core)
-  and the pseudo filesystems (the kernel's furniture); one link row per
-  interface that is not the loopback, not container plumbing (the
-  `veth`, `br-`, `docker`, `virbr`, `tap` prefixes), and has moved a
-  byte since boot, busiest first.
+  the news, and where the board's embedded controller reads the same
+  package the CPU reports itself (`asusec`/`asus` beside
+  `k10temp`/`coretemp`) the CPU's own word survives and the board's
+  yields, so the band's rows say different things; one disk row per
+  device, at its shortest mount point, largest filesystem first, the
+  filesystem allow-list refusing tmpfs (RAM), overlay (one row per
+  container), squashfs (a read-only core) and the pseudo filesystems (the
+  kernel's furniture); one link row per interface that is not the
+  loopback, not container plumbing (the `veth`, `br-`, `docker`, `virbr`,
+  `tap` prefixes), and has moved a byte since boot, busiest first.
+- The parsers state their own arithmetic: `/proc/uptime`'s first field and
+  `/proc/loadavg`'s first three fields are the seconds and the averages;
+  the RAM row needs *both* `MemTotal` and `MemAvailable`, an available
+  share read against a total the kernel did not state being a guess; the
+  busy share is the aggregate `cpu` line's idle share crossing between
+  samples over its first eight columns — the guest columns left out
+  because the kernel counts guest time inside user — and is refused for a
+  counter that fell, a window no jiffies crossed, or an idle share larger
+  than the window. hwmon inputs are millidegrees Celsius, and a chip that
+  labels none of its sensors renders no row.
 - `parseNvidiaCSV`: one row per card from
   `nvidia-smi --query-gpu=<index,name,utilization.gpu,temperature.gpu,
   power.draw,memory.used,memory.total> --format=csv,noheader,nounits`. A
   field the card refuses — the `[N/A]` of a power draw it cannot sense —
   is absent, never zero; the driver's own error line is no rows at all.
+  The number is nvidia-smi's own, which counts by PCI bus while CUDA
+  counts fastest-first, so the wire key is `pci_index` and the band's row
+  says `pci0` and never a bare index: an operator reading the wrong card
+  is the bug.
 
 ## The caps and their derivations
 
@@ -60,11 +84,12 @@ one band above the model cards; the package knows nothing of HTTP.
 
 ## How it is consumed
 
-- `frontend/web`'s `handleRoom` samples on every `/api/room` read and
-  holds the last `*Sample` behind its own mutex, answering each report's
-  rates against it. The page's poll is the only clock: a closed page
-  samples nothing, which is what SPEC_ROOM asks for. Nothing in the
-  package starts a timer, a goroutine, or a cache.
+- `frontend/web`'s `handleRoom` samples on every `/api/room` read through
+  one `*stats.Sampler` the server is built with, so two open pages answer
+  their own windows and never serialize behind each other's subprocess.
+  The page's poll is the only clock: a closed page samples nothing, which
+  is what SPEC_ROOM asks for. Nothing in the package starts a timer, a
+  goroutine, or a cache.
 
 ## Gotchas
 

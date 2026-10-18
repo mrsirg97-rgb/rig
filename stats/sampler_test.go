@@ -7,8 +7,6 @@ import (
 	"time"
 )
 
-// vitals builds one scripted sample: its clock is the uptime, so a pair of
-// samples states the window between them.
 func vitals(at, total, idle, rx uint64) *Sample {
 	load := [3]float64{1, 2, 3}
 	return &Sample{
@@ -51,6 +49,66 @@ func TestTheFirstReadAnswersNoRateAndTheSecondDoes(t *testing.T) {
 	f64(t, second.Links[0].TxRate, 250)
 }
 
+func TestASampleOlderThanTheHeldOneNeverBecomesTheWindow(t *testing.T) {
+	s := script(t,
+		vitals(102, 200, 100, 2000),
+		vitals(100, 100, 50, 1000),
+		vitals(104, 300, 150, 3000))
+	s.Report(context.Background())
+	stale := s.Report(context.Background())
+	if stale.CPU.Percent != nil {
+		t.Fatalf("an older read answers no busy share: %v", *stale.CPU.Percent)
+	}
+	if stale.Links[0].RxRate != nil {
+		t.Fatalf("an older read answers no rate: %v", *stale.Links[0].RxRate)
+	}
+	fresh := s.Report(context.Background())
+	f64(t, fresh.CPU.Percent, 50)
+	f64(t, fresh.Links[0].RxRate, 500)
+}
+
+func TestAReadPricedAtOneSecondAnswersTheRatesOfItsOwnWindow(t *testing.T) {
+	now := time.Now()
+	cur := vitals(100, 100, 50, 1000)
+	cur.at = now
+	old := vitals(98, 100, 50, 1000)
+	old.at = now.Add(-time.Second)
+	r := cur.Report(old)
+	f64(t, r.Links[0].RxRate, 0)
+	if r.CPU.Percent != nil {
+		t.Fatalf("no jiffies crossed answers no share: %v", *r.CPU.Percent)
+	}
+}
+
+func TestASecondReaderDoesNotWaitForTheFirstsSubprocess(t *testing.T) {
+	var mu sync.Mutex
+	calls := 0
+	inside := make(chan struct{})
+	blocked := make(chan struct{})
+	s := NewSampler(func(context.Context) *Sample {
+		mu.Lock()
+		calls++
+		first := calls == 1
+		mu.Unlock()
+		if first {
+			close(inside)
+			<-blocked
+		} else {
+			close(blocked)
+		}
+		return vitals(100, 100, 50, 1000)
+	})
+	go func() { s.Report(context.Background()) }()
+	<-inside
+	returned := make(chan Report, 1)
+	go func() { returned <- s.Report(context.Background()) }()
+	select {
+	case <-returned:
+	case <-time.After(2 * time.Second):
+		t.Fatal("a reader waited on another reader's subprocess: the lock is held across the read")
+	}
+}
+
 func TestAReusedSamplerAnswersEveryRead(t *testing.T) {
 	s := script(t, vitals(100, 100, 50, 1000), vitals(102, 200, 100, 2000))
 	for i := 0; i < 3; i++ {
@@ -84,6 +142,9 @@ func TestARacedSamplerPairsConsecutiveSamples(t *testing.T) {
 				}
 				if p := r.CPU.Percent; p != nil && (*p < 0 || *p > 100) {
 					t.Errorf("the busy share is a share: %v", *p)
+				}
+				if l := r.Links[0].RxRate; l != nil && *l < 0 {
+					t.Errorf("a rate against the held sample never runs negative: %v", *l)
 				}
 			}
 		}()

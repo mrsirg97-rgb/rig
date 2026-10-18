@@ -207,10 +207,16 @@ the Apple meta tags, safe-area insets).
   machine: the session line (the TUI's own band, mapped once at the root
   and rendered a third time) and `stats.Report`'s vitals — the load, the
   CPU's busy share, the RAM, the cards, the chips, the filesystems, the
-  links — as monospace rows coloured only by heat (`HOT_WARN`,
-  `HOT_ERR`). The sampler is `stats.NewSampler(stats.Read)`, held by the
-  server and read once per `/api/room`, so the page's poll is its clock
-  and a closed page samples nothing; the first read carries no rates.
+  links — as monospace rows coloured only by heat: `HOT_WARN` 80° and
+  `HOT_ERR` 95°, where a package's fan is loud and where it is at its
+  ceiling, because a card at 98% of its VRAM is a *loaded* card and that
+  number speaks without a colour. A card row leads with its model and
+  names its enumeration (`pci0`), since nvidia-smi counts by PCI bus and
+  CUDA counts fastest-first. The sampler is `stats.NewSampler(stats.Read)`,
+  held by the server and read once per `/api/room`, so the page's poll is
+  its clock and a closed page samples nothing; the first read carries no
+  rates, and the read runs outside the sampler's lock so two open pages
+  do not queue behind one `nvidia-smi`.
   The room is the landing view and the first tab on both navs, and a
   browser opens on the view it last showed (`rig.serve.view`, remembered
   beside the theme and the workspace; a dashboard with no memory opens

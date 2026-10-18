@@ -16,9 +16,6 @@ const (
 	linksRoot = "/sys/class/net"
 )
 
-// walk reads the box's sources once. Every read is best effort by rule: the
-// source that is not there renders no row, so a box missing half of them
-// still answers with the half it has.
 func walk(ctx context.Context, s *Sample) {
 	if text, err := os.ReadFile("/proc/uptime"); err == nil {
 		s.uptime, _ = parseUptime(string(text))
@@ -40,8 +37,6 @@ func walk(ctx context.Context, s *Sample) {
 	s.gpus = readGPUs(ctx)
 }
 
-// readTemps walks the hwmon tree: one chip per directory, named by its own
-// name file.
 func readTemps(root string) []Temp {
 	dirs, err := os.ReadDir(root)
 	if err != nil {
@@ -63,8 +58,6 @@ func readTemps(root string) []Temp {
 	return pickTemps(chips)
 }
 
-// deviceBase names the sysfs device a chip sits under — "nvme0" for a drive's
-// hwmon — or nothing when the chip states no device link.
 func deviceBase(dir string) string {
 	target, err := filepath.EvalSymlinks(filepath.Join(dir, "device"))
 	if err != nil {
@@ -73,9 +66,6 @@ func deviceBase(dir string) string {
 	return filepath.Base(target)
 }
 
-// hwmonSensors reads one chip's labelled sensors: a tempN_label and its
-// tempN_input, the latter in millidegrees Celsius. A sensor the chip does not
-// label says nothing an operator would read.
 func hwmonSensors(dir string) []tempInput {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
@@ -104,8 +94,6 @@ func hwmonSensors(dir string) []tempInput {
 	return inputs
 }
 
-// readLinks walks /sys/class/net, reading each interface's byte counters. An
-// interface with no statistics directory is not a link the kernel counts.
 func readLinks(root string) []linkCounters {
 	dirs, err := os.ReadDir(root)
 	if err != nil {
@@ -135,7 +123,6 @@ func readCounter(path string) (uint64, bool) {
 	return n, true
 }
 
-// readDisks asks the kernel for the real filesystems' blocks.
 func readDisks() []Disk {
 	text, err := os.ReadFile("/proc/mounts")
 	if err != nil {

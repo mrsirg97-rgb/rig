@@ -11,8 +11,6 @@ const VIEWS_KEY = 'rig.serve.view';
 const DEFAULT_VIEW = 'room';
 const KNOWN_VIEWS = ['room', 'chat', 'sessions', 'todos', 'scheduler', 'swarm', 'plugins', 'models', 'update', 'more'];
 
-// rememberedView is the view this browser last showed; a dashboard with no
-// memory shows the machine.
 function rememberedView() {
   let v;
   try { v = localStorage.getItem(VIEWS_KEY); } catch (_) {}
@@ -1449,11 +1447,6 @@ function fillRoomModel(parts, m) {
   fillTerm(parts.log, logText(m.tail || []));
 }
 
-// HOT_WARN and HOT_ERR are the temperatures an operator acts on: 95 is where
-// an AMD package is at its ceiling and starting to throttle, and 80 is where
-// the fan is loud and the clocks sag. The band colours heat only: a card at
-// 98% of its VRAM is a loaded card, which is the point of the box, so that
-// number speaks without a warning colour.
 const HOT_WARN = 80;
 const HOT_ERR = 95;
 
@@ -1479,7 +1472,6 @@ function gibOf(kib) {
   return gib >= 10 ? gib.toFixed(0) : gib.toFixed(1);
 }
 
-// sizeOf counts in the kernel's blocks; byteRateText in a network's decades.
 function sizeOf(n) {
   const units = ['B', 'K', 'M', 'G', 'T', 'P'];
   let i = 0, v = n;
@@ -1495,9 +1487,6 @@ function byteRateText(bps) {
   return Math.round(bps) + ' B/s';
 }
 
-// machineLines is the band the machine speaks in: one monospace row per
-// source it states. A source the box has no row for renders nothing, and the
-// room page says so once rather than leaving a blank box.
 function machineLines(st) {
   const pad = (text, width) => String(text).padEnd(width);
   const rows = [];
@@ -1518,8 +1507,9 @@ function machineLines(st) {
   for (const g of st.gpus || []) {
     const name = (g.name || 'card').replace(/^NVIDIA GeForce /, '');
     const cols = [
-      'gpu' + g.index,
-      pad(name, 12),
+      'card ',
+      pad(name, 13),
+      pad('pci' + g.pci_index, 7),
       pad(g.util == null ? '-' : Math.round(g.util) + '%', 5),
       pad(g.temp == null ? '-' : Math.round(g.temp) + '°', 5),
       pad(g.power_w == null ? '-' : Math.round(g.power_w) + 'W', 6),
@@ -1530,14 +1520,14 @@ function machineLines(st) {
     rows.push({ text: cols.join(' '), cls });
   }
   for (const t of st.temps || []) {
-    rows.push({ text: 'temp  ' + pad(t.chip, 12) + pad(t.label, 15) + t.c.toFixed(1) + '°', cls: heatClass(t.c) });
+    rows.push({ text: 'temp  ' + pad(t.chip, 15) + pad(t.label, 16) + t.c.toFixed(1) + '°', cls: heatClass(t.c) });
   }
   for (const d of st.disks || []) {
     const pct = share(d.used_bytes, d.total_bytes);
-    rows.push({ text: 'disk  ' + pad(d.path, 16) + pct + '% of ' + sizeOf(d.total_bytes), cls: pct >= 90 ? 'warn' : 'dim' });
+    rows.push({ text: 'disk  ' + pad(d.path, 18) + pct + '% of ' + sizeOf(d.total_bytes), cls: pct >= 90 ? 'warn' : 'dim' });
   }
   for (const l of st.links || []) {
-    rows.push({ text: 'net   ' + pad(l.iface, 12) + '↓' + byteRateText(l.rx_rate) + ' ↑' + byteRateText(l.tx_rate) + '  ' + sizeOf(l.rx_bytes) + ' in', cls: 'dim' });
+    rows.push({ text: 'net   ' + pad(l.iface, 13) + '↓' + byteRateText(l.rx_rate) + ' ↑' + byteRateText(l.tx_rate) + '  ' + sizeOf(l.rx_bytes) + ' in', cls: 'dim' });
   }
   return rows;
 }
@@ -1555,8 +1545,6 @@ function fillMachine(pre, st) {
   }
 }
 
-// paintSession is the TUI's band rendered a third time: the room page answers
-// "what is rig doing right now" without opening the chat.
 function paintSession() {
   if (!roomSession) return;
   roomSession.innerHTML = '';

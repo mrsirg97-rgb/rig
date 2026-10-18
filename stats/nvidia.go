@@ -5,8 +5,6 @@ import (
 	"os/exec"
 )
 
-// readGPUs asks nvidia-smi. A box with no binary, no driver, or a driver
-// busy past gpuTimeout answers no cards.
 func readGPUs(ctx context.Context) []GPU {
 	cctx, cancel := context.WithTimeout(ctx, gpuTimeout)
 	defer cancel()
