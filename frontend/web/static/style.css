@@ -176,6 +176,10 @@ pre.verbatim { margin: 0; white-space: pre-wrap; word-break: break-word; color: 
 .termlabel { color: var(--dim); margin: 8px 0 2px; }
 pre.term { margin: 0; padding: 8px 10px; background: var(--bg2); border: 1px solid var(--rule); border-radius: 4px; font-family: var(--mono); color: var(--text); white-space: pre; overflow: auto; }
 pre.term.log { max-height: 45vh; color: var(--reasoning); }
+pre.term.machine { margin: 0 0 10px; }
+.sessionline { color: var(--dim); }
+.sessionline .k { color: var(--ember); }
+.sessionline .v { color: var(--text); }
 
 .prompt { display: flex; align-items: flex-start; gap: 8px; margin: 8px 0 0; }
 .prompt .mark { color: var(--ember); padding-top: 3px; flex-shrink: 0; }

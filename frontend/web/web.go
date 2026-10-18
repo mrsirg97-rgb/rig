@@ -14,6 +14,7 @@ import (
 	"github.com/mrsirg97-rgb/rig/v3/core"
 	"github.com/mrsirg97-rgb/rig/v3/models"
 	"github.com/mrsirg97-rgb/rig/v3/room"
+	"github.com/mrsirg97-rgb/rig/v3/stats"
 	sched "github.com/mrsirg97-rgb/rig/v3/store/scheduler"
 )
 
@@ -70,6 +71,7 @@ type Server struct {
 	tailnet string
 	version string
 	ready   func(ctx context.Context, m models.Model) error
+	vitals  *stats.Sampler
 }
 
 func New(opts Options) (*Server, error) {
@@ -118,6 +120,7 @@ func New(opts Options) (*Server, error) {
 		tailnet:   opts.Tailnet,
 		ready:     opts.Ready,
 		version:   opts.Version,
+		vitals:    stats.NewSampler(stats.Read),
 	}, nil
 }
 

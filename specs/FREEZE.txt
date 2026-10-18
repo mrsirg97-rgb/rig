@@ -74,6 +74,9 @@ imagemarker/
 decision/
 room/
 
+# the machine's vitals, read from the world (3.3.0, SPEC_ROOM's system stats)
+stats/
+
 # the frozen surface itself: open to pure addition only (SPEC_CORE)
 core/
 

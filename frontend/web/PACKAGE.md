@@ -203,13 +203,25 @@ the Apple meta tags, safe-area insets).
   on (the rest are one line), the requests as a fixed-column table
   (`SERVED_COLS`) and the log in a scrolling box that keeps its newest
   line in view, and fills them in place; `tail` reads the file's last
-  64 KB, never the whole of it. The
+  64 KB, never the whole of it. Since 3.3.0 the page leads with the
+  machine: the session line (the TUI's own band, mapped once at the root
+  and rendered a third time) and `stats.Report`'s vitals — the load, the
+  CPU's busy share, the RAM, the cards, the chips, the filesystems, the
+  links — as monospace rows coloured only by heat (`HOT_WARN`,
+  `HOT_ERR`). The sampler is `stats.NewSampler(stats.Read)`, held by the
+  server and read once per `/api/room`, so the page's poll is its clock
+  and a closed page samples nothing; the first read carries no rates.
+  The room is the landing view and the first tab on both navs, and a
+  browser opens on the view it last showed (`rig.serve.view`, remembered
+  beside the theme and the workspace; a dashboard with no memory opens
+  the room). The
   models page carries the residency beside the row. The scheduler page
   reads `sched.ListOpen`: active and paused jobs, with the count of
-  finished one-off runs it leaves out. On the phone the room, models,
-  plugins and update pages open from the more menu (`MORE_VIEWS`, one
-  list; 3.0.3), and every static file is sent `no-store`. The update page
-  shows the build's version and runs `rig -update`, which drains the
+  finished one-off runs it leaves out. On the phone the bar is room,
+  chat, sessions, todo, jobs, more, and the swarm, models, plugins and
+  update pages open from the more menu (`MORE_VIEWS`, one list; 3.0.3,
+  reordered 3.3.0), and every static file is sent `no-store`. The update
+  page shows the build's version and runs `rig -update`, which drains the
   room first.
 - The wire front (`wire.go`) answers `/v1/chat/completions`,
   `/v1/models` (the rows' aliases), `/running` and `/unload` on

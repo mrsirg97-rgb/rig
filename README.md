@@ -200,10 +200,11 @@ process routes: llama-swap left the stack at 3.0.0 and nothing took its
 place. A claim that finds the port silent starts the row's child and
 waits for it, one child at a time, and `settings.json`'s `mesh` extends
 one room to many machines, their orders ordered by the clocks they agree
-on. Its face is the dashboard's room page — the members, who holds which
-model, who waits, whether the port answers, and the log's tail; there is
-no slash command for it. `specs/SPEC_ROOM.md` is the design and
-`docs/DESIGN.md` the summary.
+on. Its face is the dashboard's room page — the machine's vitals, the
+members, who holds which model, who waits, whether the port answers, the
+served requests and the log's tail — and the page the dashboard opens
+on; there is no slash command for it. `specs/SPEC_ROOM.md` is the design
+and `docs/DESIGN.md` the summary.
 
 **a worker does, the session decides.** The verbs that judge or delete
 shared state belong to the session that owns the state. A delegated
@@ -232,7 +233,7 @@ the core is frozen.
 <!-- measured:begin (scripts/readme-measured; do not hand-edit) -->
 Numbers, not adjectives — and each one names its mechanism. The block is computed: `scripts/readme-measured` reads the stores and the tree, CI refuses drift, so it cannot go stale on you. One SQL read of the state store: the store is the receipt.
 
-**98.2% of 6.9 billion prompt tokens served from cache**, across 2,995 sessions and 61,400 recorded turns — the earliest on v0.2.0. The ratio is `cache_read / prompt`, the arithmetic `sessions summary` runs; the byte-stable prefix is why the provider can reuse so much of it. Cost per turn, era by era:
+**98.2% of 7.0 billion prompt tokens served from cache**, across 3,030 sessions and 62,065 recorded turns — the earliest on v0.2.0. The ratio is `cache_read / prompt`, the arithmetic `sessions summary` runs; the byte-stable prefix is why the provider can reuse so much of it. Cost per turn, era by era:
 
 | era | turns | new tokens / turn | completion / turn | cache |
 |---------|--------|------|------|--------|
@@ -246,7 +247,7 @@ The 2.1.x consolidation rethought the system prompt and the toolset and kept the
 
 **A few thousand bytes of preamble.** The system prompt and the tool schemas are lean, byte-stable, and carefully chosen, and the tests say so: `TestSystemPromptIsByteStableAcrossBuilds`, `TestWireMarshalingIsDeterministic`, `TestWireMessagesAreAppendOnly`. A stray timestamp cannot quietly kill the cache.
 
-**448 lines is the loop** — `loop.go` plus `batch.go`, stdlib only. **680 lines is the whole swarm** — claim, spawn, complete, verdict, reap, and the status throttle. **50,153 lines of Go, 85,395 of tests.** The one store dependency is pure-Go SQLite.
+**448 lines is the loop** — `loop.go` plus `batch.go`, stdlib only. **680 lines is the whole swarm** — claim, spawn, complete, verdict, reap, and the status throttle. **50,936 lines of Go, 85,898 of tests.** The one store dependency is pure-Go SQLite.
 
 <!-- measured:end -->
 
@@ -376,6 +377,7 @@ middleware/ policy/  the tool chain and the context/provider decorators,
              including the operator link a delegated worker carries
 frontend       four frontends: tui, cli, oneshot (the -p worker), web
 room/ swarm/   the machine's room (SPEC_ROOM) and the drain controller
+stats/         the machine's vitals, read from /proc, /sys and nvidia-smi
 decision/ plugins/  the decision seam (SPEC_DECISION) and the python zones
 config/ models/ pathguard/ imagemarker/  the four-layer knobs, the model
              table, and the two stdlib leaves the tools and the wires share

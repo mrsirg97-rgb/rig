@@ -7,7 +7,21 @@ const cwdAdd = document.getElementById('cwd-add');
 const browseBtn = document.getElementById('browse-btn');
 const browser = document.getElementById('browser');
 
-const state = { view: 'chat', cwd: '', transcript: null, pluginZone: 'approved', status: null, live: false };
+const VIEWS_KEY = 'rig.serve.view';
+const DEFAULT_VIEW = 'room';
+const KNOWN_VIEWS = ['room', 'chat', 'sessions', 'todos', 'scheduler', 'swarm', 'plugins', 'models', 'update', 'more'];
+
+// rememberedView is the view this browser last showed; a dashboard with no
+// memory shows the machine.
+function rememberedView() {
+  let v;
+  try { v = localStorage.getItem(VIEWS_KEY); } catch (_) {}
+  return KNOWN_VIEWS.indexOf(v) >= 0 ? v : DEFAULT_VIEW;
+}
+
+let roomSession = null;
+
+const state = { view: rememberedView(), cwd: '', transcript: null, pluginZone: 'approved', status: null, live: false };
 
 const G = {
   pending: '○', active: '◐', done: '●', fail: '✕', ok: '✓', review: '⧗',
@@ -70,7 +84,7 @@ function el(tag, cls, text) {
 function span(text, cls) { return el('span', cls, text); }
 function line(cls) { return el('div', 'line' + (cls ? ' ' + cls : '')); }
 function note(text, cls) { return el('p', cls, text); }
-function clear() { main.innerHTML = ''; main.classList.remove('chat', 'more'); }
+function clear() { main.innerHTML = ''; main.classList.remove('chat', 'more'); roomSession = null; }
 
 function renderError(msg) {
   clear();
@@ -592,6 +606,7 @@ function paintStatus() {
   };
   paint(sideStatus, null);
   if (chat.statusline) paint(chat.statusline, ' ' + G.dot + ' ');
+  paintSession();
 }
 
 async function refreshStatus() {
@@ -1434,14 +1449,142 @@ function fillRoomModel(parts, m) {
   fillTerm(parts.log, logText(m.tail || []));
 }
 
+// HOT_WARN and HOT_ERR are the temperatures an operator acts on: 95 is where
+// an AMD package is at its ceiling and starting to throttle, and 80 is where
+// the fan is loud and the clocks sag. The band colours heat only: a card at
+// 98% of its VRAM is a loaded card, which is the point of the box, so that
+// number speaks without a warning colour.
+const HOT_WARN = 80;
+const HOT_ERR = 95;
+
+function heatClass(c) {
+  if (c >= HOT_ERR) return 'err';
+  if (c >= HOT_WARN) return 'warn';
+  return 'dim';
+}
+
+function share(part, whole) {
+  return whole > 0 ? Math.round(100 * part / whole) : 0;
+}
+
+function upFor(secs) {
+  const d = Math.floor(secs / 86400), h = Math.floor((secs % 86400) / 3600), m = Math.floor((secs % 3600) / 60);
+  if (d) return d + 'd ' + h + 'h';
+  if (h) return h + 'h ' + m + 'm';
+  return m + 'm';
+}
+
+function gibOf(kib) {
+  const gib = kib / 1048576;
+  return gib >= 10 ? gib.toFixed(0) : gib.toFixed(1);
+}
+
+// sizeOf counts in the kernel's blocks; byteRateText in a network's decades.
+function sizeOf(n) {
+  const units = ['B', 'K', 'M', 'G', 'T', 'P'];
+  let i = 0, v = n;
+  while (v >= 1024 && i < units.length - 1) { v /= 1024; i++; }
+  return (v >= 10 || i === 0 ? Math.round(v) : v.toFixed(1)) + units[i];
+}
+
+function byteRateText(bps) {
+  if (bps == null) return '-';
+  if (bps >= 1e9) return (bps / 1e9).toFixed(1) + ' GB/s';
+  if (bps >= 1e6) return (bps / 1e6).toFixed(1) + ' MB/s';
+  if (bps >= 1e3) return (bps / 1e3).toFixed(1) + ' kB/s';
+  return Math.round(bps) + ' B/s';
+}
+
+// machineLines is the band the machine speaks in: one monospace row per
+// source it states. A source the box has no row for renders nothing, and the
+// room page says so once rather than leaving a blank box.
+function machineLines(st) {
+  const pad = (text, width) => String(text).padEnd(width);
+  const rows = [];
+  const head = [];
+  if (st.uptime_s) head.push('up ' + upFor(st.uptime_s));
+  if (st.load && st.load.length) head.push('load ' + st.load.map((x) => x.toFixed(2)).join(' '));
+  if (st.cpu) {
+    head.push(st.cpu.percent == null ? 'cpu -' : 'cpu ' + st.cpu.percent.toFixed(1) + '% of ' + st.cpu.cores + 'c');
+  }
+  if (head.length) {
+    rows.push({ text: head.join(' ' + G.dot + ' '), cls: st.cpu && st.cpu.percent > 90 ? 'warn' : 'dim' });
+  }
+  if (st.memory && st.memory.total_kib) {
+    const used = st.memory.total_kib - st.memory.available_kib;
+    const pct = share(used, st.memory.total_kib);
+    rows.push({ text: 'ram   ' + pad(gibOf(used) + '/' + gibOf(st.memory.total_kib), 8) + ' GiB (' + pct + '%)', cls: pct >= 90 ? 'warn' : 'dim' });
+  }
+  for (const g of st.gpus || []) {
+    const name = (g.name || 'card').replace(/^NVIDIA GeForce /, '');
+    const cols = [
+      'gpu' + g.index,
+      pad(name, 12),
+      pad(g.util == null ? '-' : Math.round(g.util) + '%', 5),
+      pad(g.temp == null ? '-' : Math.round(g.temp) + '°', 5),
+      pad(g.power_w == null ? '-' : Math.round(g.power_w) + 'W', 6),
+      (g.mem_used_mib == null || g.mem_total_mib == null) ? '-' :
+        (g.mem_used_mib / 1024).toFixed(1) + '/' + (g.mem_total_mib / 1024).toFixed(1) + 'G',
+    ];
+    let cls = heatClass(g.temp == null ? 0 : g.temp);
+    rows.push({ text: cols.join(' '), cls });
+  }
+  for (const t of st.temps || []) {
+    rows.push({ text: 'temp  ' + pad(t.chip, 12) + pad(t.label, 15) + t.c.toFixed(1) + '°', cls: heatClass(t.c) });
+  }
+  for (const d of st.disks || []) {
+    const pct = share(d.used_bytes, d.total_bytes);
+    rows.push({ text: 'disk  ' + pad(d.path, 16) + pct + '% of ' + sizeOf(d.total_bytes), cls: pct >= 90 ? 'warn' : 'dim' });
+  }
+  for (const l of st.links || []) {
+    rows.push({ text: 'net   ' + pad(l.iface, 12) + '↓' + byteRateText(l.rx_rate) + ' ↑' + byteRateText(l.tx_rate) + '  ' + sizeOf(l.rx_bytes) + ' in', cls: 'dim' });
+  }
+  return rows;
+}
+
+function fillMachine(pre, st) {
+  pre.innerHTML = '';
+  const rows = machineLines(st);
+  if (!rows.length) {
+    pre.appendChild(span('the box states no vitals', 'dim'));
+    return;
+  }
+  for (const r of rows) {
+    pre.appendChild(span(r.text, r.cls));
+    pre.appendChild(document.createTextNode('\n'));
+  }
+}
+
+// paintSession is the TUI's band rendered a third time: the room page answers
+// "what is rig doing right now" without opening the chat.
+function paintSession() {
+  if (!roomSession) return;
+  roomSession.innerHTML = '';
+  roomSession.appendChild(span(G.prompt + ' ' + (state.live ? 'live' : 'idle'), state.live ? 'live' : 'dim'));
+  for (const [k, v] of fmtStatus(state.status)) {
+    roomSession.appendChild(span(' ' + G.dot + ' ', 'dim'));
+    roomSession.appendChild(span(k + ' ', 'k'));
+    roomSession.appendChild(span(v, 'v'));
+  }
+}
+
 function paintRoom(data) {
   clear();
-  const tb = toolBlock('room', 'members');
+  const tb = toolBlock('room', 'the machine, its members, its models');
   main.appendChild(tb.el);
-  const members = data.members || [];
   const models = data.models || {};
   const shown = roomShown(models);
-  const parts = { members: line('dim'), rest: line('dim'), models: {}, shown: shown.join(' ') };
+  const parts = {
+    session: line('sessionline'),
+    machine: el('pre', 'term machine'),
+    members: line('dim'),
+    rest: line('dim'),
+    models: {},
+    shown: shown.join(' '),
+  };
+  roomSession = parts.session;
+  tb.body.appendChild(parts.session);
+  tb.body.appendChild(parts.machine);
   tb.body.appendChild(parts.members);
   for (const id of shown) {
     const box = el('div', 'roommodel');
@@ -1461,6 +1604,8 @@ function paintRoom(data) {
     parts.models[id] = p;
   }
   tb.body.appendChild(parts.rest);
+  fillMachine(parts.machine, data.stats || {});
+  paintSession();
   fillRoom(parts, data);
   for (const id of shown) parts.models[id].log.scrollTop = parts.models[id].log.scrollHeight;
   return parts;
@@ -1469,6 +1614,7 @@ function paintRoom(data) {
 function fillRoom(parts, data) {
   const members = data.members || [];
   const models = data.models || {};
+  fillMachine(parts.machine, data.stats || {});
   parts.members.textContent = members.length ? members.length + ' other member(s) in the room' : 'no other members live; this rig is a room of one';
   for (const id of Object.keys(parts.models)) fillRoomModel(parts.models[id], models[id]);
   const rest = Object.keys(models).filter((id) => !parts.models[id]);
@@ -1486,6 +1632,7 @@ async function renderRoom() {
     }
     if (document.hidden) return;
     try {
+      refreshStatus();
       const data = await api('/api/room');
       if (state.view !== 'room') return;
       if (roomShown(data.models || {}).join(' ') === parts.shown) fillRoom(parts, data);
@@ -1756,7 +1903,7 @@ async function openForge(host, name, zone) {
 }
 
 const MORE_VIEWS = [
-  ['room', 'room ' + G.dot + ' members, served requests, the models\' logs'],
+  ['swarm', 'swarm ' + G.dot + ' the fleet'],
   ['models', 'models ' + G.dot + ' switch, effort'],
   ['plugins', 'plugins ' + G.dot + ' the forge'],
   ['update', 'update ' + G.dot + ' this build, rig -update'],
@@ -1920,6 +2067,7 @@ browseBtn.addEventListener('click', () => setBrowser(browser.hidden));
 function setView(v) {
   if (state.view === 'chat' && v !== 'chat') leaveChat();
   state.view = v;
+  try { localStorage.setItem(VIEWS_KEY, v); } catch (_) {}
   state.transcript = null;
   for (const x of nav.querySelectorAll('button')) x.classList.toggle('active', x.dataset.view === v);
   for (const x of tabs.querySelectorAll('button')) x.classList.toggle('active', x.dataset.view === v || (v !== 'chat' && x.dataset.view === 'more' && MORE_VIEWS.some(([name]) => name === v)));
