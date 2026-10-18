@@ -33,6 +33,37 @@ jobs:
           RIG_LOOP_LINES=$(cat loop/loop.go loop/batch.go | wc -l | tr -d ' ')
           echo "RIG_COMMITS=$RIG_COMMITS RIG_LOOP_LINES=$RIG_LOOP_LINES"
           sed -i "s/{{RIG_COMMITS}}/$RIG_COMMITS/g; s/{{RIG_LOOP_LINES}}/$RIG_LOOP_LINES/g" dist/index.html
+          python3 - <<'PY'
+          import json
+          d = json.load(open("docs/measured.json"))
+          rows = "".join(
+              '      <div class="row" role="listitem"><span class="os">{era}</span>'
+              '<p class="what">{turns:,} turns · {new:,} new tokens a turn · '
+              '{out} out · {cache:.2f}% cache</p></div>\n'.format(
+                  era=e["era"].replace("-", "\u2013"), turns=e["turns"],
+                  new=e["new_per_turn"], out=e["completion_per_turn"],
+                  cache=e["cache_pct"])
+              for e in d["eras"])
+          subs = {
+              "{{RIG_TOKENS}}": "{:.1f}".format(d["prompt"] / 1e9),
+              "{{RIG_CACHE_PCT}}": "{:.1f}".format(100.0 * d["cache_read"] / d["prompt"]),
+              "{{RIG_SESSIONS}}": "{:,}".format(d["sessions"]),
+              "{{RIG_TURNS}}": "{:,}".format(d["turns"]),
+              "{{RIG_ERA_ROWS}}": rows,
+          }
+          path = "dist/index.html"
+          text = open(path).read()
+          for key, val in subs.items():
+              text = text.replace(key, val)
+          open(path, "w").write(text)
+          PY
+      - name: no placeholder survives the build
+        run: |
+          if grep -q '{{RIG_' dist/index.html; then
+            echo "pages: an unrendered placeholder survives:"
+            grep -o '{{RIG_[A-Z_]*}}' dist/index.html | sort -u
+            exit 1
+          fi
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

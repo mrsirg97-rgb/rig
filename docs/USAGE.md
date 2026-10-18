@@ -15,6 +15,11 @@ Then just talk. The boundary is plain text in, plain text out. Blank
 lines are no-ops; EOF (Ctrl-D) ends the session. A line starting with `/`
 is a command (below); `//` escapes it back into a prompt.
 
+`-p "the task"` runs one prompt and exits — the one-shot path every
+scheduled and delegated worker takes; `-p -` takes the prompt from stdin
+instead, capped at the read tool's 1 MiB ceiling, which is why a worker's
+prompt is never an argv.
+
 A session outlives the process. `--resume <id>` continues an earlier one:
 the transcript, the file provenance, and the identity are rebuilt from
 the state store in one read-only transaction (dangling tool calls are
@@ -142,8 +147,11 @@ remote row's delegate and scheduled fire skip the local swap entirely,
 and `swarm start 2 budget=5` or a job's `budget` cap spend in dollars
 summed from the cost column.
 
-Context compacts automatically at the active model's own trigger (the
-models table); the `⧉` line reports it. The summary lands in the
+Context compacts automatically at the active model's own trigger: the
+assembled request's calibrated size crossing **the row's `window` minus
+its `reserve`** is the trigger, and the kept tail is the row's
+`keepRecent` budget, so the numbers in `models.json` are the arithmetic
+and nothing else decides. The `⧉` line reports it. The summary lands in the
 transcript only; context, not memory: compaction writes nothing to rem
 (`specs/SPEC_STATE.md`: rem is deliberate).
 
@@ -179,6 +187,45 @@ is recorded in the one scheduler store under an ad-hoc key, so
 resumable with `sessions resume <id>`. A piped session (`rig -p`) has no
 next turn to carry a return, so there the delegate still waits and
 answers with the worker's message.
+
+## the room, from the chair
+
+The room (README's "no center", `specs/SPEC_ROOM.md`) changes the waits,
+not the words. What you feel:
+
+- **the first request may load the model.** A claim that finds its row's
+  port silent starts the row's child and waits for it, inside the request.
+  `specs/SPEC_ROOM.md` measured the engine's model swap at about 50 s, and
+  a swap ends whatever is in flight — the cold start is the same wait
+  paid once. The port answers before the model does: a child's `/health`
+  saying 503 is what "still loading" means, so the wait is a fact the room
+  reads, not a guess at a timeout.
+- **one model, ordered by class.** Your turn (90) outranks a delegate's
+  return (70), which outranks the fleet's and the one-shot workers' traffic
+  (30), which outranks a child's start or stop (20), which outranks a client
+  from outside the room (0). A swarm of six cannot put your prompt behind
+  their own traffic — that ordering is the whole reason it is safe to run
+  the fleet while you work.
+- **one child at a time.** Naming a second model swaps: the resident one
+  stops at its holders' end and the incoming one starts after. Nothing
+  evicts a model from inside a turn, and a model that is not resident
+  refuses by name, naming the holder.
+- **the children outlive the session that started them.** Their logs are
+  `~/.rig/logs/<model id>.log`, and every request a rig served appends one
+  line to `~/.rig/logs/<model id>.served`.
+- **`rig -update` drains the room first.** Each session stops claiming at
+  its turn boundary and leaves; the binary swaps once the live set is
+  empty. A member that has left says so and refuses its next request by
+  name instead of waiting on a room it is no longer in.
+- **with `mesh` set, a remote row's claim waits the horizon at the front**
+  — about 1.3 s at the defaults — and a foreign claim reposts at the home
+  machine, where that row's child runs.
+
+The room has no command and no tool: the dashboard's room page is where you
+see the members, which model each holds, who waits, whether the port
+answers, and the log's tail. `/models` lists the table and switches the
+active row; starting and stopping a model is the room's own act, driven by
+the claims themselves.
 
 ## what you see
 
@@ -274,7 +321,11 @@ Anything not named is refused at the boundary with the reason named, and
 the refusal goes back to the model. The execution allow-list is not
 vision-gated: twelve names in the embedded `settings.json`, fourteen once
 `scheduler` and `delegate` join them (they do whenever the settings file
-carries no `allow` key; write the key and you decide). What the model is
+carries no `allow` key; write the key and you decide). The literal
+`none` clears the list whole — it is what a reviewer's worker runs with,
+and a worker given no tools at all (`store/scheduler/delegate.go`'s
+`NoToolsAllow`); a worker with the doing set gets the eight names
+`tool/delegate` names. What the model is
 offered is a different count — the menu: twelve on a model row without
 vision, thirteen with `vision: true` (`view` registers only there),
 `decide` only where `decisionUrl` is set. `scheduler` is wired

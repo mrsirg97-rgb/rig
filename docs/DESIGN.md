@@ -17,11 +17,13 @@ disagree.
                   │  ├─ seam: ContextPolicy ─► policy        (per-turn Assemble)
                   │  └─ seam: Provider      ─► provider/openai · provider/anthropic (stream out, events in)
                   └─ seam: Tool ─► ToolMiddleware chain
-                                   └─ toolset.Resolve → approve.Gate → cutoff
+                                   └─ toolset.Resolve → index (the graph tap, wired)
+                                       → approve.Gate → cutoff
                                        → perm.Plugins → perm.Allowlist
                                        → operator (delegated workers only)
                                        → guard.Bound → guard.Rounds → guard.Cap
                                        → paths (the ~ expansion)
+                                       → the decision links, when set (the bash site, the rem guideline)
                                        (first-listed = innermost)
                                         │
                                         ▼
@@ -191,6 +193,33 @@ against the last-read state and names the drift; ambiguity ("occurs N
 times") is named and the write is refused. Provenance is canonicalized
 through `filepath.Abs`, so `a.go` and `./a.go` are one key.
 
+### the code map
+
+`store/graph` is the project's map: one sqlite file per worktree under the
+rig home (`<home>/graph/<repo scope>/<worktree>.sqlite`), the scope minted
+like todo's so a repo's worktrees share a project and branches never share
+a map. It holds addresses, never source text: `files` (path, sha256,
+language), `symbols` (package, name, kind, file, line range) and `edges`
+(from symbol, to symbol, file, line of the use), paths project-relative.
+
+The `Extract` seam has one implementation in the process and one door out:
+Go through `go/parser` and `go/types` with the package as the unit —
+symbols from the package-scope AST, edges from `Uses` and `Selections`, a
+name fallback when the type-check fails — and every other language behind a
+language-server client. `ProjectRoot` is the one rule for what a project is
+(a `go.mod` above the directory, or a git worktree); a directory that is
+neither refuses by name.
+
+The map stays warm through the chain, not a watcher: the `middleware/index`
+link hands the path of a successful read, write or edit to the queue and
+never waits. The operator reaches it through `rem` — `index` walks it, and
+`pack` loads the live code around a symbol (the definition, its callers,
+its callees) from disk — so a session reads the neighborhood of a name
+instead of grep-chasing it. The fuzzy arm of recall shares one tokenization
+contract with the memory store: `store/fts` is the padded trigrams and the
+quoted-OR query, in one place because two stores disagreeing about
+tokenization is a silent ranking bug. `specs/SPEC_GRAPH.md` governs.
+
 ### induced-work bounds
 
 One table, because every input from the model is untrusted work:
@@ -202,6 +231,69 @@ One table, because every input from the model is untrusted work:
 | file read        | 1 MiB, naming the truncation; streamed — a huge file is never materialised |
 | every tool result | `resultCap` (default 64 KiB): head and tail with the loud `[TRUNCATED]` marker naming the full size, before the transcript |
 | a turn's calls   | `rounds` (default 0 = no cap): the n+1th call is refused without executing |
+| a model's headers | time to first headers: 5 minutes (`provider/wire.DefaultHeaderTimeout`), and `Retry-After` is obeyed up to the same ceiling — never a longer wait than the one already paid for a stream |
+| a model's stream | the idle gap: 10 minutes with no event ends it; the scanner takes 64 KiB lines up to 4 MiB; an error body is read to 256 bytes, so a page of HTML from a proxy never reaches the transcript |
+| the room's join  | 64 attempts to mint a member id, then the join refuses loud rather than spinning (`room/`) |
+| the reviewer's queue | 256 pending proposals (`decision.QueueCap`): a full queue drops the proposal, not the call |
+
+## the room and the mesh
+
+`room/` is the machine's room (SPEC_ROOM): every rig instance on the
+machine joins one room over unix sockets under the rig home (`<home>/room`),
+and no process is the center — no router, no supervisor, nothing that
+polls. The ordering primitive is `evt`'s `broadcast`; what rig adds is the
+member's join, the keys it orders over, and the signals the instances
+exchange.
+
+**The keys and the order.** `KeyOf(model)` and `TableKey()` name what a
+claim is taken on: one model, or the model table itself. An operation
+carries its mint (tick, member, nonce), its key and its priority, and
+every member folds the same fields the same way — priority first, then
+tick, member, nonce — so a late act takes its rightful place and a
+duplicate is refused by its mint. The claim classes are the room's
+priorities: an outside client 0, a child 20, a fleet worker 30, a
+delegate's return 70, the operator's turn 90. Within one priority the
+claim that continues the session already in the model goes first.
+
+**What a claim buys.** An instance sends its own request, to the model's
+port, itself, once its claim is final by every live member's
+acknowledgement. What is loaded is read from the world, never replayed:
+the port is probed once at a join over an empty room (`Answers`), and a
+child's `/health` saying 503 is what "still loading" means (`Loading`). A
+claim that finds its row's port silent holds its place, publishes the
+start, and sends when the port answers; when another row is resident it
+publishes the swap on that row's key instead, so the resident one stops at
+its holders' end and before the incoming one starts. One child at a time —
+the rule the retired router had, now an order.
+
+**The children.** A model row that the machine serves carries the child
+half: the command with `${PORT}` substituted, its environment, its port,
+its aliases, its stop grace, and the places function that reads the
+table. Start, stop and swap are guarded operations on the model's key; the
+child runs detached with its log at `~/.rig/logs/<model id>.log`, the port
+answers before the operation settles, and a stop sends SIGTERM to the
+child's session and waits the row's grace before the kill. A pid file whose
+start time differs names nobody, so a stale file never reaches another
+process. Each request a rig served appends one line to
+`~/.rig/logs/<model id>.served`, and the dashboard reads that file's tail
+to say what a model is doing. `rig -update` is a guarded operation too: it
+drains the room — every member stops claiming at its turn boundary and
+leaves — and only then does the binary swap.
+
+**The mesh (3.1.0).** `settings.json`'s `mesh` binds one more member: a TCP
+door the tailnet reaches, gossip converging the machines' folds. The clock
+is the machine's — the wall clock taken once at construction plus the
+monotonic time since, counted in periods (250 ms by default) — and nothing
+is computed between ticks. The mesh's order is advisory, because a key's
+home machine is its authority: a foreign claim past the horizon (4 periods)
+reposts at the home machine, where that row's child runs. The cost is one
+horizon at the front of a remote request, about 1.3 s at the defaults
+measured on loopback; a lone mesh member idles between ticks.
+
+The room has no slash command and no verb of its own: its face is the
+dashboard's room page (the members, each model's residency, who waits,
+whether the port answers, and the log's tail), and its rules are
+`specs/SPEC_ROOM.md`.
 
 ## the decision pipeline
 
@@ -240,9 +332,12 @@ lands as a printed command: the one `Environment=` line in the unit
 
 ## the fleet
 
-`broadcast/` is the fleet's message seam (SPEC_SWARM): a `Room` of
+`broadcast/` — the `evt` module's package, not a directory in this tree —
+is the fleet's message seam (SPEC_SWARM): a `Room` of
 `Member`s over a `Transport`, exchanging `Message`s that carry origin,
-health, and a `evt.Signal`. The transport is the loop itself
+health, and a `evt.Signal`. This is a session's own room, over the loop's
+queue; the machine's room, over unix sockets between instances, is `room/`
+and the section above. The transport is the loop itself
 (`NewLoopTransport(id, engine, priority)`): a send posts one closure at
 the room's priority and acks on the post — the queue is the durability —
 and a second heartbeat before the first ran is not posted at all. `Say`

@@ -16,7 +16,11 @@ plus one registration line, and the loop never names a concrete type.
 - Every Go package carries a `PACKAGE.md` that is the spec file for that
   package: what it is, what it includes, how it is consumed, the gotchas.
   Read it before touching the package and keep it current when behavior
-  changes. The governing specs live in `specs/`, written and agreed
+  changes. The generated `ddl`/`domain` projections are exempt (the
+  generated header speaks for them); the handwritten packages that do not
+  carry one yet are debt, and they are named: `kernel.go`, `cmd/freeze`,
+  `middleware/index`, `policy/compact`, `policy/effort`, `policy/operator`,
+  `provider/wire`. The governing specs live in `specs/`, written and agreed
   before the code; the `PACKAGE.md` points at its spec.
 - No comments in Go, implementation or tests: one rule everywhere,
   because a small model reads the repository as one corpus and cannot
@@ -49,7 +53,8 @@ plus one registration line, and the loop never names a concrete type.
 
 The reference is `~/Projects/lift/engine` (read `core/path.go`,
 `core/scribe.go`, and `visit` in `core/agent.go`) and, in this tree,
-`core/`, `evt/`, `loop/` and `tool/registry.go`. Pack them with `rem`
+`core/`, `room/`, `loop/` and `tool/registry.go` — the engine itself is the
+`evt` module, not a directory here. Pack them with `rem`
 before opening a new package. The aim is to express a lot in a little;
 that is harder than writing a lot, and it is the bar.
 
@@ -388,6 +393,19 @@ that is harder than writing a lot, and it is the bar.
   supervisor is a member of the session's `broadcast` room and says
   everything there as `Notice` with source `swarm` and `SwarmStatus`
   snapshots; the dead claim is released via the todo store's Reap door.
+- `room`: the machine room (SPEC_ROOM): every instance joins one room over
+  unix sockets under the rig home, the member id the hash of the boot id,
+  the pid and the start time at 62 bits, re-derived on a collision and
+  bounded at 64 attempts. The model and the model table are keys; an
+  operation carries its mint, its key and its priority, and every member
+  folds the same fields the same way — priority first, then tick, member,
+  nonce. The classes are outside 0, child 20, fleet 30, the delegate's
+  return 70, the operator's turn 90. Residency is read from the world
+  (`Answers` on the port, `Loading` off the child's `/health`), the row's
+  child starts, stops and swaps as guarded operations, and what a rig
+  served rides `~/.rig/logs/<model>.served` for the dashboard to read. The
+  door is the same member over TCP, only when `settings.json` names a
+  `mesh`.
 - `tool/sessions`: the session-store introspection tool: `list` and
   `summary`, the vitals (which models ran, what failed, the cache
   ratio), and the store's schema migration on open.

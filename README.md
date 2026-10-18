@@ -7,7 +7,11 @@ rig assembles context, streams the model, executes tool calls, returns results, 
 Every rig instance on the machine is a member of one room over unix
 sockets, and no process is the center: the model is a guarded key, the
 instances own the models' children, and a swap and an update are
-operations in the same order the requests are.
+operations in the same order the requests are. With `mesh` set in
+`settings.json` the room spans machines, their orders ordered by the
+clocks the machines agree on and converged by gossip over a tailnet. The
+room has no command of its own: its face is the dashboard's room page,
+and its rules are `specs/SPEC_ROOM.md`.
 
 ## install
 
@@ -34,7 +38,8 @@ table doesn't know refuses at startup. The endpoint defaults to
 without one refuses at start, naming the three ways to set it
 (`--model`, `RIG_MODEL`, the `model` key in `settings.json`). The TUI
 is the frontend when stdout is a terminal, the piped CLI otherwise.
-For scripts, run `rig -p "the task"`.
+For scripts, run `rig -p "the task"`, or `rig -p -` to take the prompt
+from stdin — the worker path, capped at the read tool's ceiling.
 
 #### in a session
 
@@ -149,7 +154,10 @@ one registration line extends it.
 
 **the decision pipeline.** Point rig at a small decision server and it
 runs as a sidecar over a queue of its own — no GPU negotiation, one
-URL. Three things happen: every bash call grows a pending question with
+URL. You run that server yourself: `decisionUrl` is rig's half of a wire
+(one `POST /v1/systemone` per batch, `decision/http.go:53`), the small
+model behind it is yours to train, and `specs/SPEC_DECISION.md` governs
+the contract. Three things happen: every bash call grows a pending question with
 a risk proposal, the `decide` tool joins the menu so the model hands
 over its sorting — classifying a thousand items by a typed question
 (choice, score, yes/no) instead of reading them through context — and a
@@ -181,6 +189,21 @@ renders the request bodies at the merge-base and at the head and posts
 their diff, so a byte that moves is reviewed, not trusted. The
 byte-stable prefix is why 99 cents of every prompt dollar serve from
 cache.
+
+**the room, no center.** Every rig instance on the machine sits in one
+room over a unix socket in the rig home, and the model is a key in it.
+Before a request, the instance claims the key at its class's priority —
+the operator's turn 90, a delegate's return 70, a worker 30, a child's
+start or stop 20, an outside client 0 — and the request goes to the row's
+port itself once every live member has agreed the claim is first. No
+process routes: llama-swap left the stack at 3.0.0 and nothing took its
+place. A claim that finds the port silent starts the row's child and
+waits for it, one child at a time, and `settings.json`'s `mesh` extends
+one room to many machines, their orders ordered by the clocks they agree
+on. Its face is the dashboard's room page — the members, who holds which
+model, who waits, whether the port answers, and the log's tail; there is
+no slash command for it. `specs/SPEC_ROOM.md` is the design and
+`docs/DESIGN.md` the summary.
 
 **a worker does, the session decides.** The verbs that judge or delete
 shared state belong to the session that owns the state. A delegated
@@ -227,14 +250,21 @@ The 2.1.x consolidation rethought the system prompt and the toolset and kept the
 
 <!-- measured:end -->
 
+The ratio spans providers, and the denominator is each endpoint's own
+number: on the OpenAI wire the cached tokens sit inside `prompt`, and on
+the Anthropic wire rig sums input with the cache read and the cache write
+to land on the same convention (`provider/anthropic/stream.go:287`). One
+ratio over both, and the convention is the reason it holds.
+
 ## the os
 
 | OS concept | rig | where |
 |---|---|---|
-| kernel | `loop.Run(ctx, kernel)` over the typed seams; `loop.go` + `batch.go` are 432 lines, stdlib-only | `loop/`, `core/`, `kernel.go` |
+| kernel | `loop.Run(ctx, kernel)` over the typed seams; `loop.go` + `batch.go` are the 448 lines the block above names, stdlib-only | `loop/`, `core/`, `kernel.go` |
 | scheduler | the turn's batch: concurrent reads beside each other, bounded by the kernel's Parallel (8), effects in call order; background jobs on the operator's crontab, model fires jailed | `loop/batch.go`, `tool/scheduler`, `store/scheduler` |
 | processes | sessions (TUI, piped, one-shot), delegates, drain workers; each worker owns a transcript, sandboxed and resumable | `frontend/`, `tool/delegate`, `swarm/` |
-| IPC | the event stream (`TextDelta`, `ToolCallEvent`, `ToolResult`, `TurnEnd`) and tool calls through the middleware chain; the stores are the shared state across processes | `core/provider.go`, `evt/`, `store/` |
+| IPC | the event stream (`TextDelta`, `ToolCallEvent`, `ToolResult`, `TurnEnd`) and tool calls through the middleware chain; the stores are the shared state across processes | `core/provider.go`, `room/`, `store/` |
+| the model's key | one key per model: a claim is ordered by priority (the operator's turn 90, a delegate's return 70, a fleet worker 30, a scheduled job 20, an outside client 0), the resident child belongs to the instance that started it, and one child runs at a time | `room/`, `cmd/rig/children.go`, `specs/SPEC_ROOM.md` |
 | filesystem | the workspace through read/write/edit, provenance-canonicalized; the stores are SQLite files under the rig home | `tool/file`, `store/` |
 | permissions | allowlist, approval gate, pathguard, plugin provenance, worker jail; deny by default, refusals named | `middleware/`, `policy/`, `specs/SPEC_SANDBOX.md` |
 | modules | python plugins, one file one tool, pending until approved; typed Go seams beside them | `plugins/`, `core/` |
@@ -246,9 +276,9 @@ rig's default menu is 12 built-in tools on a model row without vision,
 13 with `"vision": true` (`view` joins the set). `decide` joins when a
 decision server is set (`decisionUrl`), making it 13/14; `verdict` is
 never on the interactive menu, only on a fleet worker that holds the
-pipe. `scheduler` is on the menu everywhere; `delegate` is wired where
-a second request can run (a remote row, or a readable swap). Restrict
-them with `--allow`:
+pipe. `scheduler` is on the menu everywhere; `delegate` is wired where a
+second request can run (a remote row, or an endpoint that answers one
+live read of what it has loaded). Restrict them with `--allow`:
 
 | tool | what it does |
 |------|--------------|
@@ -260,7 +290,7 @@ them with `--allow`:
 | `todo` | the task queue, scoped to the project (a repo's worktrees share one); tasks link with `requires`/`blocks` |
 | `rem` | memory across sessions: learn, recall, reflect, prune, and `index`/`pack` over the project's code map; scoped to the project |
 | `scheduler` | background jobs on your crontab, run in a bubblewrap jail |
-| `delegate` | a headless worker for a bounded subtask, handed off and returned on a later turn; wired where a second request can run (a remote row, or a readable swap) |
+| `delegate` | a headless worker for a bounded subtask, handed off and returned on a later turn; wired where a second request can run (a remote row, or an endpoint that answers one live read of what it has loaded) |
 | `sessions` | vitals of the session store (an older store is migrated on open) |
 | `decide` | hand many items to a decision server against one typed question instead of reading them (on the menu only when `decisionUrl` is set) |
 | `verdict` | deliver the reviewer's one word on work a worker was asked to review (registered only in a fleet worker that holds the pipe) |
@@ -293,34 +323,62 @@ installable to a phone home screen. `docs/SETUP.md` and
 
 ## docs
 
+Read in this order: this file, `docs/SETUP.md` to get it running,
+`docs/USAGE.md` for what a session does and how it fails, then
+`docs/DESIGN.md` for the architecture, and a spec for the rules behind
+any one behavior.
+
 | doc                | what it is                                        |
 |--------------------|---------------------------------------------------|
-| `docs/DESIGN.md`   | architecture: the seams, the turn, the decision pipeline, the fleet, the extension guide |
 | `docs/SETUP.md`    | build, every knob, verification                   |
-| `docs/USAGE.md`    | running a session; session and failure semantics  |
+| `docs/USAGE.md`    | running a session; commands, and the session and failure semantics |
+| `docs/DESIGN.md`   | architecture: the seams, the turn and the queue, the room and the mesh, the decision pipeline, the fleet, the code map, the extension guide |
 | `docs/PLUGINS.md`  | the python plugins and the train zone             |
 | `docs/EMBED.md`    | rig as a Go module: the seams, the freeze, a worked example |
 | `docs/TUI_DESIGN.md` | the terminal frontend's implementation notes    |
+| `specs/`           | the governing specs, written and agreed before the code; `specs/FREEZE.txt` is the gate that keeps the core closed |
 | `SECURITY.md`      | the trust model and how to report a vulnerability |
 | `CONTRIBUTING.md`  | the process: spec first, tests before code, the freeze |
-| `docs/history/`    | dated notes: the roadmap that shipped, the consolidation read |
+| `docs/history/`    | dated notes: the roadmap that shipped, the consolidation read — never cite them as current |
+
+The words rig uses for its own parts, in one place:
+
+| word | what it names |
+|---|---|
+| room | the machine's rig instances, and the keys they order over (`room/`) |
+| key | what a claim is taken on: one model, or the model table |
+| claim | the ask to be served; first in the room's order takes the model |
+| child | the model process an instance starts; one at a time, its log under the rig home |
+| row | a model row in the table, a store's row, or the one background-status line the TUI keeps (3.2.0) |
+| band | the TUI's footer rows for a running fleet |
+| bite | one reviewer fire over the pending decision rows |
+| board | the todo queue at a project's scope |
+| door | one tool that carries many verbs (`plugin`, the room's front, the ask door) |
+| zone | a directory with a trust level: `plugins/pending/`, `disabled/`, `train/` |
 
 ## layout
 
-Ten names; the full map is `AGENTS.md` and each package's `PACKAGE.md`.
+The short map; the full one is `AGENTS.md` and each package's
+`PACKAGE.md`. The engine is not in this tree: `github.com/mrsirg97-rgb/evt`
+is its own module, and its `broadcast` package is the room's primitive
+(SPEC_EVT).
 
 ```
 cmd/rig        the binary and composition root; wires every seam once
 core           the seams, the wire types, the event vocabulary; types only
+kernel.go      the dependency bag the loop drives, assembled from options
 loop           the turn runtime: ordering, faults, cancellation
-evt            the event loop the turn and the fleet run on (SPEC_EVT)
+command        the sixteen slash commands, dispatchable with fakes
+provider       the model wires: openai-compatible SSE, anthropic Messages
 store          the SQLite stores: state, todo, rem, scheduler, graph, decision
 tool           the model's words (registry.json) and one leaf per tool
 middleware/ policy/  the tool chain and the context/provider decorators,
              including the operator link a delegated worker carries
 frontend       four frontends: tui, cli, oneshot (the -p worker), web
-broadcast/ swarm/    the fleet's room (SPEC_SWARM) and the drain controller
+room/ swarm/   the machine's room (SPEC_ROOM) and the drain controller
 decision/ plugins/  the decision seam (SPEC_DECISION) and the python zones
+config/ models/ pathguard/ imagemarker/  the four-layer knobs, the model
+             table, and the two stdlib leaves the tools and the wires share
 ```
 
 ## extending

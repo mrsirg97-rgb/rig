@@ -213,13 +213,20 @@ PR and in SPEC_CORE or SPEC_EVT.
 
 ## local vs hosted
 
-A model row says where it runs. Local: the row hits the swap at
-`RIG_SWAP_URL` and the resident-set gate admits it (SPEC_WORKERS: the
-fleet is the resident model; no slot is counted). Hosted (`remote: true`
-or `provider: "openrouter"`): the row's `baseUrl` and `apiKey` speak the
-OpenAI wire as-is — `Authorization: Bearer <key>` rides every request,
-429 and 5xx retry with bounded backoff (an anthropic row speaks
-Anthropic's Messages wire instead, SPEC_HOSTED 7) — and the worker skips the local
-swap and the busy probe entirely (nothing counts slots; the endpoint's
-own 429 retry is the backpressure). `usage.cost` lands in the state
-store and sums into a swarm's `budget=` or a scheduled job's `budget`.
+A model row says where it runs, and since 3.0.0 nothing routes in front of
+it: the instance sends its own request to the row's port, in the order the
+room agreed (SPEC_ROOM). **Local:** the row's `baseUrl` is the endpoint, and
+what that endpoint has loaded is read from it live — its `/v1/models` list
+and its `/running` answer (`store/scheduler/busy.go:18-26`), where
+`swapUrl` and `RIG_SWAP_URL` survive only as the address of that read, not a
+router. The fleet is the resident model, no slot is counted, and a model
+that is not resident refuses, naming the holder; a claim that finds the
+row's port silent starts the row's child and waits for the port.
+**Hosted** (`remote: true` or `provider: "openrouter"`): the row's
+`baseUrl` and `apiKey` speak the OpenAI wire as-is —
+`Authorization: Bearer <key>` rides every request, 429 and 5xx retry with
+bounded backoff (an anthropic row speaks Anthropic's Messages wire instead,
+SPEC_HOSTED 7) — and the fleet skips the resident read entirely: a second
+request is just a second request, queued by the endpoint itself.
+`usage.cost` lands in the state store and sums into a swarm's `budget=` or
+a scheduled job's `budget`.
