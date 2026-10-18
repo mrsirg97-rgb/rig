@@ -1,4 +1,54 @@
 # Changelog
+## [3.3.0]: the dashboard opens on the machine
+
+The dashboard opened on the chat because the chat was the last thing
+built into it, while the page an operator actually reads — the room — sat
+eighth in the sidebar and off the phone's bar entirely. And SPEC_ROOM had
+long since specced a third dashboard page the tree never built: system
+stats. This round puts the room first and builds the missing page.
+
+The new leaf `stats` reads the machine's vitals from the world, the same
+way the room reads residency — never replayed from a store. `/proc/uptime`,
+`/proc/loadavg`, `/proc/meminfo` and `/proc/stat`; `/sys/class/hwmon`, one
+row per chip at its hottest labelled input, and where two drives name
+their hwmon the same word the device says which (`nvme0`, `nvme1`); the
+sysfs link counters, with no loopback, no container plumbing, and no link
+that has never moved a byte; `/proc/mounts` behind a filesystem
+allow-list — tmpfs is RAM, overlay is one row per container, squashfs a
+read-only core — one row per device, at its shortest mount; and
+`nvidia-smi --query-gpu` as CSV, where a card's `[N/A]` power draw is
+absent rather than zero. No source is a dependency: a box with no cards
+gets no card rows, and a non-Linux build answers only the cards. The
+rates — the CPU's busy share and a link's bytes per second — are a
+difference between two samples, so the page's four-second poll is the
+only clock, a closed page samples nothing (SPEC_ROOM's rule), and the
+first read carries no rate rather than a number invented from one point.
+`nvidia-smi` is bounded at two seconds, half the poll, and the whole read
+rides the route's five-second context.
+
+`/api/room` grows `stats` and no new route. The room page leads with the
+machine — monospace rows coloured only by heat, 80° and 95°, because a
+card at 98% of its VRAM is a loaded card, which is the point of the box —
+and one session line: the TUI's own band, mapped once at the root,
+rendered a third time, so "what is rig doing right now" is answerable
+without opening the chat. The room is the landing view and the first tab
+on both navs; the phone's bar is room, chat, sessions, todo, jobs, more,
+and the swarm moves into the more menu with the models, the plugins and
+the update. A browser opens on the view it last showed (`rig.serve.view`,
+beside the theme and the workspace); a dashboard with no memory opens the
+room. Deferred, named: an AMD `/sys/class/drm` source for a box with no
+`nvidia-smi`, and a tok/s sparkline from the served log's history — the
+band stays text.
+
+Red first: the room route's payload without `stats`, the page's navs with
+the chat still first, and 16 cases of `stats` that did not exist —
+fixtures for every parser, the live box for the load and the busy share,
+a scripted sampler for the rate's window (a first read answers no rate,
+the second answers 50% and 500 B/s, and eight racing reads pair only
+consecutive samples). `go vet`, `gofmt`, the suite under `-race`, the
+freeze gate with `stats/` opened by name, and `scripts/readme-measured
+check` on the refreshed block are the gates; the version test pins 3.3.0.
+
 ## [3.2.8]: the docs catch up to the room
 
 The 3.x line shipped the room, the mesh, the models' children and the row;
