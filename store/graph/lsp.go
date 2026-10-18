@@ -26,16 +26,16 @@ const lspKillBound = 2 * time.Second
 const lspStderrTail = 4096
 
 type lspClient struct {
-	cmd     *exec.Cmd
-	stdin   io.WriteCloser
-	lang    string
-	voice   broadcast.Member
-	mu      sync.Mutex
-	nextID  int64
-	pending map[int64]chan json.RawMessage
-	dead    bool
-	waited  bool
-	stderr  *boundedTail
+	cmd      *exec.Cmd
+	stdin    io.WriteCloser
+	lang     string
+	voice    broadcast.Member
+	mu       sync.Mutex
+	nextID   int64
+	pending  map[int64]chan json.RawMessage
+	dead     bool
+	reapDone chan struct{}
+	stderr   *boundedTail
 }
 
 func (q *Queue) lspFor(ctx context.Context, lang string) (*lspClient, error) {
@@ -121,36 +121,40 @@ func (c *lspClient) alive() bool {
 
 func (c *lspClient) stop() {
 	c.mu.Lock()
-	already := c.waited
-	c.waited = true
-	cmd := c.cmd
+	c.dead = true
+	pending := c.pending
+	c.pending = map[int64]chan json.RawMessage{}
 	stdin := c.stdin
-	var pending map[int64]chan json.RawMessage
-	if !c.dead {
-		c.dead = true
-		pending = c.pending
-		c.pending = map[int64]chan json.RawMessage{}
-	}
 	c.mu.Unlock()
 	_ = stdin.Close()
-	if !already {
-		waitBound(cmd)
-	}
+	c.reap()
 	for _, ch := range pending {
 		close(ch)
 	}
 }
 
-func waitBound(cmd *exec.Cmd) {
-	done := make(chan struct{})
-	go func() {
-		_ = cmd.Wait()
-		close(done)
-	}()
+func (c *lspClient) reap() {
+	c.mu.Lock()
+	cmd := c.cmd
+	if cmd != nil && c.reapDone == nil {
+		done := make(chan struct{})
+		c.reapDone = done
+		go func() {
+			_ = cmd.Wait()
+			close(done)
+		}()
+	}
+	done := c.reapDone
+	c.mu.Unlock()
+	if done == nil {
+		return
+	}
 	select {
 	case <-done:
 	case <-time.After(lspKillBound):
-		_ = cmd.Process.Kill()
+		if cmd.Process != nil {
+			_ = cmd.Process.Kill()
+		}
 		<-done
 	}
 }
@@ -234,17 +238,13 @@ func (c *lspClient) die(err error) {
 		return
 	}
 	c.dead = true
-	already := c.waited
-	c.waited = true
 	pending := c.pending
 	c.pending = map[int64]chan json.RawMessage{}
 	c.mu.Unlock()
 	for _, ch := range pending {
 		close(ch)
 	}
-	if !already {
-		waitBound(c.cmd)
-	}
+	c.reap()
 	c.say("the %s language server stopped: %v: %s", c.lang, err, c.stderr.tail())
 }
 

@@ -40,12 +40,41 @@ room. Deferred, named: an AMD `/sys/class/drm` source for a box with no
 `nvidia-smi`, and a tok/s sparkline from the served log's history — the
 band stays text.
 
+The review round put three things right. The corpus rule is no comments
+in Go: `stats` arrived with 106 lines of them and keeps none outside the
+`//go:build` directive, its reasons living in names and in its
+`PACKAGE.md`. The sampler's lock no longer spans the read — holding it
+across `nvidia-smi` is the 3.2.1 audit's M5 shape, a phone and a laptop
+on the room page queueing behind each other's subprocess — so the lock
+covers the swap and the fold alone, and the held sample moves only
+forward in time: a read that arrives older answers no rate and never
+becomes the window. And the card rows stopped lying about which card is
+which: `nvidia-smi` counts by PCI bus (the 3090 here is `pci1`) while
+CUDA and the model configs count fastest-first (the same card is
+`CUDA2`), so a row leads with its model and says `pci`, and the wire key
+is `pci_index`. The board's embedded controller also stopped spending a
+row on a die the CPU reports itself: where `k10temp` or `coretemp`
+speaks, `asusec`'s `CPU Package` yields, and the band's temperature rows
+say different things.
+
+CI's `-race` run named a second lock shape, in a package this round did
+not otherwise touch: `store/graph`'s language-server client let `stop()`
+and the death path trade one `waited` flag, so the caller that arrived
+second skipped the join and read `cmd.ProcessState` unsynchronized
+against the `cmd.Wait()` the other caller had started — the race the
+detector reported, and the "one zombie per death" the test asserted. The
+reap now belongs to the client: one shared `cmd.Wait()` that both callers
+join, red first as a child that closes its stdout and sleeps, so the
+reaper is provably still inside `Wait` when `stop()` returns.
+
 Red first: the room route's payload without `stats`, the page's navs with
-the chat still first, and 16 cases of `stats` that did not exist —
+the chat still first, and 20 cases of `stats` that did not exist —
 fixtures for every parser, the live box for the load and the busy share,
-a scripted sampler for the rate's window (a first read answers no rate,
-the second answers 50% and 500 B/s, and eight racing reads pair only
-consecutive samples). `go vet`, `gofmt`, the suite under `-race`, the
+and a scripted sampler for the rate's window: a first read answers no
+rate, the second answers 50% and 500 B/s, a read that arrives older
+never becomes the window, a second reader never waits on the first's
+subprocess, and eight racing reads pair only consecutive samples and
+never a negative rate. `go vet`, `gofmt`, the suite under `-race`, the
 freeze gate with `stats/` opened by name, and `scripts/readme-measured
 check` on the refreshed block are the gates; the version test pins 3.3.0.
 
