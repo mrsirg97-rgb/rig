@@ -78,6 +78,28 @@ go vet ./...
 gofmt -l .
 ```
 
+## the binary's verbs
+
+`rig` takes flags, one positional door, and three subcommands. The flags
+are the four-layer knobs under "configure" (plus `-p`, `--resume`,
+`--session-id`, `--tui`, `--version`, `--update`). The subcommands
+(`cmd/rig/main.go:164-178`):
+
+- `rig serve [-addr 127.0.0.1:7777]` — the dashboard; the address must be
+  loopback and the page is the prompt (`-p` refuses beside it).
+- `rig run-job <key>` — the cold shell your crontab line runs, with the
+  job's key as its one positional; the crontab is the scheduling truth and
+  this is its door.
+- `rig decision train <trainer>` — the train zone's runner, headless
+  (`docs/PLUGINS.md`).
+- `rig -exec <argv>` — the landlock door: it applies the in-kernel domain
+  and `syscall.Exec`s the argv, and it is honored only when `RIG_LANDLOCK`
+  names a profile. The `sandbox: "landlock"` fire reaches it as
+  `rig -exec rig -p …`, so every thread of the worker inherits a wall an
+  in-process call cannot put on threads that already exist.
+
+An unknown positional refuses, naming the three.
+
 ## configure
 
 Every knob resolves through four layers, per key:
@@ -137,7 +159,7 @@ creating session's.
 | extraction    |                | `RIG_TRAFILATURA`      | `trafilatura`   | none (auto); **presence key**: set empty = the stdlib text pass |
 | session model |                | `RIG_MODEL`            | `model`          | no embedded default; the worker model resolves at claim time: the named one, else the resident model, else this |
 | swap endpoint |                | `RIG_SWAP_URL`         | `swapUrl`         | retired as a router at 3.0.0: the provider sends to the model row's port directly; the setting stays parsed for older configs |
-| decision server |  | `RIG_DECISION_URL`     | `decisionUrl`     | none; set it and every bash call gets a pending risk proposal the reviewer settles, and the `decide` tool joins the live table so the model hands it the sorting (SPEC_DECISION); unset, nothing proposes and the menu, the wire sha, and the system prompt do not move |
+| decision server |  | `RIG_DECISION_URL`     | `decisionUrl`     | none; set it and every bash call gets a pending risk proposal the reviewer settles, and the `decide` tool joins the live table so the model hands it the sorting (SPEC_DECISION); unset, nothing proposes and the menu, the wire sha, and the system prompt do not move. **the server is yours to run**: rig is only its client, posting one `POST <url>/v1/systemone` per batch (`decision/http.go:53`) — a small model behind one URL, trained on rig's own rows (`docs/PLUGINS.md`, `/decision train`) |
 | decision unit |  |  | `decisionUnit`    | none; the systemd user unit file a promotion rewrites — the one `Environment=` line naming `RIG_DECISION_CHECKPOINT` (SPEC_DECISION 2.13.0); unset, runs score and record but promote nothing |
 | trainer interpreter |  |  | `trainPython`     | none; the `train/` zone's own interpreter, run headless with torch — two gigabytes that do not belong in the session kernel's venv (SPEC_DECISION 2.13.0); a run without it refuses naming the key |
 | approval dial  |                |  | `approve`         | `auto`; `manual` pauses every mutating tool call for the operator's y/n |
@@ -192,7 +214,12 @@ per-million prices (`inputPrice`, `outputPrice`, `cacheReadPrice`,
 name openai-wire concepts.
 
 **On the model row**: compaction is per-model, so the active model must
-resolve to a row (window, max tokens, reserve, keep-recent). The table
+resolve to a row (window, max tokens, reserve, keep-recent). What those
+four numbers buy is one rule, not a percentage: the assembled request's
+size crossing **`window − reserve`** is what triggers a compaction, and
+`keepRecent` is the tail it keeps while a provider call at the row's own
+model and effort rewrites the older prefix (`policy/compact`; the
+operator's verb is `/compact`). The table
 **is your `models.json`**: the binary ships none, a row you do not write
 does not exist, and naming a model with no row refuses at start — before
 any store opens — naming the missing id and the ids the table does know.
@@ -356,9 +383,14 @@ prompt — beside the stores with their writes: sessions per workspace with
 transcripts and resume; the queue (create, complete, retry); the
 jobs with their run audit (create, pause, resume, remove, repair); the
 swarm, live, with start and stop; the model table, switch, and effort
-dial; and the plugins' three zones with the forge's source read and save
-into the pending zone. Loopback bind only (a non-loopback address is
-refused by name), behind a token minted and printed once, stored 0600 and
+dial; the plugins' three zones with the forge's source read and save
+into the pending zone; and the room — the machine's members, each model's
+residency (who holds it, who waits, whether the port answers, and the
+served log's tail, read from the file rather than replayed), plus the
+mesh's mode, the machines it sees and the tick horizon while `mesh` is on.
+`-addr` names the bind (default `127.0.0.1:7777`); loopback only, or a
+non-loopback address is refused by name, behind a token minted and printed
+once, stored 0600 and
 exchanged for a cookie. A sidebar on desktop, a tab bar on the phone,
 `warm` and `cool` palettes; from Safari, share → add to home screen
 installs it as an app. There is no memory view: rem is the model's, read

@@ -1,4 +1,37 @@
 # Changelog
+## [3.2.8]: the docs catch up to the room
+
+The 3.x line shipped the room, the mesh, the models' children and the row;
+the reading set stopped at 2.18.x. This round is docs, and no Go moved but
+the version const and its pin. `docs/DESIGN.md` gains the room and the mesh
+— the keys, the claim classes, the residency read from the world rather
+than replayed, the update that drains — the code map, the graph tap and the
+conditional decision links in the middleware figure, and the providers'
+clocks in the bounds table: five minutes to headers, ten to an idle stream,
+`Retry-After` obeyed to that same ceiling, 4 MiB over the scanner, 256
+bytes of an error body, a 256-deep proposal queue that drops the proposal
+and says so. `docs/USAGE.md` gains the room from the chair — what a cold
+claim costs, why a swarm cannot put your prompt behind its own traffic,
+what `-update` drains — the compaction arithmetic (`window − reserve` is
+the trigger, `keepRecent` the tail), `-p -`, and the `allow: none`
+sentinel. `docs/SETUP.md` gains the binary's verbs (`serve`, `run-job`,
+`decision train`, and the landlock `-exec` door), `-addr` and the room
+page, the decision server named as the external process it is, and the
+compaction rule; `docs/EMBED.md`'s local rows stop routing through the
+retired swap — `swapUrl` is the address of the resident read, not a router.
+README names the mesh, the room, the code map and the decision server, puts
+a reading order, a specs row and a vocabulary table where a newcomer lands,
+and stops contradicting its own measured block (448, not 432; `room/`, not
+`evt/` or `broadcast/`); the measured ratio now names whose `prompt` it
+divides by, since the Anthropic wire's `prompt` is summed to the same
+convention. The landing page's stats are rendered from `docs/measured.json`
+in `pages.yml` — the README's own source — and a placeholder that survives
+the build fails the deploy, so the page cannot lag the store by three
+releases again. `AGENTS.md` gains `room`, drops the in-tree `evt/`
+reference, and names the seven handwritten packages still without a
+`PACKAGE.md`. The version test pins 3.2.8, the freeze passes on docs,
+`scripts/readme-measured check`, and the tree's own counts.
+
 ## [3.2.7]: the measure catches the steer
 
 The 3.2.6 steer moved the tree after its freeze — the command worker's
