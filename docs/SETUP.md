@@ -384,10 +384,15 @@ transcripts and resume; the queue (create, complete, retry); the
 jobs with their run audit (create, pause, resume, remove, repair); the
 swarm, live, with start and stop; the model table, switch, and effort
 dial; the plugins' three zones with the forge's source read and save
-into the pending zone; and the room — the machine's members, each model's
+into the pending zone; and the room — the page the dashboard opens on:
+the machine's members, each model's
 residency (who holds it, who waits, whether the port answers, and the
-served log's tail, read from the file rather than replayed), plus the
-mesh's mode, the machines it sees and the tick horizon while `mesh` is on.
+served log's tail, read from the file rather than replayed), the
+machine's vitals (the load, the CPU's busy share, the RAM, the cards'
+utilisation, temperature, power and memory, the chips, the real
+filesystems, and the links that move bytes, read from `/proc`, `/sys` and
+`nvidia-smi` rather than replayed), plus the mesh's mode, the machines it
+sees and the tick horizon while `mesh` is on.
 `-addr` names the bind (default `127.0.0.1:7777`); loopback only, or a
 non-loopback address is refused by name, behind a token minted and printed
 once, stored 0600 and

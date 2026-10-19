@@ -56,7 +56,12 @@ project-relative; each worktree's store maps its own tree.
   ignored, a 30s cap per request) and the one-at-a-time child: a server
   starts on the first read of a file in its language, touching another
   language replaces it (the old child's stdin closes, it is joined,
-  killed after 2s), and the queue's context close stops it. A frame
+  killed after 2s), and the queue's context close stops it. The reap
+  belongs to the client, not to the caller that got there first: `stop()`
+  and the death path share one `cmd.Wait()` and both join it, so a caller
+  never returns while the child is still a process (3.3.0 — before, the
+  second caller saw the shared flag, skipped the join, and left the
+  reap's write to `ProcessState` unsynchronized against a read of it). A frame
   whose `Content-Length` is negative or over the read ceiling dies the
   client (the body is never allocated at the server's word), and the
   death line carries the child's last stderr words (a bounded tail,

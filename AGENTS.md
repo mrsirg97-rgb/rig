@@ -222,6 +222,11 @@ that is harder than writing a lot, and it is the bar.
   directory and refuse one outside the session's cwd or the rig home;
   the delegate and scheduler tools and the runner's fire-time
   revalidation all call it.
+- `stats`: the machine's vitals, read from the world (SPEC_ROOM's system
+  stats, 3.3.0): `/proc`, `/sys/class/hwmon`, the sysfs link counters,
+  `statfs`, and `nvidia-smi` as CSV, one walk per read and no timers; a
+  source the box lacks renders no row. The dashboard's room page is its
+  only consumer.
 - `decision`: the decision seam (SPEC_DECISION): the typed question
   (choice, score, yes/no), the answer with its confidence and its
   decider, the `Decider` a decision server implements, the `Recorder`

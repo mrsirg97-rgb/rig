@@ -49,6 +49,38 @@ type emptyReader struct{}
 
 func (emptyReader) Read([]byte) (int, error) { return 0, io.EOF }
 
+func TestASecondStopJoinsTheReaperThatGotThereFirst(t *testing.T) {
+	cmd := exec.Command("sh", "-c", "exec 1>&-; sleep 0.25")
+	stdin, err := cmd.StdinPipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	c := &lspClient{cmd: cmd, stdin: stdin, lang: "dead", pending: map[int64]chan json.RawMessage{}, stderr: newBoundedTail(lspStderrTail)}
+	go c.readLoop(stdout)
+	deadline := time.After(2 * time.Second)
+	for c.alive() {
+		select {
+		case <-deadline:
+			t.Fatal("the client never died")
+		case <-time.After(time.Millisecond):
+		}
+	}
+	c.stop()
+	if cmd.ProcessState == nil {
+		t.Fatal("stop returned while the reaper was still inside Wait: one zombie per death")
+	}
+	if code := cmd.ProcessState.ExitCode(); code != 0 {
+		t.Fatalf("the child was reaped by the client, exit %d", code)
+	}
+}
+
 func TestABodyOverTheReadCeilingDiesTheClient(t *testing.T) {
 	cmd := exec.Command("sh", "-c", "printf 'Content-Length: 99999999\\r\\n\\r\\n'; sleep 5")
 	stdin, err := cmd.StdinPipe()

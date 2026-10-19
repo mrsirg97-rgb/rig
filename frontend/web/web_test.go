@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -353,6 +354,62 @@ func TestTheTailnetAnswersTheWireBesideLoopback(t *testing.T) {
 	cancel()
 	if err := <-served; err != nil {
 		t.Fatalf("serve: %v", err)
+	}
+}
+
+func TestTheRoomPageCarriesTheMachinesVitals(t *testing.T) {
+	srv, tok := newTestServer(t)
+	h := srv.Handler()
+	read := func() map[string]any {
+		t.Helper()
+		rec := doReq(t, h, "GET", "/api/room", nil, bearer(tok))
+		if rec.Code != http.StatusOK {
+			t.Fatalf("room: got %d", rec.Code)
+		}
+		var body map[string]any
+		if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+			t.Fatal(err)
+		}
+		for _, want := range []string{"members", "models", "mesh", "stats"} {
+			if _, ok := body[want]; !ok {
+				t.Fatalf("the room's payload carries %s: %s", want, rec.Body.String())
+			}
+		}
+		return body
+	}
+	first := read()
+	vitals, ok := first["stats"].(map[string]any)
+	if !ok {
+		t.Fatalf("the vitals are an object: %T", first["stats"])
+	}
+	if runtime.GOOS != "linux" {
+		t.Logf("a non-Linux box states no vitals: %v", vitals)
+		return
+	}
+	if _, ok := vitals["load"]; !ok {
+		t.Fatalf("the kernel states a load: %v", vitals)
+	}
+	if _, ok := vitals["uptime_s"]; !ok {
+		t.Fatalf("the box has been up: %v", vitals)
+	}
+	cpu, ok := vitals["cpu"].(map[string]any)
+	if !ok || cpu["cores"] == nil {
+		t.Fatalf("the box has cores: %v", vitals)
+	}
+	if _, ok := cpu["percent"]; ok {
+		t.Fatalf("one sample states no busy share: %v", cpu)
+	}
+	time.Sleep(250 * time.Millisecond)
+	second, ok := read()["stats"].(map[string]any)
+	if !ok {
+		t.Fatal("the vitals stay an object")
+	}
+	cpu2, ok := second["cpu"].(map[string]any)
+	if !ok {
+		t.Fatalf("the core count answers every read: %v", second)
+	}
+	if p, ok := cpu2["percent"].(float64); !ok || p < 0 || p > 100 {
+		t.Fatalf("the second read answers the busy share the first could not: %v", cpu2)
 	}
 }
 
@@ -1428,6 +1485,7 @@ func TestStaticAssets(t *testing.T) {
 			"parseTodo",
 			"parseScheduler",
 			"servedTable",
+			"pci_index",
 			"roomShown",
 			"fillTerm",
 			"progressBar",
@@ -1450,7 +1508,7 @@ func TestStaticAssets(t *testing.T) {
 			"schedconfirm",
 			"claimed for review by",
 		},
-		"/static/style.css":            {"--ember", `[data-theme="warm"]`, `[data-theme="cool"]`, "@media (max-width: 720px)", ".tabs {", "@keyframes breathe", "env(safe-area-inset-bottom", "main.chat { padding: env(safe-area-inset-top, 0px) 0 0; }", ".editor", "--effort-xhigh", ".schedacts", ".schedup", ".composer", ".feed"},
+		"/static/style.css":            {"--ember", `[data-theme="warm"]`, `[data-theme="cool"]`, "@media (max-width: 720px)", ".tabs {", "@keyframes breathe", "env(safe-area-inset-bottom", "main.chat { padding: env(safe-area-inset-top, 0px) 0 0; }", ".editor", "--effort-xhigh", ".schedacts", ".schedup", ".composer", ".feed", "pre.term.machine", ".sessionline"},
 		"/static/manifest.webmanifest": {`"display": "standalone"`, "icon-180.png", `"start_url": "/?token=`},
 	} {
 		rec := doReq(t, h, "GET", path, nil, bearer(tok))
@@ -1836,6 +1894,64 @@ func TestTodoRoutesResolveThroughTheRepoScope(t *testing.T) {
 	}
 }
 
+func TestTheRoomIsTheLandingViewAndTheFirstTab(t *testing.T) {
+	srv, tok := newTestServer(t)
+	h := srv.Handler()
+	body := func(path string) string {
+		t.Helper()
+		rec := doReq(t, h, "GET", path, nil, bearer(tok))
+		if rec.Code != http.StatusOK {
+			t.Fatalf("%s: got %d", path, rec.Code)
+		}
+		return rec.Body.String()
+	}
+	page := body("/")
+	js := body("/static/app.js")
+	for _, host := range []string{`id="nav"`, `id="tabs"`} {
+		at := strings.Index(page, host)
+		if at < 0 {
+			t.Fatalf("the page carries the %s host", host)
+		}
+		nav := page[at:]
+		end := strings.Index(nav, "</nav>")
+		if end < 0 {
+			t.Fatalf("%s: an unclosed nav", host)
+		}
+		nav = nav[:end]
+		room := strings.Index(nav, `data-view="room"`)
+		if room < 0 {
+			t.Fatalf("%s: the room is a view", host)
+		}
+		if chat := strings.Index(nav, `data-view="chat"`); chat < 0 || chat < room {
+			t.Fatalf("%s: the room comes before the chat: %s", host, nav)
+		}
+		if strings.Contains(nav, `data-view="swarm"`) && host == `id="tabs"` {
+			t.Fatal("the phone's bar carries the room, not the swarm (more holds it)")
+		}
+		if !strings.Contains(nav, `data-view="room" class="active"`) {
+			t.Fatalf("%s: the landing view is the room: %s", host, nav)
+		}
+	}
+	for _, want := range []string{
+		"const DEFAULT_VIEW = 'room'",
+		"'rig.serve.view'",
+		"machineLines",
+		"roomSession",
+	} {
+		if !strings.Contains(js, want) {
+			t.Fatalf("app.js carries %s", want)
+		}
+	}
+	at := strings.Index(js, "const MORE_VIEWS = [")
+	if at < 0 {
+		t.Fatal("the more menu's views are one list")
+	}
+	menu := js[at : at+strings.Index(js[at:], "];")]
+	if !strings.Contains(menu, "'swarm'") {
+		t.Fatalf("the phone's more menu reaches the swarm: %s", menu)
+	}
+}
+
 func TestThePhonesMoreMenuReachesTheRoomAndNothingStaticIsCached(t *testing.T) {
 	srv, tok := newTestServer(t)
 	h := srv.Handler()
@@ -1852,7 +1968,7 @@ func TestThePhonesMoreMenuReachesTheRoomAndNothingStaticIsCached(t *testing.T) {
 		t.Fatal("the more menu's views must be one list")
 	}
 	menu := js[at : at+strings.Index(js[at:], "];")]
-	for _, view := range []string{"'room'", "'models'", "'plugins'", "'update'"} {
+	for _, view := range []string{"'swarm'", "'models'", "'plugins'", "'update'"} {
 		if !strings.Contains(menu, view) {
 			t.Fatalf("the phone has no sidebar: the more menu must reach %s", view)
 		}

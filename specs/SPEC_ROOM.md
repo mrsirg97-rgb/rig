@@ -356,6 +356,13 @@ Sources are pure Go and need no packages: `/proc`, `/sys/class/hwmon`, and
 connected; a source that is missing does not render (the box has three GPUs;
 a box with none must not render a GPU row).
 
+Built in 3.3.0 as the leaf package `stats` (SPEC_SERVE phase 4): one `Read`
+of those sources per poll of `/api/room`, whose payload carries the object as
+`stats` — the page's poll is the only clock, so a closed page samples
+nothing. A rate (the CPU's percent, a link's bytes per second) is a
+difference between two samples, so the first read after a page opens carries
+none rather than a number invented from one point.
+
 ## the module and the branch mechanics
 
 - rig's module path is `github.com/mrsirg97-rgb/rig/v3` (2.18.0 → 3.0.0).

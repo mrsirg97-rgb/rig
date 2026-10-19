@@ -18,6 +18,8 @@ const (
 )
 
 func (s *Server) handleRoom(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := s.readCtx(r)
+	defer cancel()
 	members := []int64{}
 	models := map[string]any{}
 	mesh := map[string]any{"mode": "unix"}
@@ -44,7 +46,10 @@ func (s *Server) handleRoom(w http.ResponseWriter, r *http.Request) {
 		mesh["machines"] = s.door.Machines()
 		mesh["horizon"] = s.door.Horizon()
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"members": members, "models": models, "mesh": mesh})
+	writeJSON(w, http.StatusOK, map[string]any{
+		"members": members, "models": models, "mesh": mesh,
+		"stats": s.vitals.Report(ctx),
+	})
 }
 
 func (s *Server) handleUpdate(w http.ResponseWriter, r *http.Request) {
