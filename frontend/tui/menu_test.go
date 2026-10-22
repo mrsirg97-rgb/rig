@@ -3,6 +3,7 @@ package tui
 import (
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/mrsirg97-rgb/rig/v3/command"
 )
@@ -32,11 +33,19 @@ func TestTheMenuOpensAtASingleSub(t *testing.T) {
 func TestASingleTopLevelMatchGhostsAndKeepsTheMenuClosed(t *testing.T) {
 	s := menuSession(t)
 	s.si.feed("/mod")
-	s.await("els")
-	bandSettle(t, s)
-	for _, row := range bandScreen(t, s, 60) {
-		if strings.Contains(row, "tab/↓ pick") {
-			t.Fatalf("a single top-level match ghosts, the menu stays closed:\n%s", strings.Join(bandScreen(t, s, 60), "\n"))
+	deadline := time.Now().Add(3 * time.Second)
+	for {
+		rows := bandScreen(t, s, 60)
+		screen := strings.Join(rows, "\n")
+		if strings.Contains(screen, "❯ /models") {
+			if strings.Contains(screen, "tab/↓ pick") {
+				t.Fatalf("a single top-level match ghosts, the menu stays closed:\n%s", screen)
+			}
+			return
 		}
+		if time.Now().After(deadline) {
+			t.Fatalf("the input row never ghosted /models:\n%s", screen)
+		}
+		time.Sleep(time.Millisecond)
 	}
 }

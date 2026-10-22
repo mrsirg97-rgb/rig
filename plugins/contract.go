@@ -22,7 +22,7 @@ var PluginContract = Contract{
 
 var TrainerContract = Contract{
 	Kind:  "trainer",
-	Attrs: []Attr{{Name: "train", Kind: "callable"}, {Name: "evaluate", Kind: "callable"}},
+	Attrs: []Attr{{Name: "train", Kind: "callable"}, {Name: "evaluate", Kind: "callable"}, {Name: "STALL", Kind: "int"}},
 }
 
 func (c Contract) registry() string {

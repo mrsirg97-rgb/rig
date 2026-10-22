@@ -28,6 +28,8 @@ const (
 
 const MaxCellMs = maxTimeoutMs
 
+const NoCellCap = 0
+
 type Reply struct {
 	ID     *string `json:"id"`
 	Ok     bool    `json:"ok"`

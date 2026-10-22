@@ -90,17 +90,16 @@ def run(code: str, rid: str, emit) -> dict:
     err_r, err_w = os.pipe()
     out_wfile = os.fdopen(out_w, "w", buffering=1, encoding="utf-8", errors="replace")
     err_wfile = os.fdopen(err_w, "w", buffering=1, encoding="utf-8", errors="replace")
+    saved1, saved2 = os.dup(1), os.dup(2)
     pumps = [threading.Thread(target=_pump, args=(out_r, out_chunks, rid, emit)),
              threading.Thread(target=_pump, args=(err_r, err_chunks, rid, emit))]
     try:
         for p in pumps:
             p.start()
+        os.dup2(out_w, 1)
+        os.dup2(err_w, 2)
         with redirect_stdout(out_wfile), redirect_stderr(err_wfile):
             res = shell.run_cell(code, store_history=True, silent=False)
-        out_wfile.close()
-        err_wfile.close()
-        for p in pumps:
-            p.join(1)
         if res.error_before_exec is not None:
             error = "".join(traceback.format_exception_only(type(res.error_before_exec),
                                                            res.error_before_exec)).strip()
@@ -114,6 +113,15 @@ def run(code: str, rid: str, emit) -> dict:
                 result_repr = "<unreprable>"
     except Exception:
         error = traceback.format_exc()
+    finally:
+        os.dup2(saved1, 1)
+        os.dup2(saved2, 2)
+        os.close(saved1)
+        os.close(saved2)
+        out_wfile.close()
+        err_wfile.close()
+        for p in pumps:
+            p.join()
     return {
         "ok": error is None,
         "out": _clip("".join(out_chunks)),
@@ -124,10 +132,14 @@ def run(code: str, rid: str, emit) -> dict:
 
 
 def main() -> None:
-    real_stdout = sys.stdout
+    proto = os.fdopen(os.dup(1), "w", buffering=1, encoding="utf-8", errors="replace")
+    proto_lock = threading.Lock()
 
     def emit(obj: dict) -> None:
-        print(json.dumps(obj), file=real_stdout, flush=True)
+        line = json.dumps(obj) + "\n"
+        with proto_lock:
+            proto.write(line)
+            proto.flush()
 
     for line in sys.stdin:
         line = line.strip()
@@ -152,7 +164,7 @@ def main() -> None:
         else:
             resp = run(req.get("code", ""), rid, emit)
         resp["id"] = rid
-        print(json.dumps(resp), file=real_stdout, flush=True)
+        emit(resp)
 
 
 if __name__ == "__main__":

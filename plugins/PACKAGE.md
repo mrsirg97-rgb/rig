@@ -26,7 +26,8 @@ nothing else: the leaf discovers and wraps; the root (cmd/rig) wires.
   back as a skipped report naming the omission, never a silent drop. `Contract` names what one file of a zone
   must expose: `PluginContract` (DESCRIPTION str, SCHEMA dict, run
   callable) and `TrainerContract` (`train(rows_path, out_dir)` and
-  `evaluate(checkpoint, rows_path)` callable); the registry a cell
+  `evaluate(checkpoint, rows_path)` callable, `STALL` int, the job's
+  stall in minutes); the registry a cell
   populates derives from the contract's kind (`__rig_plugins__`,
   `__rig_trainers__`).
 - `Report`: one plugin file's discovery outcome.

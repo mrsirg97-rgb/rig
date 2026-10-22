@@ -21,6 +21,7 @@ type Report struct {
 	Schema      json.RawMessage
 	Skipped     bool
 	Reason      string
+	Stall       int
 }
 
 type Kernel interface {
@@ -33,6 +34,7 @@ type wireReport struct {
 	OK          bool            `json:"ok"`
 	Description string          `json:"description"`
 	Schema      json.RawMessage `json:"schema"`
+	Stall       *int            `json:"stall"`
 	Error       string          `json:"error"`
 }
 
@@ -52,6 +54,10 @@ func Discover(ctx context.Context, k Kernel, files []string, c Contract) ([]Repo
 	}
 	reports := make([]Report, 0, len(out))
 	for _, w := range out {
+		stall := 0
+		if w.Stall != nil {
+			stall = *w.Stall
+		}
 		reports = append(reports, Report{
 			Name:        w.Name,
 			File:        w.File,
@@ -59,6 +65,7 @@ func Discover(ctx context.Context, k Kernel, files []string, c Contract) ([]Repo
 			Schema:      w.Schema,
 			Skipped:     !w.OK,
 			Reason:      w.Error,
+			Stall:       stall,
 		})
 	}
 	return reports, nil
@@ -111,21 +118,12 @@ func discoveryCell(files []string, c Contract) string {
 	names, _ := json.Marshal(attrNames(c))
 	attrs, _ := json.Marshal(attrPairs(c))
 	registry := c.registry()
-	description, schema := "", ""
+	reads := ""
 	for _, a := range c.Attrs {
 		switch a.Kind {
-		case "str":
-			description = a.Name
-		case "dict":
-			schema = a.Name
+		case "str", "dict", "int":
+			reads += fmt.Sprintf("        _rig_e[%q] = _rig_m.%s\n", strings.ToLower(a.Name), a.Name)
 		}
-	}
-	reads := ""
-	if description != "" {
-		reads += fmt.Sprintf("        _rig_e[\"description\"] = _rig_m.%s\n", description)
-	}
-	if schema != "" {
-		reads += fmt.Sprintf("        _rig_e[\"schema\"] = _rig_m.%s\n", schema)
 	}
 	return `import importlib.util as _rig_iu, json as _rig_j, os as _rig_os, sys as _rig_sys
 _rig_paths = _rig_j.loads('` + pyLiteral(string(paths)) + `')
@@ -151,7 +149,7 @@ for _rig_p in _rig_paths:
             raise TypeError("missing " + ", ".join(_rig_miss))
         for _f, _k in ` + string(attrs) + `:
             _v = getattr(_rig_m, _f)
-            if (_k == "str" and not isinstance(_v, str)) or (_k == "dict" and not isinstance(_v, dict)) or (_k == "callable" and not callable(_v)):
+            if (_k == "str" and not isinstance(_v, str)) or (_k == "dict" and not isinstance(_v, dict)) or (_k == "callable" and not callable(_v)) or (_k == "int" and (isinstance(_v, bool) or not isinstance(_v, int))):
                 raise TypeError(_f + " must be a " + _k)
         _rig_next[_rig_n] = _rig_m
         _rig_e["ok"] = True

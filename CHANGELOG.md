@@ -4,13 +4,19 @@
 j491 died at the cell cap: `laya.train: timed out after 600s`, with rows
 grown 315 → 569 a bigger number only moves the failure. The shape is a
 health check, not a clock. The trainer's cells carry no cap — the kernel's
-`Run` takes `0` as unbounded — and the cell's stdout now streams out of the
-kernel as it drains (a pipe under the redirect, one `stream` line per
-chunk), so `rig decision train` writes the trainer's progress into the
+`Run` takes `NoCellCap` as unbounded — and the cell's output now streams out
+of the kernel as it drains (the cell's fds 1 and 2 are pipes for the run, so
+a child process like `laya-train` streams too; one `stream` line per chunk), so `rig decision train` writes the trainer's progress into the
 job's stream while it works: a healthy run is loud, and every byte it
-prints touches the scheduler's stall watch. The enqueued job carries a
-stall (ten minutes, the window the old cap already tolerated), so a hung
-trainer is ended by the watch and a printing one never is. The trainer's
+prints touches the scheduler's stall watch. The enqueued job carries the
+trainer's own stall: the trainer contract gains `STALL`, the minutes of
+silence that mean it is hung, since only the trainer knows how often it
+prints; `/decision train` refuses a trainer the zone does not load. A hung
+trainer is ended by the watch and a printing one never is. A failed run
+keeps rig's export (`decision/train/<tag>`, the rows a rerun by hand
+needs); the trainer cleans its own checkpoint. A trainer written before
+3.3.2 is skipped until it declares `STALL`: `laya.py` needs `STALL = 10`
+and its `laya-train` call without `stdout=`/`stderr=subprocess.DEVNULL`. The trainer's
 result rides home too: the run's end status carries a summary — the job's
 last non-empty stdout line, stderr's when it failed — and the band's done
 notice says it after "done". `Invoke` takes the stream callback and takes

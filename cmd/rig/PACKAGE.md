@@ -119,8 +119,9 @@ sees core and models and nothing else.
   the train zone headless, and `/decision train` lands its once-job on
   the crontab through the `DecisionTrain` enqueue seam
   (`command/env.go`), tagged with the rig home the runner reads. The
-  once-job carries a stall (`trainerStallMinutes`, 10 — the window the
-  old cell cap already tolerated, now watched instead of timed): the
+  once-job carries the trainer's own `STALL` (read off the zone's
+  discovery; a trainer the zone does not load is refused at enqueue,
+  watched instead of timed): the
   trainer's cells are uncapped, the kernel's stream of the cell's
   stdout is written to the job's stream as it drains, and a run whose
   output goes quiet for the stall is ended by the stall watch. The

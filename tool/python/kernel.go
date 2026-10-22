@@ -109,10 +109,10 @@ func (k *kernel) send(ctx context.Context, req request, timeoutMs int, onStream 
 		return Reply{ID: strPtr(id), Ok: false, Error: &msg, Note: note}, nil
 	}
 
-	timer := time.NewTimer(time.Duration(timeoutMs) * time.Millisecond)
-	defer timer.Stop()
 	var timerC <-chan time.Time
-	if timeoutMs > 0 {
+	if timeoutMs != NoCellCap {
+		timer := time.NewTimer(time.Duration(timeoutMs) * time.Millisecond)
+		defer timer.Stop()
 		timerC = timer.C
 	}
 	select {

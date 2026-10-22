@@ -701,3 +701,26 @@ func TestARunStreamsTheCellsPrints(t *testing.T) {
 		t.Fatalf("the first print streams while the cell still runs (at %v): %q", at, joined)
 	}
 }
+
+func TestARunStreamsAChildProcessOutput(t *testing.T) {
+	requireKernel(t)
+	var mu sync.Mutex
+	var chunks []string
+	reply, err := suite.Run(context.Background(),
+		"import subprocess; subprocess.run(['sh', '-c', 'echo child-$((1+1))'])", NoCellCap,
+		func(chunk string) {
+			mu.Lock()
+			chunks = append(chunks, chunk)
+			mu.Unlock()
+		})
+	if err != nil {
+		t.Fatalf("the child's cell completes: %v", err)
+	}
+	if !reply.Ok {
+		t.Fatalf("the child's cell is ok: %+v", reply)
+	}
+	joined := strings.Join(chunks, "")
+	if !strings.Contains(joined, "child-2") {
+		t.Fatalf("a child process's output streams to the caller: %q", joined)
+	}
+}
