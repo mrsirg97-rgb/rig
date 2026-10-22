@@ -9,9 +9,7 @@ sockets, and no process is the center: the model is a guarded key, the
 instances own the models' children, and a swap and an update are
 operations in the same order the requests are. With `mesh` set in
 `settings.json` the room spans machines, their orders ordered by the
-clocks the machines agree on and converged by gossip over a tailnet. The
-room has no command of its own: its face is the dashboard's room page,
-and its rules are `specs/SPEC_ROOM.md`.
+clocks the machines agree on and converged by gossip over a tailnet.
 
 ## install
 
