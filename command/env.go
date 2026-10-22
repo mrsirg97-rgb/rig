@@ -102,6 +102,7 @@ type Env struct {
 	PluginsDir string
 
 	DecisionTrain func(ctx context.Context, trainer string) (string, error)
+	Trainers      func() []string
 }
 
 func envOf(env any) (*Env, error) {

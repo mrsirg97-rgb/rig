@@ -283,13 +283,20 @@ the filename stem (`laya.py` first), beside `pending/` and `disabled/`
 subzones, loaded through the machinery the plugins share (SPEC_PLUGINS,
 the 2.13.0 amendment): the same filename rule, the same contract check
 with a different contract, the same zone moves. The trainer contract is
-two callables: `train(rows_path, out_dir) -> report` and
-`evaluate(checkpoint, rows_path) -> report`, where a report is JSON —
+two callables and a number: `train(rows_path, out_dir) -> report`,
+`evaluate(checkpoint, rows_path) -> report`, and `STALL`, the minutes of
+silence that mean the trainer is hung (the job's stall: only the trainer
+knows how often it prints), where a report is JSON —
 per-question `n`, `correct`, `accuracy`, and for a noul question the
 mean predicted p(true) by gold class (`pTrue.goldTrue`,
 `pTrue.goldFalse`), the two numbers that separated signal from none
 above. A train report carries one field more, `checkpoint`: the
-directory it wrote under `out_dir`.
+directory it wrote under `out_dir`. A trainer prints progress — long
+work runs loud, its output and its child processes' reaching the job's
+stream through the kernel's cell pipes (the cell's fds 1 and 2 are the
+pipes) — and cleans what it wrote of a failed run: the trainer owns its
+checkpoint, while the runner keeps its own export under
+`decision/train/<tag>`, the rows a rerun by hand needs.
 
 Trainers do not load into the session kernel: torch is two gigabytes
 and the kernel's venv is not where it belongs. The zone is read through
@@ -329,10 +336,13 @@ incumbent score, so the three reports share one table.
 
 ### the run, the table, the promotion
 
-The run discovers the zone, calls the trainer's `train` (the cell bound
-is the kernel's max cell timeout, 600 s; the real bound is the
-scheduler's per-job timeout), then `evaluate` three ways on the same
-held-out rows: the candidate's checkpoint, the incumbent, and the
+The run discovers the zone, calls the trainer's `train` — the cell
+carries no cap (the kernel's `Run` takes `NoCellCap` as unbounded; the trainer's
+progress streams out of the kernel into the job's stream, and the real
+bound is the job's health: the run ends when the stream goes quiet for
+the job's stall, the stall watch ending a hung trainer that a clock
+would only defer) — then `evaluate` three ways on the same held-out
+rows: the candidate's checkpoint, the incumbent, and the
 constant. The incumbent is the currently served checkpoint, read from
 the unit file settings `decisionUnit` names (`~/.config/systemd/user/
 laya.service`): the `Environment=` line carrying

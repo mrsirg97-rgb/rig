@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/mrsirg97-rgb/rig/v3/command"
+	"github.com/mrsirg97-rgb/rig/v3/core"
 )
 
 func TestDecisionTrainHandsTheTrainerToTheSeam(t *testing.T) {
@@ -33,5 +34,40 @@ func TestDecisionTrainRefuses(t *testing.T) {
 		if _, err := byName["decision"].Run(context.Background(), args, seam); err == nil {
 			t.Fatalf("decision %q must refuse", args)
 		}
+	}
+}
+
+func TestDecisionSubsCarryTheTrainerNames(t *testing.T) {
+	env := &command.Env{Trainers: func() []string { return []string{"laya", "risk"} }}
+	cmds := command.All()
+	command.DecisionHints(cmds, env)
+	subber, ok := decisionIn(cmds).(command.Subber)
+	if !ok {
+		t.Fatal("decision is a Subber")
+	}
+	subs := subber.Sub()
+	if len(subs) != 2 || subs[0].Name != "train laya" || subs[1].Name != "train risk" {
+		t.Fatalf("the zone's trainers are the subs: %+v", subs)
+	}
+	if subs[0].Desc == "" {
+		t.Fatal("the row's description is the point")
+	}
+}
+
+func decisionIn(cmds []core.Command) core.Command {
+	for _, c := range cmds {
+		if c.Name() == "decision" {
+			return c
+		}
+	}
+	return nil
+}
+
+func TestDecisionSubsFallBackToTheUsageRow(t *testing.T) {
+	byName := allByName(t)
+	command.DecisionHints(command.All(), &command.Env{Trainers: func() []string { return nil }})
+	subs := byName["decision"].(command.Subber).Sub()
+	if len(subs) != 1 || subs[0].Name != "train" || subs[0].Desc != "enqueue a training run off the turn: train <trainer>; the nightly is the operator's cron line" {
+		t.Fatalf("no seam falls back to the usage row: %+v", subs)
 	}
 }

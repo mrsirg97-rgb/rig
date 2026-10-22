@@ -28,6 +28,8 @@ const (
 
 const MaxCellMs = maxTimeoutMs
 
+const NoCellCap = 0
+
 type Reply struct {
 	ID     *string `json:"id"`
 	Ok     bool    `json:"ok"`
@@ -36,6 +38,7 @@ type Reply struct {
 	Result *string `json:"result"`
 	Error  *string `json:"error"`
 	Note   *string `json:"note"`
+	Stream *string `json:"stream,omitempty"`
 }
 
 type request struct {
@@ -59,7 +62,7 @@ type Python interface {
 	Vars(ctx context.Context, timeoutMs int) (string, error)
 	Reset(ctx context.Context, timeoutMs int) (string, error)
 
-	Run(ctx context.Context, code string, timeoutMs int) (Reply, error)
+	Run(ctx context.Context, code string, timeoutMs int, onStream func(string)) (Reply, error)
 	Host() string
 	Close()
 }
@@ -184,7 +187,7 @@ func (t *pyTool) run(ctx context.Context, req request, timeoutMs int) (string, e
 	if timeoutMs < minTimeoutMs || timeoutMs > maxTimeoutMs {
 		return "", fmt.Errorf("python: timeoutMs must be between %d and %d, got %d", minTimeoutMs, maxTimeoutMs, timeoutMs)
 	}
-	reply, err := t.k.send(ctx, req, timeoutMs)
+	reply, err := t.k.send(ctx, req, timeoutMs, nil)
 	if err != nil {
 		return "", err
 	}
@@ -208,7 +211,7 @@ func (t *pyTool) Close() {
 	}
 }
 
-func (t *pyTool) Run(ctx context.Context, code string, timeoutMs int) (Reply, error) {
+func (t *pyTool) Run(ctx context.Context, code string, timeoutMs int, onStream func(string)) (Reply, error) {
 	req := request{Code: &code}
-	return t.k.send(ctx, req, timeoutMs)
+	return t.k.send(ctx, req, timeoutMs, onStream)
 }

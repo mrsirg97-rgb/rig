@@ -10,6 +10,8 @@ Protocol: one JSON object per line on stdin, one per line on stdout.
        {"id": "2", "cmd": "reset"}       fresh namespace
        {"id": "3", "cmd": "vars"}        summarise the namespace
   out: {"id": "1", "ok": true, "out": "...", "result": "...", "error": null}
+       {"id": "1", "stream": "..."}      a cell's stdout/stderr, as it drains
+       (a stream line's text is also collected into the final reply's "out"/"err")
 
 Deliberately not jupyter_client/ZMQ: that pulls a much larger dependency tree
 for features (multi-client, heartbeat, side channels) a single local agent
@@ -20,6 +22,7 @@ import json
 import os
 import re
 import sys
+import threading
 import traceback
 from contextlib import redirect_stderr, redirect_stdout
 
@@ -69,18 +72,40 @@ def describe_vars() -> str:
     return "\n".join(sorted(rows)) or "(empty)"
 
 
-def run(code: str) -> dict:
-    out, err = io.StringIO(), io.StringIO()
+def _pump(fd: int, chunks: list, rid: str, emit) -> None:
+    while True:
+        raw = os.read(fd, 4096)
+        if not raw:
+            os.close(fd)
+            return
+        text = raw.decode("utf-8", "replace")
+        chunks.append(text)
+        emit({"id": rid, "stream": _clip(text)})
+
+
+def run(code: str, rid: str, emit) -> dict:
+    out_chunks, err_chunks = [], []
     result_repr, error = None, None
+    out_r, out_w = os.pipe()
+    err_r, err_w = os.pipe()
+    out_wfile = os.fdopen(out_w, "w", buffering=1, encoding="utf-8", errors="replace")
+    err_wfile = os.fdopen(err_w, "w", buffering=1, encoding="utf-8", errors="replace")
+    saved1, saved2 = os.dup(1), os.dup(2)
+    pumps = [threading.Thread(target=_pump, args=(out_r, out_chunks, rid, emit)),
+             threading.Thread(target=_pump, args=(err_r, err_chunks, rid, emit))]
     try:
-        with redirect_stdout(out), redirect_stderr(err):
+        for p in pumps:
+            p.start()
+        os.dup2(out_w, 1)
+        os.dup2(err_w, 2)
+        with redirect_stdout(out_wfile), redirect_stderr(err_wfile):
             res = shell.run_cell(code, store_history=True, silent=False)
         if res.error_before_exec is not None:
             error = "".join(traceback.format_exception_only(type(res.error_before_exec),
-                                                            res.error_before_exec)).strip()
+                                                           res.error_before_exec)).strip()
         elif res.error_in_exec is not None:
             error = "".join(traceback.format_exception_only(type(res.error_in_exec),
-                                                            res.error_in_exec)).strip()
+                                                           res.error_in_exec)).strip()
         elif res.result is not None:
             try:
                 result_repr = repr(res.result)
@@ -88,17 +113,34 @@ def run(code: str) -> dict:
                 result_repr = "<unreprable>"
     except Exception:
         error = traceback.format_exc()
+    finally:
+        os.dup2(saved1, 1)
+        os.dup2(saved2, 2)
+        os.close(saved1)
+        os.close(saved2)
+        out_wfile.close()
+        err_wfile.close()
+        for p in pumps:
+            p.join()
     return {
         "ok": error is None,
-        "out": _clip(out.getvalue()),
-        "err": _clip(err.getvalue()),
+        "out": _clip("".join(out_chunks)),
+        "err": _clip("".join(err_chunks)),
         "result": _clip(result_repr) if result_repr else None,
         "error": _clip(error) if error else None,
     }
 
 
 def main() -> None:
-    real_stdout = sys.stdout
+    proto = os.fdopen(os.dup(1), "w", buffering=1, encoding="utf-8", errors="replace")
+    proto_lock = threading.Lock()
+
+    def emit(obj: dict) -> None:
+        line = json.dumps(obj) + "\n"
+        with proto_lock:
+            proto.write(line)
+            proto.flush()
+
     for line in sys.stdin:
         line = line.strip()
         if not line:
@@ -106,8 +148,7 @@ def main() -> None:
         try:
             req = json.loads(line)
         except Exception as e:
-            print(json.dumps({"id": None, "ok": False, "error": f"bad request: {e}"}),
-                  file=real_stdout, flush=True)
+            emit({"id": None, "ok": False, "error": f"bad request: {e}"})
             continue
 
         rid, cmd = req.get("id"), req.get("cmd")
@@ -121,9 +162,9 @@ def main() -> None:
         elif cmd == "ping":
             resp = {"ok": True, "out": "pong", "err": "", "result": None, "error": None}
         else:
-            resp = run(req.get("code", ""))
+            resp = run(req.get("code", ""), rid, emit)
         resp["id"] = rid
-        print(json.dumps(resp), file=real_stdout, flush=True)
+        emit(resp)
 
 
 if __name__ == "__main__":

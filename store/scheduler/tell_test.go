@@ -159,6 +159,7 @@ func TestTheJobStatusActCrossesTheRegistry(t *testing.T) {
 	frame, err := enc.Encode(broadcast.NewMessage(7, true, room.JobStatus{
 		Job: "j8", Prompt: "do the thing", State: room.JobRunning,
 		Started: started, Workers: 1,
+		Summary: "decision train laya · 569 gold · promoted",
 	}))
 	if err != nil {
 		t.Fatal(err)
@@ -177,7 +178,88 @@ func TestTheJobStatusActCrossesTheRegistry(t *testing.T) {
 	if st.Job != "j8" || st.State != room.JobRunning || st.Workers != 1 || !st.Started.Equal(started) {
 		t.Fatalf("the act survives the frame: %+v", st)
 	}
+	if st.Summary != "decision train laya · 569 gold · promoted" {
+		t.Fatalf("the summary survives the frame: %+v", st)
+	}
+
+	old, err := enc.Encode(broadcast.NewMessage(7, true, room.JobStatus{
+		Job: "j8", Prompt: "do the thing", State: room.JobRunning,
+		Started: started, Workers: 1,
+	}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(old), "Summary") {
+		t.Fatalf("an empty summary stays off the wire (a 3.3.1 peer sends exactly this frame): %s", old)
+	}
+	oldMsg, err := enc.Decode(old)
+	if err != nil {
+		t.Fatal(err)
+	}
+	oldSt, ok := oldMsg.Signal().(room.JobStatus)
+	if !ok {
+		t.Fatalf("the old payload decodes to the act: %T", oldMsg.Signal())
+	}
+	if oldSt.Job != "j8" || oldSt.Workers != 1 || oldSt.Summary != "" {
+		t.Fatalf("a 3.3.1 peer's frame decodes with the summary empty: %+v", oldSt)
+	}
 	if msg.Origin() != 7 {
 		t.Fatalf("the act carries its origin: %d", msg.Origin())
+	}
+}
+
+func TestTheEndStatusCarriesTheRunSummary(t *testing.T) {
+	cwd := realCwd(t, "tellsummary")
+	h := newHarness(t, cwd)
+	if _, err := h.create(sched.CreateInput{
+		Name: "tick", Command: "true", Cron: "20 10 * * *", Cwd: cwd,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	var told []room.JobStatus
+	tell := func(st room.JobStatus) { told = append(told, st) }
+	if err := sched.RunJob("j1", sched.RunOpts{
+		Home: h.home, Crontab: h.ct, RigHome: h.rigHome,
+		Fetch: func(string) (json.RawMessage, error) { return nil, jsonError("no fetch") },
+		Spawn: (&fakeSpawn{result: sched.SpawnResult{Exit: 0,
+			Stdout: "loading rows\nepoch 1 done\nepoch 2 done\n"}}).spawn,
+		WorkerCmd: []string{"/x/rig"}, Now: func() time.Time { return runnerNow },
+		Sandbox: "off", Tell: tell,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if told[1].State != room.JobDone || told[1].Summary != "epoch 2 done" {
+		t.Fatalf("the done status carries the run's last stdout line: %+v", told[1])
+	}
+
+	told = nil
+	if err := sched.RunJob("j1", sched.RunOpts{
+		Home: h.home, Crontab: h.ct, RigHome: h.rigHome,
+		Fetch: func(string) (json.RawMessage, error) { return nil, jsonError("no fetch") },
+		Spawn: (&fakeSpawn{result: sched.SpawnResult{Exit: 1,
+			Stdout: "step ok\n",
+			Stderr: "warn x\n[runner: killed after stall]\nthe trainer died\n"}}).spawn,
+		WorkerCmd: []string{"/x/rig"}, Now: func() time.Time { return runnerNow },
+		Sandbox: "off", Tell: tell,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if told[1].State != room.JobFailed || told[1].Summary != "the trainer died" {
+		t.Fatalf("a failed end carries stderr's last line over the runner's notes: %+v", told[1])
+	}
+
+	told = nil
+	if err := sched.RunJob("j1", sched.RunOpts{
+		Home: h.home, Crontab: h.ct, RigHome: h.rigHome,
+		Fetch: func(string) (json.RawMessage, error) { return nil, jsonError("no fetch") },
+		Spawn: (&fakeSpawn{result: sched.SpawnResult{Exit: 0,
+			Stdout: "progress\n[spawn: output truncated, kept the first and last 131072 bytes of 262144]\n"}}).spawn,
+		WorkerCmd: []string{"/x/rig"}, Now: func() time.Time { return runnerNow },
+		Sandbox: "off", Tell: tell,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if told[1].Summary != "progress" {
+		t.Fatalf("the runner's truncation note is not the run's result: %+v", told[1])
 	}
 }

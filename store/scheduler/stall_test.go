@@ -2,6 +2,7 @@ package scheduler_test
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -10,6 +11,7 @@ import (
 	"time"
 
 	"github.com/mrsirg97-rgb/evt/broadcast"
+	"github.com/mrsirg97-rgb/rig/v3/room"
 	"github.com/mrsirg97-rgb/rig/v3/store"
 	sched "github.com/mrsirg97-rgb/rig/v3/store/scheduler"
 )
@@ -399,5 +401,37 @@ func TestRealSpawnKeepsTheResultOfAWorkerThatTalksPastTheCap(t *testing.T) {
 	}
 	if res.Exit != 0 || !strings.HasSuffix(strings.TrimSpace(res.Stdout), "the report") {
 		t.Fatalf("exit %d; the tail keeps the report: %q", res.Exit, res.Stdout[len(res.Stdout)-120:])
+	}
+}
+
+func TestASilentCommandFireIsEndedByTheStall(t *testing.T) {
+	cwd := realCwd(t, "stallcmd")
+	h := newHarness(t, cwd)
+	if _, err := h.create(sched.CreateInput{
+		Name: "silent", Command: "true", Cron: "20 10 * * *", Cwd: cwd,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	var told []room.JobStatus
+	tell := func(st room.JobStatus) { told = append(told, st) }
+	spawn := func(ctx context.Context, argv []string, wd string, env []string, observe func([]byte)) (sched.SpawnResult, error) {
+		<-ctx.Done()
+		return sched.SpawnResult{Exit: 1}, nil
+	}
+	if err := sched.RunJob("j1", sched.RunOpts{
+		Home: h.home, Crontab: h.ct, RigHome: h.rigHome,
+		Fetch:     func(string) (json.RawMessage, error) { return nil, jsonError("no fetch") },
+		Spawn:     spawn,
+		WorkerCmd: []string{"/x/rig"}, Now: func() time.Time { return runnerNow },
+		Sandbox: "off", Tell: tell, Stall: 60 * time.Millisecond,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	logBody := readRunLog(t, h, "j1", logName)
+	if !strings.Contains(logBody, "[runner: killed after stall]") {
+		t.Fatalf("a silent command fire must end by the stall watch: %s", logBody)
+	}
+	if told[len(told)-1].State != room.JobFailed {
+		t.Fatalf("the end is a failure: %+v", told[len(told)-1])
 	}
 }

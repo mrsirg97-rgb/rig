@@ -19,7 +19,7 @@ type fakeKernel struct {
 	errs    []error
 }
 
-func (f *fakeKernel) Run(ctx context.Context, code string, timeoutMs int) (pythontool.Reply, error) {
+func (f *fakeKernel) Run(ctx context.Context, code string, timeoutMs int, onStream func(string)) (pythontool.Reply, error) {
 	f.cells = append(f.cells, code)
 	i := len(f.cells) - 1
 	if i < len(f.errs) && f.errs[i] != nil {
@@ -382,4 +382,31 @@ func TestAPluginImportingASiblingLoads(t *testing.T) {
 	if rep, ok := byName["z_sibling"]; ok && strings.Contains(rep.Error, "ModuleNotFoundError") {
 		t.Fatalf("the sibling must import cleanly: %+v", rep)
 	}
+}
+
+func TestInvokeStreamsProgressAndSplitsTheResult(t *testing.T) {
+	k := &streamingKernel{}
+	var got []string
+	raw, err := Invoke(context.Background(), k, "trainer", "fake", "train", 0,
+		func(chunk string) { got = append(got, chunk) }, "/rows", "/out")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(raw) != `{"checkpoint":"/x/ck"}` {
+		t.Fatalf("the result is the cell's last line: %s", raw)
+	}
+	if len(got) != 2 || got[0] != "epoch 1\n" || got[1] != "epoch 2\n" {
+		t.Fatalf("the cell's stdout streams to the caller: %q", got)
+	}
+}
+
+type streamingKernel struct{}
+
+func (k *streamingKernel) Run(ctx context.Context, code string, timeoutMs int, onStream func(string)) (pythontool.Reply, error) {
+	for _, chunk := range []string{"epoch 1\n", "epoch 2\n"} {
+		if onStream != nil {
+			onStream(chunk)
+		}
+	}
+	return okReply("epoch 1\nepoch 2\n" + `{"checkpoint":"/x/ck"}`), nil
 }

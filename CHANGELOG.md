@@ -1,4 +1,38 @@
 # Changelog
+## [3.3.2]: the decision train is watched, not timed
+
+j491 died at the cell cap: `laya.train: timed out after 600s`, with rows
+grown 315 → 569 a bigger number only moves the failure. The shape is a
+health check, not a clock. The trainer's cells carry no cap — the kernel's
+`Run` takes `NoCellCap` as unbounded — and the cell's output now streams out
+of the kernel as it drains (the cell's fds 1 and 2 are pipes for the run, so
+a child process like `laya-train` streams too; one `stream` line per chunk), so `rig decision train` writes the trainer's progress into the
+job's stream while it works: a healthy run is loud, and every byte it
+prints touches the scheduler's stall watch. The enqueued job carries the
+trainer's own stall: the trainer contract gains `STALL`, the minutes of
+silence that mean it is hung, since only the trainer knows how often it
+prints; `/decision train` refuses a trainer the zone does not load. A hung
+trainer is ended by the watch and a printing one never is. A failed run
+keeps rig's export (`decision/train/<tag>`, the rows a rerun by hand
+needs); the trainer cleans its own checkpoint. A trainer written before
+3.3.2 is skipped until it declares `STALL`: `laya.py` needs `STALL = 10`
+and its `laya-train` call without `stdout=`/`stderr=subprocess.DEVNULL`. The trainer's
+result rides home too: the run's end status carries a summary — the job's
+last non-empty stdout line, stderr's when it failed — and the band's done
+notice says it after "done". `Invoke` takes the stream callback and takes
+the result as the cell's last line, so a printing trainer no longer has to
+be silent to parse.
+
+Two TUI gaps closed around it. The completion menu opened only at two
+candidates, and `decision` carries exactly one sub, so typing `/decision`
+showed nothing: a command's sub list opens at one candidate (the row's
+description is the point) while top-level names keep one-match-ghosts.
+And the menu's rows are the zone now: `/decision`'s subs are the trainers
+the train zone loads, read at menu time off a zone-stamp cache, so a
+trainer dropped into `train/` shows without a restart and skipped
+trainers stay out — the list is what `rig decision train` accepts,
+through the discovery it already runs.
+
 ## [3.3.1]: the room joins on a Mac
 
 3.1.1's audit made a stat failure fail the identity, and on Linux that is

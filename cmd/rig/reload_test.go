@@ -40,7 +40,7 @@ type kernelStub struct {
 	replies []pythontool.Reply
 }
 
-func (k *kernelStub) Run(ctx context.Context, code string, timeoutMs int) (pythontool.Reply, error) {
+func (k *kernelStub) Run(ctx context.Context, code string, timeoutMs int, onStream func(string)) (pythontool.Reply, error) {
 	k.mu.Lock()
 	k.cells = append(k.cells, code)
 	i := len(k.cells) - 1
@@ -71,7 +71,7 @@ func (k *kernelStub) Exec(ctx context.Context, data json.RawMessage) (string, er
 	if err := json.Unmarshal(data, &a); err != nil {
 		return "", err
 	}
-	reply, err := k.Run(ctx, a.Code, 0)
+	reply, err := k.Run(ctx, a.Code, 0, nil)
 	if err != nil {
 		return "", err
 	}

@@ -16,9 +16,14 @@ func TestTheTrainerContractRefusesAMissingEvaluate(t *testing.T) {
 		t.Fatalf("a file with neither method refuses naming train, got %v", err)
 	}
 	both := trainOnly + "def evaluate(checkpoint, rows_path):\n    return {}\n"
-	path, created, err := WritePending(t.TempDir(), "train", nil, "laya", both, TrainerContract)
+	_, _, err = WritePending(t.TempDir(), "train", nil, "laya", both, TrainerContract)
+	if err == nil || !strings.Contains(err.Error(), "missing STALL") {
+		t.Fatalf("a trainer with both methods but no STALL refuses, got %v", err)
+	}
+	whole := "STALL = 10\n" + both
+	path, created, err := WritePending(t.TempDir(), "train", nil, "laya", whole, TrainerContract)
 	if err != nil || !created || path == "" {
-		t.Fatalf("a trainer carrying both methods writes: %v, %v", err, path)
+		t.Fatalf("a trainer carrying both methods and its STALL writes: %v, %v", err, path)
 	}
 }
 
@@ -32,7 +37,7 @@ func TestTheZoneNamesTheHomeDirectory(t *testing.T) {
 	if err != nil || listed != nil {
 		t.Fatalf("an absent listing reads empty: %v, %v", listed, err)
 	}
-	if _, _, err := WritePending(home, "train", nil, "laya", "def train(rows_path, out_dir):\n    return {}\ndef evaluate(checkpoint, rows_path):\n    return {}\n", TrainerContract); err != nil {
+	if _, _, err := WritePending(home, "train", nil, "laya", "STALL = 10\ndef train(rows_path, out_dir):\n    return {}\ndef evaluate(checkpoint, rows_path):\n    return {}\n", TrainerContract); err != nil {
 		t.Fatal(err)
 	}
 	pending, err := Zone(home, "train", "pending")

@@ -117,7 +117,10 @@ depends on core and models; the root depends on the leaf.
   schedule is the operator's own cron line, not a default. The trainer
   name is validated at the seam (the plugin filename stem); anything else
   on the line refuses with the usage, and a missing seam refuses with the
-  no-seam voice.
+  no-seam voice. The verb's subs are the zone's trainers at menu time
+  (`DecisionHints` over `Env.Trainers`, `train <name>` a row), so the
+  menu opens on the command naming what the zone loads; with no seam the
+  single `train` usage row stands.
 - **theme**: the operator's dial over the three presets (2.3.2): bare
   shows the active one (`theme: warm (default)`, `theme: custom
   (theme.json)`), `theme warm|cool|custom` sets it through the env's

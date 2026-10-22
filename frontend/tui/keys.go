@@ -189,14 +189,20 @@ func (t *tui) clearEsc() {
 }
 
 func (t *tui) menuSyncLocked() {
-	t.menuCands, _, _ = t.completionLocked()
+	t.menuCands, _, t.menuSubs, _ = t.completionLocked()
 	t.menuSel = 0
 	t.menuDead = false
 	t.menuNavigated = false
 }
 
 func (t *tui) menuOpenLocked() bool {
-	return len(t.menuCands) >= 2 && !t.menuDead
+	if t.menuDead {
+		return false
+	}
+	if t.menuSubs {
+		return len(t.menuCands) >= 1
+	}
+	return len(t.menuCands) >= 2
 }
 
 func (t *tui) closeMenu() bool {

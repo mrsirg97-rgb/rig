@@ -54,7 +54,7 @@ import (
 	webtool "github.com/mrsirg97-rgb/rig/v3/tool/web"
 )
 
-const Version = "3.3.1"
+const Version = "3.3.2"
 
 func claimPriority(prompt string, served bool) (int, error) {
 	if v := os.Getenv("RIG_PRIORITY"); v != "" {
@@ -166,7 +166,7 @@ func rigMain() int {
 	}
 
 	if len(os.Args) > 1 && os.Args[1] == "decision" {
-		os.Exit(decisionTrain(os.Args[2:]))
+		os.Exit(decisionTrain(os.Args[2:], newTrainKernel))
 	}
 
 	serveAddr := ""
@@ -575,8 +575,10 @@ func rigMain() int {
 		return command.RenderPlugins(r.pluginInfos, "", r.pluginsHome), nil
 	})
 
+	menus := newTrainerMenu(cfgDir, cwd)
 	env := r.commandEnv()
-	env.DecisionTrain = decisionTrainEnqueue(scdb, cfgDir, self, cwd, sched.RealCrontab(""))
+	env.DecisionTrain = decisionTrainEnqueue(scdb, cfgDir, self, cwd, sched.RealCrontab(""), menus.stall)
+	env.Trainers = menus.names
 
 	var fe core.Frontend
 	var webSrv *web.Server

@@ -57,8 +57,11 @@ the five signals the instances exchange beside the protocol's own.
   `TableChange` (one row's raw JSON), `Update` and `JobStatus` (3.2.0:
   a scheduled job's state crossing processes — the job's id, the
   prompt's first line, `running`, `done` or `failed`, the started and
-  ended stamps, the failure's reason, the worker count, and the
-  worker's latest call with its stamp), with `Codec` and `Registry`
+  ended stamps, the failure's reason, the worker count, the worker's
+  latest call with its stamp, and since 3.3.2 the run's summary — the
+  job's last non-empty stdout line, stderr's when the run failed,
+  omitted from the wire when empty so a 3.2.0 peer decodes the frame
+  unchanged), with `Codec` and `Registry`
   declaring rig's six kinds beside `broadcast.Protocol()`'s. `New` takes
   the member's version and writes it to `<room dir>/<id>.version` beside
   the socket (`Close` removes it); `Admits(version)` reads every live

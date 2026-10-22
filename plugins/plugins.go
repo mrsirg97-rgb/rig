@@ -21,10 +21,11 @@ type Report struct {
 	Schema      json.RawMessage
 	Skipped     bool
 	Reason      string
+	Stall       int
 }
 
 type Kernel interface {
-	Run(ctx context.Context, code string, timeoutMs int) (pythontool.Reply, error)
+	Run(ctx context.Context, code string, timeoutMs int, onStream func(string)) (pythontool.Reply, error)
 }
 
 type wireReport struct {
@@ -33,11 +34,12 @@ type wireReport struct {
 	OK          bool            `json:"ok"`
 	Description string          `json:"description"`
 	Schema      json.RawMessage `json:"schema"`
+	Stall       *int            `json:"stall"`
 	Error       string          `json:"error"`
 }
 
 func Discover(ctx context.Context, k Kernel, files []string, c Contract) ([]Report, error) {
-	reply, err := k.Run(ctx, discoveryCell(files, c), defaultTimeoutMs)
+	reply, err := k.Run(ctx, discoveryCell(files, c), defaultTimeoutMs, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -52,6 +54,10 @@ func Discover(ctx context.Context, k Kernel, files []string, c Contract) ([]Repo
 	}
 	reports := make([]Report, 0, len(out))
 	for _, w := range out {
+		stall := 0
+		if w.Stall != nil {
+			stall = *w.Stall
+		}
 		reports = append(reports, Report{
 			Name:        w.Name,
 			File:        w.File,
@@ -59,6 +65,7 @@ func Discover(ctx context.Context, k Kernel, files []string, c Contract) ([]Repo
 			Schema:      w.Schema,
 			Skipped:     !w.OK,
 			Reason:      w.Error,
+			Stall:       stall,
 		})
 	}
 	return reports, nil
@@ -111,21 +118,12 @@ func discoveryCell(files []string, c Contract) string {
 	names, _ := json.Marshal(attrNames(c))
 	attrs, _ := json.Marshal(attrPairs(c))
 	registry := c.registry()
-	description, schema := "", ""
+	reads := ""
 	for _, a := range c.Attrs {
 		switch a.Kind {
-		case "str":
-			description = a.Name
-		case "dict":
-			schema = a.Name
+		case "str", "dict", "int":
+			reads += fmt.Sprintf("        _rig_e[%q] = _rig_m.%s\n", strings.ToLower(a.Name), a.Name)
 		}
-	}
-	reads := ""
-	if description != "" {
-		reads += fmt.Sprintf("        _rig_e[\"description\"] = _rig_m.%s\n", description)
-	}
-	if schema != "" {
-		reads += fmt.Sprintf("        _rig_e[\"schema\"] = _rig_m.%s\n", schema)
 	}
 	return `import importlib.util as _rig_iu, json as _rig_j, os as _rig_os, sys as _rig_sys
 _rig_paths = _rig_j.loads('` + pyLiteral(string(paths)) + `')
@@ -151,7 +149,7 @@ for _rig_p in _rig_paths:
             raise TypeError("missing " + ", ".join(_rig_miss))
         for _f, _k in ` + string(attrs) + `:
             _v = getattr(_rig_m, _f)
-            if (_k == "str" and not isinstance(_v, str)) or (_k == "dict" and not isinstance(_v, dict)) or (_k == "callable" and not callable(_v)):
+            if (_k == "str" and not isinstance(_v, str)) or (_k == "dict" and not isinstance(_v, dict)) or (_k == "callable" and not callable(_v)) or (_k == "int" and (isinstance(_v, bool) or not isinstance(_v, int))):
                 raise TypeError(_f + " must be a " + _k)
         _rig_next[_rig_n] = _rig_m
         _rig_e["ok"] = True
@@ -185,8 +183,8 @@ func attrPairs(c Contract) [][2]string {
 	return out
 }
 
-func Invoke(ctx context.Context, k Kernel, kind, name, fn string, timeoutMs int, args ...string) (json.RawMessage, error) {
-	reply, err := k.Run(ctx, invokeCell(kind, name, fn, args), timeoutMs)
+func Invoke(ctx context.Context, k Kernel, kind, name, fn string, timeoutMs int, onStream func(string), args ...string) (json.RawMessage, error) {
+	reply, err := k.Run(ctx, invokeCell(kind, name, fn, args), timeoutMs, onStream)
 	if err != nil {
 		return nil, err
 	}
@@ -197,13 +195,24 @@ func Invoke(ctx context.Context, k Kernel, kind, name, fn string, timeoutMs int,
 	if reply.Out != nil {
 		out = strings.TrimSpace(*reply.Out)
 	}
-	if out == "" {
+	result := lastLine(out)
+	if result == "" {
 		return nil, fmt.Errorf("%s.%s: the kernel printed nothing", name, fn)
 	}
-	if !json.Valid([]byte(out)) {
-		return nil, fmt.Errorf("%s.%s: the plugin printed %.60q, not JSON", name, fn, out)
+	if !json.Valid([]byte(result)) {
+		return nil, fmt.Errorf("%s.%s: the plugin printed %.60q, not JSON", name, fn, result)
 	}
-	return json.RawMessage(out), nil
+	return json.RawMessage(result), nil
+}
+
+func lastLine(out string) string {
+	for len(out) > 0 && (out[len(out)-1] == '\n' || out[len(out)-1] == '\r' || out[len(out)-1] == ' ' || out[len(out)-1] == '\t') {
+		out = out[:len(out)-1]
+	}
+	if i := strings.LastIndexAny(out, "\r\n"); i >= 0 {
+		out = out[i+1:]
+	}
+	return out
 }
 
 func invokeCell(kind, name, fn string, args []string) string {
@@ -240,7 +249,7 @@ func (t *Tool) Exec(ctx context.Context, args json.RawMessage) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	reply, err := t.k.Run(ctx, callCell(t.name, argsJSON), defaultTimeoutMs)
+	reply, err := t.k.Run(ctx, callCell(t.name, argsJSON), defaultTimeoutMs, nil)
 	if err != nil {
 		return "", err
 	}

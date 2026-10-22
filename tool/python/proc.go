@@ -41,10 +41,15 @@ type proc struct {
 	dead     chan struct{}
 
 	mu      sync.Mutex
-	pending map[string]chan Reply
+	pending map[string]*pendingCall
 
 	errMu  sync.Mutex
 	errBuf []byte
+}
+
+type pendingCall struct {
+	ch   chan Reply
+	sink func(string)
 }
 
 func (k *kernel) start() (*proc, error) {
@@ -74,7 +79,7 @@ func (k *kernel) start() (*proc, error) {
 		stdin:    stdin,
 		readDone: make(chan struct{}),
 		dead:     make(chan struct{}),
-		pending:  map[string]chan Reply{},
+		pending:  map[string]*pendingCall{},
 	}
 	k.proc = p
 	go p.readLoop(stdout)
@@ -107,12 +112,21 @@ func (p *proc) deliver(raw string) {
 		return
 	}
 	p.mu.Lock()
-	ch := p.pending[*r.ID]
-	delete(p.pending, *r.ID)
+	call := p.pending[*r.ID]
+	if r.Stream != nil {
+		p.mu.Unlock()
+		if call != nil && call.sink != nil {
+			call.sink(*r.Stream)
+		}
+		return
+	}
+	if call != nil {
+		delete(p.pending, *r.ID)
+	}
 	p.mu.Unlock()
-	if ch != nil {
+	if call != nil {
 		select {
-		case ch <- r:
+		case call.ch <- r:
 		default:
 		}
 	}

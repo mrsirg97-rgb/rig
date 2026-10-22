@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -18,6 +19,7 @@ import (
 	decisionstore "github.com/mrsirg97-rgb/rig/v3/store/decision"
 	sched "github.com/mrsirg97-rgb/rig/v3/store/scheduler"
 	"github.com/mrsirg97-rgb/rig/v3/testenv"
+	pythontool "github.com/mrsirg97-rgb/rig/v3/tool/python"
 )
 
 type crontabRecord struct{ lines string }
@@ -32,7 +34,7 @@ func TestDecisionTrainEnqueueLandsTwoMinutesOut(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer db.DB.Close()
-	enqueue := decisionTrainEnqueue(db, home, "/x/rig", t.TempDir(), &crontabRecord{})
+	enqueue := decisionTrainEnqueue(db, home, "/x/rig", t.TempDir(), &crontabRecord{}, func(string) (int, bool) { return 10, true })
 	before := time.Now()
 	if _, err := enqueue(context.Background(), "reviewer"); err != nil {
 		t.Fatal(err)
@@ -42,12 +44,16 @@ func TestDecisionTrainEnqueueLandsTwoMinutesOut(t *testing.T) {
 		t.Fatal(err)
 	}
 	var record struct {
-		Name string  `json:"name"`
-		At   *string `json:"at"`
-		Cron string  `json:"cron"`
+		Name  string  `json:"name"`
+		At    *string `json:"at"`
+		Cron  string  `json:"cron"`
+		Stall *int    `json:"stall"`
 	}
 	if err := json.Unmarshal([]byte(args), &record); err != nil {
 		t.Fatal(err)
+	}
+	if record.Stall == nil || *record.Stall != 10 {
+		t.Fatalf("the enqueued train job carries the stall (%v): %s", record.Stall, args)
 	}
 	if record.At == nil {
 		t.Fatalf("the once-job must carry a normalized at: %s", args)
@@ -125,6 +131,7 @@ func seedGoldRows(t *testing.T, home string) {
 }
 
 const fakeTrainer = `import json, os
+STALL = 10
 def train(rows_path, out_dir):
     ck = os.path.join(out_dir, "ckpt-fake")
     os.makedirs(ck, exist_ok=True)
@@ -136,6 +143,7 @@ def evaluate(checkpoint, rows_path):
 `
 
 const flatTrainer = `import json, os
+STALL = 10
 def train(rows_path, out_dir):
     ck = os.path.join(out_dir, "ckpt-fake")
     os.makedirs(ck, exist_ok=True)
@@ -181,7 +189,7 @@ WantedBy=default.target
 
 func runTrain(t *testing.T, trainer string) int {
 	t.Helper()
-	return decisionTrain([]string{"train", trainer})
+	return decisionTrain([]string{"train", trainer}, newTrainKernel)
 }
 
 func runTrainStderr(t *testing.T, trainer string) (int, string) {
@@ -192,7 +200,7 @@ func runTrainStderr(t *testing.T, trainer string) (int, string) {
 	}
 	old := os.Stderr
 	os.Stderr = w
-	code := decisionTrain([]string{"train", trainer})
+	code := decisionTrain([]string{"train", trainer}, newTrainKernel)
 	os.Stderr = old
 	w.Close()
 	out, _ := io.ReadAll(r)
@@ -296,10 +304,10 @@ func TestTrainingWithNoUnitScoresAndPromotesNothing(t *testing.T) {
 
 func TestTrainingRefusesUsage(t *testing.T) {
 	trainSetup(t, "", nil)
-	if code := decisionTrain([]string{"train"}); code != 2 {
+	if code := decisionTrain([]string{"train"}, newTrainKernel); code != 2 {
 		t.Fatalf("usage exits 2, got %d", code)
 	}
-	if code := decisionTrain(nil); code != 2 {
+	if code := decisionTrain(nil, newTrainKernel); code != 2 {
 		t.Fatalf("no args exits 2, got %d", code)
 	}
 }
@@ -378,7 +386,7 @@ func TestDecisionTrainEnqueueLandsALineRunJobFires(t *testing.T) {
 	}
 	defer db.DB.Close()
 	ct := &crontabRecord{}
-	enqueue := decisionTrainEnqueue(db, rigHome, "/x/rig", canonicalCwd(t, "trainfire"), ct)
+	enqueue := decisionTrainEnqueue(db, rigHome, "/x/rig", canonicalCwd(t, "trainfire"), ct, func(string) (int, bool) { return 10, true })
 	if _, err := enqueue(context.Background(), "reviewer"); err != nil {
 		t.Fatal(err)
 	}
@@ -433,5 +441,241 @@ func TestTheIncumbentExpandsTheHomeTilde(t *testing.T) {
 	home, _ := os.UserHomeDir()
 	if ckpt != filepath.Join(home, "laya/ft-rig-20261006-1658") {
 		t.Fatalf("%%h expands to the operator's home: %q", ckpt)
+	}
+}
+
+type fakeTrainKernel struct {
+	runs int
+}
+
+const fakeTrainCellMs = 700 * 1000
+
+func (k *fakeTrainKernel) Run(ctx context.Context, code string, timeoutMs int, onStream func(string)) (pythontool.Reply, error) {
+	k.runs++
+	if strings.Contains(code, "importlib") {
+		out := `[{"name":"fake","file":"` + filepath.Join(trainHomeForFake, "train", "fake.py") + `","ok":true,"stall":10}]`
+		return pythontool.Reply{Ok: true, Out: &out}, nil
+	}
+	if timeoutMs != pythontool.NoCellCap {
+		return pythontool.Reply{}, fmt.Errorf("fake trainer: the cell runs %dms and the call carried a cap of %dms", fakeTrainCellMs, timeoutMs)
+	}
+	for _, chunk := range []string{"epoch 1\n", "epoch 2\n"} {
+		onStream(chunk)
+	}
+	trainPath := fakeInvokeArgs(code)
+	if trainPath == "" {
+		return pythontool.Reply{}, fmt.Errorf("fake trainer: the invoke cell carries no args")
+	}
+	ckpt := filepath.Join(filepath.Dir(trainPath), "ckpt-fake")
+	if strings.Contains(code, `"train"`) {
+		if err := os.MkdirAll(ckpt, 0o755); err != nil {
+			return pythontool.Reply{}, err
+		}
+		out := fmt.Sprintf(`{"checkpoint": %q, "questions": {}}`, ckpt)
+		return pythontool.Reply{Ok: true, Out: &out}, nil
+	}
+	if strings.Contains(code, `"evaluate"`) {
+		var args []string
+		raw := fakeInvokeRaw(code)
+		if json.Unmarshal([]byte(raw), &args) != nil || len(args) != 2 {
+			return pythontool.Reply{}, fmt.Errorf("fake trainer: the evaluate cell carries %v", args)
+		}
+		acc := 0.5
+		if strings.Contains(args[0], "ckpt-fake") {
+			acc = 1.0
+		}
+		out := fmt.Sprintf(`{"checkpoint": %q, "questions": {"risk": {"n": 2, "correct": 2, "accuracy": %g}}}`, args[0], acc)
+		return pythontool.Reply{Ok: true, Out: &out}, nil
+	}
+	return pythontool.Reply{}, fmt.Errorf("fake trainer: unknown cell %q", cellHead(code))
+}
+
+func cellHead(code string) string {
+	if len(code) > 60 {
+		return code[:60]
+	}
+	return code
+}
+
+var fakeInvokeArgsRe = regexp.MustCompile(`_rig_j\.loads\('(.*?)'\)+$`)
+
+func fakeInvokeRaw(cell string) string {
+	m := fakeInvokeArgsRe.FindStringSubmatch(cell)
+	if m == nil {
+		return "null"
+	}
+	raw := strings.ReplaceAll(m[1], `\'`, `'`)
+	return strings.ReplaceAll(raw, `\\`, `\`)
+}
+
+func fakeInvokeArgs(cell string) string {
+	var args []string
+	if json.Unmarshal([]byte(fakeInvokeRaw(cell)), &args) != nil || len(args) == 0 {
+		return ""
+	}
+	return args[0]
+}
+
+var trainHomeForFake string
+
+func (k *fakeTrainKernel) Close() {}
+
+func TestAPrintingTrainerOutlivesTheOldCellCap(t *testing.T) {
+	home := trainSetup(t, fakeTrainer, func(home string) string {
+		return fmt.Sprintf(`{"trainPython": %q, "decisionUnit": %q}`, kernelInterpreter(t), filepath.Join(home, "laya.service"))
+	})
+	trainHomeForFake = home
+	unit := filepath.Join(home, "laya.service")
+	if err := os.WriteFile(unit, []byte(unitTemplate), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("RIG_HOME", home)
+	kernel := &fakeTrainKernel{}
+	code, stdout := captureStdout(t, func() int {
+		return decisionTrain([]string{"train", "fake"}, func(string, string) (trainKernel, error) { return kernel, nil })
+	})
+	if code != 0 {
+		t.Fatalf("a trainer that prints outlives the old cap: exit %d", code)
+	}
+	if !strings.Contains(stdout, "epoch 1") || !strings.Contains(stdout, "epoch 2") {
+		t.Fatalf("the trainer's progress reaches the job's stream:\n%s", stdout)
+	}
+	if _, promoted, _ := trainingsRow(t, home); !promoted {
+		t.Fatal("the measured win is recorded promoted")
+	}
+}
+
+func captureStdout(t *testing.T, run func() int) (int, string) {
+	t.Helper()
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	old := os.Stdout
+	os.Stdout = w
+	code := run()
+	os.Stdout = old
+	w.Close()
+	out, _ := io.ReadAll(r)
+	return code, string(out)
+}
+
+func TestTheTrainerMenuTracksTheZone(t *testing.T) {
+	home := trainSetup(t, fakeTrainer, func(home string) string {
+		return fmt.Sprintf(`{"trainPython": %q}`, kernelInterpreter(t))
+	})
+	menus := newTrainerMenu(home, home)
+	if got := menus.names(); len(got) != 1 || got[0] != "fake" {
+		t.Fatalf("the zone's trainer lists: %v", got)
+	}
+	if err := os.WriteFile(filepath.Join(home, "train", "second.py"), []byte(fakeTrainer), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	got := menus.names()
+	if len(got) != 2 || got[0] != "fake" || got[1] != "second" {
+		t.Fatalf("a trainer dropped into the zone shows without a restart: %v", got)
+	}
+}
+
+type failingEvaluateKernel struct {
+	fakeTrainKernel
+}
+
+func (k *failingEvaluateKernel) Run(ctx context.Context, code string, timeoutMs int, onStream func(string)) (pythontool.Reply, error) {
+	if strings.Contains(code, "importlib") {
+		return k.fakeTrainKernel.Run(ctx, code, timeoutMs, onStream)
+	}
+	if strings.Contains(code, "evaluate") {
+		errText := "the evaluate blew up"
+		return pythontool.Reply{Ok: false, Error: &errText}, nil
+	}
+	return k.fakeTrainKernel.Run(ctx, code, timeoutMs, onStream)
+}
+
+func strp(s string) *string { return &s }
+
+func TestAFailedRunKeepsTheExportForARerun(t *testing.T) {
+	home := trainSetup(t, fakeTrainer, func(home string) string {
+		return fmt.Sprintf(`{"trainPython": %q}`, kernelInterpreter(t))
+	})
+	trainHomeForFake = home
+	t.Setenv("RIG_HOME", home)
+	kernel := &failingEvaluateKernel{}
+	code, runOut := captureBoth(t, func() int {
+		return decisionTrain([]string{"train", "fake"}, func(string, string) (trainKernel, error) { return kernel, nil })
+	})
+	t.Logf("exit=%d out=%q", code, runOut)
+	if code != 1 {
+		t.Fatalf("the failing evaluate exits 1, got %d", code)
+	}
+	runs, err := os.ReadDir(filepath.Join(home, "decision", "train"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(runs) != 1 {
+		t.Fatalf("a failed run keeps its export (the rows a rerun by hand needs): %v", runs)
+	}
+	dir := filepath.Join(home, "decision", "train", runs[0].Name())
+	rows, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"rig-train.jsonl", "rig-heldout.jsonl"} {
+		found := false
+		for _, r := range rows {
+			if r.Name() == want {
+				found = true
+			}
+		}
+		if !found {
+			t.Fatalf("the export keeps %s: %v", want, rows)
+		}
+	}
+}
+
+func captureBoth(t *testing.T, run func() int) (int, string) {
+	t.Helper()
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	oldOut, oldErr := os.Stdout, os.Stderr
+	os.Stdout, os.Stderr = w, w
+	code := run()
+	os.Stdout, os.Stderr = oldOut, oldErr
+	w.Close()
+	out, _ := io.ReadAll(r)
+	return code, string(out)
+}
+
+func TestDecisionTrainEnqueueRefusesATrainerTheZoneDoesNotLoad(t *testing.T) {
+	home := shortTemp(t)
+	db, _, _, err := store.Open(filepath.Join(home, "global.sqlite"), sched.Statements(), sched.SchemaVersion)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.DB.Close()
+	ct := &crontabRecord{}
+	enqueue := decisionTrainEnqueue(db, home, "/x/rig", t.TempDir(), ct, func(string) (int, bool) { return 0, false })
+	if _, err := enqueue(context.Background(), "absent"); err == nil || !strings.Contains(err.Error(), "STALL") {
+		t.Fatalf("an unknown trainer is refused, naming the contract: %v", err)
+	}
+	if ct.lines != "" {
+		t.Fatalf("a refused trainer installs no cron line: %q", ct.lines)
+	}
+}
+
+const stallessTrainer = `def train(rows_path, out_dir):
+    return {"checkpoint": out_dir, "questions": {}}
+def evaluate(checkpoint, rows_path):
+    return {"questions": {}}
+`
+
+func TestATrainerWithoutAStallStaysOutOfTheMenu(t *testing.T) {
+	home := trainSetup(t, stallessTrainer, func(home string) string {
+		return fmt.Sprintf(`{"trainPython": %q}`, kernelInterpreter(t))
+	})
+	if got := newTrainerMenu(home, home).names(); len(got) != 0 {
+		t.Fatalf("a trainer that declares no STALL is skipped: %v", got)
 	}
 }

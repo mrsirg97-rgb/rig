@@ -65,6 +65,26 @@ func ReportBack(scope string) string {
 	return "\n\nReport back: when you finish, persist durable findings with the rem tool (scope: " + scope + ") and end your reply with a short summary of what you found and did."
 }
 
+func runSummary(res SpawnResult, failed bool) string {
+	source := res.Stdout
+	if failed {
+		source = res.Stderr
+	}
+	return tailLine(source)
+}
+
+func tailLine(text string) string {
+	lines := strings.Split(text, "\n")
+	for i := len(lines) - 1; i >= 0; i-- {
+		line := strings.TrimSpace(lines[i])
+		if line == "" || strings.HasPrefix(line, "[spawn:") || strings.HasPrefix(line, "[runner:") {
+			continue
+		}
+		return line
+	}
+	return ""
+}
+
 func (opts RunOpts) modelRow(model string) (models.Model, bool) {
 	if opts.Models == nil {
 		return models.Model{}, false
@@ -401,7 +421,8 @@ func RunJob(key string, opts RunOpts) error {
 		endState, endReason = room.JobFailed, fmt.Sprintf("exit %d", res.Exit)
 	}
 	tell(room.JobStatus{Job: id, Prompt: firstLine(job.Prompt), State: endState,
-		Started: startedTime, Ended: endedAt, Reason: endReason, Workers: workers})
+		Started: startedTime, Ended: endedAt, Reason: endReason, Workers: workers,
+		Summary: runSummary(res, endState == room.JobFailed)})
 	content := fmt.Sprintf(
 		"# rig-scheduler run\nkey=%s\n%sstarted=%s\nexit=%d\nduration_ms=%d\n\n== stdout ==\n%s\n\n== stderr ==\n%s\n",
 		key, modelLine, started, res.Exit, durationMs, res.Stdout, res.Stderr)
