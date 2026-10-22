@@ -37,7 +37,7 @@ func (f *fakeCrontab) Install(text string) error {
 
 func seedHome(t *testing.T) string {
 	t.Helper()
-	home := t.TempDir()
+	home := shortTemp(t)
 	ctx := context.Background()
 
 	spath := state.StorePath(home, testCWD)
@@ -1973,4 +1973,14 @@ func TestThePhonesMoreMenuReachesTheRoomAndNothingStaticIsCached(t *testing.T) {
 			t.Fatalf("the phone has no sidebar: the more menu must reach %s", view)
 		}
 	}
+}
+
+func shortTemp(t *testing.T) string {
+	t.Helper()
+	d, err := os.MkdirTemp("", "web")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.RemoveAll(d) })
+	return d
 }

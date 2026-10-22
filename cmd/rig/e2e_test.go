@@ -117,7 +117,7 @@ func TestRunJobColdShellFiresAndRecords(t *testing.T) {
 	}
 	scratch := shortTemp(t)
 	binDir := t.TempDir()
-	workDir := t.TempDir()
+	workDir := realTemp(t)
 	spool := filepath.Join(scratch, "spool")
 
 	bin := filepath.Join(binDir, "rig")
@@ -291,7 +291,7 @@ func TestOneShotCompactsAndRecoversMidTurn(t *testing.T) {
 	}
 	scratch := shortTemp(t)
 	binDir := t.TempDir()
-	workDir := t.TempDir()
+	workDir := realTemp(t)
 	bin := filepath.Join(binDir, "rig")
 	if out, err := exec.Command("go", "build", "-o", bin, filepath.Join(root, "cmd", "rig")).CombinedOutput(); err != nil {
 		t.Fatalf("build: %v\n%s", err, out)

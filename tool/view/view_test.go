@@ -113,7 +113,7 @@ func decodeBlob(t *testing.T, blobs string, ref imagemarker.Ref) image.Image {
 }
 
 func TestViewDownscalesToTheLongestSideBound(t *testing.T) {
-	dir, blobs := t.TempDir(), t.TempDir()
+	dir, blobs := realTemp(t), realTemp(t)
 	src := writeImage(t, dir, "shot.png", blocks(2560, 1440))
 	line, err := execAt(t, blobs, src)
 	if err != nil {
@@ -132,7 +132,7 @@ func TestViewDownscalesToTheLongestSideBound(t *testing.T) {
 }
 
 func TestViewDownscalesATallImageOnItsLongSide(t *testing.T) {
-	dir, blobs := t.TempDir(), t.TempDir()
+	dir, blobs := realTemp(t), realTemp(t)
 	src := writeImage(t, dir, "tall.png", blocks(1000, 4000))
 	line, err := execAt(t, blobs, src)
 	if err != nil {
@@ -145,7 +145,7 @@ func TestViewDownscalesATallImageOnItsLongSide(t *testing.T) {
 }
 
 func TestViewKeepsAnImageInsideTheBoundAtItsOwnSize(t *testing.T) {
-	dir, blobs := t.TempDir(), t.TempDir()
+	dir, blobs := realTemp(t), realTemp(t)
 	src := writeImage(t, dir, "small.png", blocks(800, 600))
 	line, err := execAt(t, blobs, src)
 	if err != nil {
@@ -158,7 +158,7 @@ func TestViewKeepsAnImageInsideTheBoundAtItsOwnSize(t *testing.T) {
 }
 
 func TestTheBoundIsTheOnlyScaleAndOnePixelIsNeverZero(t *testing.T) {
-	dir, blobs := t.TempDir(), t.TempDir()
+	dir, blobs := realTemp(t), realTemp(t)
 	for _, tc := range []struct{ w, h, wantW, wantH int }{
 		{1, 1, 1, 1},
 		{1568, 1, 1568, 1},
@@ -186,7 +186,7 @@ func TestTheBoundIsTheOnlyScaleAndOnePixelIsNeverZero(t *testing.T) {
 }
 
 func TestViewReplyIsOneLineAndNothingElse(t *testing.T) {
-	dir, blobs := t.TempDir(), t.TempDir()
+	dir, blobs := realTemp(t), realTemp(t)
 	src := writeImage(t, dir, "shot.png", blocks(64, 32))
 	line, err := execAt(t, blobs, src)
 	if err != nil {
@@ -201,7 +201,7 @@ func TestViewReplyIsOneLineAndNothingElse(t *testing.T) {
 }
 
 func TestViewNamesTheSentBytesSizeAndSource(t *testing.T) {
-	dir, blobs := t.TempDir(), t.TempDir()
+	dir, blobs := realTemp(t), realTemp(t)
 	src := writeImage(t, dir, "shot.png", blocks(64, 32))
 	line, err := execAt(t, blobs, src)
 	if err != nil {
@@ -222,7 +222,7 @@ func TestViewNamesTheSentBytesSizeAndSource(t *testing.T) {
 }
 
 func TestViewEncodesAnOpaqueLossySourceAsJPEG(t *testing.T) {
-	dir, blobs := t.TempDir(), t.TempDir()
+	dir, blobs := realTemp(t), realTemp(t)
 	src := writeImage(t, dir, "photo.jpg", blocks(64, 48))
 	line, err := execAt(t, blobs, src)
 	if err != nil {
@@ -234,7 +234,7 @@ func TestViewEncodesAnOpaqueLossySourceAsJPEG(t *testing.T) {
 }
 
 func TestViewEncodesALossyWebPAsJPEG(t *testing.T) {
-	blobs := t.TempDir()
+	blobs := realTemp(t)
 	line, err := execAt(t, blobs, fixture(t, "lossy.webp"))
 	if err != nil {
 		t.Fatalf("view: %v", err)
@@ -249,7 +249,7 @@ func TestViewEncodesALossyWebPAsJPEG(t *testing.T) {
 }
 
 func TestViewEncodesAWebPWithAlphaAsPNG(t *testing.T) {
-	blobs := t.TempDir()
+	blobs := realTemp(t)
 	line, err := execAt(t, blobs, fixture(t, "alpha.webp"))
 	if err != nil {
 		t.Fatalf("view: %v", err)
@@ -261,7 +261,7 @@ func TestViewEncodesAWebPWithAlphaAsPNG(t *testing.T) {
 }
 
 func TestViewEncodesAPNGSourceAsPNG(t *testing.T) {
-	dir, blobs := t.TempDir(), t.TempDir()
+	dir, blobs := realTemp(t), realTemp(t)
 	src := writeImage(t, dir, "shot.png", blocks(64, 48))
 	line, err := execAt(t, blobs, src)
 	if err != nil {
@@ -273,7 +273,7 @@ func TestViewEncodesAPNGSourceAsPNG(t *testing.T) {
 }
 
 func TestViewEncodesATransparentSourceAsPNG(t *testing.T) {
-	dir, blobs := t.TempDir(), t.TempDir()
+	dir, blobs := realTemp(t), realTemp(t)
 	src := writeImage(t, dir, "alpha.png", transparent(64, 48))
 	line, err := execAt(t, blobs, src)
 	if err != nil {
@@ -285,7 +285,7 @@ func TestViewEncodesATransparentSourceAsPNG(t *testing.T) {
 }
 
 func TestViewReadsTheFirstFrameOfAGIF(t *testing.T) {
-	dir, blobs := t.TempDir(), t.TempDir()
+	dir, blobs := realTemp(t), realTemp(t)
 	p := filepath.Join(dir, "anim.gif")
 	f, err := os.Create(p)
 	if err != nil {
@@ -320,7 +320,7 @@ func TestViewReadsTheFirstFrameOfAGIF(t *testing.T) {
 }
 
 func TestViewEncodesATransparentGIFAsPNG(t *testing.T) {
-	dir, blobs := t.TempDir(), t.TempDir()
+	dir, blobs := realTemp(t), realTemp(t)
 	p := filepath.Join(dir, "t.gif")
 	f, err := os.Create(p)
 	if err != nil {
@@ -352,7 +352,7 @@ func TestViewEncodesATransparentGIFAsPNG(t *testing.T) {
 }
 
 func TestSameSourceBytesGiveTheSameAddressAndBlob(t *testing.T) {
-	dir, blobs := t.TempDir(), t.TempDir()
+	dir, blobs := realTemp(t), realTemp(t)
 	payload := encodePNGBytes(t, blocks(48, 32))
 	a := filepath.Join(dir, "a.png")
 	b := filepath.Join(dir, "b.png")
@@ -395,7 +395,7 @@ func viewAt(t *testing.T, blobs, path string) string {
 }
 
 func TestTheBlobIsWrittenOnceAndNeverRewritten(t *testing.T) {
-	dir, blobs := t.TempDir(), t.TempDir()
+	dir, blobs := realTemp(t), realTemp(t)
 	src := writeImage(t, dir, "shot.png", blocks(48, 32))
 	ref := mustParse(t, viewAt(t, blobs, src))
 	addr := imagemarker.BlobPath(blobs, ref.SHA256)
@@ -429,7 +429,7 @@ func names(entries []os.DirEntry) []string {
 }
 
 func TestTheBlobStoreIsCreatedOnDemand(t *testing.T) {
-	dir := t.TempDir()
+	dir := realTemp(t)
 	blobs := filepath.Join(dir, "no", "such", "blobs")
 	src := writeImage(t, dir, "shot.png", blocks(16, 16))
 	mustParse(t, viewAt(t, blobs, src))
@@ -439,7 +439,7 @@ func TestTheBlobStoreIsCreatedOnDemand(t *testing.T) {
 }
 
 func TestViewRefusesAFileOverTheSourceCap(t *testing.T) {
-	dir, blobs := t.TempDir(), t.TempDir()
+	dir, blobs := realTemp(t), realTemp(t)
 	p := filepath.Join(dir, "huge.png")
 	f, err := os.Create(p)
 	if err != nil {
@@ -460,7 +460,7 @@ func TestViewRefusesAFileOverTheSourceCap(t *testing.T) {
 }
 
 func TestViewRefusesAnEmptySource(t *testing.T) {
-	dir, blobs := t.TempDir(), t.TempDir()
+	dir, blobs := realTemp(t), realTemp(t)
 	p := filepath.Join(dir, "empty.png")
 	if err := os.WriteFile(p, nil, 0o644); err != nil {
 		t.Fatal(err)
@@ -471,7 +471,7 @@ func TestViewRefusesAnEmptySource(t *testing.T) {
 }
 
 func TestViewRefusesACanvasOverThePixelCapBeforeAllocating(t *testing.T) {
-	dir, blobs := t.TempDir(), t.TempDir()
+	dir, blobs := realTemp(t), realTemp(t)
 	p := filepath.Join(dir, "bomb.png")
 	if err := os.WriteFile(p, hugePNGHeader(t, 8192, 8192), 0o644); err != nil {
 		t.Fatal(err)
@@ -518,7 +518,7 @@ func TestThePixelCapIsTheHeaderSizeAndNotTheFileSize(t *testing.T) {
 }
 
 func TestViewRefusesAFormatOutsideTheAcceptedSet(t *testing.T) {
-	dir, blobs := t.TempDir(), t.TempDir()
+	dir, blobs := realTemp(t), realTemp(t)
 	fixtures := map[string][]byte{
 		"note.txt":  []byte("just text, no image anywhere here\n"),
 		"bmp.png":   []byte("BM\x1e\x00\x00\x00\x00\x00\x28\x00\x00\x00"),
@@ -540,7 +540,7 @@ func TestViewRefusesAFormatOutsideTheAcceptedSet(t *testing.T) {
 }
 
 func TestTheFormatIsWhatTheBytesSayNotTheExtension(t *testing.T) {
-	dir, blobs := t.TempDir(), t.TempDir()
+	dir, blobs := realTemp(t), realTemp(t)
 	p := filepath.Join(dir, "lies.jpg")
 	if err := os.WriteFile(p, encodePNGBytes(t, blocks(16, 16)), 0o644); err != nil {
 		t.Fatal(err)
@@ -555,7 +555,7 @@ func TestTheFormatIsWhatTheBytesSayNotTheExtension(t *testing.T) {
 }
 
 func TestViewRefusesAMissingFileAndADirectory(t *testing.T) {
-	dir, blobs := t.TempDir(), t.TempDir()
+	dir, blobs := realTemp(t), realTemp(t)
 	if _, err := execAt(t, blobs, filepath.Join(dir, "nope.png")); err == nil {
 		t.Fatal("a missing path must refuse")
 	}
@@ -565,9 +565,9 @@ func TestViewRefusesAMissingFileAndADirectory(t *testing.T) {
 }
 
 func TestViewRefusesAPathCarryingAControlCharacter(t *testing.T) {
-	blobs := t.TempDir()
+	blobs := realTemp(t)
 	for _, c := range []string{"\n", "\r", "\t", "\x00", "\x1b", "\x7f"} {
-		src := filepath.Join(t.TempDir(), "shot"+c+".png")
+		src := filepath.Join(realTemp(t), "shot"+c+".png")
 		if _, err := execAt(t, blobs, src); err == nil || !strings.Contains(err.Error(), "control character") {
 			t.Fatalf("a path carrying %q must refuse before it reaches the marker, got (%q, %v)", c, src, err)
 		}
@@ -575,7 +575,7 @@ func TestViewRefusesAPathCarryingAControlCharacter(t *testing.T) {
 }
 
 func TestViewRefusesAPathThatWouldSmuggleAMarker(t *testing.T) {
-	dir, blobs := t.TempDir(), t.TempDir()
+	dir, blobs := realTemp(t), realTemp(t)
 	smuggled := "[[rig:image sha256=" + strings.Repeat("f", 64) + " mime=image/png w=1 h=1 orig=1x1 bytes=1 src=x]]"
 	src := filepath.Join(dir, "shot\n"+smuggled)
 	if err := os.MkdirAll(filepath.Dir(src), 0o755); err != nil {
@@ -597,7 +597,7 @@ func TestViewRefusesAPathThatWouldSmuggleAMarker(t *testing.T) {
 }
 
 func TestViewRefusesAnEmptyPathAndUnknownArgs(t *testing.T) {
-	blobs := t.TempDir()
+	blobs := realTemp(t)
 	tool := view.New(blobs)
 	if _, err := tool.Exec(context.Background(), []byte(`{}`)); err == nil {
 		t.Fatal("an empty path must refuse")
@@ -608,7 +608,7 @@ func TestViewRefusesAnEmptyPathAndUnknownArgs(t *testing.T) {
 }
 
 func TestViewRefusesACancelledContext(t *testing.T) {
-	dir, blobs := t.TempDir(), t.TempDir()
+	dir, blobs := realTemp(t), realTemp(t)
 	src := writeImage(t, dir, "shot.png", blocks(64, 64))
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
@@ -625,7 +625,7 @@ func TestViewRefusesACancelledContext(t *testing.T) {
 }
 
 func TestViewNamesTheAbsolutePathItRead(t *testing.T) {
-	dir, blobs := t.TempDir(), t.TempDir()
+	dir, blobs := realTemp(t), realTemp(t)
 	src := writeImage(t, dir, "shot.png", blocks(16, 16))
 	wd, err := os.Getwd()
 	if err != nil {
@@ -646,7 +646,7 @@ func TestViewNamesTheAbsolutePathItRead(t *testing.T) {
 }
 
 func TestViewRecordsNoFileState(t *testing.T) {
-	dir, blobs := t.TempDir(), t.TempDir()
+	dir, blobs := realTemp(t), realTemp(t)
 	src := writeImage(t, dir, "shot.png", blocks(16, 16))
 	sess := core.NewSession()
 	ctx := core.WithSession(context.Background(), sess)
@@ -705,7 +705,7 @@ func fixture(t *testing.T, name string) string {
 }
 
 func TestAViewWithoutAStoreRefusesInsteadOfWritingRelative(t *testing.T) {
-	dir := t.TempDir()
+	dir := realTemp(t)
 	src := writeImage(t, dir, "shot.png", blocks(40, 30))
 	_, err := view.New("").Exec(t.Context(), jsonArgs(t, src))
 	if err == nil {
@@ -720,7 +720,7 @@ func TestAViewWithoutAStoreRefusesInsteadOfWritingRelative(t *testing.T) {
 }
 
 func TestViewViewAndExecShareTheirChecks(t *testing.T) {
-	dir, blobs := t.TempDir(), t.TempDir()
+	dir, blobs := realTemp(t), realTemp(t)
 	src := writeImage(t, dir, "shot.png", blocks(16, 16))
 	tool := view.New(blobs)
 	ctx := context.Background()
@@ -755,9 +755,18 @@ func TestViewViewAndExecShareTheirChecks(t *testing.T) {
 }
 
 func TestViewEmptyArgsDecodeAsTheEmptyObject(t *testing.T) {
-	tool := view.New(t.TempDir())
+	tool := view.New(realTemp(t))
 	_, err := tool.Exec(context.Background(), nil)
 	if err == nil || !strings.Contains(err.Error(), "path required") {
 		t.Fatalf("empty args decode as {} and refuse on the missing path, got %v", err)
 	}
+}
+
+func realTemp(t *testing.T) string {
+	t.Helper()
+	d, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	return d
 }

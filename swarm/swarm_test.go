@@ -622,15 +622,32 @@ func TestSwarmCompletedRequirementHandsTheDependentOut(t *testing.T) {
 		{Exit: 0, Stdout: "done\n"},
 		{Exit: 0, Stdout: "looks good\nverdict: accept\n"},
 		{Exit: 0, Stdout: "done\n"},
+		{Exit: 0, Stdout: "looks good\nverdict: accept\n"},
+	}
+	var mu sync.Mutex
+	var blocker []string
+	h.spawn.onCall = func(ctx context.Context) {
+		if p, _ := sched.PromptFrom(ctx); !strings.Contains(p, "the dependent") {
+			return
+		}
+		var status string
+		if err := h.todoDB.DB.QueryRow(`SELECT status FROM tasks WHERE scope = ? AND id = ?`, h.proj.Key, "t1").Scan(&status); err != nil {
+			status = err.Error()
+		}
+		mu.Lock()
+		blocker = append(blocker, status)
+		mu.Unlock()
 	}
 	h.start(t, swarm.StartOpts{Count: 1, Role: "worker"})
 	h.start(t, swarm.StartOpts{Count: 1, Role: "reviewer"})
-	h.waitFor(t, "only the blocker claimed while it blocked", func() bool {
-		return h.spawn.count() == 1 && h.status(t, "t1") == "review"
+	h.waitFor(t, "the dependent handed out on the completion and reviewed", func() bool {
+		return h.status(t, "t1") == "done" && h.status(t, "t2") == "done"
 	})
-	h.waitFor(t, "the dependent handed out on the completion", func() bool {
-		return h.spawn.count() == 3 && h.status(t, "t1") == "done" && h.status(t, "t2") == "review"
-	})
+	mu.Lock()
+	defer mu.Unlock()
+	if len(blocker) == 0 || blocker[0] != "done" {
+		t.Fatalf("the dependent was handed out while its requirement was %v, want only after done", blocker)
+	}
 }
 
 func TestSwarmSpawnsWhileEverySlotIsProcessing(t *testing.T) {

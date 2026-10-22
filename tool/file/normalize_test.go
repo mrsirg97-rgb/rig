@@ -12,7 +12,7 @@ import (
 )
 
 func TestAliasedReadThenRealPathEditRefusesTheDrift(t *testing.T) {
-	dir := t.TempDir()
+	dir := realTemp(t)
 	real := filepath.Join(dir, "real")
 	if err := os.MkdirAll(real, 0o755); err != nil {
 		t.Fatal(err)
@@ -49,7 +49,7 @@ func TestAliasedReadThenRealPathEditRefusesTheDrift(t *testing.T) {
 }
 
 func TestRealReadThenAliasedEditRefusesTheDrift(t *testing.T) {
-	dir := t.TempDir()
+	dir := realTemp(t)
 	real := filepath.Join(dir, "real")
 	if err := os.MkdirAll(real, 0o755); err != nil {
 		t.Fatal(err)
@@ -86,7 +86,7 @@ func TestRealReadThenAliasedEditRefusesTheDrift(t *testing.T) {
 }
 
 func TestDotDotThroughASymlinkReadsTheResolvedFile(t *testing.T) {
-	dir := t.TempDir()
+	dir := realTemp(t)
 	if err := os.MkdirAll(filepath.Join(dir, "x", "sub"), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -110,7 +110,7 @@ func TestDotDotThroughASymlinkReadsTheResolvedFile(t *testing.T) {
 }
 
 func TestWriteThroughAliasedSpellingLandsWhereTheOsResolves(t *testing.T) {
-	dir := t.TempDir()
+	dir := realTemp(t)
 	if err := os.MkdirAll(filepath.Join(dir, "x", "sub"), 0o755); err != nil {
 		t.Fatal(err)
 	}

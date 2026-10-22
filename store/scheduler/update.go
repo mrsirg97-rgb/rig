@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/mrsirg97-rgb/rig/v3/pathguard"
 )
 
 type UpdateInput struct {
@@ -32,6 +34,11 @@ func Update(ctx context.Context, db DB, ct Crontab, in UpdateInput, session, run
 	command := strings.TrimSpace(in.Command)
 	model := in.Model
 	cwd := strings.TrimSpace(in.Cwd)
+	if cwd != "" {
+		if canonical, err := pathguard.Canonical(cwd); err == nil {
+			cwd = canonical
+		}
+	}
 	cron := strings.TrimSpace(in.Cron)
 	at := in.At
 	busy := in.Busy

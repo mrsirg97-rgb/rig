@@ -101,6 +101,35 @@ func TestPluginsRuleResolvesSymlinksBeforeApplyingTheZone(t *testing.T) {
 	}
 }
 
+func TestPluginsRuleHoldsWhenTheRootIsSpelledThroughALink(t *testing.T) {
+	real, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	alias := filepath.Join(t.TempDir(), "alias")
+	if err := os.Symlink(real, alias); err != nil {
+		t.Fatal(err)
+	}
+	pluginsDir := filepath.Join(alias, "plugins")
+	pending := filepath.Join(pluginsDir, "pending")
+	if err := os.MkdirAll(pending, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(pending, "escape")
+	if err := os.Symlink(t.TempDir(), link); err != nil {
+		t.Fatal(err)
+	}
+	target := filepath.Join(link, "x.py")
+	calls, _, err := pluginCall(t, perm.Plugins(pluginsDir), "write", `{"path": `+mustJSON(t, target)+`, "content": "x"}`)
+	if err == nil || calls != 0 {
+		t.Fatalf("a pending link out of a root spelled through an alias must refuse, got %d calls / %v", calls, err)
+	}
+	calls, _, err = pluginCall(t, perm.Plugins(pluginsDir), "write", `{"path": `+mustJSON(t, filepath.Join(pending, "ok.py"))+`, "content": "x"}`)
+	if err != nil || calls != 1 {
+		t.Fatalf("a pending write through the alias must pass, got %d calls / %v", calls, err)
+	}
+}
+
 func TestPluginsRuleAllowsAPendingDirRelocatedBySymlink(t *testing.T) {
 	home := t.TempDir()
 	pluginsDir := filepath.Join(home, "plugins")

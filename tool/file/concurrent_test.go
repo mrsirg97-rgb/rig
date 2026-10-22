@@ -14,7 +14,7 @@ import (
 )
 
 func TestReadsRecordFileStateConcurrently(t *testing.T) {
-	dir := t.TempDir()
+	dir := realTemp(t)
 	const n = 16
 	paths := make([]string, n)
 	for i := range paths {
@@ -41,4 +41,13 @@ func TestReadsRecordFileStateConcurrently(t *testing.T) {
 	if len(s.Files) != n {
 		t.Fatalf("recorded %d file states, want %d", len(s.Files), n)
 	}
+}
+
+func realTemp(t *testing.T) string {
+	t.Helper()
+	d, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	return d
 }

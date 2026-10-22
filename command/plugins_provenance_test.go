@@ -14,7 +14,7 @@ import (
 
 func homeWithZone(t *testing.T, pending map[string]string, installed ...string) string {
 	t.Helper()
-	home := t.TempDir()
+	home := realTemp(t)
 	pluginsDir := filepath.Join(home, "plugins")
 	if err := os.MkdirAll(filepath.Join(pluginsDir, "pending"), 0o755); err != nil {
 		t.Fatal(err)
@@ -67,13 +67,13 @@ func TestPluginsPendingListsTheZoneWithDescriptions(t *testing.T) {
 func TestPluginsPendingEmptyAndAbsentZone(t *testing.T) {
 	for _, home := range []string{
 		func() string {
-			h := t.TempDir()
+			h := realTemp(t)
 			if err := os.MkdirAll(filepath.Join(h, "plugins", "pending"), 0o755); err != nil {
 				t.Fatal(err)
 			}
 			return h
 		}(),
-		t.TempDir(),
+		realTemp(t),
 	} {
 		out, err := pluginsCmd(t).Run(context.Background(), "pending", &command.Env{
 			Plugins:    func() []command.PluginInfo { return nil },
@@ -191,7 +191,7 @@ func TestPluginsApproveBadNames(t *testing.T) {
 }
 
 func TestPluginsUnknownVerbUsage(t *testing.T) {
-	home := t.TempDir()
+	home := realTemp(t)
 	_, err := pluginsCmd(t).Run(context.Background(), "frobnicate", &command.Env{
 		Plugins:    func() []command.PluginInfo { return nil },
 		PluginsDir: filepath.Join(home, "plugins"),
@@ -203,4 +203,13 @@ func TestPluginsUnknownVerbUsage(t *testing.T) {
 	if err.Error() != want {
 		t.Fatalf("the usage line = %q, want %q", err.Error(), want)
 	}
+}
+
+func realTemp(t *testing.T) string {
+	t.Helper()
+	d, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	return d
 }

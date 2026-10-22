@@ -31,7 +31,7 @@ func runCmd(t *testing.T, name, args string, env *command.Env) (string, error) {
 
 func openTodo(t *testing.T) store.DB {
 	t.Helper()
-	db, _, _, err := store.Open(t.TempDir()+"/todo.sqlite", todostore.Statements(), todostore.SchemaVersion)
+	db, _, _, err := store.Open(realTemp(t)+"/todo.sqlite", todostore.Statements(), todostore.SchemaVersion)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -40,7 +40,7 @@ func openTodo(t *testing.T) store.DB {
 
 func TestTodoCommandRoundTrip(t *testing.T) {
 	s := core.NewSession()
-	ws := t.TempDir()
+	ws := realTemp(t)
 	env := &command.Env{
 		Session:   func() *core.Session { return s },
 		Workspace: func() string { return ws },
@@ -91,7 +91,7 @@ func TestTodoCommandRoundTrip(t *testing.T) {
 
 func TestTodoNotesAndReadIdThroughTheCommand(t *testing.T) {
 	s := core.NewSession()
-	ws := t.TempDir()
+	ws := realTemp(t)
 	env := &command.Env{
 		Session:   func() *core.Session { return s },
 		Workspace: func() string { return ws },
@@ -194,7 +194,7 @@ func fakeExecFunc(f func(ctx context.Context, args json.RawMessage) (string, err
 }
 
 func TestSchedulerCommandRoundTrip(t *testing.T) {
-	home := t.TempDir()
+	home := realTemp(t)
 	cwd, err := os.Getwd()
 	if err != nil {
 		t.Fatal(err)
@@ -297,8 +297,8 @@ func TestSchedulerCommandRoundTrip(t *testing.T) {
 }
 
 func TestSchedulerRepairCommand(t *testing.T) {
-	home := t.TempDir()
-	cwd := t.TempDir()
+	home := realTemp(t)
+	cwd := realTemp(t)
 	ct := newFakeCron()
 	st := schedStores(t, home, cwd)
 	tool := schedapi.New(st, ct, "/bin/true run-job", "qwen3.8-workers", home)
@@ -411,13 +411,13 @@ func schedStores(t *testing.T, home, cwd string) sched.DB {
 
 func TestTodoProjectCommand(t *testing.T) {
 	db := openTodo(t)
-	here := t.TempDir()
+	here := realTemp(t)
 	env := &command.Env{
 		Session:   func() *core.Session { return core.NewSession() },
 		Workspace: func() string { return here },
 		Tools:     map[string]core.Tool{"todo": todoapi.New(db, todoapi.Interactive)},
 	}
-	proj := t.TempDir()
+	proj := realTemp(t)
 	ctx := context.Background()
 	if _, err := todostore.Create(ctx, db, todostore.ProjectOf(proj), todostore.CreateItem{Text: "elsewhere"}, "seed"); err != nil {
 		t.Fatal(err)
@@ -430,7 +430,7 @@ func TestTodoProjectCommand(t *testing.T) {
 		t.Fatalf("todo project must render that project's queue:\n%s", rendered)
 	}
 
-	unknown := t.TempDir()
+	unknown := realTemp(t)
 	empty, err := runCmd(t, "todo", "project "+unknown, env)
 	if err != nil {
 		t.Fatalf("todo project unknown: %v", err)
@@ -456,13 +456,13 @@ func TestTodoProjectCommand(t *testing.T) {
 
 func TestTodoPathFormActsAtTheScope(t *testing.T) {
 	db := openTodo(t)
-	here := t.TempDir()
+	here := realTemp(t)
 	env := &command.Env{
 		Session:   func() *core.Session { return core.NewSession() },
 		Workspace: func() string { return here },
 		Tools:     map[string]core.Tool{"todo": todoapi.New(db, todoapi.Interactive)},
 	}
-	proj := t.TempDir()
+	proj := realTemp(t)
 	created, err := runCmd(t, "todo", proj+" create write the spec", env)
 	if err != nil {
 		t.Fatalf("todo <path> create: %v", err)
@@ -477,7 +477,7 @@ func TestTodoPathFormActsAtTheScope(t *testing.T) {
 	if strings.Contains(read, "write the spec") {
 		t.Fatalf("a bare verb must stay at the workspace scope:\n%s", read)
 	}
-	if _, err := runCmd(t, "todo", t.TempDir()+"/nowhere read", env); err == nil ||
+	if _, err := runCmd(t, "todo", realTemp(t)+"/nowhere read", env); err == nil ||
 		!strings.Contains(err.Error(), "no such project directory") {
 		t.Fatalf("a path that is not a directory must refuse by name, got %v", err)
 	}
@@ -564,7 +564,7 @@ func TestTodoListFinishedCommandParses(t *testing.T) {
 func TestTodoPruneCommand(t *testing.T) {
 	db := openTodo(t)
 	s := core.NewSession()
-	ws := t.TempDir()
+	ws := realTemp(t)
 	env := &command.Env{
 		Session:   func() *core.Session { return s },
 		Workspace: func() string { return ws },

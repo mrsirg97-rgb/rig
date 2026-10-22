@@ -52,7 +52,7 @@ func unixClient(sock string) *http.Client {
 
 func TestSocketProxyForwardsToOneDestination(t *testing.T) {
 	dest, srv := newScriptSrv(t)
-	sock := t.TempDir() + "/rig.sock"
+	sock := shortSock(t)
 	proxy, err := sched.NewSocketProxy(sock, srv.URL)
 	if err != nil {
 		t.Fatalf("NewSocketProxy: %v", err)
@@ -75,7 +75,7 @@ func TestSocketProxyForwardsToOneDestination(t *testing.T) {
 
 func TestSocketProxyClosedRefusesDials(t *testing.T) {
 	_, srv := newScriptSrv(t)
-	sock := t.TempDir() + "/rig.sock"
+	sock := shortSock(t)
 	proxy, err := sched.NewSocketProxy(sock, srv.URL)
 	if err != nil {
 		t.Fatalf("NewSocketProxy: %v", err)
@@ -90,7 +90,7 @@ func TestSocketProxyClosedRefusesDials(t *testing.T) {
 
 func TestSocketProxyNormalizesASuffixedTarget(t *testing.T) {
 	dest, srv := newScriptSrv(t)
-	sock := t.TempDir() + "/rig.sock"
+	sock := shortSock(t)
 	proxy, err := sched.NewSocketProxy(sock, srv.URL+"/v1")
 	if err != nil {
 		t.Fatalf("NewSocketProxy: %v", err)
@@ -111,7 +111,7 @@ func TestSocketProxyNormalizesASuffixedTarget(t *testing.T) {
 func TestSocketProxySetsPrivatePermissions(t *testing.T) {
 	dest, srv := newScriptSrv(t)
 	_ = dest
-	sock := t.TempDir() + "/rig.sock"
+	sock := shortSock(t)
 	proxy, err := sched.NewSocketProxy(sock, srv.URL)
 	if err != nil {
 		t.Fatalf("NewSocketProxy: %v", err)

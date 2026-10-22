@@ -195,7 +195,10 @@ func TestWithinFailureRefusesAMissingPathOutsideTheRoots(t *testing.T) {
 }
 
 func TestUnderIsThePrimitiveItClaimsToBe(t *testing.T) {
-	home := t.TempDir()
+	home, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
 	inside := filepath.Join(home, "projects", "rig")
 	if err := os.MkdirAll(inside, 0o755); err != nil {
 		t.Fatal(err)

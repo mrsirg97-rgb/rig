@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -61,6 +62,9 @@ func TestInteractiveREPLNeverConsultsTheJail(t *testing.T) {
 }
 
 func TestRunJobDoorFailClosedWithoutBwrap(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("the bwrap refusal is linux's; elsewhere the jail refuses as linux-only")
+	}
 	scratch := shortTemp(t)
 
 	binDir := t.TempDir()
@@ -73,7 +77,7 @@ func TestRunJobDoorFailClosedWithoutBwrap(t *testing.T) {
 	st := scratchStores(t, home, "/ws/door2")
 	if _, err := sched.Create(context.Background(), st, fake, sched.CreateInput{
 		Name: "door2", Prompt: "say hi", Cron: "0 5 * * *",
-		Cwd: t.TempDir(), Model: "local", Busy: "skip",
+		Cwd: realTemp(t), Model: "local", Busy: "skip",
 	}, "/ws/door2", "sess-door2", bin+" run-job", cfgDir(t, scratch), fixedNow); err != nil {
 		t.Fatalf("create: %v", err)
 	}
@@ -128,7 +132,7 @@ func TestRunJobDoorSandboxOffRunsUnjailed(t *testing.T) {
 	}
 	fake := newFakeCrontab()
 	st := scratchStores(t, home, "/ws/door3")
-	workDir := t.TempDir()
+	workDir := realTemp(t)
 	if _, err := sched.Create(context.Background(), st, fake, sched.CreateInput{
 		Name: "door3", Prompt: "say hi", Cron: "0 5 * * *",
 		Cwd: workDir, Model: "local", Busy: "skip",

@@ -1,4 +1,44 @@
 # Changelog
+## [3.3.1]: the room joins on a Mac
+
+3.1.1's audit made a stat failure fail the identity, and on Linux that is
+right: an unreadable `/proc/self/stat` is a broken box. But the reader was
+the only one there was, and darwin has no `/proc`, so from 3.1.1 on every
+Mac refused at start with `room: /proc/self/stat: open /proc/self/stat: no
+such file or directory` — CI runs on ubuntu, so nothing caught it. The
+identity's two halves are now per platform: `member_linux.go` keeps the
+`/proc` readers and the loud failure unchanged, `member_darwin.go` reads the
+boot session's uuid (`kern.bootsessionuuid`, the hostname behind it as on
+Linux) and the process row's start time (`kern.proc.pid`, in microseconds),
+and any other unix fails loud naming its GOOS rather than joining on a
+guess.
+
+The suite had never run on a Mac either, and running it found three more
+bugs the Linux box hides. Two members joining in one process race to bind
+one socket path; Linux answers the loser `EADDRINUSE`, which the join walks
+past, but darwin answers `EEXIST`, so the second join failed instead of
+re-deriving — the join now walks past both. The plugins rule compared the
+spelled path against the resolved root, so with a symlink anywhere above
+the plugins root (`/var` on a Mac, or a linked home) a link out of
+`pending/` matched neither zone and passed; a path is now in the zone when
+any ancestor resolves to the root, whatever its spelling. And a job created
+from a session whose cwd runs through a symlink was stored unresolved, so
+the runner's replaced-or-moved check skipped every fire of it;
+`sched.Create` and `sched.Update` store the canonical cwd. Each fix carries
+a test built on an explicit symlink or race, so Linux CI pins it too.
+
+The rest was the tests' own: `t.TempDir()` names the test, so a room's
+socket under it passed darwin's 104-byte bound (`shortTemp` homes now, as
+`cmd/rig` already had); `/var` resolves to `/private/var`, so expectations
+built from the unresolved temp dir missed the resolved paths the tools
+report (`realTemp`); the bwrap and landlock tests skip off Linux, and a new
+darwin test pins that the jailed and landlock profiles refuse there and
+spawn nothing; and three tests leaned on a timing window — the swarm's
+dependency test now records the blocker's status as the dependent is
+handed out, the delegate snapshot test holds its worker until it has
+looked, and the gate test waits for the mirror the way its sibling does.
+The version test pins 3.3.1.
+
 ## [3.3.0]: the dashboard opens on the machine
 
 The dashboard opened on the chat because the chat was the last thing

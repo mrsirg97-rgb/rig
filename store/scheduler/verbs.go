@@ -7,6 +7,8 @@ import (
 	"regexp"
 	"strings"
 	"time"
+
+	"github.com/mrsirg97-rgb/rig/v3/pathguard"
 )
 
 var jobKeyRe = regexp.MustCompile(`^(j\d+)$`)
@@ -104,6 +106,9 @@ func Create(ctx context.Context, db DB, ct Crontab, in CreateInput, sessionCwd, 
 	}
 	if jobCwd == "" {
 		return "", schedErr("create requires a workspace (workspace or a session workspace)")
+	}
+	if canonical, err := pathguard.Canonical(jobCwd); err == nil {
+		jobCwd = canonical
 	}
 	model := in.Model
 	busy := busyOf(in.Busy)

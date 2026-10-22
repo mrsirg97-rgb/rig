@@ -45,6 +45,15 @@ func shortTemp(t *testing.T) string {
 	return d
 }
 
+func realTemp(t *testing.T) string {
+	t.Helper()
+	d, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	return d
+}
+
 func newBodySrv(t *testing.T, s *bodySrv) *httptest.Server {
 	t.Helper()
 	if s.reply == "" {
@@ -224,7 +233,7 @@ func TestPrecedenceFlagOverEnvOverFileOverEmbedded(t *testing.T) {
 				args = append(args, "-system", c.flag)
 			}
 			cmd := exec.Command(bin, args...)
-			cmdDir := t.TempDir()
+			cmdDir := realTemp(t)
 			cmd.Dir = cmdDir
 			env := rigEnv(t, scratch, "")
 			if c.env != "" {
@@ -336,7 +345,7 @@ func TestFlagPresenceWins(t *testing.T) {
 		srv := newBodySrv(t, s)
 		bin := buildBin(t, t.TempDir())
 		cmd := exec.Command(bin, "-p", "hello", "-base-url", srv.URL+"/v1", "-system", "")
-		cmdDir := t.TempDir()
+		cmdDir := realTemp(t)
 		home := shortTemp(t)
 		cmd.Dir = cmdDir
 		cmd.Env = rigEnv(t, home, "")
@@ -502,7 +511,7 @@ func TestPrecedencePresenceKeyEnvEmptyBeatsFile(t *testing.T) {
 func TestRunJobSwapUrlChain(t *testing.T) {
 	mkJob := func(t *testing.T, scratch, bin string) (string, string) {
 		t.Helper()
-		workDir := t.TempDir()
+		workDir := realTemp(t)
 		home := filepath.Join(cfgDir(t, scratch), "scheduler")
 		fake := newFakeCrontab()
 		st := scratchStores(t, home, "/ws/swap")
@@ -722,7 +731,7 @@ func TestRunJobWorkerInheritsJobCwdAgents(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "AGENTS.md"), []byte(global), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	workDir := t.TempDir()
+	workDir := realTemp(t)
 	if err := os.WriteFile(filepath.Join(workDir, "AGENTS.md"), []byte(jobAgents), 0o644); err != nil {
 		t.Fatal(err)
 	}

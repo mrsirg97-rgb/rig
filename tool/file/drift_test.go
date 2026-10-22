@@ -45,7 +45,7 @@ func moveMtimeOnly(t *testing.T, path string) {
 }
 
 func TestDriftRefusalNamesIdenticalBytesWhenOnlyMtimeMoved(t *testing.T) {
-	dir := t.TempDir()
+	dir := realTemp(t)
 	path := filepath.Join(dir, "code.txt")
 	ctx, _ := driftSetup(t, path, "alpha\nbeta\ngamma\n")
 	moveMtimeOnly(t, path)
@@ -65,7 +65,7 @@ func TestDriftRefusalNamesIdenticalBytesWhenOnlyMtimeMoved(t *testing.T) {
 }
 
 func TestDriftRefusalAfterWindowedReadDiffsTheWindowNotTheFile(t *testing.T) {
-	dir := t.TempDir()
+	dir := realTemp(t)
 	path := filepath.Join(dir, "code.txt")
 	ctx, _ := driftWindowSetup(t, path, linesFile(30), 10, 4)
 	var nw strings.Builder
@@ -99,7 +99,7 @@ func TestDriftRefusalAfterWindowedReadDiffsTheWindowNotTheFile(t *testing.T) {
 }
 
 func TestDriftRefusalAfterWindowedReadNamesIdenticalBytesWhenOnlyMtimeMoved(t *testing.T) {
-	dir := t.TempDir()
+	dir := realTemp(t)
 	path := filepath.Join(dir, "code.txt")
 	ctx, _ := driftWindowSetup(t, path, linesFile(30), 10, 4)
 	moveMtimeOnly(t, path)
@@ -119,7 +119,7 @@ func TestDriftRefusalAfterWindowedReadNamesIdenticalBytesWhenOnlyMtimeMoved(t *t
 }
 
 func TestDriftRefusalAfterWindowedReadStaysRefusedWhenTheWindowVanishes(t *testing.T) {
-	dir := t.TempDir()
+	dir := realTemp(t)
 	path := filepath.Join(dir, "code.txt")
 	ctx, _ := driftWindowSetup(t, path, linesFile(30), 10, 4)
 	if err := os.WriteFile(path, []byte("short\n"), 0o644); err != nil {

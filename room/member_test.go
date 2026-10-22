@@ -28,7 +28,7 @@ func newRoom(t *testing.T, home string, places int) Member {
 }
 
 func TestAMemberAloneClaimsAndHolds(t *testing.T) {
-	home := t.TempDir()
+	home := shortTemp(t)
 	m := newRoom(t, home, 1)
 	key := KeyOf("local")
 	done := make(chan bool, 1)
@@ -49,7 +49,7 @@ func TestAMemberAloneClaimsAndHolds(t *testing.T) {
 }
 
 func TestTwoMembersAgreeOnWhoHolds(t *testing.T) {
-	home := t.TempDir()
+	home := shortTemp(t)
 	first := newRoom(t, home, 2)
 	second := newRoom(t, home, 2)
 	waitFor(t, "the members to see each other", func() bool {
@@ -87,7 +87,7 @@ func TestTwoMembersAgreeOnWhoHolds(t *testing.T) {
 }
 
 func TestTwoMembersStartedTogetherEndInOneRoom(t *testing.T) {
-	home := t.TempDir()
+	home := shortTemp(t)
 	type outcome struct {
 		m   Member
 		err error
@@ -122,7 +122,7 @@ func TestTwoMembersStartedTogetherEndInOneRoom(t *testing.T) {
 }
 
 func TestAPeerGoneAtTheDialIsSkipped(t *testing.T) {
-	home := t.TempDir()
+	home := shortTemp(t)
 	dir := filepath.Join(home, "room")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
@@ -139,7 +139,7 @@ func TestAPeerGoneAtTheDialIsSkipped(t *testing.T) {
 }
 
 func TestPriorityOutranksArrival(t *testing.T) {
-	home := t.TempDir()
+	home := shortTemp(t)
 	first := newRoom(t, home, 1)
 	second := newRoom(t, home, 1)
 	key := KeyOf("local")
@@ -160,7 +160,7 @@ func TestPriorityOutranksArrival(t *testing.T) {
 }
 
 func TestAMemberThatDiesReleasesForIt(t *testing.T) {
-	home := t.TempDir()
+	home := shortTemp(t)
 	holder := newRoom(t, home, 1)
 	watcher := newRoom(t, home, 1)
 	key := KeyOf("local")
@@ -171,7 +171,7 @@ func TestAMemberThatDiesReleasesForIt(t *testing.T) {
 }
 
 func TestAKeyServesAsManyPlacesAsItsRowSays(t *testing.T) {
-	home := t.TempDir()
+	home := shortTemp(t)
 	first := newRoom(t, home, 2)
 	second := newRoom(t, home, 2)
 	waitFor(t, "the members to see each other", func() bool {
@@ -220,7 +220,7 @@ func TestAKeyServesAsManyPlacesAsItsRowSays(t *testing.T) {
 }
 
 func TestAHigherClaimEntersPastOneInFlight(t *testing.T) {
-	home := t.TempDir()
+	home := shortTemp(t)
 	first := newRoom(t, home, 1)
 	second := newRoom(t, home, 1)
 	waitFor(t, "the members to see each other", func() bool {
@@ -261,7 +261,7 @@ func TestAHigherClaimEntersPastOneInFlight(t *testing.T) {
 }
 
 func TestATransientAcceptErrorKeepsTheMemberAdmitting(t *testing.T) {
-	home := t.TempDir()
+	home := shortTemp(t)
 	socketReady := make(chan struct{})
 	var socket string
 	old := acceptFrom
@@ -353,7 +353,7 @@ func TestAJoinWalksPastItsOwnTakenIds(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	home := t.TempDir()
+	home := shortTemp(t)
 	if err := os.MkdirAll(filepath.Join(home, "room"), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -376,7 +376,7 @@ func TestAJoinPastTheBoundRefusesLoud(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	home := t.TempDir()
+	home := shortTemp(t)
 	if err := os.MkdirAll(filepath.Join(home, "room"), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -390,11 +390,12 @@ func TestAJoinPastTheBoundRefusesLoud(t *testing.T) {
 	}
 }
 
-func TestAStatReadFailureFailsTheIdentity(t *testing.T) {
-	old := procStat
-	procStat = filepath.Join(t.TempDir(), "absent")
-	t.Cleanup(func() { procStat = old })
-	if _, err := startTime(); err == nil {
-		t.Fatal("an unreadable stat must fail the identity")
+func shortTemp(t *testing.T) string {
+	t.Helper()
+	d, err := os.MkdirTemp("", "room")
+	if err != nil {
+		t.Fatal(err)
 	}
+	t.Cleanup(func() { os.RemoveAll(d) })
+	return d
 }

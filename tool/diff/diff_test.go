@@ -70,7 +70,7 @@ func lastLine(s string) string {
 }
 
 func TestFilesDefaultsToHeadNotTheIndex(t *testing.T) {
-	dir := t.TempDir()
+	dir := realTemp(t)
 	chdir(t, dir)
 	initRepo(t, dir)
 	if err := os.WriteFile(filepath.Join(dir, "f.txt"), []byte("one\n"), 0o644); err != nil {
@@ -91,7 +91,7 @@ func TestFilesDefaultsToHeadNotTheIndex(t *testing.T) {
 }
 
 func TestFilesCleanTreeRepliesNoChanges(t *testing.T) {
-	dir := t.TempDir()
+	dir := realTemp(t)
 	chdir(t, dir)
 	initRepo(t, dir)
 	commitAll(t, dir, "base")
@@ -105,7 +105,7 @@ func TestFilesCleanTreeRepliesNoChanges(t *testing.T) {
 }
 
 func TestFilesDirtyTreeCappedAt100(t *testing.T) {
-	dir := t.TempDir()
+	dir := realTemp(t)
 	chdir(t, dir)
 	initRepo(t, dir)
 	var base, dirty strings.Builder
@@ -141,7 +141,7 @@ func TestFilesDirtyTreeCappedAt100(t *testing.T) {
 }
 
 func TestFilesNonGitCwdRefusesLoud(t *testing.T) {
-	dir := t.TempDir()
+	dir := realTemp(t)
 	chdir(t, dir)
 	_, err := difftool.Files(context.Background(), "", nil)
 	if err == nil {
@@ -154,7 +154,7 @@ func TestFilesNonGitCwdRefusesLoud(t *testing.T) {
 }
 
 func TestFilesRefIsOneDotNotTwoDot(t *testing.T) {
-	dir := t.TempDir()
+	dir := realTemp(t)
 	chdir(t, dir)
 	initRepo(t, dir)
 	setFile := func(content string) {
@@ -185,7 +185,7 @@ func TestFilesRefIsOneDotNotTwoDot(t *testing.T) {
 }
 
 func TestFilesPathsRestrictTheDiff(t *testing.T) {
-	dir := t.TempDir()
+	dir := realTemp(t)
 	chdir(t, dir)
 	initRepo(t, dir)
 	w := func(p, content string) {
@@ -212,7 +212,7 @@ func TestFilesPathsRestrictTheDiff(t *testing.T) {
 }
 
 func TestFilesGitFailurePassesTheStderrLine(t *testing.T) {
-	dir := t.TempDir()
+	dir := realTemp(t)
 	chdir(t, dir)
 	initRepo(t, dir)
 	commitAll(t, dir, "base")
@@ -430,7 +430,7 @@ func lineOr(lines []string, i int) string {
 }
 
 func TestFilesStreamsABigDiffWithoutBufferingItWhole(t *testing.T) {
-	dir := t.TempDir()
+	dir := realTemp(t)
 	chdir(t, dir)
 	initRepo(t, dir)
 	var base, dirty strings.Builder
@@ -458,4 +458,13 @@ func TestFilesStreamsABigDiffWithoutBufferingItWhole(t *testing.T) {
 	if allocated := after.TotalAlloc - before.TotalAlloc; allocated > 8<<20 {
 		t.Fatalf("Files allocated %d bytes for a ~9 MB diff; git's stdout must stream through a bounded capture, not buffer whole", allocated)
 	}
+}
+
+func realTemp(t *testing.T) string {
+	t.Helper()
+	d, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	return d
 }

@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -32,6 +33,30 @@ func carriesSetenv(argv []string, key, value string) bool {
 		}
 	}
 	return false
+}
+
+func linuxJail(t *testing.T) {
+	t.Helper()
+	if runtime.GOOS != "linux" {
+		t.Skip("the worker jail is linux-only")
+	}
+}
+
+func linuxLandlock(t *testing.T) {
+	t.Helper()
+	if runtime.GOOS != "linux" || (runtime.GOARCH != "amd64" && runtime.GOARCH != "arm64") {
+		t.Skip("the landlock profile is linux/amd64 or linux/arm64")
+	}
+}
+
+func shortSock(t *testing.T) string {
+	t.Helper()
+	d, err := os.MkdirTemp("", "sched")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.RemoveAll(d) })
+	return filepath.Join(d, "rig.sock")
 }
 
 func runSandboxOpts(h *harness, s sched.Spawn, profile string) sched.RunOpts {
@@ -64,6 +89,7 @@ func captureStderrRun(t *testing.T, f func()) string {
 }
 
 func TestJailedRunRefusesLoudWithoutBwrap(t *testing.T) {
+	linuxJail(t)
 	cwd := t.TempDir()
 	h, key := setupJob(t, cwd, nil)
 	t.Setenv("PATH", t.TempDir())
@@ -122,6 +148,7 @@ func TestSandboxOffRunsUnjailedWithTheOneLoudLine(t *testing.T) {
 }
 
 func TestJailedRunCarriesTheScratchHome(t *testing.T) {
+	linuxJail(t)
 	cwd := t.TempDir()
 	h, key := setupJob(t, cwd, nil)
 
@@ -157,6 +184,7 @@ func TestJailedRunCarriesTheScratchHome(t *testing.T) {
 }
 
 func TestJailedRunCarriesTheFleetEnvIntoTheJail(t *testing.T) {
+	linuxJail(t)
 	cwd := t.TempDir()
 	h, key := setupJob(t, cwd, nil)
 
@@ -183,6 +211,7 @@ func TestJailedRunCarriesTheFleetEnvIntoTheJail(t *testing.T) {
 }
 
 func TestOverlappingFiresDoNotStompEachOthersSocket(t *testing.T) {
+	linuxJail(t)
 	cwd := t.TempDir()
 	h, key1 := setupJob(t, cwd, nil)
 	if _, err := h.create(sched.CreateInput{

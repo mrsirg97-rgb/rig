@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"testing"
 	"time"
@@ -218,7 +219,9 @@ func (c *callSpawn) send(ev evt.Signal) error {
 func TestTheSnapshotCarriesEachWorkersLastCall(t *testing.T) {
 	h := newHarness(t, "/ws/sess")
 	room, fe := newFleetRoom(t)
-	spawn := &callSpawn{started: make(chan struct{})}
+	var settled atomic.Bool
+	defer settled.Store(true)
+	spawn := &callSpawn{started: make(chan struct{}), until: settled.Load}
 	tool := h.newToolRoom(t, context.Background(), false, room, fakeFetch(""), spawn.spawn)
 	if _, err := tool.Exec(context.Background(), runArgs("read the file")); err != nil {
 		t.Fatalf("hand off: %v", err)

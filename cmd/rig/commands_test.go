@@ -685,7 +685,7 @@ func TestREPLCommands(t *testing.T) {
 		t.Fatalf("build: %v\n%s", err, out)
 	}
 	scratch := shortTemp(t)
-	workDir := t.TempDir()
+	workDir := realTemp(t)
 	writeModelRows(t, cfgDir(t, scratch), localModelRow)
 
 	cmd := exec.Command(bin)

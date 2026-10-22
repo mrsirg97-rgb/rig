@@ -972,3 +972,29 @@ func TestALongFireDoesNotClobberTheCrontab(t *testing.T) {
 		t.Fatalf("the fired once line must still be consumed:\n%s", h.ct.text)
 	}
 }
+
+func TestAJobFromASymlinkedSessionCwdRunsWhereTheLinkResolves(t *testing.T) {
+	real := t.TempDir()
+	link := filepath.Join(t.TempDir(), "link")
+	if err := os.Symlink(real, link); err != nil {
+		t.Fatal(err)
+	}
+	resolved, err := filepath.EvalSymlinks(real)
+	if err != nil {
+		t.Fatal(err)
+	}
+	h, key := setupJob(t, link, nil)
+	if got := jobsRow(t, h, key)["cwd"]; got != resolved {
+		t.Fatalf("the stored cwd must be the canonical workspace, got %v want %s", got, resolved)
+	}
+	spawn := &envSpawn{result: sched.SpawnResult{Exit: 0}}
+	captureStderrRun(t, func() {
+		mustOK(t, sched.RunJob(key, runSandboxOpts(h, spawn.spawn, "off")))
+	})
+	if len(spawn.calls) != 1 {
+		t.Fatalf("a job made from a symlinked session cwd must run, not skip as moved: spawn calls = %d", len(spawn.calls))
+	}
+	if spawn.calls[0].Cwd != resolved {
+		t.Fatalf("the worker runs in the canonical workspace, got %s want %s", spawn.calls[0].Cwd, resolved)
+	}
+}

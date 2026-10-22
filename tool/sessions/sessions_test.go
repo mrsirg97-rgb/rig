@@ -87,7 +87,7 @@ func run(t *testing.T, tool core.Tool, args string) (string, error) {
 }
 
 func TestSessionsListThisProjectNewestFirst(t *testing.T) {
-	home := t.TempDir()
+	home := realTemp(t)
 	this := "/workspace/this"
 	base := time.Now().Add(-time.Hour)
 	openProject(t, home, this,
@@ -125,7 +125,7 @@ func TestSessionsListThisProjectNewestFirst(t *testing.T) {
 }
 
 func TestSessionsListHonorsProjectAndN(t *testing.T) {
-	home := t.TempDir()
+	home := realTemp(t)
 	this := "/workspace/this"
 	other := "/workspace/other"
 	openProject(t, home, this,
@@ -166,7 +166,7 @@ func TestSessionsListHonorsProjectAndN(t *testing.T) {
 }
 
 func TestSessionsSummaryCacheRatioFixture(t *testing.T) {
-	home := t.TempDir()
+	home := realTemp(t)
 	cwd := "/workspace/vitals"
 	base := time.Now().Add(-time.Hour)
 	openProject(t, home, cwd,
@@ -191,7 +191,7 @@ func TestSessionsSummaryCacheRatioFixture(t *testing.T) {
 }
 
 func TestSessionsSummaryNamesScopeWhenEmpty(t *testing.T) {
-	home := t.TempDir()
+	home := realTemp(t)
 	tool := sessions.New(home, "/workspace/emptyscope")
 	out, err := run(t, tool, `{"action":"list"}`)
 	if err != nil {
@@ -210,7 +210,7 @@ func TestSessionsSummaryNamesScopeWhenEmpty(t *testing.T) {
 }
 
 func TestSessionsSummaryPicksTheLatestFaultAcrossSessions(t *testing.T) {
-	home := t.TempDir()
+	home := realTemp(t)
 	cwd := "/workspace/multifault"
 	base := time.Now().Add(-time.Hour)
 	openProject(t, home, cwd,
@@ -233,7 +233,7 @@ func TestSessionsSummaryPicksTheLatestFaultAcrossSessions(t *testing.T) {
 }
 
 func TestSessionsActionRefusals(t *testing.T) {
-	home := t.TempDir()
+	home := realTemp(t)
 	tool := sessions.New(home, "/workspace/this")
 	if _, err := run(t, tool, `{}`); err == nil || err.Error() != "sessions: action required" {
 		t.Fatalf("a missing action must refuse, got %v", err)
@@ -245,7 +245,7 @@ func TestSessionsActionRefusals(t *testing.T) {
 }
 
 func TestSessionsShape(t *testing.T) {
-	tool := sessions.New(t.TempDir(), "/workspace/this")
+	tool := sessions.New(realTemp(t), "/workspace/this")
 	if tool.Name() != "sessions" {
 		t.Fatalf("name = %q", tool.Name())
 	}
@@ -264,8 +264,8 @@ func TestSessionsShape(t *testing.T) {
 }
 
 func TestRelativeProjectResolvesToTheAbsoluteWorkspace(t *testing.T) {
-	home := t.TempDir()
-	ws := t.TempDir()
+	home := realTemp(t)
+	ws := realTemp(t)
 	openProject(t, home, ws, seedSpec{id: "sess-rel", model: "m1", version: "0.16.1", turns: 1})
 	sub := filepath.Join(ws, "sub")
 	if err := os.MkdirAll(sub, 0o755); err != nil {
@@ -321,7 +321,7 @@ func openV2Project(t *testing.T, home, cwd string) {
 }
 
 func TestSessionsToolMigratesAnOlderProjectStoreToTheBuildVersion(t *testing.T) {
-	home := t.TempDir()
+	home := realTemp(t)
 	cwd := "/workspace/oldstore"
 	openV2Project(t, home, cwd)
 	tool := sessions.New(home, cwd)
@@ -347,7 +347,7 @@ func TestSessionsToolMigratesAnOlderProjectStoreToTheBuildVersion(t *testing.T) 
 }
 
 func TestSessionsSummarySplitsTokensByModelForAMixedSession(t *testing.T) {
-	home := t.TempDir()
+	home := realTemp(t)
 	cwd := "/workspace/split"
 	base := time.Now().Add(-time.Hour)
 	openProject(t, home, cwd,
@@ -376,7 +376,7 @@ func TestSessionsSummarySplitsTokensByModelForAMixedSession(t *testing.T) {
 }
 
 func TestSessionsListSummaryAndExecShareTheirChecks(t *testing.T) {
-	home := t.TempDir()
+	home := realTemp(t)
 	this := "/workspace/this"
 	openProject(t, home, this, seedSpec{id: "t0000001", model: "local", version: "0.16.1", turns: 1})
 	tool := sessions.New(home, this)
@@ -427,8 +427,17 @@ func TestSessionsListSummaryAndExecShareTheirChecks(t *testing.T) {
 }
 
 func TestSessionsRefusesAnUnknownField(t *testing.T) {
-	tool := sessions.New(t.TempDir(), t.TempDir())
+	tool := sessions.New(realTemp(t), realTemp(t))
 	if _, err := tool.Exec(context.Background(), json.RawMessage(`{"action":"list","bogus":1}`)); err == nil || !strings.Contains(err.Error(), "unknown field") {
 		t.Fatalf("an unknown field must refuse: %v", err)
 	}
+}
+
+func realTemp(t *testing.T) string {
+	t.Helper()
+	d, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	return d
 }

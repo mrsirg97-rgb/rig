@@ -15,7 +15,7 @@ import (
 )
 
 func TestEditSingleChangeReplacesExactlyOnce(t *testing.T) {
-	dir := t.TempDir()
+	dir := realTemp(t)
 	path := filepath.Join(dir, "code.txt")
 	if err := os.WriteFile(path, []byte("alpha beta gamma"), 0o644); err != nil {
 		t.Fatal(err)
@@ -39,7 +39,7 @@ func TestEditSingleChangeReplacesExactlyOnce(t *testing.T) {
 }
 
 func TestEditReplyNamesThePathAndBytesReplaced(t *testing.T) {
-	dir := t.TempDir()
+	dir := realTemp(t)
 	path := filepath.Join(dir, "code.txt")
 	if err := os.WriteFile(path, []byte("one two three\n"), 0o644); err != nil {
 		t.Fatal(err)
@@ -61,7 +61,7 @@ func TestEditReplyNamesThePathAndBytesReplaced(t *testing.T) {
 }
 
 func TestEditAmbiguousOldNamesTheCount(t *testing.T) {
-	dir := t.TempDir()
+	dir := realTemp(t)
 	path := filepath.Join(dir, "code.txt")
 	if err := os.WriteFile(path, []byte("x x x"), 0o644); err != nil {
 		t.Fatal(err)
@@ -92,7 +92,7 @@ func TestEditAmbiguousOldNamesTheCount(t *testing.T) {
 }
 
 func TestEditAbsentOldRefusesLoud(t *testing.T) {
-	dir := t.TempDir()
+	dir := realTemp(t)
 	path := filepath.Join(dir, "code.txt")
 	if err := os.WriteFile(path, []byte("hello"), 0o644); err != nil {
 		t.Fatal(err)
@@ -117,7 +117,7 @@ func TestEditAbsentOldRefusesLoud(t *testing.T) {
 }
 
 func TestEditAfterExternalChangeFailsLoud(t *testing.T) {
-	dir := t.TempDir()
+	dir := realTemp(t)
 	path := filepath.Join(dir, "code.txt")
 	if err := os.WriteFile(path, []byte("version one"), 0o644); err != nil {
 		t.Fatal(err)
@@ -148,7 +148,7 @@ func TestEditAfterExternalChangeFailsLoud(t *testing.T) {
 }
 
 func TestDriftCheckIsPathSpellingInsensitive(t *testing.T) {
-	dir := t.TempDir()
+	dir := realTemp(t)
 	oldWd, err := os.Getwd()
 	if err != nil {
 		t.Fatal(err)
@@ -219,7 +219,7 @@ func TestEditSchemaTakesPathOldNew(t *testing.T) {
 }
 
 func TestEditRefusesLegacyEditsArray(t *testing.T) {
-	dir := t.TempDir()
+	dir := realTemp(t)
 	path := filepath.Join(dir, "code.txt")
 	if err := os.WriteFile(path, []byte("one"), 0o644); err != nil {
 		t.Fatal(err)
@@ -233,7 +233,7 @@ func TestEditRefusesLegacyEditsArray(t *testing.T) {
 }
 
 func TestEditWithoutPriorReadAppliesWhenOldMatches(t *testing.T) {
-	dir := t.TempDir()
+	dir := realTemp(t)
 	path := filepath.Join(dir, "code.txt")
 	if err := os.WriteFile(path, []byte("one\ntwo\n"), 0o644); err != nil {
 		t.Fatal(err)
@@ -262,7 +262,7 @@ func TestEditWithoutPriorReadAppliesWhenOldMatches(t *testing.T) {
 }
 
 func TestEditWithoutPriorReadMismatchReturnsTheFileText(t *testing.T) {
-	dir := t.TempDir()
+	dir := realTemp(t)
 	path := filepath.Join(dir, "code.txt")
 	content := "alpha\nbeta\ngamma\n"
 	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
@@ -289,7 +289,7 @@ func TestEditWithoutPriorReadMismatchReturnsTheFileText(t *testing.T) {
 }
 
 func TestEditWithoutPriorReadAmbiguousReturnsTheFileText(t *testing.T) {
-	dir := t.TempDir()
+	dir := realTemp(t)
 	path := filepath.Join(dir, "code.txt")
 	if err := os.WriteFile(path, []byte("x y x"), 0o644); err != nil {
 		t.Fatal(err)
@@ -314,7 +314,7 @@ func TestEditWithoutPriorReadAmbiguousReturnsTheFileText(t *testing.T) {
 }
 
 func TestEditUnreadTeachesOnceOnAMiss(t *testing.T) {
-	dir := t.TempDir()
+	dir := realTemp(t)
 	path := filepath.Join(dir, "code.txt")
 	content := "alpha\nbeta\n"
 	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
@@ -344,7 +344,7 @@ func TestEditUnreadTeachesOnceOnAMiss(t *testing.T) {
 }
 
 func TestEditWithoutPriorReadReplyIsReadPlusTheMarker(t *testing.T) {
-	dir := t.TempDir()
+	dir := realTemp(t)
 	path := filepath.Join(dir, "code.txt")
 	if err := os.WriteFile(path, []byte("alpha\nbeta\n"), 0o644); err != nil {
 		t.Fatal(err)
@@ -367,7 +367,7 @@ func TestEditWithoutPriorReadReplyIsReadPlusTheMarker(t *testing.T) {
 }
 
 func TestEditWithoutPriorReadReplyCapsLikeRead(t *testing.T) {
-	dir := t.TempDir()
+	dir := realTemp(t)
 	path := filepath.Join(dir, "big.txt")
 	var b strings.Builder
 	for b.Len() < readCap+4096 {
@@ -400,7 +400,7 @@ func TestEditWithoutPriorReadReplyCapsLikeRead(t *testing.T) {
 }
 
 func TestEditAfterUnreadTeachingReplyIsDriftChecked(t *testing.T) {
-	dir := t.TempDir()
+	dir := realTemp(t)
 	path := filepath.Join(dir, "code.txt")
 	if err := os.WriteFile(path, []byte("alpha\nbeta\n"), 0o644); err != nil {
 		t.Fatal(err)
@@ -423,7 +423,7 @@ func TestEditAfterUnreadTeachingReplyIsDriftChecked(t *testing.T) {
 }
 
 func TestEditAfterUnreadTeachingReplyAppliesWithoutARead(t *testing.T) {
-	dir := t.TempDir()
+	dir := realTemp(t)
 	path := filepath.Join(dir, "code.txt")
 	if err := os.WriteFile(path, []byte("alpha\nbeta\n"), 0o644); err != nil {
 		t.Fatal(err)
@@ -449,7 +449,7 @@ func TestEditAfterUnreadTeachingReplyAppliesWithoutARead(t *testing.T) {
 }
 
 func TestEditEmptyOldRefusesAheadOfTheFile(t *testing.T) {
-	dir := t.TempDir()
+	dir := realTemp(t)
 	path := filepath.Join(dir, "code.txt")
 	if err := os.WriteFile(path, []byte("one"), 0o644); err != nil {
 		t.Fatal(err)
@@ -470,7 +470,7 @@ func TestEditEmptyOldRefusesAheadOfTheFile(t *testing.T) {
 func TestEditWithoutPriorReadMissingFileRefusesLoud(t *testing.T) {
 	ctx := core.WithSession(context.Background(), core.NewSession())
 	_, err := file.NewEdit().Exec(ctx, argsJSON(t, map[string]any{
-		"path": filepath.Join(t.TempDir(), "absent.txt"), "old": "x", "new": "y",
+		"path": filepath.Join(realTemp(t), "absent.txt"), "old": "x", "new": "y",
 	}))
 	if err == nil || !strings.Contains(err.Error(), "absent.txt") {
 		t.Fatalf("a missing file is not a teaching moment, got %v", err)
@@ -478,7 +478,7 @@ func TestEditWithoutPriorReadMissingFileRefusesLoud(t *testing.T) {
 }
 
 func TestEditWithoutPriorReadProceedsStandalone(t *testing.T) {
-	dir := t.TempDir()
+	dir := realTemp(t)
 	path := filepath.Join(dir, "code.txt")
 	if err := os.WriteFile(path, []byte("one"), 0o644); err != nil {
 		t.Fatal(err)
@@ -495,7 +495,7 @@ func TestEditWithoutPriorReadProceedsStandalone(t *testing.T) {
 }
 
 func TestEditAfterWriteProceedsThreaded(t *testing.T) {
-	dir := t.TempDir()
+	dir := realTemp(t)
 	path := filepath.Join(dir, "code.txt")
 	ctx := core.WithSession(context.Background(), core.NewSession())
 	if _, err := file.NewWrite().Exec(ctx, argsJSON(t, map[string]any{
@@ -512,7 +512,7 @@ func TestEditAfterWriteProceedsThreaded(t *testing.T) {
 
 func TestEditOldPlusNewAtTheReadCeilingRefuses(t *testing.T) {
 	_, err := file.NewEdit().Exec(context.Background(), argsJSON(t, map[string]any{
-		"path": filepath.Join(t.TempDir(), "absent.txt"),
+		"path": filepath.Join(realTemp(t), "absent.txt"),
 		"old":  "a", "new": strings.Repeat("x", readCap-1),
 	}))
 	if err == nil || !strings.Contains(err.Error(), strconv.Itoa(readCap)) {
@@ -521,7 +521,7 @@ func TestEditOldPlusNewAtTheReadCeilingRefuses(t *testing.T) {
 }
 
 func TestEditOldPlusNewUnderTheReadCeilingApplies(t *testing.T) {
-	dir := t.TempDir()
+	dir := realTemp(t)
 	path := filepath.Join(dir, "code.txt")
 	if err := os.WriteFile(path, []byte("a\n"), 0o644); err != nil {
 		t.Fatal(err)
@@ -542,7 +542,7 @@ func TestEditOldPlusNewUnderTheReadCeilingApplies(t *testing.T) {
 }
 
 func TestDriftDiffKeysOnTheSession(t *testing.T) {
-	dir := t.TempDir()
+	dir := realTemp(t)
 	path := filepath.Join(dir, "code.txt")
 	if err := os.WriteFile(path, []byte("A content\n"), 0o644); err != nil {
 		t.Fatal(err)
@@ -577,7 +577,7 @@ func TestDriftDiffKeysOnTheSession(t *testing.T) {
 }
 
 func TestEditRecordsFreshProvenance(t *testing.T) {
-	dir := t.TempDir()
+	dir := realTemp(t)
 	path := filepath.Join(dir, "code.txt")
 	if err := os.WriteFile(path, []byte("one"), 0o644); err != nil {
 		t.Fatal(err)
@@ -624,7 +624,7 @@ func driftSetup(t *testing.T, path, content string) (context.Context, *core.Sess
 }
 
 func TestDriftRefusalShowsASmallDriftWhole(t *testing.T) {
-	dir := t.TempDir()
+	dir := realTemp(t)
 	path := filepath.Join(dir, "code.txt")
 	ctx, _ := driftSetup(t, path, "alpha\nbeta\ngamma\n")
 	if err := os.WriteFile(path, []byte("alpha\nBETA\ngamma\n"), 0o644); err != nil {
@@ -654,7 +654,7 @@ func TestDriftRefusalShowsASmallDriftWhole(t *testing.T) {
 }
 
 func TestDriftRefusalCapsARewrite(t *testing.T) {
-	dir := t.TempDir()
+	dir := realTemp(t)
 	path := filepath.Join(dir, "big.txt")
 	var old strings.Builder
 	for i := 0; i < 40; i++ {

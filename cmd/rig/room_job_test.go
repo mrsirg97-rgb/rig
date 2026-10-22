@@ -36,7 +36,7 @@ func TestAJobStatusCrossesTheMachineRoom(t *testing.T) {
 	}
 	scratch := shortTemp(t)
 	binDir := t.TempDir()
-	workDir := t.TempDir()
+	workDir := realTemp(t)
 	spool := filepath.Join(scratch, "spool")
 
 	bin := filepath.Join(binDir, "rig")
@@ -134,7 +134,7 @@ func TestAJobStatusCrossesTheMachineRoom(t *testing.T) {
 }
 
 func TestTheEndJobsDrainRidesTheRoomSMemberLeftSignal(t *testing.T) {
-	home := t.TempDir()
+	home := shortTemp(t)
 	engine, fleetroom := newFleet()
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

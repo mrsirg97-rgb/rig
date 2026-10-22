@@ -42,6 +42,7 @@ func landlockRunOpts(h *harness, s sched.Spawn, abi int, abiErr error) sched.Run
 }
 
 func TestALandlockDelegateSpawnCarriesTheEffortAfterTheModel(t *testing.T) {
+	linuxLandlock(t)
 	rigHome := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(rigHome, "kernel"), 0o755); err != nil {
 		t.Fatal(err)
@@ -79,6 +80,7 @@ func envAt(env []string, key string) string {
 }
 
 func TestLandlockRunCarriesTheNamedEnvAndTheOneSocket(t *testing.T) {
+	linuxLandlock(t)
 	cwd := t.TempDir()
 	h, key := setupJob(t, cwd, nil)
 	if err := os.MkdirAll(filepath.Join(h.home, "kernel"), 0o755); err != nil {
@@ -151,6 +153,7 @@ func TestLandlockRunCarriesTheNamedEnvAndTheOneSocket(t *testing.T) {
 }
 
 func TestLandlockRunRefusesOnAnOldABI(t *testing.T) {
+	linuxLandlock(t)
 	cwd := t.TempDir()
 	h, key := setupJob(t, cwd, nil)
 	spawn := &landlockEnvSpawn{result: sched.SpawnResult{Exit: 0}}
@@ -171,6 +174,7 @@ func TestLandlockRunRefusesOnAnOldABI(t *testing.T) {
 }
 
 func TestLandlockRunRefusesWhenTheProbeFails(t *testing.T) {
+	linuxLandlock(t)
 	cwd := t.TempDir()
 	h, key := setupJob(t, cwd, nil)
 	spawn := &landlockEnvSpawn{result: sched.SpawnResult{Exit: 0}}
@@ -189,6 +193,7 @@ func TestLandlockRunRefusesWhenTheProbeFails(t *testing.T) {
 }
 
 func TestLandlockRunRefusesOnAMissingBind(t *testing.T) {
+	linuxLandlock(t)
 	cwd := t.TempDir()
 	h, key := setupJob(t, cwd, nil)
 	if err := os.MkdirAll(filepath.Join(h.home, "kernel"), 0o755); err != nil {
@@ -228,6 +233,7 @@ func TestApplyLandlockRefusesUnknownVersion(t *testing.T) {
 }
 
 func TestApplyLandlockRefusesMissingGrantPath(t *testing.T) {
+	linuxLandlock(t)
 	cwd := t.TempDir()
 	scratch := filepath.Join(cwd, ".rig-job")
 	if err := os.MkdirAll(scratch, 0o755); err != nil {
