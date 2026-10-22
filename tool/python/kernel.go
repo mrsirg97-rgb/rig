@@ -39,21 +39,21 @@ func (k *kernel) onDeath(p *proc, _ error) {
 
 func (p *proc) failAll(msg string) {
 	p.mu.Lock()
-	chs := make([]chan Reply, 0, len(p.pending))
-	for id, ch := range p.pending {
-		chs = append(chs, ch)
+	calls := make([]*pendingCall, 0, len(p.pending))
+	for id, call := range p.pending {
+		calls = append(calls, call)
 		delete(p.pending, id)
 	}
 	p.mu.Unlock()
-	for _, ch := range chs {
+	for _, call := range calls {
 		select {
-		case ch <- Reply{ID: nil, Ok: false, Error: strPtr(msg)}:
+		case call.ch <- Reply{ID: nil, Ok: false, Error: strPtr(msg)}:
 		default:
 		}
 	}
 }
 
-func (k *kernel) send(ctx context.Context, req request, timeoutMs int) (Reply, error) {
+func (k *kernel) send(ctx context.Context, req request, timeoutMs int, onStream func(string)) (Reply, error) {
 	select {
 	case k.queue <- struct{}{}:
 	case <-ctx.Done():
@@ -90,9 +90,9 @@ func (k *kernel) send(ctx context.Context, req request, timeoutMs int) (Reply, e
 
 	id := strconv.FormatInt(k.seq.Add(1), 10)
 	req.ID = id
-	ch := make(chan Reply, 1)
+	call := &pendingCall{ch: make(chan Reply, 1), sink: onStream}
 	p.mu.Lock()
-	p.pending[id] = ch
+	p.pending[id] = call
 	p.mu.Unlock()
 
 	body, err := json.Marshal(req)
@@ -111,20 +111,24 @@ func (k *kernel) send(ctx context.Context, req request, timeoutMs int) (Reply, e
 
 	timer := time.NewTimer(time.Duration(timeoutMs) * time.Millisecond)
 	defer timer.Stop()
+	var timerC <-chan time.Time
+	if timeoutMs > 0 {
+		timerC = timer.C
+	}
 	select {
-	case r := <-ch:
+	case r := <-call.ch:
 		if note != nil {
 			r.Note = note
 		}
 		return r, nil
-	case <-timer.C:
+	case <-timerC:
 		msg := fmt.Sprintf("timed out after %ds; kernel will be restarted on the next call; all variables are gone. Re-run setup, or pass a larger timeoutMs.",
 			roundSeconds(timeoutMs))
 		k.restart()
 		return Reply{ID: strPtr(id), Ok: false, Error: &msg, Note: note}, nil
 	case <-ctx.Done():
 		select {
-		case r := <-ch:
+		case r := <-call.ch:
 			if note != nil {
 				r.Note = note
 			}

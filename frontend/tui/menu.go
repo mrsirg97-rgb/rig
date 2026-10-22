@@ -11,28 +11,28 @@ type menuCand struct {
 	desc string
 }
 
-func (t *tui) completionLocked() (cands []menuCand, accept string, ok bool) {
+func (t *tui) completionLocked() (cands []menuCand, accept string, subs bool, ok bool) {
 	text := t.ed.text()
 	if t.commands == nil || !strings.HasPrefix(text, "/") || strings.HasPrefix(text, "//") {
-		return nil, "", false
+		return nil, "", false, false
 	}
 	rest := text[1:]
 	if sp := strings.IndexAny(rest, " \t"); sp >= 0 {
 		name := rest[:sp]
 		cmd, found := t.commands[name]
 		if !found {
-			return nil, "", false
+			return nil, "", false, false
 		}
 		subber, has := cmd.(command.Subber)
 		if !has {
-			return nil, "", false
+			return nil, "", false, false
 		}
 		for _, s := range subber.Sub() {
 			if strings.HasPrefix(s.Name, rest[sp+1:]) {
 				cands = append(cands, menuCand{name: s.Name, desc: s.Desc})
 			}
 		}
-		return cands, "/" + name + " ", true
+		return cands, "/" + name + " ", true, true
 	}
 
 	if cmd, whole := t.commands[rest]; whole {
@@ -40,7 +40,7 @@ func (t *tui) completionLocked() (cands []menuCand, accept string, ok bool) {
 			for _, sub := range subber.Sub() {
 				cands = append(cands, menuCand{name: sub.Name, desc: sub.Desc})
 			}
-			return cands, "/" + rest + " ", true
+			return cands, "/" + rest + " ", true, true
 		}
 	}
 	for _, name := range t.known {
@@ -48,7 +48,7 @@ func (t *tui) completionLocked() (cands []menuCand, accept string, ok bool) {
 			cands = append(cands, menuCand{name: name, desc: t.commands[name].Description()})
 		}
 	}
-	return cands, "/", true
+	return cands, "/", false, true
 }
 
 func (t *tui) menuLinesLocked(maxRows int) []string {
@@ -137,7 +137,7 @@ func (t *tui) tabTextLocked() (string, bool) {
 		return "", false
 	}
 	if len(t.menuCands) == 1 {
-		_, accept, ok := t.completionLocked()
+		_, accept, _, ok := t.completionLocked()
 		if ok {
 			next := accept + t.menuCands[0].name + " "
 			if next != t.ed.text() {
@@ -149,7 +149,7 @@ func (t *tui) tabTextLocked() (string, bool) {
 }
 
 func (t *tui) menuAcceptLocked() string {
-	_, accept, _ := t.completionLocked()
+	_, accept, _, _ := t.completionLocked()
 	return accept + t.menuCands[t.menuSel].name + " "
 }
 

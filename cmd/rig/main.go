@@ -166,7 +166,7 @@ func rigMain() int {
 	}
 
 	if len(os.Args) > 1 && os.Args[1] == "decision" {
-		os.Exit(decisionTrain(os.Args[2:]))
+		os.Exit(decisionTrain(os.Args[2:], newTrainKernel))
 	}
 
 	serveAddr := ""
@@ -577,6 +577,7 @@ func rigMain() int {
 
 	env := r.commandEnv()
 	env.DecisionTrain = decisionTrainEnqueue(scdb, cfgDir, self, cwd, sched.RealCrontab(""))
+	env.Trainers = newTrainerMenu(cfgDir, cwd)
 
 	var fe core.Frontend
 	var webSrv *web.Server

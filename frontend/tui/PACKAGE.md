@@ -18,8 +18,10 @@ width); no core or loop line (decision 10).
   input seam; `notify.go`: the event rendering and the live-region
   protocol; `commands.go`: the command dispatch and the `Steerer` seam
   (`Steer`, `Interrupt`, `ClearSlot`, `LiveTurn`, `Ask`); `menu.go`:
-  the completion menu; `paint.go`: the flow and the paint seam;
-  `frame.go`: the repaint cadence.
+  the completion menu (the gate: a command's sub list opens at one
+  candidate — the row's description is the point; the top-level names
+  keep one-match-ghosts, two-or-more-opens); `paint.go`: the flow and
+  the paint seam; `frame.go`: the repaint cadence.
 - **The live region** (`live.go`): the activity, pending, menu, input,
   and status rows; cursor-up redraw, width handling, the one-op-one-write
   frame (the write gate, decision 2).

@@ -17,10 +17,14 @@ The shared kernel is also the plugin discovery/execution surface
   timeoutMs)`, `Vars(ctx, timeoutMs)`, `Reset(ctx, timeoutMs)`. The
   blank-cell refusal and the `timeoutMs` bound live in the verb, so a Go
   caller and the model hit the same checks. The interface also carries the
-  seams the root and plugin discovery hold: `Run(ctx, code, timeoutMs)`
-  (the raw `Reply`, what `plugins.Kernel` asks for), `Host()` and
-  `Close()`. `New`/`NewWith` return the interface; the struct is
-  unexported.
+  seams the root and plugin discovery hold: `Run(ctx, code, timeoutMs,
+  onStream)` (the raw `Reply`, what `plugins.Kernel` asks for; `onStream`
+  receives the cell's stdout as the host drains it — a `stream` protocol
+  line per chunk, the text also collected into the final reply's
+  `out`/`err`; nil collects silently), `Host()` and `Close()`. `New`/`NewWith` return the interface; the struct is
+  unexported. A `timeoutMs` of 0 sets no timer: the cell runs until it
+  answers or the caller's context ends (the programmatic seam's no-cap
+  call; the model-facing verb keeps its bound).
 - `kernel_host.py`: embedded host script (`//go:embed`).
 - The JSON-lines wire protocol reader/writer over the subprocess stdio.
   The reply line is bounded: the host clips `out`/`result`/`error` at

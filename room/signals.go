@@ -65,6 +65,7 @@ type JobStatus struct {
 	Started time.Time
 	Ended   time.Time
 	Reason  string
+	Summary string `json:"Summary,omitempty"`
 	Workers int
 	Call    string
 	CallAt  time.Time

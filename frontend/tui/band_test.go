@@ -461,3 +461,14 @@ func TestANewNoticeRestartsTheRest(t *testing.T) {
 	s.fe.bandFade()
 	bandAwait(t, s, "—")
 }
+
+func TestTheDoneNoticeSaysTheResult(t *testing.T) {
+	s := bandSession(t, 52)
+	s.fe.Notify(machineroom.JobStatus{Job: "j8", State: machineroom.JobRunning, Workers: 1, Started: bandNow()})
+	bandAwait(t, s, "scheduled job · 1 worker")
+	bandSettle(t, s)
+	s.fe.Notify(machineroom.JobStatus{Job: "j8", State: machineroom.JobDone,
+		Started: bandNow().Add(-4 * time.Minute), Ended: bandNow(),
+		Summary: "promoted"})
+	bandAwait(t, s, "job j8 done · 4m · promoted")
+}

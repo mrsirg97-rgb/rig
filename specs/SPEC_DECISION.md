@@ -289,7 +289,11 @@ per-question `n`, `correct`, `accuracy`, and for a noul question the
 mean predicted p(true) by gold class (`pTrue.goldTrue`,
 `pTrue.goldFalse`), the two numbers that separated signal from none
 above. A train report carries one field more, `checkpoint`: the
-directory it wrote under `out_dir`.
+directory it wrote under `out_dir`. A trainer prints progress — long
+work runs loud, its output reaching the job's stream through the
+kernel's cell pipes — and cleans `out_dir` of a failed run: the
+runner removes it when the run fails, so a partial training never
+outlives the run that died.
 
 Trainers do not load into the session kernel: torch is two gigabytes
 and the kernel's venv is not where it belongs. The zone is read through
@@ -329,10 +333,13 @@ incumbent score, so the three reports share one table.
 
 ### the run, the table, the promotion
 
-The run discovers the zone, calls the trainer's `train` (the cell bound
-is the kernel's max cell timeout, 600 s; the real bound is the
-scheduler's per-job timeout), then `evaluate` three ways on the same
-held-out rows: the candidate's checkpoint, the incumbent, and the
+The run discovers the zone, calls the trainer's `train` — the cell
+carries no cap (the kernel's `Run` takes `0` as unbounded; the trainer's
+progress streams out of the kernel into the job's stream, and the real
+bound is the job's health: the run ends when the stream goes quiet for
+the job's stall, the stall watch ending a hung trainer that a clock
+would only defer) — then `evaluate` three ways on the same held-out
+rows: the candidate's checkpoint, the incumbent, and the
 constant. The incumbent is the currently served checkpoint, read from
 the unit file settings `decisionUnit` names (`~/.config/systemd/user/
 laya.service`): the `Environment=` line carrying

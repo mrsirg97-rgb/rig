@@ -93,6 +93,7 @@ type tui struct {
 	menuSel       int
 	menuDead      bool
 	menuNavigated bool
+	menuSubs      bool
 
 	statusModel   string
 	statusEffort  string

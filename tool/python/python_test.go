@@ -660,3 +660,44 @@ func TestPythonRefusesAnUnknownField(t *testing.T) {
 		t.Fatalf("an unknown field must refuse before the kernel: %v", err)
 	}
 }
+
+func TestARunWithoutACapRunsPastAnyBound(t *testing.T) {
+	requireKernel(t)
+	reply, err := suite.Run(context.Background(), "import time; time.sleep(2); print('done')", 0, nil)
+	if err != nil {
+		t.Fatalf("an uncapped cell runs to completion: %v", err)
+	}
+	if !reply.Ok || reply.Out == nil || !strings.Contains(*reply.Out, "done") {
+		t.Fatalf("an uncapped cell runs to completion: %+v", reply)
+	}
+}
+
+func TestARunStreamsTheCellsPrints(t *testing.T) {
+	requireKernel(t)
+	var mu sync.Mutex
+	var at []time.Time
+	var chunks []string
+	reply, err := suite.Run(context.Background(),
+		"print('epoch 1', flush=True)\nimport time\ntime.sleep(1)\nprint('epoch 2', flush=True)", 0,
+		func(chunk string) {
+			mu.Lock()
+			chunks = append(chunks, chunk)
+			at = append(at, time.Now())
+			mu.Unlock()
+		})
+	if err != nil {
+		t.Fatalf("the streaming cell completes: %v", err)
+	}
+	if !reply.Ok {
+		t.Fatalf("the streaming cell is ok: %+v", reply)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	joined := strings.Join(chunks, "")
+	if !strings.Contains(joined, "epoch 1") || !strings.Contains(joined, "epoch 2") {
+		t.Fatalf("the cell's prints stream to the caller: %q", joined)
+	}
+	if len(at) < 2 || reply.Ok && time.Since(at[0]) < 500*time.Millisecond {
+		t.Fatalf("the first print streams while the cell still runs (at %v): %q", at, joined)
+	}
+}

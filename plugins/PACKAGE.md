@@ -31,12 +31,16 @@ nothing else: the leaf discovers and wraps; the root (cmd/rig) wires.
   `__rig_trainers__`).
 - `Report`: one plugin file's discovery outcome.
 - `Tool`: one loaded plugin on the Tool seam.
-- `Invoke(ctx, k, kind, name, fn, timeoutMs, args...)`: one call cell
-  over a loaded file's method, the args splat from their JSON array and
-  the return printed as JSON (2.13.0) — the trainer call
-  (`train(rows_path, out_dir)`, `evaluate(checkpoint, rows_path)`) is
-  its consumer; the plugin tool's own `run(args)` cell, whose stdout is
-  the reply text, stays as it was.
+- `Invoke(ctx, k, kind, name, fn, timeoutMs, onStream, args...)`: one
+  call cell over a loaded file's method, the args splat from their JSON
+  array and the return printed as JSON (2.13.0) — the cell's stdout
+  before that line is the trainer's progress, streamed to `onStream` as
+  the host drains it (the kernel's pipe carries the cell's own prints
+  and an inherited subprocess's, so a printing trainer is loud while it
+  works) and the result is the last non-empty line, validated alone —
+  the trainer call (`train(rows_path, out_dir)`,
+  `evaluate(checkpoint, rows_path)`) is its consumer; the plugin tool's
+  own `run(args)` cell, whose stdout is the reply text, stays as it was.
 - `Ecosystem` + `NewEcosystem`: the ecosystem arms of the `plugin` door
   (SPEC_PLUGINS 8, amended 2.8.2: the `plugins` native folded into the
   door): one dispatcher over the ecosystem, by `action`:

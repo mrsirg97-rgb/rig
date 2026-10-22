@@ -118,7 +118,18 @@ sees core and models and nothing else.
   decision train <trainer>` (`decision_train.go`) runs a trainer from
   the train zone headless, and `/decision train` lands its once-job on
   the crontab through the `DecisionTrain` enqueue seam
-  (`command/env.go`), tagged with the rig home the runner reads.
+  (`command/env.go`), tagged with the rig home the runner reads. The
+  once-job carries a stall (`trainerStallMinutes`, 10 — the window the
+  old cell cap already tolerated, now watched instead of timed): the
+  trainer's cells are uncapped, the kernel's stream of the cell's
+  stdout is written to the job's stream as it drains, and a run whose
+  output goes quiet for the stall is ended by the stall watch. The
+  enqueued run's end status carries the run's summary — its last
+  non-empty stdout line, stderr's when it failed — to the band. The
+  menu's trainer rows (`newTrainerMenu`) come off the zone at menu
+  time: the zone's stamp (names, sizes, mtimes) keys the cache, so a
+  trainer dropped into `train/` shows without a restart and the kernel
+  runs only when the zone changed.
 - **The seam closures**: `buildSystem` (prompt assembly), `buildPair`
   (the provider+policy rebuild), `buildProvider` (the row's wire:
   openai, or anthropic when the row says so), `swapIn`, `compactNow`,

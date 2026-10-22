@@ -9,6 +9,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/mrsirg97-rgb/evt"
@@ -27,7 +28,28 @@ import (
 
 const decisionTrainUsage = "decision: usage: rig decision train <trainer>"
 
-func decisionTrain(args []string) int {
+const trainerStallMinutes = 10
+
+type trainKernel interface {
+	plugins.Kernel
+	Close()
+}
+
+func newTrainKernel(trainPython, cwd string) (trainKernel, error) {
+	return pythontool.NewWith(trainPython, pythontool.DefaultHost(), nil, cwd), nil
+}
+
+func jobStream() func(string) {
+	return func(chunk string) { os.Stdout.WriteString(chunk) }
+}
+
+func decisionTrain(args []string, newKernel func(trainPython, cwd string) (trainKernel, error)) (code int) {
+	var runDir string
+	defer func() {
+		if code != 0 && runDir != "" {
+			os.RemoveAll(runDir)
+		}
+	}()
 	if len(args) != 2 || args[0] != "train" {
 		fmt.Fprintln(os.Stderr, decisionTrainUsage)
 		return 2
@@ -83,31 +105,26 @@ func decisionTrain(args []string) int {
 	})
 	voice := room.Add(rig.MemberDecision)
 
-	k := pythontool.NewWith(trainPython, pythontool.DefaultHost(), nil, cwd)
+	k, kerr := newKernel(trainPython, cwd)
+	if kerr != nil {
+		fmt.Fprintln(os.Stderr, "rig: decision train:", kerr)
+		return 1
+	}
 	defer k.Close()
 
 	if err := os.MkdirAll(filepath.Join(cfgDir, "train", "pending"), 0o755); err != nil {
 		fmt.Fprintln(os.Stderr, "rig: decision train:", err)
 		return 1
 	}
-	files, err := plugins.List(cfgDir, "train")
+	reports, err := discoverTrainers(ctx, k, cfgDir)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "rig: decision train:", err)
 		return 1
 	}
-	reports, err := plugins.DiscoverChecked(ctx, k, files, nil, plugins.TrainerContract)
-	if err != nil {
-		fmt.Fprintln(os.Stderr, "rig: decision train:", err)
-		return 1
-	}
-	loaded := make([]string, 0, len(reports))
+	loaded := loadedTrainers(reports)
 	var found *plugins.Report
 	for i := range reports {
-		if reports[i].Skipped {
-			continue
-		}
-		loaded = append(loaded, reports[i].Name)
-		if reports[i].Name == trainer {
+		if !reports[i].Skipped && reports[i].Name == trainer {
 			found = &reports[i]
 		}
 	}
@@ -140,7 +157,7 @@ func decisionTrain(args []string) int {
 	constant := decision.ConstantReport(trainRows, heldRows)
 
 	tag := time.Now().UTC().Format("20060102-1504")
-	runDir := filepath.Join(cfgDir, "decision", "train", tag)
+	runDir = filepath.Join(cfgDir, "decision", "train", tag)
 	if err := os.MkdirAll(runDir, 0o755); err != nil {
 		fmt.Fprintln(os.Stderr, "rig: decision train:", err)
 		return 1
@@ -157,7 +174,7 @@ func decisionTrain(args []string) int {
 	}
 
 	kind := plugins.TrainerContract.Kind
-	checkpointRaw, err := plugins.Invoke(ctx, k, kind, trainer, "train", pythontool.MaxCellMs, trainPath, runDir)
+	checkpointRaw, err := plugins.Invoke(ctx, k, kind, trainer, "train", 0, jobStream(), trainPath, runDir)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "rig: decision train:", err)
 		return 1
@@ -177,7 +194,7 @@ func decisionTrain(args []string) int {
 		return 1
 	}
 
-	candidateRaw, err := plugins.Invoke(ctx, k, kind, trainer, "evaluate", pythontool.MaxCellMs, checkpoint, heldPath)
+	candidateRaw, err := plugins.Invoke(ctx, k, kind, trainer, "evaluate", 0, jobStream(), checkpoint, heldPath)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "rig: decision train:", err)
 		return 1
@@ -200,7 +217,7 @@ func decisionTrain(args []string) int {
 			fmt.Fprintln(os.Stderr, "rig: decision train:", err)
 			return 1
 		}
-		incumbentRaw, err := plugins.Invoke(ctx, k, kind, trainer, "evaluate", pythontool.MaxCellMs, incumbentPath, heldPath)
+		incumbentRaw, err := plugins.Invoke(ctx, k, kind, trainer, "evaluate", 0, jobStream(), incumbentPath, heldPath)
 		if err != nil {
 			fmt.Fprintln(os.Stderr, "rig: decision train:", err)
 			return 1
@@ -247,6 +264,83 @@ func decisionTrain(args []string) int {
 		return 1
 	}
 	return 0
+}
+
+func discoverTrainers(ctx context.Context, k plugins.Kernel, cfgDir string) ([]plugins.Report, error) {
+	files, err := plugins.List(cfgDir, "train")
+	if err != nil {
+		return nil, err
+	}
+	return plugins.DiscoverChecked(ctx, k, files, nil, plugins.TrainerContract)
+}
+
+func loadedTrainers(reports []plugins.Report) []string {
+	out := make([]string, 0, len(reports))
+	for _, rep := range reports {
+		if !rep.Skipped {
+			out = append(out, rep.Name)
+		}
+	}
+	return out
+}
+
+type trainerMenu struct {
+	mu    sync.Mutex
+	stamp string
+	names []string
+}
+
+func newTrainerMenu(cfgDir, cwd string) func() []string {
+	m := &trainerMenu{}
+	return func() []string { return m.load(cfgDir, cwd) }
+}
+
+func (m *trainerMenu) load(cfgDir, cwd string) []string {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	stamp, err := zoneStamp(filepath.Join(cfgDir, "train"))
+	if err != nil || stamp == m.stamp {
+		return m.names
+	}
+	cfg, err := config.Load(cfgDir)
+	if err != nil || cfg.Settings.TrainPython == "" {
+		return nil
+	}
+	k, err := newTrainKernel(cfg.Settings.TrainPython, cwd)
+	if err != nil {
+		return nil
+	}
+	defer k.Close()
+	reports, err := discoverTrainers(context.Background(), k, cfgDir)
+	if err != nil {
+		return nil
+	}
+	names := loadedTrainers(reports)
+	m.stamp, m.names = stamp, names
+	return names
+}
+
+func zoneStamp(zone string) (string, error) {
+	entries, err := os.ReadDir(zone)
+	if err != nil {
+		return "", err
+	}
+	var b strings.Builder
+	b.WriteString("train:")
+	for _, e := range entries {
+		if e.IsDir() || filepath.Ext(e.Name()) != ".py" {
+			continue
+		}
+		info, err := e.Info()
+		if err != nil {
+			return "", err
+		}
+		fmt.Fprintf(&b, "%s|%d|%d;", e.Name(), info.Size(), info.ModTime().UnixNano())
+	}
+	if b.Len() == len("train:") {
+		return "", fmt.Errorf("%s carries no trainers", zone)
+	}
+	return b.String(), nil
 }
 
 func writeJSONL(path string, rows []decision.LayaRow) error {
@@ -398,6 +492,7 @@ func decisionTrainEnqueue(db store.DB, rigHome, self, cwd string, ct sched.Cront
 			Cron:    "once",
 			At:      at.UTC().Format(time.RFC3339),
 			Cwd:     cwd,
+			Stall:   trainerStallMinutes,
 		}, cwd, session, self+" run-job", rigHome, time.Now)
 	}
 }
