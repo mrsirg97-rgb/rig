@@ -34,8 +34,6 @@ const JobStatusPostWait = 2 * meshPeriod
 
 const acceptBackoff = meshPeriod
 
-var procStat = "/proc/self/stat"
-
 var acceptFrom = func(l net.Listener) (net.Conn, error) { return l.Accept() }
 
 const sidecarExt = ".version"
@@ -91,7 +89,7 @@ func New(home string, version string, places func(int64) int, effects func(self 
 		id = broadcast.MemberOf([]byte(seed + " " + strconv.Itoa(i)))
 		listener, err = broadcast.Listen(dir, id)
 		if err != nil {
-			if !errors.Is(err, syscall.EADDRINUSE) {
+			if !errors.Is(err, syscall.EADDRINUSE) && !errors.Is(err, syscall.EEXIST) {
 				cancel()
 				return nil, err
 			}
@@ -307,38 +305,6 @@ func identity() (string, error) {
 		return "", err
 	}
 	return boot + fmt.Sprintf(" %d %d", os.Getpid(), start), nil
-}
-
-func bootID() (string, error) {
-	b, err := os.ReadFile("/proc/sys/kernel/random/boot_id")
-	if err == nil {
-		return strings.TrimSpace(string(b)), nil
-	}
-	host, herr := os.Hostname()
-	if herr != nil {
-		return "", errors.New("room: neither a boot id nor a hostname: " + herr.Error())
-	}
-	return host, nil
-}
-
-func startTime() (int64, error) {
-	stat, err := os.ReadFile(procStat)
-	if err != nil {
-		return 0, fmt.Errorf("room: %s: %w", procStat, err)
-	}
-	end := strings.LastIndex(string(stat), ") ")
-	if end < 0 {
-		return 0, errors.New("room: /proc/self/stat has no exec name")
-	}
-	fields := strings.Split(string(stat[end+2:]), " ")
-	if len(fields) < 20 {
-		return 0, errors.New("room: /proc/self/stat is short")
-	}
-	start, err := strconv.ParseInt(fields[19], 10, 64)
-	if err != nil {
-		return 0, fmt.Errorf("room: /proc/self/stat starttime: %w", err)
-	}
-	return start, nil
 }
 
 func Loading(port int) bool {

@@ -47,7 +47,7 @@ func newHarness(t *testing.T, cwd string) *harness {
 
 func newHarnessModel(t *testing.T, cwd, defModel string) *harness {
 	t.Helper()
-	home := t.TempDir()
+	home := realTemp(t)
 	globalPath := filepath.Join(home, "global.sqlite")
 	db, _, _, err := store.Open(globalPath, sched.Statements(), sched.SchemaVersion)
 	if err != nil {
@@ -463,7 +463,7 @@ func TestSchedulerVerbsAndExecShareTheirChecks(t *testing.T) {
 		t.Fatalf("a command job with a model refuses the same way on either door: create=%v exec=%v", createErr, execErr)
 	}
 
-	outside := filepath.Join(t.TempDir(), "elsewhere")
+	outside := filepath.Join(realTemp(t), "elsewhere")
 	_, createErr = h.tool.Create(ctx, adapter.CreateInput{Name: "sweep", Prompt: "the prompt", Cron: "0 3 * * *", Workspace: outside})
 	_, execErr = exec(t, h, map[string]any{"action": "create", "name": "sweep", "prompt": "the prompt", "cron": "0 3 * * *", "workspace": outside})
 	if createErr == nil || execErr == nil || createErr.Error() != execErr.Error() {
@@ -660,4 +660,13 @@ func TestSchedulerToleratesAnOffSchemaFieldTheConfigSuitePins(t *testing.T) {
 	if _, err := exec(t, h, map[string]any{"action": "list", "scope": "cwd"}); err != nil {
 		t.Fatalf("the scheduler door stays tolerant of off-schema fields (cmd/rig's config suite sends scope): %v", err)
 	}
+}
+
+func realTemp(t *testing.T) string {
+	t.Helper()
+	d, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	return d
 }

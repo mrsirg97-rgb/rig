@@ -24,7 +24,7 @@ func TestPluginsReloadVerbPassesTheReplyThrough(t *testing.T) {
 	calls := 0
 	env := &command.Env{
 		Plugins:    func() []command.PluginInfo { return nil },
-		PluginsDir: t.TempDir(),
+		PluginsDir: realTemp(t),
 		Reload: func(ctx context.Context) (string, error) {
 			calls++
 			return reply, nil
@@ -43,7 +43,7 @@ func TestPluginsReloadVerbPassesTheReplyThrough(t *testing.T) {
 
 	_, err = pluginsCmd(t).Run(context.Background(), "reload", &command.Env{
 		Plugins:    func() []command.PluginInfo { return nil },
-		PluginsDir: t.TempDir(),
+		PluginsDir: realTemp(t),
 	})
 	if err == nil || !strings.Contains(err.Error(), "no reload seam") {
 		t.Fatalf("a nil seam must refuse with the no-seam voice, got %v", err)
@@ -85,7 +85,7 @@ func TestPluginsCreateQueuesTheTemplate(t *testing.T) {
 }
 
 func TestPluginsUsageNamesTheReloadAndCreateVerbs(t *testing.T) {
-	home := t.TempDir()
+	home := realTemp(t)
 	_, err := pluginsCmd(t).Run(context.Background(), "frobnicate", &command.Env{
 		Plugins:    func() []command.PluginInfo { return nil },
 		PluginsDir: filepath.Join(home, "plugins"),

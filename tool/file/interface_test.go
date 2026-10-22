@@ -11,7 +11,7 @@ import (
 )
 
 func TestReadReadAndExecShareTheirChecks(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "lines.txt")
+	path := filepath.Join(realTemp(t), "lines.txt")
 	if err := os.WriteFile(path, []byte("one\ntwo\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -68,7 +68,7 @@ func TestReadReadAndExecShareTheirChecks(t *testing.T) {
 }
 
 func TestWriteWriteAndExecShareTheirChecks(t *testing.T) {
-	dir := t.TempDir()
+	dir := realTemp(t)
 	tool := file.NewWrite()
 	ctx := context.Background()
 
@@ -92,7 +92,7 @@ func TestWriteWriteAndExecShareTheirChecks(t *testing.T) {
 }
 
 func TestEditEditAndExecShareTheirChecks(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "a.txt")
+	path := filepath.Join(realTemp(t), "a.txt")
 	if err := os.WriteFile(path, []byte("one\ntwo\none\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}

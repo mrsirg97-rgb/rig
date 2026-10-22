@@ -63,8 +63,8 @@ func doorConfig(machine, addr string, peers []string) broadcast.MeshConfig {
 }
 
 func TestTheDoorAnswersTheMintsItSawUnderKeysItDoesNotCarry(t *testing.T) {
-	ma := doorMember(t, t.TempDir())
-	mb := doorMember(t, t.TempDir())
+	ma := doorMember(t, shortTemp(t))
+	mb := doorMember(t, shortTemp(t))
 	defer ma.Close()
 	defer mb.Close()
 	key := KeyOf("alias-on-one-side")
@@ -94,7 +94,7 @@ func TestTheDoorAnswersTheMintsItSawUnderKeysItDoesNotCarry(t *testing.T) {
 }
 
 func TestARepostReleasedBeforeItsAdmissionStillEnds(t *testing.T) {
-	home := t.TempDir()
+	home := shortTemp(t)
 	ma := doorMember(t, home)
 	defer ma.Close()
 	mb, err := New(home, JobStatusSince, func(int64) int { return 1 }, nil, nil)
@@ -102,7 +102,7 @@ func TestARepostReleasedBeforeItsAdmissionStillEnds(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer mb.Close()
-	mc := doorMember(t, t.TempDir())
+	mc := doorMember(t, shortTemp(t))
 	defer mc.Close()
 	key := KeyOf("the-model")
 	addrs := doorPorts(t, 2)
@@ -137,8 +137,8 @@ func TestARepostReleasedBeforeItsAdmissionStillEnds(t *testing.T) {
 }
 
 func TestTheDoorMirrorsAHoldAcrossMachines(t *testing.T) {
-	ma := doorMember(t, t.TempDir())
-	mb := doorMember(t, t.TempDir())
+	ma := doorMember(t, shortTemp(t))
+	mb := doorMember(t, shortTemp(t))
 	defer ma.Close()
 	defer mb.Close()
 	key := KeyOf("remote-model")
@@ -183,8 +183,8 @@ func TestTheDoorMirrorsAHoldAcrossMachines(t *testing.T) {
 }
 
 func TestTheSilentDoorSHoldsAreReleased(t *testing.T) {
-	ma := doorMember(t, t.TempDir())
-	mb := doorMember(t, t.TempDir())
+	ma := doorMember(t, shortTemp(t))
+	mb := doorMember(t, shortTemp(t))
 	defer ma.Close()
 	defer mb.Close()
 	key := KeyOf("remote-model")
@@ -214,7 +214,7 @@ func TestTheSilentDoorSHoldsAreReleased(t *testing.T) {
 }
 
 func TestALoneDoorSClockRuns(t *testing.T) {
-	m := doorMember(t, t.TempDir())
+	m := doorMember(t, shortTemp(t))
 	defer m.Close()
 	d, err := NewDoor(m, doorConfig("a", doorPorts(t, 1)[0], nil), nil, nil, nil)
 	if err != nil {
@@ -227,8 +227,8 @@ func TestALoneDoorSClockRuns(t *testing.T) {
 }
 
 func TestTheFoldSHoldKeepsAClaimUnrefused(t *testing.T) {
-	ma := doorMember(t, t.TempDir())
-	mb := doorMember(t, t.TempDir())
+	ma := doorMember(t, shortTemp(t))
+	mb := doorMember(t, shortTemp(t))
 	defer ma.Close()
 	defer mb.Close()
 	key := KeyOf("remote-model")
@@ -258,8 +258,8 @@ func TestTheFoldSHoldKeepsAClaimUnrefused(t *testing.T) {
 }
 
 func TestTheDoorProvesAClaimRefusedPastTheHorizon(t *testing.T) {
-	ma := doorMember(t, t.TempDir())
-	mb := doorMember(t, t.TempDir())
+	ma := doorMember(t, shortTemp(t))
+	mb := doorMember(t, shortTemp(t))
 	defer ma.Close()
 	defer mb.Close()
 	key := KeyOf("remote-model")
@@ -324,7 +324,7 @@ func doorInEntries(t *testing.T, d Door, key int64) int {
 }
 
 func TestTheSweepForgetsARepostReleasedWithoutItsAdmission(t *testing.T) {
-	home := t.TempDir()
+	home := shortTemp(t)
 	ma := doorMember(t, home)
 	defer ma.Close()
 	mb, err := New(home, JobStatusSince, func(int64) int { return 1 }, nil, nil)
@@ -332,7 +332,7 @@ func TestTheSweepForgetsARepostReleasedWithoutItsAdmission(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer mb.Close()
-	mc := doorMember(t, t.TempDir())
+	mc := doorMember(t, shortTemp(t))
 	defer mc.Close()
 	key := KeyOf("the-model")
 	addrs := doorPorts(t, 2)
@@ -372,8 +372,8 @@ func TestTheSweepForgetsARepostReleasedWithoutItsAdmission(t *testing.T) {
 }
 
 func TestAJoinerNeverLearnsHoldsOlderThanTheWindow(t *testing.T) {
-	ma := doorMember(t, t.TempDir())
-	mb := doorMember(t, t.TempDir())
+	ma := doorMember(t, shortTemp(t))
+	mb := doorMember(t, shortTemp(t))
 	defer ma.Close()
 	defer mb.Close()
 	key := KeyOf("remote-model")
@@ -407,8 +407,8 @@ func TestAJoinerNeverLearnsHoldsOlderThanTheWindow(t *testing.T) {
 }
 
 func TestPartitionHealingLeavesNoTwoHolders(t *testing.T) {
-	ma := doorMember(t, t.TempDir())
-	mb := doorMember(t, t.TempDir())
+	ma := doorMember(t, shortTemp(t))
+	mb := doorMember(t, shortTemp(t))
 	defer ma.Close()
 	defer mb.Close()
 	key := KeyOf("remote-model")
@@ -440,8 +440,8 @@ func TestPartitionHealingLeavesNoTwoHolders(t *testing.T) {
 }
 
 func TestServeDownMeansOutOfTheMesh(t *testing.T) {
-	ma := doorMember(t, t.TempDir())
-	mb := doorMember(t, t.TempDir())
+	ma := doorMember(t, shortTemp(t))
+	mb := doorMember(t, shortTemp(t))
 	defer ma.Close()
 	defer mb.Close()
 	key := KeyOf("remote-model")
@@ -480,7 +480,7 @@ func TestServeDownMeansOutOfTheMesh(t *testing.T) {
 }
 
 func TestADoorGoneEndsItsCalls(t *testing.T) {
-	m := doorMember(t, t.TempDir())
+	m := doorMember(t, shortTemp(t))
 	defer m.Close()
 	d, err := NewDoor(m, doorConfig("a", doorPorts(t, 1)[0], nil), nil, nil, nil)
 	if err != nil {

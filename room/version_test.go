@@ -61,7 +61,7 @@ func roomAwait(t *testing.T, what string, f func() bool) {
 }
 
 func TestAnOldRegistryDropsTheLinkOnTheUndeclaredAct(t *testing.T) {
-	home := t.TempDir()
+	home := shortTemp(t)
 	var aTold, bTold []evt.Notice
 	var aSeen, bSeen []evt.Signal
 	a, err := New(home, JobStatusSince, func(int64) int { return 1 },
@@ -99,7 +99,7 @@ func TestAnOldRegistryDropsTheLinkOnTheUndeclaredAct(t *testing.T) {
 }
 
 func TestAdmitsGatesOnTheDeclarations(t *testing.T) {
-	home := t.TempDir()
+	home := shortTemp(t)
 	a := newRoom(t, home, 1)
 	b := newRoom(t, home, 1)
 	roomAwait(t, "the members see each other", func() bool { return len(a.Live()) == 1 && len(b.Live()) == 1 })
@@ -150,7 +150,7 @@ func TestAdmitsGatesOnTheDeclarations(t *testing.T) {
 }
 
 func TestAClosedMemberAdmitsNothing(t *testing.T) {
-	m := newRoom(t, t.TempDir(), 1)
+	m := newRoom(t, shortTemp(t), 1)
 	m.Close()
 	if m.Admits(JobStatusSince) {
 		t.Fatal("a closed member admits everything: the live walk over nothing returned true")
@@ -158,7 +158,7 @@ func TestAClosedMemberAdmitsNothing(t *testing.T) {
 }
 
 func TestTheSidecarNamesTheJoinAndIsCleanedUp(t *testing.T) {
-	home := t.TempDir()
+	home := shortTemp(t)
 	m := newRoom(t, home, 1)
 	name := filepath.Join(home, "room", strconv.FormatInt(m.Id(), 10)+sidecarExt)
 	b, err := os.ReadFile(name)

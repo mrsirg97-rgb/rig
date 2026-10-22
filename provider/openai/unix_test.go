@@ -5,6 +5,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"os"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -23,7 +24,7 @@ type unixSrv struct {
 func newUnixSrv(t *testing.T) (*unixSrv, string) {
 	t.Helper()
 	s := &unixSrv{}
-	ln, err := net.Listen("unix", filepath.Join(t.TempDir(), "provider.sock"))
+	ln, err := net.Listen("unix", filepath.Join(shortTemp(t), "provider.sock"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -74,4 +75,14 @@ func TestUnixBaseURLDialsTheSocket(t *testing.T) {
 	if !strings.Contains(srv.body, `"qwen3.8-workers"`) {
 		t.Fatalf("the request must carry the model, got %q", srv.body)
 	}
+}
+
+func shortTemp(t *testing.T) string {
+	t.Helper()
+	d, err := os.MkdirTemp("", "openai")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.RemoveAll(d) })
+	return d
 }

@@ -113,7 +113,7 @@ func dumpWire(t *testing.T, out, root string) {
 	s := &bodySrv{}
 	srv := newBodySrv(t, s)
 	scratch := shortTemp(t)
-	cmdDir := t.TempDir()
+	cmdDir := realTemp(t)
 	cmd := exec.Command(bin, "-p", "hello", "-base-url", srv.URL+"/v1")
 	cmd.Dir = cmdDir
 	cmd.Env = rigEnv(t, scratch, "", "RIG_SWAP_URL="+srv.URL)
@@ -131,8 +131,8 @@ func dumpWire(t *testing.T, out, root string) {
 
 	s2 := &bodySrv{}
 	srv2 := newBodySrv(t, s2)
-	scratch2 := t.TempDir()
-	cmdDir2 := t.TempDir()
+	scratch2 := shortTemp(t)
+	cmdDir2 := realTemp(t)
 	cmd = exec.Command(bin, "-base-url", srv2.URL+"/v1")
 	cmd.Dir = cmdDir2
 	cmd.Env = rigEnv(t, scratch2, "", "RIG_SWAP_URL="+srv2.URL)
@@ -148,8 +148,8 @@ func dumpWire(t *testing.T, out, root string) {
 
 	s3 := &bodySrv{model: "brain"}
 	srv3 := newBodySrv(t, s3)
-	scratch3 := t.TempDir()
-	workDir := t.TempDir()
+	scratch3 := shortTemp(t)
+	workDir := realTemp(t)
 	shimDir := t.TempDir()
 	writeFakeCrontab(t, shimDir, filepath.Join(scratch3, "spool"))
 	home := filepath.Join(cfgDir(t, scratch3), "scheduler")

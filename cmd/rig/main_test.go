@@ -30,8 +30,8 @@ import (
 
 func TestVersionIsTheFreeze(t *testing.T) {
 
-	if Version != "3.3.0" {
-		t.Fatalf("Version = %q, want 3.3.0", Version)
+	if Version != "3.3.1" {
+		t.Fatalf("Version = %q, want 3.3.1", Version)
 	}
 
 	if !regexp.MustCompile(`^\d+\.\d+\.\d+$`).MatchString(Version) {
@@ -589,7 +589,7 @@ func TestApproveDialDoorRule(t *testing.T) {
 
 func TestProjectMovesTheSessionToTheNamedWorkspace(t *testing.T) {
 	h := newHarness(t, defaultRow(), "local", defaultsTable(t))
-	other := t.TempDir()
+	other := realTemp(t)
 	jobAgents := "the other workspace's contract"
 	if err := os.WriteFile(filepath.Join(other, "AGENTS.md"), []byte(jobAgents), 0o644); err != nil {
 		t.Fatal(err)
@@ -643,7 +643,7 @@ func TestProjectMovesTheSessionToTheNamedWorkspace(t *testing.T) {
 
 func TestProjectRefusesToMoveWhenTheOldSessionCannotClose(t *testing.T) {
 	h := newHarness(t, defaultRow(), "local", defaultsTable(t))
-	other := t.TempDir()
+	other := realTemp(t)
 	launched, err := os.Getwd()
 	if err != nil {
 		t.Fatal(err)

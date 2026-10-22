@@ -336,7 +336,7 @@ func fileCall(t *testing.T, id, name string, args map[string]any) core.ToolCall 
 }
 
 func TestBatchEditsToOneFileRunInCallOrderAgainstThePreviousLanding(t *testing.T) {
-	dir := t.TempDir()
+	dir := realTemp(t)
 	path := filepath.Join(dir, "code.txt")
 	if err := os.WriteFile(path, []byte("alpha\n"), 0o644); err != nil {
 		t.Fatal(err)
@@ -553,4 +553,13 @@ func TestInterruptMidDrainCancelsTheRest(t *testing.T) {
 	if got := toolOrder(s); !same(got, []string{"c1", "c2", "c3"}) {
 		t.Fatalf("the batch must drain into the transcript in order, got %v", got)
 	}
+}
+
+func realTemp(t *testing.T) string {
+	t.Helper()
+	d, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	return d
 }

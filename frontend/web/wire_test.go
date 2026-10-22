@@ -489,6 +489,14 @@ func TestTheGateMakesTheChildReadyForARemoteRequest(t *testing.T) {
 	claimed := make(chan broadcast.Mint, 1)
 	remote.Claim(key, room.PriorityTurn, 0, func(m broadcast.Mint, ok bool) { claimed <- m })
 	mint := <-claimed
+	await(t, "the mirror to hold the key in the home machine's fold", 20*time.Second, func() bool {
+		for _, op := range machine.Holders(key) {
+			if op.Priority() == room.PriorityTurn {
+				return true
+			}
+		}
+		return false
+	})
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 	encoded, _ := json.Marshal(mint)

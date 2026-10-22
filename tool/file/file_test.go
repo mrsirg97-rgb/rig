@@ -29,7 +29,7 @@ func argsJSON(t *testing.T, args map[string]any) json.RawMessage {
 }
 
 func TestReadReturnsContent(t *testing.T) {
-	dir := t.TempDir()
+	dir := realTemp(t)
 	path := filepath.Join(dir, "note.txt")
 	if err := os.WriteFile(path, []byte("read me"), 0o644); err != nil {
 		t.Fatal(err)
@@ -44,7 +44,7 @@ func TestReadReturnsContent(t *testing.T) {
 }
 
 func TestReadRecordsProvenanceWhenThreaded(t *testing.T) {
-	dir := t.TempDir()
+	dir := realTemp(t)
 	path := filepath.Join(dir, "note.txt")
 	if err := os.WriteFile(path, []byte("read me"), 0o644); err != nil {
 		t.Fatal(err)
@@ -64,7 +64,7 @@ func TestReadRecordsProvenanceWhenThreaded(t *testing.T) {
 }
 
 func TestReadNotesStaleObservation(t *testing.T) {
-	dir := t.TempDir()
+	dir := realTemp(t)
 	path := filepath.Join(dir, "note.txt")
 	if err := os.WriteFile(path, []byte("first"), 0o644); err != nil {
 		t.Fatal(err)
@@ -90,7 +90,7 @@ func TestReadNotesStaleObservation(t *testing.T) {
 }
 
 func TestReadFreshObservationStaysQuiet(t *testing.T) {
-	dir := t.TempDir()
+	dir := realTemp(t)
 	path := filepath.Join(dir, "note.txt")
 	if err := os.WriteFile(path, []byte("same"), 0o644); err != nil {
 		t.Fatal(err)
@@ -135,7 +135,7 @@ func readLines(t *testing.T, content string) []string {
 }
 
 func TestReadOffsetLimitReturnsTheRange(t *testing.T) {
-	dir := t.TempDir()
+	dir := realTemp(t)
 	path := filepath.Join(dir, "note.txt")
 	content := strings.Join([]string{
 		"line 00", "line 01", "line 02", "line 03", "line 04",
@@ -157,7 +157,7 @@ func TestReadOffsetLimitReturnsTheRange(t *testing.T) {
 }
 
 func TestReadOffsetPastTheEndRefusesLoud(t *testing.T) {
-	dir := t.TempDir()
+	dir := realTemp(t)
 	path := filepath.Join(dir, "note.txt")
 	if err := os.WriteFile(path, []byte("a\nb\n"), 0o644); err != nil {
 		t.Fatal(err)
@@ -171,7 +171,7 @@ func TestReadOffsetPastTheEndRefusesLoud(t *testing.T) {
 }
 
 func TestReadOffsetNegativeRefusesLoud(t *testing.T) {
-	dir := t.TempDir()
+	dir := realTemp(t)
 	path := filepath.Join(dir, "note.txt")
 	if err := os.WriteFile(path, []byte("a\nb\n"), 0o644); err != nil {
 		t.Fatal(err)
@@ -185,7 +185,7 @@ func TestReadOffsetNegativeRefusesLoud(t *testing.T) {
 }
 
 func TestReadLimitNegativeRefusesLoud(t *testing.T) {
-	dir := t.TempDir()
+	dir := realTemp(t)
 	path := filepath.Join(dir, "note.txt")
 	if err := os.WriteFile(path, []byte("a\nb\n"), 0o644); err != nil {
 		t.Fatal(err)
@@ -199,7 +199,7 @@ func TestReadLimitNegativeRefusesLoud(t *testing.T) {
 }
 
 func TestWriteCreatesAndOverwrites(t *testing.T) {
-	dir := t.TempDir()
+	dir := realTemp(t)
 	path := filepath.Join(dir, "note.txt")
 	tool := file.NewWrite()
 	if _, err := tool.Exec(context.Background(), argsJSON(t, map[string]any{
@@ -222,7 +222,7 @@ func TestWriteCreatesAndOverwrites(t *testing.T) {
 }
 
 func TestWriteRefusesMissingParentDir(t *testing.T) {
-	dir := t.TempDir()
+	dir := realTemp(t)
 	path := filepath.Join(dir, "no/such/dir/note.txt")
 	_, err := file.NewWrite().Exec(context.Background(), argsJSON(t, map[string]any{
 		"path": path, "content": "x",
@@ -250,7 +250,7 @@ func splitTruncMarker(rep string) (body string, n, m, nextOffset int, capped boo
 }
 
 func TestReadWholeFileCapsByteIdenticalToTheSplitJoin(t *testing.T) {
-	dir := t.TempDir()
+	dir := realTemp(t)
 	path := filepath.Join(dir, "big.txt")
 	var b strings.Builder
 	for i := 0; b.Len() < readCap+4096; i++ {
@@ -281,7 +281,7 @@ func TestReadWholeFileCapsByteIdenticalToTheSplitJoin(t *testing.T) {
 }
 
 func TestReadWindowOfABigFileIsByteIdentical(t *testing.T) {
-	dir := t.TempDir()
+	dir := realTemp(t)
 	path := filepath.Join(dir, "big.txt")
 	var b strings.Builder
 	for i := 0; b.Len() < readCap+4096; i++ {
@@ -312,7 +312,7 @@ func TestReadWindowOfABigFileIsByteIdentical(t *testing.T) {
 }
 
 func TestReadOneHugeLineFallsBackToARuneBoundary(t *testing.T) {
-	dir := t.TempDir()
+	dir := realTemp(t)
 	straddle := filepath.Join(dir, "straddle.txt")
 	if err := os.WriteFile(straddle, []byte(strings.Repeat("a", readCap-1)+"é"+"tail"), 0o644); err != nil {
 		t.Fatal(err)
@@ -360,7 +360,7 @@ func TestReadOneHugeLineFallsBackToARuneBoundary(t *testing.T) {
 }
 
 func TestReadOneHugeLineCapsByteIdentical(t *testing.T) {
-	dir := t.TempDir()
+	dir := realTemp(t)
 	path := filepath.Join(dir, "one.txt")
 	huge := strings.Repeat("x", readCap+8192)
 	if err := os.WriteFile(path, []byte(huge), 0o644); err != nil {
@@ -377,7 +377,7 @@ func TestReadOneHugeLineCapsByteIdentical(t *testing.T) {
 }
 
 func TestReadBigFileDoesNotAllocateTheWholeFile(t *testing.T) {
-	dir := t.TempDir()
+	dir := realTemp(t)
 	path := filepath.Join(dir, "big.txt")
 	size := 64 << 20
 	if err := os.WriteFile(path, []byte(strings.Repeat("x\n", size/2)), 0o644); err != nil {
@@ -401,7 +401,7 @@ func TestReadBigFileDoesNotAllocateTheWholeFile(t *testing.T) {
 }
 
 func TestReadBigFileRangesReassembleExactly(t *testing.T) {
-	dir := t.TempDir()
+	dir := realTemp(t)
 	path := filepath.Join(dir, "big.txt")
 	var b strings.Builder
 	for b.Len() < 3*readCap+4096 {
@@ -470,7 +470,7 @@ func commitAll(t *testing.T, dir, msg string) {
 }
 
 func TestReadDiffShowsTheHunk(t *testing.T) {
-	dir := t.TempDir()
+	dir := realTemp(t)
 	oldWd, err := os.Getwd()
 	if err != nil {
 		t.Fatal(err)
@@ -498,7 +498,7 @@ func TestReadDiffShowsTheHunk(t *testing.T) {
 }
 
 func TestReadDiffShowsTheHunkWithTheEditStaged(t *testing.T) {
-	dir := t.TempDir()
+	dir := realTemp(t)
 	oldWd, err := os.Getwd()
 	if err != nil {
 		t.Fatal(err)
@@ -527,7 +527,7 @@ func TestReadDiffShowsTheHunkWithTheEditStaged(t *testing.T) {
 }
 
 func TestReadDiffShowsAnAddedFileStagedWhole(t *testing.T) {
-	dir := t.TempDir()
+	dir := realTemp(t)
 	oldWd, err := os.Getwd()
 	if err != nil {
 		t.Fatal(err)
@@ -559,7 +559,7 @@ func TestReadDiffShowsAnAddedFileStagedWhole(t *testing.T) {
 }
 
 func TestReadDiffCleanSaysNoChanges(t *testing.T) {
-	dir := t.TempDir()
+	dir := realTemp(t)
 	oldWd, err := os.Getwd()
 	if err != nil {
 		t.Fatal(err)

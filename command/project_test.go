@@ -12,7 +12,7 @@ import (
 
 func TestProjectOpensASessionInTheNamedWorkspace(t *testing.T) {
 	byName := allByName(t)
-	home := t.TempDir()
+	home := realTemp(t)
 	t.Setenv("HOME", home)
 	dir := filepath.Join(home, "workspace")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
@@ -40,7 +40,7 @@ func TestProjectRefusesANonDirectoryByName(t *testing.T) {
 	byName := allByName(t)
 	swap := &swapSeam{id: "s9"}
 	env := &command.Env{NewSession: swap.swap}
-	out, err := byName["project"].Run(context.Background(), filepath.Join(t.TempDir(), "absent"), env)
+	out, err := byName["project"].Run(context.Background(), filepath.Join(realTemp(t), "absent"), env)
 	if err == nil || !strings.Contains(err.Error(), "project: not a directory:") {
 		t.Fatalf("a non-directory must refuse by name, got (%q, %v)", out, err)
 	}
@@ -61,7 +61,7 @@ func TestProjectRefusesALiveTurn(t *testing.T) {
 	byName := allByName(t)
 	fs := &fakeSteer{live: true}
 	env := &command.Env{Steer: fs, NewSession: (&swapSeam{id: "s9"}).swap}
-	if _, err := byName["project"].Run(context.Background(), t.TempDir(), env); err == nil ||
+	if _, err := byName["project"].Run(context.Background(), realTemp(t), env); err == nil ||
 		err.Error() != "project: a turn is live; steer or interrupt first" {
 		t.Fatalf("a live turn must refuse, got %v", err)
 	}

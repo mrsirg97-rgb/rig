@@ -110,6 +110,7 @@ func delegateInput(t *testing.T, fetch sched.Fetch, spawn sched.Spawn, mutate fu
 }
 
 func TestAJailedDelegateCarriesTheFleetEnvAndItsMemberId(t *testing.T) {
+	linuxJail(t)
 	engine := evt.NewEngine()
 	go engine.Start(context.Background())
 	defer engine.Stop()

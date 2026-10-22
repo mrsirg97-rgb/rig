@@ -33,7 +33,7 @@ func freePort(t *testing.T) int {
 }
 
 func TestAnActEffectRunsOnceOnItsOwner(t *testing.T) {
-	home := t.TempDir()
+	home := shortTemp(t)
 	port := freePort(t)
 	marker := filepath.Join(home, "starts")
 	ka := newChildren(home, models.Table{}, nil, nil, nil)
@@ -66,7 +66,7 @@ func TestAnActEffectRunsOnceOnItsOwner(t *testing.T) {
 }
 
 func TestTheRoomEngineStaysFreeWhileAChildStarts(t *testing.T) {
-	home := t.TempDir()
+	home := shortTemp(t)
 	port := freePort(t)
 	ka := newChildren(home, models.Table{}, nil, nil, nil)
 	kb := newChildren(home, models.Table{}, nil, nil, nil)
@@ -146,7 +146,7 @@ func loadRows(t *testing.T, path string) models.Table {
 }
 
 func TestAJoinerReadsTheWorld(t *testing.T) {
-	home := t.TempDir()
+	home := shortTemp(t)
 	port := freePort(t)
 	marker := filepath.Join(home, "starts")
 	rowOf := func(id string, p int, places int) string {
@@ -221,7 +221,7 @@ func TestAJoinerReadsTheWorld(t *testing.T) {
 }
 
 func TestTwoInstancesRaceToStartAModelAndOneChildRuns(t *testing.T) {
-	home := t.TempDir()
+	home := shortTemp(t)
 	port := freePort(t)
 	ka := newChildren(home, models.Table{}, nil, nil, nil)
 	kb := newChildren(home, models.Table{}, nil, nil, nil)
@@ -264,7 +264,7 @@ func TestTwoInstancesRaceToStartAModelAndOneChildRuns(t *testing.T) {
 }
 
 func TestASwapWaitsForTheHoldsAndThenSwaps(t *testing.T) {
-	home := t.TempDir()
+	home := shortTemp(t)
 	oldPort, newPort := freePort(t), freePort(t)
 	ka := newChildren(home, models.Table{}, nil, nil, nil)
 	kb := newChildren(home, models.Table{}, nil, nil, nil)
@@ -311,7 +311,7 @@ func TestASwapWaitsForTheHoldsAndThenSwaps(t *testing.T) {
 }
 
 func TestStartChildWaitsForThePortThenStops(t *testing.T) {
-	home := t.TempDir()
+	home := shortTemp(t)
 	port := freePort(t)
 	kids := newChildren(home, models.Table{}, nil, nil, nil)
 	if !kids.start("fake", port, "python3 -m http.server ${PORT}", nil, "") {
@@ -334,7 +334,7 @@ func TestStartChildWaitsForThePortThenStops(t *testing.T) {
 }
 
 func TestASecondInstanceStopsTheChild(t *testing.T) {
-	home := t.TempDir()
+	home := shortTemp(t)
 	port := freePort(t)
 	first := newChildren(home, models.Table{}, nil, nil, nil)
 	if !first.start("fake", port, "python3 -m http.server ${PORT}", nil, "") {
@@ -348,7 +348,7 @@ func TestASecondInstanceStopsTheChild(t *testing.T) {
 }
 
 func TestTheUpdateDrainsTheRoom(t *testing.T) {
-	home := t.TempDir()
+	home := shortTemp(t)
 	var a, b machineroom.Member
 	ka := newChildren(home, models.Table{}, nil, nil, nil)
 	a, err := machineroom.New(home, Version, ka.places, ka.effects, nil)
@@ -378,7 +378,7 @@ func TestTheUpdateDrainsTheRoom(t *testing.T) {
 }
 
 func TestAChildThatLivesWithoutAnsweringFailsTheStartWithinTheBound(t *testing.T) {
-	home := t.TempDir()
+	home := shortTemp(t)
 	port := freePort(t)
 	c := newChildren(home, models.Table{}, nil, nil, nil)
 	t.Cleanup(c.close)
@@ -419,7 +419,7 @@ func dummyChild(t *testing.T) int {
 }
 
 func TestAStopSignalsTheWorldsChildAndItsOwn(t *testing.T) {
-	home := t.TempDir()
+	home := shortTemp(t)
 	c := newChildren(home, models.Table{}, nil, nil, nil)
 	t.Cleanup(c.close)
 	mine := dummyChild(t)
@@ -438,7 +438,7 @@ func TestAStopSignalsTheWorldsChildAndItsOwn(t *testing.T) {
 }
 
 func TestARunnerLeavingEndsItsJobsAsRunnerLeft(t *testing.T) {
-	home := t.TempDir()
+	home := shortTemp(t)
 	engine, fleetroom := newFleet()
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -524,7 +524,7 @@ func TestARunnerLeavingEndsItsJobsAsRunnerLeft(t *testing.T) {
 }
 
 func TestARunnerThatPostedItsEndLeavesWithoutAFailure(t *testing.T) {
-	home := t.TempDir()
+	home := shortTemp(t)
 	engine, fleetroom := newFleet()
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

@@ -189,7 +189,7 @@ func TestRigHomeResolvesEnvOverDefault(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", xdg)
 
 	t.Run("RIG_HOME set wins", func(t *testing.T) {
-		override := filepath.Join(t.TempDir(), "the-home")
+		override := filepath.Join(shortTemp(t), "the-home")
 		t.Setenv("RIG_HOME", override)
 		got, err := rigHome()
 		if err != nil {
@@ -380,7 +380,7 @@ func TestRigHomeOverrideBeatsTheOldHome(t *testing.T) {
 	srv := newBodySrv(t, s)
 	bin := buildBin(t, t.TempDir())
 	scratch := shortTemp(t)
-	override := filepath.Join(t.TempDir(), "the-home")
+	override := filepath.Join(shortTemp(t), "the-home")
 	if err := os.MkdirAll(override, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -396,7 +396,7 @@ func TestRigHomeOverrideBeatsTheOldHome(t *testing.T) {
 		t.Fatal(err)
 	}
 	cmd := exec.Command(bin, "-p", "hello", "-base-url", srv.URL+"/v1")
-	cmdDir := t.TempDir()
+	cmdDir := realTemp(t)
 	cmd.Dir = cmdDir
 	env := rigEnv(t, scratch, "")
 	env = append(env, "RIG_HOME="+override)
@@ -588,7 +588,7 @@ func TestRigHomeOverrideWins(t *testing.T) {
 	srv := newPluginSrv(t, s)
 	bin := buildBin(t, t.TempDir())
 	scratch := shortTemp(t)
-	override := filepath.Join(t.TempDir(), "the-home")
+	override := filepath.Join(shortTemp(t), "the-home")
 	if err := os.MkdirAll(override, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -612,7 +612,7 @@ def run(args):
 		}
 	}
 	cmd := exec.Command(bin, "-p", "hello", "-base-url", srv.URL+"/v1")
-	cmdDir := t.TempDir()
+	cmdDir := realTemp(t)
 	cmd.Dir = cmdDir
 	env := rigEnv(t, scratch, "")
 	env = append(env, "RIG_HOME="+override, "RIG_PYTHON="+py)

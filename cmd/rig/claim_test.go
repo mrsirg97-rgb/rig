@@ -46,7 +46,7 @@ func childRow(id string, port int) models.Model {
 
 func roomOf(t *testing.T, rows ...models.Model) (string, *children, machineroom.Member) {
 	t.Helper()
-	home := t.TempDir()
+	home := shortTemp(t)
 	table, err := models.New(rows...)
 	if err != nil {
 		t.Fatal(err)
@@ -136,7 +136,7 @@ func TestAMemberThatLeftRefusesInsteadOfWaiting(t *testing.T) {
 }
 
 func TestAChildStillLoadingIsNotStartedTwice(t *testing.T) {
-	home := t.TempDir()
+	home := shortTemp(t)
 	port := freePort(t)
 	marker := filepath.Join(home, "pids")
 	command := "echo $$ >> " + marker + "; exec sleep 300"
@@ -168,7 +168,7 @@ func TestAChildStillLoadingIsNotStartedTwice(t *testing.T) {
 }
 
 func TestAStalePidFileNamesNobody(t *testing.T) {
-	home := t.TempDir()
+	home := shortTemp(t)
 	kids := newChildren(home, models.Table{}, nil, nil, nil)
 	t.Cleanup(kids.close)
 	if err := os.MkdirAll(filepath.Join(home, "logs"), 0o755); err != nil {

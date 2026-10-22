@@ -32,7 +32,7 @@ func paddedServedRow(t *testing.T, at time.Time, prompt int) []byte {
 }
 
 func TestServedRequestsReadTheRecordTheTailStartsOn(t *testing.T) {
-	home := t.TempDir()
+	home := shortTemp(t)
 	at := time.Date(2026, 10, 12, 21, 0, 0, 0, time.UTC)
 	first, err := json.Marshal(Served{At: at, Priority: PriorityTurn, Prompt: 1, Cached: 1, Completion: 1})
 	if err != nil {
@@ -60,7 +60,7 @@ func TestServedRequestsReadTheRecordTheTailStartsOn(t *testing.T) {
 }
 
 func TestServedRequestsReadBackNewestLast(t *testing.T) {
-	home := t.TempDir()
+	home := shortTemp(t)
 	if got := Recent(home, "m", 4); len(got) != 0 {
 		t.Fatalf("a model nobody served reads empty, got %d", len(got))
 	}
@@ -80,7 +80,7 @@ func TestServedRequestsReadBackNewestLast(t *testing.T) {
 }
 
 func TestServedRequestsReadOnlyTheFilesTail(t *testing.T) {
-	home := t.TempDir()
+	home := shortTemp(t)
 	for i := 0; i < 1200; i++ {
 		if err := Record(home, "m", Served{Prompt: i, Completion: 1}); err != nil {
 			t.Fatal(err)
@@ -96,7 +96,7 @@ func TestServedRequestsReadOnlyTheFilesTail(t *testing.T) {
 }
 
 func TestRecentAsksForNoRecordsAndGetsNone(t *testing.T) {
-	home := t.TempDir()
+	home := shortTemp(t)
 	for _, n := range []int{0, -5} {
 		if got := Recent(home, "model", n); got != nil {
 			t.Fatalf("Recent with n=%d returns %v, want none (a negative ask must not panic)", n, got)

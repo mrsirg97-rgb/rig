@@ -61,7 +61,7 @@ func Plugins(pluginsDir string, rec ...decision.Recorder) core.ToolMiddleware {
 				return msg, errors.New(msg)
 			}
 			targetRel, targetIn := zoneRel(root, target)
-			lexRel, lexIn := zoneRel(root, lex)
+			lexRel, lexIn := spelledRel(root, lex)
 			if targetIn && inPending(targetRel) {
 				return next(ctx, call)
 			}
@@ -100,6 +100,23 @@ func zoneRel(root, path string) (string, bool) {
 		return rel, false
 	}
 	return rel, true
+}
+
+func spelledRel(root, lex string) (string, bool) {
+	if rel, in := zoneRel(root, lex); in {
+		return rel, true
+	}
+	for cur := lex; ; {
+		parent := filepath.Dir(cur)
+		if parent == cur {
+			return "", false
+		}
+		cur = parent
+		if resolved, err := resolvedPath(cur); err == nil && resolved == root {
+			rel, err := filepath.Rel(cur, lex)
+			return rel, err == nil
+		}
+	}
 }
 
 func inPending(rel string) bool {

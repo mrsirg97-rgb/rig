@@ -65,7 +65,7 @@ func TestPluginsNone(t *testing.T) {
 }
 
 func TestPluginsDisableAndEnableMoveTheFileAndReload(t *testing.T) {
-	dir := t.TempDir()
+	dir := realTemp(t)
 	if err := os.WriteFile(filepath.Join(dir, "echo.py"), []byte("DESCRIPTION = \"echo\"\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
