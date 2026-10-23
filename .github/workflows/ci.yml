@@ -22,13 +22,6 @@ jobs:
         run: |
           sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
           sudo apt-get -y install bubblewrap >/dev/null
-      # the python door's e2e must not install from PyPI: the venv is a
-      # fixture here, and testenv links it into every throwaway home (the
-      # kernel tests otherwise bootstrap one per package run)
-      - name: the python kernel's venv
-        run: |
-          python3 -m venv "$HOME/.pi/agent/kernel-venv"
-          "$HOME/.pi/agent/kernel-venv/bin/pip" install --quiet ipython numpy pandas
       - name: test
         run: go vet ./... && go test -race -p 2 ./...
       - name: fmt-check
