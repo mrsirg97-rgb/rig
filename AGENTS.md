@@ -52,11 +52,13 @@ plus one registration line, and the loop never names a concrete type.
 ## how the code looks
 
 The reference is `~/Projects/lift/engine` (read `core/path.go`,
-`core/scribe.go`, and `visit` in `core/agent.go`) and, in this tree,
-`core/`, `room/`, `loop/` and `tool/registry.go` — the engine itself is the
-`evt` module, not a directory here. Pack them with `rem`
-before opening a new package. The aim is to express a lot in a little;
-that is harder than writing a lot, and it is the bar.
+`core/scribe.go`, and `visit` in `core/agent.go`), `~/Projects/evt` from
+0.5.0 (read `broadcast/act.go` and `broadcast/mesh.go`: the shape below,
+applied to wire values and config) and, in this tree, `core/`, `room/`,
+`loop/` and `tool/registry.go` — the engine itself is the `evt` module,
+not a directory here. Pack them with `rem` before opening a new package.
+The aim is to express a lot in a little; that is harder than writing a
+lot, and it is the bar.
 
 - **Interface first.** Every type reads as its interface. The struct is
   unexported, the constructor returns it, every signature takes the
@@ -128,6 +130,47 @@ that is harder than writing a lot, and it is the bar.
   `q.SetScorer(s)`, `q.SetPackCaps(a, b)`, `t.SetParallel(n)` (seams
   bolted on after the constructor). Each of those is a constructor
   argument that was not given one.
+
+- **Config is built from options.** A type with required parts and
+  optional knobs takes the parts positionally and the knobs as named
+  options, and hands back an interface that only reads:
+
+  ```go
+  cfg := broadcast.NewMeshConfig(machine, addr, clock,
+  	broadcast.WithPeers(peers...), broadcast.WithVoice(voice))
+  ```
+
+  Not this: `cfg := MeshConfig{...}` and then `cfg.Voice = v`,
+  `cfg.Rounds = r` four lines later (`room/door.go` today, until rig
+  takes evt 0.5.0). The correctness reason: a struct filled in steps is
+  visible half-filled, a forgotten field is a silent zero, and anyone
+  holding it can change it under the code that already read it. With
+  options, every knob is named at the one call that builds it, defaults
+  live in one place, and the built value cannot change.
+
+- **Values are read, never written.** A value that crosses a seam or the
+  wire (an act, a message, a mint) is an interface of getters over an
+  unexported struct, built by one constructor. Code that sorts, folds or
+  keys on a value's fields (`actLess`, a fold, a map key) depends on them
+  not moving; an exported struct lets any holder move them after the fact,
+  and the ordering breaks somewhere else. Getters make that impossible.
+  When a constructor's arguments become a run of same-typed positions,
+  where two literals could swap and still compile, take an input struct
+  or options instead.
+
+- **The wire is its own struct.** Encoding goes through a private wire
+  struct (`actWire`) with the codec declared once, and decoding goes back
+  through the same constructor a minted value uses. The API can change
+  shape without moving a byte (evt 0.5.0's `Act` became an interface and
+  its JSON stayed byte for byte, so 0.4 and 0.5 members still read each
+  other), and a decoded value is built by the same door as a new one.
+  Never store a typed nil pointer in an interface field: `x != nil` is
+  then true and the next call on it panics.
+
+- **Let the compiler find the callers.** Turning fields into methods makes
+  every consumer a compile error, so a refactor's blast radius is a list,
+  not a search (evt 0.5.0 named all 32 of rig's sites, in `room/`). Prefer
+  changes the type checker enforces over changes a reviewer has to spot.
 
 - **State you carry, not state you store.** lift's `Path` is one
   `[]string`: `Push`, `Pop`, `Seen`, `Current`, and `Symbol()` minting
