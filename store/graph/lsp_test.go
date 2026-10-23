@@ -69,7 +69,7 @@ var widgetSymbols = []any{
 	},
 }
 
-func lspProject(t *testing.T) (string, *graph.Queue) {
+func lspRoot(t *testing.T) string {
 	t.Helper()
 	root := t.TempDir()
 	if err := os.WriteFile(filepath.Join(root, "go.mod"), []byte("module example.com/m\n"), 0o644); err != nil {
@@ -91,16 +91,21 @@ func lspProject(t *testing.T) (string, *graph.Queue) {
 			t.Fatal(err)
 		}
 	}
-	return root, graph.NewQueue(t.TempDir(), nil)
+	return root
+}
+
+func lspProject(t *testing.T, opts ...graph.Option) (string, graph.Queue) {
+	t.Helper()
+	root := lspRoot(t)
+	return root, graph.NewQueue(t.TempDir(), nil, opts...)
 }
 
 func TestReadOfNonGoFileStartsTheServerOnce(t *testing.T) {
-	root, q := lspProject(t)
-	defer q.Close()
 	log := fakeLog(t)
 	syms := filepath.Join(t.TempDir(), "syms.json")
 	writeFake(t, syms, widgetSymbols)
-	q.SetServer("typescript", fakeServer(t, "typescript", log, syms, "")...)
+	root, q := lspProject(t, graph.WithServer("typescript", fakeServer(t, "typescript", log, syms, "")...))
+	defer q.Close()
 	q.Touch(filepath.Join(root, "src", "widget.ts"))
 	q.Drain(context.Background())
 	q.Touch(filepath.Join(root, "lib", "other.ts"))
@@ -133,15 +138,15 @@ func TestReadOfNonGoFileStartsTheServerOnce(t *testing.T) {
 }
 
 func TestSecondLanguageReplacesTheServer(t *testing.T) {
-	root, q := lspProject(t)
-	defer q.Close()
 	tsLog, pyLog := fakeLog(t), fakeLog(t)
 	empty := filepath.Join(t.TempDir(), "empty.json")
 	writeFake(t, empty, []any{})
 	syms := filepath.Join(t.TempDir(), "syms.json")
 	writeFake(t, syms, widgetSymbols)
-	q.SetServer("typescript", fakeServer(t, "typescript", tsLog, syms, "")...)
-	q.SetServer("python", fakeServer(t, "python", pyLog, empty, "")...)
+	root, q := lspProject(t,
+		graph.WithServer("typescript", fakeServer(t, "typescript", tsLog, syms, "")...),
+		graph.WithServer("python", fakeServer(t, "python", pyLog, empty, "")...))
+	defer q.Close()
 	ctx := context.Background()
 	q.Touch(filepath.Join(root, "src", "widget.ts"))
 	q.Drain(ctx)
@@ -160,8 +165,7 @@ func TestSecondLanguageReplacesTheServer(t *testing.T) {
 }
 
 func TestDocumentSymbolsLandAndReferencesResolveOnPack(t *testing.T) {
-	root, q := lspProject(t)
-	defer q.Close()
+	root := lspRoot(t)
 	log := fakeLog(t)
 	syms := filepath.Join(t.TempDir(), "syms.json")
 	writeFake(t, syms, widgetSymbols)
@@ -172,7 +176,8 @@ func TestDocumentSymbolsLandAndReferencesResolveOnPack(t *testing.T) {
 			"range": map[string]any{"start": map[string]any{"line": 9, "character": 12}},
 		},
 	})
-	q.SetServer("typescript", fakeServer(t, "typescript", log, syms, refs)...)
+	q := graph.NewQueue(t.TempDir(), nil, graph.WithServer("typescript", fakeServer(t, "typescript", log, syms, refs)...))
+	defer q.Close()
 	ctx := context.Background()
 	q.Touch(filepath.Join(root, "src", "widget.ts"))
 	q.Touch(filepath.Join(root, "lib", "other.ts"))
@@ -225,9 +230,9 @@ func TestAMissingLanguageServerIsSaidOnceAndTheLanguageIsSkipped(t *testing.T) {
 			}
 		}
 	})
-	q := graph.NewQueue(t.TempDir(), room.Add(0))
+	q := graph.NewQueue(t.TempDir(), room.Add(0),
+		graph.WithServer("typescript", filepath.Join(t.TempDir(), "no-such-language-server"), "--stdio"))
 	defer q.Close()
-	q.SetServer("typescript", filepath.Join(t.TempDir(), "no-such-language-server"), "--stdio")
 	q.Touch(filepath.Join(root, "src", "widget.ts"))
 	q.Drain(context.Background())
 	q.Touch(filepath.Join(root, "lib", "other.ts"))

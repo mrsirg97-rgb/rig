@@ -19,6 +19,11 @@ project-relative; each worktree's store maps its own tree.
 - `metadata/metadata.go` (+ `extra.sql`): hand-written container
   metadata, the source for the generated `ddl`/`domain`. Edit and
   regenerate; never hand-edit the projections.
+- `queue.go`: `Queue` is an interface of the verbs its callers hold
+  (`Pack`, `IndexProject`, `Touch`, `Run`, `Drain`, `Close`, `Home`,
+  `PackCaps`), built whole by `NewQueue` from the home, the voice and
+  the `Option`s (`WithPackCaps`, `WithScorer`, `WithServer`); the
+  struct is unexported, so no caller can remap a live queue.
 - `extract.go`: the seam (`Extract(file) -> symbols, edges`), the
   language table, and the project-root/package-path rules (`go.mod`
   first, then the git toplevel, then the file's directory; package =
@@ -68,11 +73,11 @@ project-relative; each worktree's store maps its own tree.
   never discarded). The default
   command is `typescript-language-server --stdio` — TypeScript is the
   first real target; the operator installs the servers, rig spawns them,
-  and the queue's `SetServer` remaps a language (the tests use it to
-  point at a fake speaking the protocol over stdio) and clears the
-  language's gone flag, so a re-pointed server gets another chance —
-  the one restart that keeps "stay unmapped until the next start"
-  honest. `file://` URIs escape `#` and `?` (the URI grammar's
+  and `WithServer` names a language's command at construction (the
+  tests use it to point at a fake speaking the protocol over stdio).
+  A configured server maps the language; a language the queue's life
+  marked gone stays unmapped until a new queue is built with its
+  server, which keeps "stay unmapped until the next start" honest. `file://` URIs escape `#` and `?` (the URI grammar's
   reserved bytes) so a path round-trips through the peer's parser. Symbols come from
   `textDocument/documentSymbol` at extraction; edges stay lazy:
   `pack` resolves them through `textDocument/references` at the symbol's

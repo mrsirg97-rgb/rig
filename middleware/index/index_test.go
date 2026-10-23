@@ -19,7 +19,7 @@ const indexSrc = `package alpha
 func Alpha() int { return 1 }
 `
 
-func indexModule(t *testing.T) (string, *graph.Queue) {
+func indexModule(t *testing.T) (string, graph.Queue) {
 	t.Helper()
 	root := t.TempDir()
 	if err := os.WriteFile(filepath.Join(root, "go.mod"), []byte("module example.com/m\n"), 0o644); err != nil {
@@ -115,7 +115,7 @@ func TestEditReplacesSymbolsAndEdgesInPlace(t *testing.T) {
 	}
 }
 
-func mapped(q *graph.Queue) (core.ToolExec, core.ToolExec) {
+func mapped(q graph.Queue) (core.ToolExec, core.ToolExec) {
 	mw := index.Middleware(q)
 	return mw.Wrap(execOf(file.NewRead())), mw.Wrap(execOf(file.NewEdit()))
 }

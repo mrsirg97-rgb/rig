@@ -23,7 +23,7 @@ func baseName(pkg string) string {
 	return pkg
 }
 
-func (q *Queue) Pack(ctx context.Context, cwd, target string) (string, error) {
+func (q *queue) Pack(ctx context.Context, cwd, target string) (string, error) {
 	target = strings.TrimSpace(target)
 	if target == "" {
 		return "", fmt.Errorf("graph: pack needs a symbol or a file")
@@ -65,7 +65,7 @@ func isFile(p string) bool {
 	return err == nil && !fi.IsDir()
 }
 
-func (q *Queue) packFile(ctx context.Context, db store.DB, root, cwd, target string) (string, error) {
+func (q *queue) packFile(ctx context.Context, db store.DB, root, cwd, target string) (string, error) {
 	abs := target
 	if !filepath.IsAbs(abs) {
 		abs = filepath.Join(cwd, target)
@@ -125,7 +125,7 @@ func querySymbols(ctx context.Context, db store.DB, q string, args ...any) ([]sy
 	return out, rows.Err()
 }
 
-func (q *Queue) lookupSymbol(ctx context.Context, db store.DB, module, target string) (symRow, error) {
+func (q *queue) lookupSymbol(ctx context.Context, db store.DB, module, target string) (symRow, error) {
 	var rows []symRow
 	if qual, name, ok := strings.Cut(target, "."); ok && qual != "" && name != "" {
 		all, err := querySymbols(ctx, db, `SELECT package, name, kind, file, line, end_line FROM symbols WHERE name = ?`, name)
@@ -181,7 +181,7 @@ func (q *Queue) lookupSymbol(ctx context.Context, db store.DB, module, target st
 	return rows[0], nil
 }
 
-func (q *Queue) packSymbol(ctx context.Context, db store.DB, root, module, target string) (string, error) {
+func (q *queue) packSymbol(ctx context.Context, db store.DB, root, module, target string) (string, error) {
 	sym, err := q.lookupSymbol(ctx, db, module, target)
 	if err != nil {
 		return "", err
@@ -213,7 +213,7 @@ func truncateAt(s string, ceiling int) string {
 	return s[:cut]
 }
 
-func (q *Queue) packOne(ctx context.Context, db store.DB, root string, sym symRow) (string, error) {
+func (q *queue) packOne(ctx context.Context, db store.DB, root string, sym symRow) (string, error) {
 	if moved, err := q.refresh(ctx, db, root, sym.File); err != nil {
 		return "", err
 	} else if moved {

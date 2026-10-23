@@ -17,7 +17,7 @@ type Scorer interface {
 	Score(ctx context.Context, task string, items []string) ([]decision.PackVerdict, error)
 }
 
-func (q *Queue) packTask(ctx context.Context, db store.DB, root, task string) (string, error) {
+func (q *queue) packTask(ctx context.Context, db store.DB, root, task string) (string, error) {
 	cands, err := lexicalCandidates(ctx, db, task, q.itemCap)
 	if err != nil {
 		return "", err

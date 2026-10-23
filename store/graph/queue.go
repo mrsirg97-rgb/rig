@@ -21,7 +21,18 @@ const QueueCap = 256
 
 const ReadCeiling = 1 << 20
 
-type Queue struct {
+type Queue interface {
+	Pack(ctx context.Context, cwd, target string) (string, error)
+	IndexProject(ctx context.Context, cwd string) (string, error)
+	Touch(path string)
+	Run(ctx context.Context)
+	Drain(ctx context.Context)
+	Close()
+	Home() string
+	PackCaps() (item, load int)
+}
+
+type queue struct {
 	ch      chan string
 	home    string
 	voice   broadcast.Member
@@ -39,17 +50,27 @@ type Queue struct {
 	loadCap int
 }
 
-type Option func(*Queue)
+type Option func(*queue)
 
 func WithPackCaps(items, load int) Option {
 	if items <= 0 || load <= 0 {
 		panic(fmt.Sprintf("graph: pack caps %d/%d: the ceiling needs a bound", items, load))
 	}
-	return func(q *Queue) { q.itemCap, q.loadCap = items, load }
+	return func(q *queue) { q.itemCap, q.loadCap = items, load }
 }
 
 func WithScorer(s Scorer) Option {
-	return func(q *Queue) { q.scorer = s }
+	return func(q *queue) { q.scorer = s }
+}
+
+func WithServer(lang string, argv ...string) Option {
+	return func(q *queue) {
+		if len(argv) == 0 {
+			delete(q.servers, lang)
+			return
+		}
+		q.servers[lang] = append([]string(nil), argv...)
+	}
 }
 
 func defaultServers() map[string][]string {
@@ -58,8 +79,12 @@ func defaultServers() map[string][]string {
 	}
 }
 
-func NewQueue(home string, voice broadcast.Member, opts ...Option) *Queue {
-	q := &Queue{
+func NewQueue(home string, voice broadcast.Member, opts ...Option) Queue {
+	return newQueue(home, voice, opts...)
+}
+
+func newQueue(home string, voice broadcast.Member, opts ...Option) *queue {
+	q := &queue{
 		ch:      make(chan string, QueueCap),
 		home:    home,
 		voice:   voice,
@@ -77,22 +102,11 @@ func NewQueue(home string, voice broadcast.Member, opts ...Option) *Queue {
 	return q
 }
 
-func (q *Queue) SetServer(lang string, argv ...string) {
-	q.lspMu.Lock()
-	defer q.lspMu.Unlock()
-	if len(argv) == 0 {
-		delete(q.servers, lang)
-	} else {
-		q.servers[lang] = argv
-	}
-	delete(q.lspGone, lang)
-}
+func (q *queue) PackCaps() (item, load int) { return q.itemCap, q.loadCap }
 
-func (q *Queue) PackCaps() (item, load int) { return q.itemCap, q.loadCap }
+func (q *queue) Home() string { return q.home }
 
-func (q *Queue) Home() string { return q.home }
-
-func (q *Queue) Touch(path string) {
+func (q *queue) Touch(path string) {
 	select {
 	case q.ch <- path:
 	default:
@@ -100,7 +114,7 @@ func (q *Queue) Touch(path string) {
 	}
 }
 
-func (q *Queue) Run(ctx context.Context) {
+func (q *queue) Run(ctx context.Context) {
 	defer q.stopLSP()
 	for {
 		select {
@@ -112,11 +126,11 @@ func (q *Queue) Run(ctx context.Context) {
 	}
 }
 
-func (q *Queue) Close() {
+func (q *queue) Close() {
 	q.stopLSP()
 }
 
-func (q *Queue) Drain(ctx context.Context) {
+func (q *queue) Drain(ctx context.Context) {
 	for {
 		select {
 		case p := <-q.ch:
@@ -127,7 +141,7 @@ func (q *Queue) Drain(ctx context.Context) {
 	}
 }
 
-func (q *Queue) say(format string, args ...any) {
+func (q *queue) say(format string, args ...any) {
 	if q.voice == nil {
 		return
 	}
@@ -141,7 +155,7 @@ func (q *Queue) say(format string, args ...any) {
 	}
 }
 
-func (q *Queue) process(ctx context.Context, path string) {
+func (q *queue) process(ctx context.Context, path string) {
 	lang := LanguageOf(path)
 	if lang == "" || Skip(path) {
 		return
@@ -163,7 +177,7 @@ func (q *Queue) process(ctx context.Context, path string) {
 	}
 }
 
-func (q *Queue) extractor(lang string) Extractor {
+func (q *queue) extractor(lang string) Extractor {
 	if lang == "go" {
 		return q.extract
 	}
@@ -177,7 +191,7 @@ func (q *Queue) extractor(lang string) Extractor {
 	return nil
 }
 
-func (q *Queue) open(root string) (store.DB, error) {
+func (q *queue) open(root string) (store.DB, error) {
 	path := FilePath(q.home, scope.Key(root), scope.Worktree(root))
 	q.mu.Lock()
 	defer q.mu.Unlock()
@@ -192,7 +206,7 @@ func (q *Queue) open(root string) (store.DB, error) {
 	return db, nil
 }
 
-func (q *Queue) index(ctx context.Context, db store.DB, root, abs string) error {
+func (q *queue) index(ctx context.Context, db store.DB, root, abs string) error {
 	lang := LanguageOf(abs)
 	if lang == "" || Skip(abs) {
 		return nil
@@ -257,7 +271,7 @@ func sha256File(path string) (string, error) {
 	return hex.EncodeToString(h.Sum(nil)), nil
 }
 
-func (q *Queue) IndexProject(ctx context.Context, cwd string) (string, error) {
+func (q *queue) IndexProject(ctx context.Context, cwd string) (string, error) {
 	root, _, ok := ProjectRoot(cwd)
 	if !ok {
 		return "", fmt.Errorf("graph: %s is not a project (no go.mod above it and not a git worktree); index from inside one, or name it with project", cwd)

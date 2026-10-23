@@ -12,7 +12,7 @@ import (
 	"github.com/mrsirg97-rgb/rig/v3/store"
 )
 
-func (q *Queue) resolveRefs(ctx context.Context, c *lspClient, db store.DB, root string, sym symRow, force bool) error {
+func (q *queue) resolveRefs(ctx context.Context, c *lspClient, db store.DB, root string, sym symRow, force bool) error {
 	key := "refs:" + sym.Package + ":" + sym.Name
 	abs := filepath.Join(root, filepath.FromSlash(sym.File))
 	live, err := sha256File(abs)
@@ -67,7 +67,7 @@ func (q *Queue) resolveRefs(ctx context.Context, c *lspClient, db store.DB, root
 }
 
 type lspExtract struct {
-	q    *Queue
+	q    *queue
 	lang string
 }
 

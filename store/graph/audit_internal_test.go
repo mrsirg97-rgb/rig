@@ -200,7 +200,7 @@ func twoSymbolProject(t *testing.T) (root, home string, db store.DB) {
 		t.Fatal(err)
 	}
 	home = t.TempDir()
-	seed := NewQueue(home, nil)
+	seed := newQueue(home, nil)
 	if _, err := seed.IndexProject(context.Background(), root); err != nil {
 		t.Fatal(err)
 	}
@@ -232,7 +232,7 @@ func TestTheExactFitCandidateLoads(t *testing.T) {
 		t.Fatal(err)
 	}
 	exact := len(first) + len(second)
-	q := NewQueue(home, nil, WithPackCaps(exact, ReadCeiling))
+	q := newQueue(home, nil, WithPackCaps(exact, ReadCeiling))
 	out, err := q.packTask(ctx, db, root, task)
 	if err != nil {
 		t.Fatalf("packTask: %v", err)
@@ -258,7 +258,7 @@ func TestPackTaskRefusesAMismatchedVerdictCount(t *testing.T) {
 	root, home, db := twoSymbolProject(t)
 	ctx := context.Background()
 	for _, by := range []int{1, -1} {
-		q := NewQueue(home, nil, WithScorer(shortScorer{by: by}))
+		q := newQueue(home, nil, WithScorer(shortScorer{by: by}))
 		_, err := q.packTask(ctx, db, root, "find the target helper")
 		if err == nil {
 			t.Fatalf("a scorer answering %d verdicts for a different candidate count must refuse", by)
@@ -267,7 +267,7 @@ func TestPackTaskRefusesAMismatchedVerdictCount(t *testing.T) {
 			t.Fatalf("the refusal names both counts, got %v", err)
 		}
 	}
-	q := NewQueue(home, nil, WithScorer(shortScorer{}))
+	q := newQueue(home, nil, WithScorer(shortScorer{}))
 	if _, err := q.packTask(ctx, db, root, "find the target helper"); err != nil {
 		t.Fatalf("a matched scorer packs: %v", err)
 	}

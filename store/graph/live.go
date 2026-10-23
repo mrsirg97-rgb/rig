@@ -13,7 +13,7 @@ import (
 	"github.com/mrsirg97-rgb/rig/v3/store"
 )
 
-func (q *Queue) refresh(ctx context.Context, db store.DB, root, rel string) (bool, error) {
+func (q *queue) refresh(ctx context.Context, db store.DB, root, rel string) (bool, error) {
 	abs := filepath.Join(root, filepath.FromSlash(rel))
 	if _, err := os.Stat(abs); os.IsNotExist(err) {
 		return true, dropFile(ctx, db, rel)

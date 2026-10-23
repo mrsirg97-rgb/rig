@@ -38,7 +38,7 @@ type lspClient struct {
 	stderr   *boundedTail
 }
 
-func (q *Queue) lspFor(ctx context.Context, lang string) (*lspClient, error) {
+func (q *queue) lspFor(ctx context.Context, lang string) (*lspClient, error) {
 	q.lspMu.Lock()
 	defer q.lspMu.Unlock()
 	if q.lsp != nil {
@@ -62,7 +62,7 @@ func (q *Queue) lspFor(ctx context.Context, lang string) (*lspClient, error) {
 	return c, nil
 }
 
-func (q *Queue) stopLSP() {
+func (q *queue) stopLSP() {
 	q.lspMu.Lock()
 	if q.lsp != nil {
 		q.lsp.stop()
