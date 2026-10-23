@@ -250,7 +250,7 @@ func TestTheAbsentFFmpegRefusalNamesTheKnob(t *testing.T) {
 func TestAConfiguredButMissingFFmpegRefusesByName(t *testing.T) {
 	dir, blobs := realTemp(t), realTemp(t)
 	clip := testVideo(t, dir, "320x240", "1")
-	tl := view.NewWith(view.Config{Blobs: blobs, FFmpeg: filepath.Join(dir, "no-ffmpeg")})
+	tl := view.New(blobs, view.WithFFmpeg(filepath.Join(dir, "no-ffmpeg")))
 	_, err := tl.Exec(context.Background(), videoArgs(t, map[string]any{"path": clip}))
 	if err == nil || !strings.Contains(err.Error(), "not an executable") {
 		t.Fatalf("a configured-but-missing ffmpeg must refuse by name: %v", err)

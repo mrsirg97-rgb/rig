@@ -412,11 +412,12 @@ func rigMain() int {
 	if v, ok := os.LookupEnv("RIG_TRAFILATURA"); ok {
 		traf = &v
 	}
-	webTool := webtool.New(webtool.Config{
-		Search:     webtool.SearchConfig{BaseURL: envOr("RIG_SEARXNG_URL", cfg.Settings.SearXNG)},
-		Fetch:      webtool.FetchConfig{Proxy: proxy, Trafilatura: traf},
-		Background: del,
-	})
+	webTool := webtool.New(
+		webtool.WithSearchURL(envOr("RIG_SEARXNG_URL", cfg.Settings.SearXNG)),
+		webtool.WithProxy(proxy),
+		webtool.WithTrafilatura(traf),
+		webtool.WithBackground(del),
+	)
 
 	pluginsDir := filepath.Join(cfgDir, "plugins")
 	if err := os.MkdirAll(filepath.Join(pluginsDir, "pending"), 0o755); err != nil {

@@ -119,14 +119,7 @@ func (s *pageServer) submitted() (map[string]string, int) {
 func browserTool(t *testing.T, blobs string) view.View {
 	t.Helper()
 	bin := requireBrowser(t)
-	return view.NewWith(view.Config{
-		Blobs:   blobs,
-		Browser: bin,
-		Lookup:  loopbackLookup,
-		Dial:    publicDial,
-		Cwd:     t.TempDir(),
-		RigHome: t.TempDir(),
-	})
+	return view.New(blobs, view.WithBrowser(bin), view.WithCwd(t.TempDir()), view.WithRigHome(t.TempDir()), view.WithLookup(loopbackLookup), view.WithDial(publicDial))
 }
 
 func stepArgs(t *testing.T, params map[string]any) []byte {
@@ -304,7 +297,7 @@ func TestABrowserStepRefusesAStaleRef(t *testing.T) {
 }
 
 func TestTheBrowserGuardsEverythingWebGuards(t *testing.T) {
-	tl := view.NewWith(view.Config{Blobs: realTemp(t), Browser: requireBrowser(t), Cwd: realTemp(t), RigHome: realTemp(t)})
+	tl := view.New(realTemp(t), view.WithBrowser(requireBrowser(t)), view.WithCwd(realTemp(t)), view.WithRigHome(realTemp(t)))
 	defer tl.Close()
 	for _, raw := range []string{
 		"http://127.0.0.1:1/",
@@ -333,7 +326,7 @@ func TestTheBrowserGuardsEverythingWebGuards(t *testing.T) {
 
 func TestTheBrowserRefusesAFileOutsideTheWorkspace(t *testing.T) {
 	dir := realTemp(t)
-	tl := view.NewWith(view.Config{Blobs: realTemp(t), Browser: requireBrowser(t), Cwd: dir, RigHome: realTemp(t)})
+	tl := view.New(realTemp(t), view.WithBrowser(requireBrowser(t)), view.WithCwd(dir), view.WithRigHome(realTemp(t)))
 	defer tl.Close()
 	_, err := tl.Exec(context.Background(), stepArgs(t, map[string]any{"step": "open", "url": "file:///etc/passwd"}))
 	if err == nil || !strings.Contains(err.Error(), "outside the session's workspace") {
@@ -353,7 +346,7 @@ func TestTheBrowserRefusesAFileOutsideTheWorkspace(t *testing.T) {
 }
 
 func TestABrowserWithoutABinaryRefusesNamingTheKnob(t *testing.T) {
-	tl := view.NewWith(view.Config{Blobs: realTemp(t)})
+	tl := view.New(realTemp(t))
 	defer tl.Close()
 	_, err := tl.Exec(context.Background(), stepArgs(t, map[string]any{"step": "open", "url": "about:blank"}))
 	if err == nil || !strings.Contains(err.Error(), "RIG_BROWSER") || !strings.Contains(err.Error(), "settings.browser") {
@@ -410,14 +403,7 @@ func TestTheBrowserDialsTheAddressItCheckedNotASecondAnswer(t *testing.T) {
 		}
 		return loopbackLookup(ctx, host)
 	}
-	tl := view.NewWith(view.Config{
-		Blobs:   realTemp(t),
-		Browser: requireBrowser(t),
-		Lookup:  rebind,
-		Dial:    publicDial,
-		Cwd:     t.TempDir(),
-		RigHome: t.TempDir(),
-	})
+	tl := view.New(realTemp(t), view.WithBrowser(requireBrowser(t)), view.WithCwd(t.TempDir()), view.WithRigHome(t.TempDir()), view.WithLookup(rebind), view.WithDial(publicDial))
 	defer tl.Close()
 	out, err := tl.Exec(context.Background(), stepArgs(t, map[string]any{"step": "open", "url": "http://rebind.test:" + port + "/"}))
 	t.Logf("open: %s (err=%v)", out, err)

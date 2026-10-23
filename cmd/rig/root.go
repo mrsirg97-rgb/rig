@@ -350,10 +350,13 @@ func (r *root) applyVision() {
 			r.tools = map[string]core.Tool{}
 		}
 		if _, ok := r.tools["view"]; !ok {
-			r.tools["view"] = viewtool.NewWith(viewtool.Config{
-				Blobs: r.blobsDir(), FFmpeg: r.ffmpeg, Browser: r.browser, Proxy: r.proxy,
-				Cwd: r.cwd, RigHome: r.rigHome,
-			})
+			r.tools["view"] = viewtool.New(r.blobsDir(),
+				viewtool.WithFFmpeg(r.ffmpeg),
+				viewtool.WithBrowser(r.browser),
+				viewtool.WithProxy(r.proxy),
+				viewtool.WithCwd(r.cwd),
+				viewtool.WithRigHome(r.rigHome),
+			)
 		}
 		return
 	}

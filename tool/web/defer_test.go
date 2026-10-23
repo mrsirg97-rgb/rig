@@ -23,7 +23,7 @@ func TestAFetchsBoundAloneFetchesInTurnAndDeferSendsItToTheBackground(t *testing
 	}))
 	defer srv.Close()
 	bg := &countingBG{}
-	w := webTool(Config{Fetch: FetchConfig{Lookup: publicLookup, Do: direct()}, Background: bg})
+	w := webTool(config{fetch: fetchConfig{Lookup: publicLookup, Do: direct()}, background: bg})
 
 	body, err := execArgs(t, w, `{"action":"fetch","target":"`+srv.URL+`/","timeoutMs":5000}`)
 	if err != nil || !strings.Contains(body, "the page's words") {

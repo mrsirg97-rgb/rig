@@ -30,7 +30,7 @@ var (
 
 type LookupFn func(ctx context.Context, host string) ([]string, error)
 
-type FetchConfig struct {
+type fetchConfig struct {
 	Proxy       string
 	Trafilatura *string
 	Lookup      LookupFn
@@ -54,7 +54,7 @@ type fetch struct {
 	maxBytes int
 }
 
-func newFetch(cfg FetchConfig) *fetch {
+func newFetch(cfg fetchConfig) *fetch {
 	f := &fetch{
 		proxy:    cfg.Proxy,
 		lookup:   systemLookup(cfg.Lookup),

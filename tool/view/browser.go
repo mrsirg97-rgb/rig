@@ -47,7 +47,7 @@ type outcome struct {
 }
 
 type browser struct {
-	cfg   Config
+	cfg   config
 	queue chan struct{}
 
 	mu        sync.Mutex
