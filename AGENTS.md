@@ -51,6 +51,14 @@ plus one registration line, and the loop never names a concrete type.
 
 ## how the code looks
 
+**Immutable at construction, no side effects.** A value is whole when its
+constructor returns, and reading it changes nothing. Then the argument
+for a piece of code is local: read the one call that built the value and
+you know what it holds, on every goroutine, for as long as it lives. What
+must change while rig runs is one named seam that changes in one place
+(the kernel's `Seat`, swapped by the root in one atomic store), never a
+field someone writes. The rules below are this one, applied.
+
 The reference is `~/Projects/lift/engine` (read `core/path.go`,
 `core/scribe.go`, and `visit` in `core/agent.go`), `~/Projects/evt` from
 0.5.0 (read `broadcast/act.go` and `broadcast/mesh.go`: the shape below,
