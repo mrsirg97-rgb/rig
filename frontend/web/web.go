@@ -20,34 +20,53 @@ import (
 
 const sessionName = "dashboard"
 
-type Options struct {
-	Home string
-	CWD  string
+type Option func(*options)
 
-	Models models.Table
-
-	Crontab sched.Crontab
-
-	RunnerCmd string
-
-	ReadTimeout time.Duration
-
-	Natives []string
-
-	Root string
-
-	Commands []core.Command
-	Env      any
-	Status   func(context.Context) Status
-
-	Machine room.Member
-	Door    room.Door
-	Tailnet string
-	Version string
-	Ready   func(ctx context.Context, m models.Model) error
-
-	StopWorkers func()
+type options struct {
+	cwd         string
+	models      models.Table
+	crontab     sched.Crontab
+	runnerCmd   string
+	readTimeout time.Duration
+	natives     []string
+	root        string
+	commands    []core.Command
+	env         any
+	status      func(context.Context) Status
+	machine     room.Member
+	door        room.Door
+	tailnet     string
+	version     string
+	ready       func(ctx context.Context, m models.Model) error
+	stopWorkers func()
 }
+
+func WithCWD(cwd string) Option                { return func(o *options) { o.cwd = cwd } }
+func WithModels(models models.Table) Option    { return func(o *options) { o.models = models } }
+func WithCrontab(crontab sched.Crontab) Option { return func(o *options) { o.crontab = crontab } }
+func WithRunnerCmd(cmd string) Option          { return func(o *options) { o.runnerCmd = cmd } }
+func WithReadTimeout(timeout time.Duration) Option {
+	return func(o *options) { o.readTimeout = timeout }
+}
+func WithNatives(natives ...string) Option {
+	return func(o *options) { o.natives = append([]string(nil), natives...) }
+}
+func WithRoot(root string) Option { return func(o *options) { o.root = root } }
+func WithCommands(cmds ...core.Command) Option {
+	return func(o *options) { o.commands = append(o.commands, cmds...) }
+}
+func WithEnv(env any) Option { return func(o *options) { o.env = env } }
+func WithStatus(status func(context.Context) Status) Option {
+	return func(o *options) { o.status = status }
+}
+func WithMachine(machine room.Member) Option { return func(o *options) { o.machine = machine } }
+func WithDoor(door room.Door) Option         { return func(o *options) { o.door = door } }
+func WithTailnet(tailnet string) Option      { return func(o *options) { o.tailnet = tailnet } }
+func WithVersion(version string) Option      { return func(o *options) { o.version = version } }
+func WithReady(ready func(ctx context.Context, m models.Model) error) Option {
+	return func(o *options) { o.ready = ready }
+}
+func WithStopWorkers(stop func()) Option { return func(o *options) { o.stopWorkers = stop } }
 
 type Server struct {
 	home      string
@@ -74,27 +93,31 @@ type Server struct {
 	vitals  *stats.Sampler
 }
 
-func New(opts Options) (*Server, error) {
-	if opts.Home == "" {
+func New(home string, opts ...Option) (*Server, error) {
+	if home == "" {
 		return nil, errors.New("web: home is required (the rig home)")
+	}
+	o := &options{}
+	for _, opt := range opts {
+		opt(o)
 	}
 	sub, err := fs.Sub(staticFS, "static")
 	if err != nil {
 		return nil, fmt.Errorf("web: static: %w", err)
 	}
-	ct := opts.Crontab
+	ct := o.crontab
 	if ct == nil {
 		ct = sched.RealCrontab("")
 	}
-	runner := opts.RunnerCmd
+	runner := o.runnerCmd
 	if runner == "" {
 		runner = "rig run-job"
 	}
-	natives := make(map[string]bool, len(opts.Natives))
-	for _, n := range opts.Natives {
+	natives := make(map[string]bool, len(o.natives))
+	for _, n := range o.natives {
 		natives[n] = true
 	}
-	root := opts.Root
+	root := o.root
 	if root == "" {
 		dir, err := os.UserHomeDir()
 		if err != nil {
@@ -103,23 +126,23 @@ func New(opts Options) (*Server, error) {
 		root = dir
 	}
 	return &Server{
-		home:      opts.Home,
-		cwd:       opts.CWD,
-		models:    opts.Models,
+		home:      home,
+		cwd:       o.cwd,
+		models:    o.models,
 		crontab:   ct,
 		runnerCmd: runner,
-		readTO:    opts.ReadTimeout,
+		readTO:    o.readTimeout,
 		natives:   natives,
 		root:      root,
-		stores:    newStoreCache(opts.Home, ct, runner),
+		stores:    newStoreCache(home, ct, runner),
 		static:    sub,
-		chat:      newChat(opts.Commands, opts.Env, opts.StopWorkers),
-		status:    opts.Status,
-		machine:   opts.Machine,
-		door:      opts.Door,
-		tailnet:   opts.Tailnet,
-		ready:     opts.Ready,
-		version:   opts.Version,
+		chat:      newChat(o.commands, o.env, o.stopWorkers),
+		status:    o.status,
+		machine:   o.machine,
+		door:      o.door,
+		tailnet:   o.tailnet,
+		ready:     o.ready,
+		version:   o.version,
 		vitals:    stats.NewSampler(stats.Read),
 	}, nil
 }

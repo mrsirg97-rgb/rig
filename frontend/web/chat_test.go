@@ -30,14 +30,9 @@ func (echoCmd) Run(_ context.Context, args string, _ any) (string, error) {
 func newChatServer(t *testing.T) (*Server, string) {
 	t.Helper()
 	home := seedHome(t)
-	srv, err := New(Options{
-		Home: home, CWD: testCWD, Models: modelsTable(t),
-		Crontab: &fakeCrontab{}, Natives: []string{"bash", "read"}, Root: home,
-		Commands: []core.Command{echoCmd{}},
-		Status: func(context.Context) Status {
-			return Status{Model: "m1", Effort: "high", Session: "sess-1", Up: 12, Rows: []string{"projects held: 2"}}
-		},
-	})
+	srv, err := New(home, WithCWD(testCWD), WithModels(modelsTable(t)), WithCrontab(&fakeCrontab{}), WithNatives([]string{"bash", "read"}...), WithRoot(home), WithCommands([]core.Command{echoCmd{}}...), WithStatus(func(context.Context) Status {
+		return Status{Model: "m1", Effort: "high", Session: "sess-1", Up: 12, Rows: []string{"projects held: 2"}}
+	}))
 	if err != nil {
 		t.Fatal(err)
 	}

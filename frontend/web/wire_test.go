@@ -82,7 +82,7 @@ func wireServerDoor(t *testing.T, machine room.Member, door room.Door) (*Server,
 		t.Cleanup(m.Close)
 		machine = m
 	}
-	srv, err := New(Options{Home: home, CWD: testCWD, Models: table, Crontab: &fakeCrontab{}, Natives: []string{"bash", "read"}, Root: home, Machine: machine, Door: door, Version: "3.0.0"})
+	srv, err := New(home, WithCWD(testCWD), WithModels(table), WithCrontab(&fakeCrontab{}), WithNatives([]string{"bash", "read"}...), WithRoot(home), WithMachine(machine), WithDoor(door), WithVersion("3.0.0"))
 	if err != nil {
 		t.Fatal(err)
 	}

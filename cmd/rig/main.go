@@ -606,14 +606,14 @@ func rigMain() int {
 				}
 			}
 		}
-		srv, werr := web.New(web.Options{
-			Home: cfgDir, CWD: cwd, Models: cfg.Models,
-			Machine: machine, Door: door, Tailnet: tailnet, Version: Version,
-			Ready:   func(ctx context.Context, m models.Model) error { return kids.ready(ctx, machine, m) },
-			Crontab: sched.RealCrontab(""), RunnerCmd: self + " run-job", Natives: nativeToolNames,
-			Commands: command.All(), Env: env, Status: webStatus(r, sdb),
-			StopWorkers: stopWorkers,
-		})
+		srv, werr := web.New(cfgDir,
+			web.WithCWD(cwd), web.WithModels(cfg.Models),
+			web.WithMachine(machine), web.WithDoor(door), web.WithTailnet(tailnet), web.WithVersion(Version),
+			web.WithReady(func(ctx context.Context, m models.Model) error { return kids.ready(ctx, machine, m) }),
+			web.WithCrontab(sched.RealCrontab("")), web.WithRunnerCmd(self+" run-job"), web.WithNatives(nativeToolNames...),
+			web.WithCommands(command.All()...), web.WithEnv(env), web.WithStatus(webStatus(r, sdb)),
+			web.WithStopWorkers(stopWorkers),
+		)
 		if werr != nil {
 			fmt.Fprintln(os.Stderr, "rig serve:", werr)
 			return 1
