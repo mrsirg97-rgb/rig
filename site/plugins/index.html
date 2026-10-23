@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="rig plugins: one Python file is one tool, three zones, one door, and the operator installs.">
+<meta name="theme-color" content="#0e0f11">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://tryrig.ai/plugins/">
+<meta property="og:title" content="rig — plugins">
+<meta property="og:description" content="One Python file is one tool. The model writes it; you install it.">
+<meta property="og:image" content="https://tryrig.ai/og.png">
+<meta name="twitter:card" content="summary_large_image">
+<title>rig — plugins</title>
+<link rel="stylesheet" href="../site.css">
+</head>
+<body>
+
+<a class="skip" href="#main">skip to content</a>
+
+<header class="topbar">
+  <a class="brand" href="../" aria-label="rig, home"><b>rig</b><span>{{RIG_VERSION}}</span></a>
+  <nav class="topnav" aria-label="pages">
+    <a href="../">overview</a>
+    <a href="../setup/">setup</a>
+    <a href="../performance/">performance</a>
+    <a href="../developing/">developing</a>
+    <a href="../plugins/" aria-current="page">plugins</a>
+    <a href="../subagents/">subagents</a>
+    <a href="../decision/">decision</a>
+    <a href="https://github.com/mrsirg97-rgb/rig">github</a>
+  </nav>
+</header>
+<div class="topbar-rule" aria-hidden="true"></div>
+
+<main class="doc" id="main">
+
+  <section>
+    <p class="eyebrow">plugins</p>
+    <h1>One file. <em>One tool. You install it.</em></h1>
+    <div class="lede">
+      <p>A plugin is a Python file with three top-level names: <code>DESCRIPTION</code>, <code>SCHEMA</code>, and a <code>run</code> function. Drop it in <code>~/.rig/plugins/</code> and it is a tool beside the built-ins on the next turn. No build step, no manifest, no framework.</p>
+      <p>The model can write one too — and that is exactly why the zones exist. <b>Everything the model authors lands in <code>pending/</code> and is invisible until you approve it.</b> Installing a tool is the operator's verb.</p>
+    </div>
+    <div class="toc" aria-label="on this page">
+      <a href="#contract">the contract</a>
+      <a href="#zones">three zones</a>
+      <a href="#door">the door</a>
+      <a href="#promote">promoting one</a>
+      <a href="#allow">the allow-list</a>
+      <a href="#kernel">the shared kernel</a>
+      <a href="#trust">trust</a>
+      <a href="#train">the train zone</a>
+    </div>
+  </section>
+
+  <section id="contract">
+    <p class="eyebrow">the contract</p>
+    <h2>Three names and a function</h2>
+<pre class="code"><span class="c"># ~/.rig/plugins/weather.py</span>
+<span class="k">DESCRIPTION</span> = <span class="s">"current weather for a city"</span>
+<span class="k">SCHEMA</span> = {
+    <span class="s">"type"</span>: <span class="s">"object"</span>,
+    <span class="s">"properties"</span>: {<span class="s">"city"</span>: {<span class="s">"type"</span>: <span class="s">"string"</span>}},
+    <span class="s">"required"</span>: [<span class="s">"city"</span>],
+}
+
+<span class="k">def</span> run(args):
+    <span class="k">return</span> fetch_weather(args[<span class="s">"city"</span>])</pre>
+    <div class="table" role="list">
+      <div class="row" role="listitem"><span class="os">the name</span><p class="what">The filename stem: <code>weather.py</code> → <code>weather</code>. The rule is <code>^[a-z][a-z0-9_]{0,63}$</code> — a lowercase letter, then letters, digits, underscores.</p></div>
+      <div class="row" role="listitem"><span class="os">DESCRIPTION</span><p class="what">A string that reaches the model verbatim, through the door's <code>schema</code> action. <b>Write it for the model.</b></p></div>
+      <div class="row" role="listitem"><span class="os">SCHEMA</span><p class="what">The tool's JSON schema. The model never pays for it until it asks.</p></div>
+      <div class="row" role="listitem"><span class="os">run(args)</span><p class="what">Receives the args dict; its return is the tool result. An exception is a tool error carrying the traceback tail, and <b>the kernel stays alive</b> — it is the model's kernel too.</p></div>
+    </div>
+    <p>The operator's first look is <code>/plugins</code>: the loaded ones with their descriptions and files, the skipped ones with their reasons, and the pending zone. From the model's side, the same door lists what is callable without pulling every schema:</p>
+<pre class="code"><span class="a">plugin</span> {<span class="k">"action"</span>: <span class="s">"list"</span>}                              <span class="d"># loaded and skipped</span>
+<span class="a">plugin</span> {<span class="k">"action"</span>: <span class="s">"schema"</span>, <span class="k">"name"</span>: <span class="s">"weather"</span>}       <span class="d"># the contract, on demand</span>
+<span class="a">plugin</span> {<span class="k">"action"</span>: <span class="s">"run"</span>, <span class="k">"name"</span>: <span class="s">"weather"</span>, <span class="k">"args"</span>: {<span class="k">"city"</span>: <span class="s">"Oslo"</span>}}</pre>
+  </section>
+
+  <section id="zones">
+    <p class="eyebrow">the zones</p>
+    <h2>A directory is a trust level</h2>
+    <div class="table" role="list">
+      <div class="row" role="listitem"><span class="os">plugins/</span><p class="what"><b>The live set.</b> Top-level <code>*.py</code> only, discovered in filename order. Presence here is the operator's approval.</p></div>
+      <div class="row" role="listitem"><span class="os">pending/</span><p class="what"><b>The forge's landing zone.</b> Everything the model writes lands here. Invisible to discovery, created at startup, silent and idempotent.</p></div>
+      <div class="row" role="listitem"><span class="os">disabled/</span><p class="what"><b>The off switch.</b> A disabled or deleted plugin moves here: hidden, not callable, never deleted. <code>/plugins enable</code> brings it back.</p></div>
+      <div class="row" role="listitem"><span class="os">train/</span><p class="what">The decision model's zone, beside plugins and sharing its machinery. Its own contract and interpreter — <a href="#train">below</a>.</p></div>
+    </div>
+    <p>A missing or empty <code>plugins/</code> is a no-op that never starts the kernel: the wire is the built-in tools' bytes exactly. <code>settings.json</code>'s <code>plugins.max</code> caps the live set; a load that would exceed it is skipped with the reason <code>disabled: over the settings.json plugins.max cap</code>, and the first N files by name win. The cap is read at startup, so raising it takes a restart.</p>
+  </section>
+
+  <section id="door">
+    <p class="eyebrow">the door</p>
+    <h2>One door, not eleven schemas</h2>
+    <p>The request carries the built-in tools plus <b>one</b> <code>plugin</code> door. The per-plugin schemas stay behind it, so a grown tool table stops blowing context: the live names ride the door's <code>name</code> enum, and a plugin's description and schema cross the wire only when you ask for them.</p>
+    <p>An unknown name runs the root's reload once and re-resolves before refusing — an out-of-band install is callable without a reload call. <code>/plugins reload</code> stays the operator's explicit verb; a failed reload leaves the table and the wire untouched.</p>
+    <div class="table" role="list">
+      <div class="row" role="listitem"><span class="os">run</span><p class="what">Call a live plugin with its args.</p></div>
+      <div class="row" role="listitem"><span class="os">schema</span><p class="what">Read one plugin's contract without running it.</p></div>
+      <div class="row" role="listitem"><span class="os">list</span><p class="what">The live set and the skipped set with reasons.</p></div>
+      <div class="row" role="listitem"><span class="os">create</span><p class="what">Take a name and source, check the name rule, native collision and contract, and write into <code>pending/</code>. Creating over an existing pending file updates it; the reply says which.</p></div>
+      <div class="row" role="listitem"><span class="os">delete</span><p class="what">A move into <code>disabled/</code>, never an unlink.</p></div>
+      <div class="row" role="listitem"><span class="os">reload</span><p class="what">Re-run discovery: the new list is live on the next turn.</p></div>
+    </div>
+    <p><code>plugins</code> is not a tool: it folded into <code>plugin</code> in 2.8.2. A <code>settings.json</code> that still carries a <code>plugins</code> entry is dropped at the read with a notice.</p>
+  </section>
+
+  <section id="promote">
+    <p class="eyebrow">promoting one</p>
+    <h2>Pending to live is your call</h2>
+    <p>Four doors write to the pending zone, and one verb installs: <code>/plugins approve &lt;name&gt;</code> moves a pending file to the top level, reloads, and says if it replaced an installed one of the same name.</p>
+    <div class="table" role="list">
+      <div class="row" role="listitem"><span class="os">by hand</span><p class="what">Write the file into <code>~/.rig/plugins/pending/</code>, review it as you would any Python you intend to run, then approve.</p></div>
+      <div class="row" role="listitem"><span class="os">from the command</span><p class="what"><code>/plugins create &lt;text&gt;</code> queues the authoring prompt — a command queues a line, never dispatches a turn. The model writes; you approve.</p></div>
+      <div class="row" role="listitem"><span class="os">from the model</span><p class="what">The door's <code>create</code> action writes the pending file through the same shared check the command door uses.</p></div>
+      <div class="row" role="listitem"><span class="os">from the dashboard</span><p class="what">The plugin forge reads a plugin's source and saves the full contract file into pending (create or update); the plugin view lists all three zones with each file's DESCRIPTION, read without running it.</p></div>
+    </div>
+    <p>The rest of the operator's surface: <code>/plugins pending</code>, <code>/plugins disabled</code>, <code>/plugins disable &lt;name&gt;</code>, <code>/plugins enable &lt;name&gt;</code>, <code>/plugins reload</code>. The dashboard's forge is the same moves, with a source editor.</p>
+  </section>
+
+  <section id="allow">
+    <p class="eyebrow">the allow-list</p>
+    <h2>Presence is the approval</h2>
+    <div class="table" role="list">
+      <div class="row" role="listitem"><span class="os">built-ins</span><p class="what">The default permits the built-in tools only; a plugin is not in it.</p></div>
+      <div class="row" role="listitem"><span class="os">installed</span><p class="what">An installed plugin's presence in <code>plugins/</code> root is its own allow-list entry — your approve put it there — and the live table admits it without an <code>allow</code> line.</p></div>
+      <div class="row" role="listitem"><span class="os">pending</span><p class="what">A plugin still in <code>pending/</code> is not live and stays refused until approved; the refusal names the tool and the allow-list.</p></div>
+      <div class="row" role="listitem"><span class="os">your own allow</span><p class="what">A <code>settings.json</code> that writes its own <code>allow</code> key replaces the built-in default whole, so it must carry <code>plugin</code> or every door call is refused.</p></div>
+    </div>
+  </section>
+
+  <section id="kernel">
+    <p class="eyebrow">the shared kernel</p>
+    <h2>One Python, on purpose</h2>
+    <p>Discovery imports every file through the same persistent IPython kernel the <code>python</code> tool uses: one process, one namespace. The cost is named and accepted — <b>the model's Python can call plugin functions directly, and plugin state persists across calls.</b> A plugin is a plain import by its stem, and a reload replaces the module in both the live table and <code>sys.modules</code>.</p>
+    <p>A plugin call's default timeout is 120 s, charged from the kernel's turn; a queued call is never charged queue time. A kernel-level failure is the call's error; a per-file failure is a skipped report.</p>
+    <div class="note">
+      <p class="label">the failure voices</p>
+      <p>A file missing a name, or failing import, is a <b>loud skip</b> naming the file and the field — startup and reload continue, because a broken plugin must not brick the harness. A name colliding with a native tool refuses loud, before the file executes: native-wins would be silent shadowing, and <code>plugin</code> is a native, so that name is reserved. An invalid manually-installed filename is skipped before execution.</p>
+    </div>
+  </section>
+
+  <section id="trust">
+    <p class="eyebrow">trust</p>
+    <h2>The jail is the boundary</h2>
+    <p>In an interactive session and a one-shot run, plugins run with rig's privileges, in your kernel: <b>trust them as you trust your own Python.</b> That is the honest model, and the provenance rule is why it holds: the model's <code>write</code> and <code>edit</code> are admitted only when the resolved and lexical paths agree the target sits in <code>plugins/pending/</code>. A write landing in <code>plugins/</code> outside pending is refused, and so is a symlink whose two views disagree about the zone. The refusal teaches the shape.</p>
+    <p>A jailed or landlock scheduled worker gets a scratch home — <code>RIG_HOME=&lt;cwd&gt;/.rig-job</code> — and the operator's rig home is not bound inside it, so the operator's plugins are <b>never discovered</b> by a jailed worker: protection by absence, not by name. Only <code>sandbox: "off"</code> inherits the home, and its workers run with your plugins present.</p>
+  </section>
+
+  <section id="train">
+    <p class="eyebrow">the train zone</p>
+    <h2>The same machinery, a different job</h2>
+    <p><code>train/</code> sits beside <code>plugins/</code> and shares its zones, filename rule, and the pre-execution contract check. A trainer exposes two callables:</p>
+<pre class="code"><span class="c"># ~/.rig/train/laya.py</span>
+<span class="k">def</span> <span class="a">train</span>(rows_path, out_dir):
+    ...
+    <span class="k">return</span> {<span class="s">"checkpoint"</span>: <span class="s">"/abs/path"</span>, <span class="s">"questions"</span>: {...}}
+
+<span class="k">def</span> <span class="a">evaluate</span>(checkpoint, rows_path):
+    ...
+    <span class="k">return</span> {<span class="s">"checkpoint"</span>: checkpoint, <span class="s">"questions"</span>: {...}}</pre>
+    <p>The interpreter is separate: <code>trainPython</code> names the train zone's own venv (torch is two gigabytes, and the train kernel is its own process, never the plugins' shared kernel). Unset, a training run refuses. The runner is <code>rig decision train &lt;trainer&gt;</code>, headless, never inside a turn; <code>/decision train &lt;trainer&gt;</code> enqueues it as a one-shot scheduler job, and the nightly is your own cron line.</p>
+    <p>The rows, the split, the scoring and the promotion rule: <a href="../decision/">the decision page</a>.</p>
+  </section>
+
+  <footer>
+    <p class="built">The contract, the zones, every verb and the symlink checks: <a href="https://github.com/mrsirg97-rgb/rig/blob/main/docs/PLUGINS.md">docs/PLUGINS.md</a>.</p>
+    <nav class="links" aria-label="links">
+      <a href="https://github.com/mrsirg97-rgb/rig">github</a>
+      <a href="https://github.com/mrsirg97-rgb/rig/releases">releases</a>
+      <a href="https://github.com/mrsirg97-rgb/evt">evt</a>
+      <a href="https://github.com/mrsirg97-rgb/rig/blob/main/docs/SETUP.md">setup doc</a>
+      <a href="https://github.com/mrsirg97-rgb/rig/tree/main/specs">specs</a>
+      <a href="https://github.com/mrsirg97-rgb/rig/blob/main/docs/EMBED.md">embed</a>
+    </nav>
+    <p class="stamp">rig {{RIG_VERSION}} · a small operating system for agents · MIT</p>
+  </footer>
+
+</main>
+</body>
+</html>

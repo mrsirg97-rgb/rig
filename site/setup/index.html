@@ -1,0 +1,272 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="rig setup: install, the rig home, running rig as the model router, loading and unloading models, updating, and the TUI versus the web dashboard.">
+<meta name="theme-color" content="#0e0f11">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://tryrig.ai/setup/">
+<meta property="og:title" content="rig — setup">
+<meta property="og:description" content="Install, the rig home, the model room, the two faces.">
+<meta property="og:image" content="https://tryrig.ai/og.png">
+<meta name="twitter:card" content="summary_large_image">
+<title>rig — setup</title>
+<link rel="stylesheet" href="../site.css">
+</head>
+<body>
+
+<a class="skip" href="#main">skip to content</a>
+
+<header class="topbar">
+  <a class="brand" href="../" aria-label="rig, home"><b>rig</b><span>{{RIG_VERSION}}</span></a>
+  <nav class="topnav" aria-label="pages">
+    <a href="../">overview</a>
+    <a href="../setup/" aria-current="page">setup</a>
+    <a href="../performance/">performance</a>
+    <a href="../developing/">developing</a>
+    <a href="../plugins/">plugins</a>
+    <a href="../subagents/">subagents</a>
+    <a href="../decision/">decision</a>
+    <a href="https://github.com/mrsirg97-rgb/rig">github</a>
+  </nav>
+</header>
+<div class="topbar-rule" aria-hidden="true"></div>
+
+<main class="doc" id="main">
+
+  <section>
+    <p class="eyebrow">setup</p>
+    <h1>One binary. <em>Then the room.</em></h1>
+    <div class="lede">
+      <p>rig needs one thing you already have — an OpenAI-compatible endpoint — and one thing you write — a row for the model you mean to name. Everything else lives in <b>~/.rig</b>: settings, the model table, your standing instructions, the stores.</p>
+      <p>This page is the operating story: how rig replaces the router in front of your models, how a model is loaded and unloaded without a supervisor process, and which of the two faces you open in the morning.</p>
+    </div>
+    <div class="toc" aria-label="on this page">
+      <a href="#install">install</a>
+      <a href="#home">the rig home</a>
+      <a href="#router">the router</a>
+      <a href="#models">models, loaded and unloaded</a>
+      <a href="#faces">TUI or dashboard</a>
+      <a href="#workers">scheduled workers</a>
+      <a href="#verify">verify</a>
+      <a href="#gotchas">gotchas</a>
+    </div>
+  </section>
+
+  <section id="install">
+    <p class="eyebrow">install</p>
+    <h2>Four paths, one binary</h2>
+    <p>The installer is POSIX sh, needs no Go and no sudo, and lands one file in <b>~/.local/bin</b>. The release asset is the same binary with the same checksums. <code>rig -update</code> fetches, verifies and installs atomically; the running process keeps the old binary until you restart it.</p>
+    <div class="table" role="list">
+      <div class="row" role="listitem"><span class="os">installer</span><p class="what"><code>curl -fsSL https://tryrig.ai/install.sh | sh</code><span class="where">POSIX sh · no Go · no sudo · ~/.local/bin</span></p></div>
+      <div class="row" role="listitem"><span class="os">release</span><p class="what"><code>rig_&lt;os&gt;_&lt;arch&gt;</code> from <code>releases/latest</code>, with <code>checksums.txt</code>; linux and macOS, amd64 and arm64.<span class="where">github.com/mrsirg97-rgb/rig/releases</span></p></div>
+      <div class="row" role="listitem"><span class="os">go install</span><p class="what"><code>go install github.com/mrsirg97-rgb/rig/v3/cmd/rig@latest</code><span class="where">Go 1.26.6 or newer</span></p></div>
+      <div class="row" role="listitem"><span class="os">from source</span><p class="what"><code>go build ./cmd/rig</code> or <code>make install</code>; <code>BINDIR=...</code> names the directory.<span class="where">$(go env GOBIN), else ~/.local/bin</span></p></div>
+    </div>
+    <div class="note">
+      <p class="label">updating is a room operation</p>
+      <p><code>rig -update</code> drains the room first: every member stops claiming at its turn boundary and leaves, and only then does the binary swap. A worker or a turn in flight is not racing the new binary. The next start is the new version; the current process is not.</p>
+    </div>
+  </section>
+
+  <section id="home">
+    <p class="eyebrow">the rig home</p>
+    <h2>~/.rig is the machine's state</h2>
+    <p>The home resolves <code>$RIG_HOME</code> over <code>~/.rig</code>, and every file in it is optional except the model table's content: the binary ships no model rows. A present-but-malformed file refuses at start, naming the file and the field; unknown keys refuse too. This is a contract, not a filter.</p>
+<pre class="code"><span class="d">~/.rig/</span>
+  settings.json      the knobs, flat, by their env names
+  models.json        the model table: one row per model
+  AGENTS.md          your standing instructions, ahead of the project's
+  theme.json         the terminal palette (custom base + slots)
+  sessions/          the state store: transcripts, usage, resume
+  todo/              the task board: one file, rows carry the project scope
+  rem/               memory, scoped to the repo (worktrees share)
+  graph/             the code map: symbols, edges, files per worktree
+  decision/          the decision store, and train/ with its jsonl splits
+  plugins/           live, pending/, disabled/
+  train/             the decision model's trainers, its own zone
+  room/              the machine's unix sockets
+  logs/              the models' children and what they served</pre>
+    <p>Every knob resolves through four layers, per key: <b>flag &gt; env &gt; file &gt; embedded default</b>. A flag you typed always wins, whatever its value; an empty env or file value descends, except the two presence keys (<code>RIG_WEB_FETCH_PROXY</code> and <code>RIG_TRAFILATURA</code>), where "set empty" is an explicit choice. On a start where the home is absent and the old <code>~/.config/rig</code> exists, it is renamed once and says so.</p>
+    <div class="split">
+      <div>
+        <h3>settings.json</h3>
+<pre class="code">{
+  <span class="k">"model"</span>: <span class="s">"local"</span>,
+  <span class="k">"baseUrl"</span>: <span class="s">"http://127.0.0.1:8090/v1"</span>,
+  <span class="k">"sandbox"</span>: <span class="s">"jailed"</span>,
+  <span class="k">"approve"</span>: <span class="s">"auto"</span>,
+  <span class="k">"theme"</span>: <span class="s">"warm"</span>
+}</pre>
+      </div>
+      <div>
+        <h3>AGENTS.md</h3>
+<pre class="code"><span class="d"># how I like to work</span>
+- run the tests before you say it's done
+- prefer small commits, one idea each
+- never add a dependency without saying why</pre>
+      </div>
+    </div>
+    <p>The project's own <code>AGENTS.md</code> is the nearest one walking up from the workspace to the repository root, and no further: a session opened in a subdirectory reads the repo's contract, a workspace that is no repository reads only its own file. It is read when the session wires, so a session carries the contract of the workspace it opens in.</p>
+  </section>
+
+  <section id="router">
+    <p class="eyebrow">the router</p>
+    <h2>rig is the router, and there is no router process</h2>
+    <p>Since 3.0.0 nothing routes in front of your models. <b>llama-swap left the stack and nothing took its place.</b> Every rig instance on the machine joins one room over a unix socket under the rig home, and the model is a guarded key in that room: an instance sends its request to the model's port itself, once its claim is final by every live member's acknowledgement.</p>
+    <p>The order is the operation, not a process. A claim carries its mint, its key and its priority; every member folds the same fields the same way — <b>priority first, then tick, member, nonce</b> — so a late act takes its rightful place and a duplicate is refused by its mint. The classes are the room's priorities:</p>
+<pre class="code"> 90  the operator's turn
+ 70  a delegate's return
+ 30  a fleet worker's claim
+ 20  a child's start or stop
+  0  an outside client</pre>
+    <p>Inside a turn the batch has its own two rungs — a write 60, a read 50 — and those are the kernel's order, not the room's.</p>
+    <p>A claim that finds the row's port silent <b>holds its place, publishes the start, and sends when the port answers</b>. When another row is resident it publishes the swap on that row's key instead, so the resident one stops at its holders' end and before the incoming one starts. One child at a time — the rule the retired router had, now an order. What is loaded is read from the world, never replayed: the port is probed at a join, and a child's <code>/health</code> saying 503 is what "still loading" means.</p>
+    <p><code>mesh</code> in <code>settings.json</code> extends one room to many machines: a TCP door the tailnet reaches, gossip converging the machines' folds. The mesh's order is advisory — a key's home machine is its authority — and a foreign claim past the horizon reposts at the home machine, where that row's child runs. The cost is one horizon at the front of a remote request, about <b>1.3 s at the defaults</b>, measured on loopback.</p>
+    <div class="note">
+      <p class="label">what this buys</p>
+      <p>The room's design note measured the problem it replaced: behind an arrival-ordered server, the operator's turn waited behind whichever of six workers arrived first. Two conversations decoding at once raised the total to about 90 tok/s against 64 alone, but a single overlapped stream was a lottery — of 111 overlapped replies the median ran 45 tok/s, one in ten under 32, the slowest at 12; alone, the slowest was 55. A model swap took about 50 s and ended whatever was in flight, and nothing ordered it. <b>The fix was not a faster router; it was deciding who is waiting at the engine.</b></p>
+    </div>
+  </section>
+
+  <section id="models">
+    <p class="eyebrow">models</p>
+    <h2>Loading and unloading are claims and swaps</h2>
+    <p>A model row is the whole model: its window, its budget, its dials, and — when the machine serves it — the child half. The child half is how a row says "I know how to start this model", and nothing else starts it:</p>
+    <div class="table" role="list">
+      <div class="row" role="listitem"><span class="os">command</span><p class="what">The child's command line, with <code>${PORT}</code> substituted. Detached; its log lands at <code>~/.rig/logs/&lt;model id&gt;.log</code>.</p></div>
+      <div class="row" role="listitem"><span class="os">env</span><p class="what">The child's environment, as the row spells it.</p></div>
+      <div class="row" role="listitem"><span class="os">port</span><p class="what">The child's fixed port, chosen at creation from the range the import carries in. The provider sends to <code>http://127.0.0.1:&lt;port&gt;/v1</code> directly.</p></div>
+      <div class="row" role="listitem"><span class="os">aliases</span><p class="what">The names that resolve to the row.</p></div>
+      <div class="row" role="listitem"><span class="os">stopGrace</span><p class="what">Seconds the SIGTERM waits before the kill. A stop sends to the child's session, not to a pid file whose start time differs.</p></div>
+      <div class="row" role="listitem"><span class="os">places</span><p class="what">How many requests the model serves at once — two with two sequences, three for an <code>-np 3</code> child. One counted key, one holder set; no key per place, because the server has no identity per place.</p></div>
+    </div>
+    <p class="sheet-intro">The row with its child half, and a hosted row beside it:</p>
+<pre class="code">[
+  {
+    <span class="k">"id"</span>: <span class="s">"local"</span>,
+    <span class="k">"window"</span>: <span class="d">393216</span>, <span class="k">"maxTokens"</span>: <span class="d">65536</span>,
+    <span class="k">"reserve"</span>: <span class="d">104858</span>, <span class="k">"keepRecent"</span>: <span class="d">98304</span>,
+    <span class="k">"effort"</span>: <span class="s">"xhigh"</span>, <span class="k">"efforts"</span>: [<span class="s">"low"</span>, <span class="s">"medium"</span>, <span class="s">"xhigh"</span>],
+    <span class="c">// the child half:</span>
+    <span class="k">"command"</span>: <span class="s">"llama-server -m ~/models/qwen.gguf --port ${PORT} -np 2"</span>,
+    <span class="k">"port"</span>: <span class="d">8090</span>,
+    <span class="k">"aliases"</span>: [<span class="s">"qwen"</span>],
+    <span class="k">"stopGrace"</span>: <span class="d">10</span>,
+    <span class="k">"places"</span>: <span class="d">2</span>
+  },
+  {
+    <span class="k">"id"</span>: <span class="s">"sonnet"</span>,
+    <span class="k">"window"</span>: <span class="d">200000</span>, <span class="k">"maxTokens"</span>: <span class="d">8192</span>,
+    <span class="k">"reserve"</span>: <span class="d">16384</span>, <span class="k">"keepRecent"</span>: <span class="d">40000</span>,
+    <span class="k">"provider"</span>: <span class="s">"openrouter"</span>,
+    <span class="k">"baseUrl"</span>: <span class="s">"https://openrouter.ai/api/v1"</span>,
+    <span class="k">"apiKey"</span>: <span class="s">"sk-or-…"</span>,
+    <span class="k">"reasoning"</span>: <span class="s">"reasoning"</span>
+  }
+]</pre>
+    <p><b>Loading</b> is a claim that found the port silent: the instance publishes the start and waits for the port, and the child is the row's own command. <b>Unloading</b> is a swap's stop, ordered on the resident model's key, at the holders' end and before the incoming start — never eviction of a request mid-flight. A strictly higher-priority claim may enter while the places are full; the entry is one holder beyond the places, never eviction, and a same-priority claim queues for a place. <b>Between claims, the continuation wins:</b> within one priority, the claim naming the conversation already in the model goes first, because a dropped reply costs a full prompt re-read.</p>
+    <p>Inside a session, the verbs are the same table:</p>
+    <div class="table" role="list">
+      <div class="row" role="listitem"><span class="os">/models</span><p class="what">Lists the table with the active row marked; <code>/models &lt;id&gt;</code> switches for the next turn and moves the open session's row with it.</p></div>
+      <div class="row" role="listitem"><span class="os">/effort</span><p class="what">The reasoning dial. Bare shows the active level and the row's levels; <code>/effort &lt;level&gt;</code> sets the next turns.</p></div>
+      <div class="row" role="listitem"><span class="os">/role</span><p class="what">The stance: <code>default</code>, <code>architect</code>, <code>reviewer</code> — prose between the system prompt and AGENTS.md.</p></div>
+      <div class="row" role="listitem"><span class="os">/approve</span><p class="what"><code>auto</code>, or <code>manual</code>: every mutating call pauses for the operator's y/n at the ask row. A denial is a teaching refusal.</p></div>
+      <div class="row" role="listitem"><span class="os">/theme</span><p class="what"><code>warm</code>, <code>cool</code>, <code>custom</code>. Custom is <code>~/.rig/theme.json</code>: a base plus the slots you want to change.</p></div>
+    </div>
+  </section>
+
+  <section id="faces">
+    <p class="eyebrow">the faces</p>
+    <h2>The TUI, or the page — one session</h2>
+    <p>Four frontends run over one session: the TUI, the piped CLI, the <code>-p</code> one-shot, and the web dashboard. They are not four products with four states; they are four doors onto the same loop, the same stores, and the same commands.</p>
+    <div class="split">
+      <div>
+        <h3>the TUI — <code>rig</code></h3>
+        <p>Chosen when stdout is a terminal; <code>--tui=false</code> forces the piped reference, <code>--tui=true</code> forces the TUI (a pty, so <code>tmux capture-pane</code> works).</p>
+        <ul>
+          <li>three status rows: identity (<code>model · used/window</code>), stance (<code>effort · role · auto|manual</code>), usage totals.</li>
+          <li>a live region redrawn in place: the activity row, the input line.</li>
+          <li>the todo and scheduler blocks, and the usage line at every turn's end.</li>
+          <li>the swarm band: live counts per role, one row for a delegated batch.</li>
+          <li>steering: a line typed while a turn is live interrupts it and is delivered at the next prompt, latest wins.</li>
+        </ul>
+      </div>
+      <div>
+        <h3>the dashboard — <code>rig serve</code></h3>
+        <p>Loopback only (<code>-addr</code>, default <code>127.0.0.1:7777</code>), behind a token minted once and stored 0600, exchanged for a cookie. A non-loopback address is refused by name. From Safari: share → add to home screen, and it installs as an app.</p>
+        <ul>
+          <li>the live session streamed in the TUI's grammar — approvals answered in place, stop while a turn runs, the same <code>❯</code> prompt and commands.</li>
+          <li>sessions per workspace with transcripts and resume.</li>
+          <li>the queue, the jobs with their run audit, the swarm.</li>
+          <li>the model table, switch and effort dial.</li>
+          <li>the plugins' three zones and the forge's save into <code>pending/</code>.</li>
+          <li><b>the room page</b> — where it opens: the members, each model's residency and who waits, whether the port answers, the served log's tail, and the machine's vitals read from <code>/proc</code>, <code>/sys</code> and <code>nvidia-smi</code>.</li>
+        </ul>
+      </div>
+    </div>
+    <p>The dashboard is the only face for the room: there is no slash command for it. The TUI is the only face for memory: there is no memory view on the page — rem is the model's, read in the terminal.</p>
+  </section>
+
+  <section id="workers">
+    <p class="eyebrow">scheduled workers</p>
+    <h2>The crontab is the clock</h2>
+    <p>A scheduled job is a one-shot <code>rig -p</code> in its own cwd, on your crontab, wrapped in the sandbox profile of your choice. The crontab is the scheduling truth; the store is its audit and its repair. A job's fire is its own process, so it cannot outlive the schedule.</p>
+<pre class="code"><span class="c"># crontab — the job's key is its one positional</span>
+0 */2 * * *  <span class="k">rig run-job</span> j8-health
+
+<span class="c"># or from inside a session, the same store:</span>
+<span class="a">/scheduler</span> create health <span class="s">"check the fund"</span> 0 */2 * * *</pre>
+    <div class="table" role="list">
+      <div class="row" role="listitem"><span class="os">jailed</span><p class="what">The default: bubblewrap, unshare-all. Netless except the one bound socket the model calls ride; the home is a scratch directory inside the job's cwd, so a jailed worker never discovers your plugins — protection by absence.</p></div>
+      <div class="row" role="listitem"><span class="os">landlock</span><p class="what">The in-kernel profile. <code>rig -exec</code> applies the domain and <code>syscall.Exec</code>s the argv, so every thread inherits a wall an in-process call cannot put on threads that already exist.</p></div>
+      <div class="row" role="listitem"><span class="os">off</span><p class="what">The explicit act: the worker runs as you, and says so once per run.</p></div>
+      <div class="row" role="listitem"><span class="os">binds</span><p class="what"><code>sandboxBinds</code>: absolute paths, read-only unless the entry ends <code>:rw</code> — the operator's need, e.g. a python venv.</p></div>
+    </div>
+    <p>Each job carries its own <code>timeout</code> and <code>budget</code>; a model that is not resident refuses by name, naming the holder. The interactive REPL and one-shot runs never consult the sandbox code: the jail is for work that outlives you.</p>
+  </section>
+
+  <section id="verify">
+    <p class="eyebrow">verify</p>
+    <h2>Four checks, no trust</h2>
+<pre class="code"><span class="d"># 1. the binary</span>
+rig --version
+
+<span class="d"># 2. the endpoint, with the model row you wrote</span>
+rig --base-url $YOUR_ENDPOINT --model $NAME --system <span class="s">"be terse"</span>
+
+<span class="d"># 3. the terminal: the three-row status, a streaming turn, a tool line</span>
+<span class="d"># 4. the same session to a capturable pane</span>
+tmux new-session -d <span class="s">'rig --tui=true'</span> \; capture-pane -p</pre>
+    <p>If nothing streams, check the endpoint first: rig surfaces provider faults verbatim and loudly, and does not hide them. The piped path (<code>--tui=false</code>) is the byte reference — the TUI adds to those bytes, never changes them.</p>
+  </section>
+
+  <section id="gotchas">
+    <p class="eyebrow">gotchas</p>
+    <h2>The refusals you will meet first</h2>
+    <div class="table" role="list">
+      <div class="row" role="listitem"><span class="os">no model</span><p class="what">The binary ships no model rows and has no model default. Naming an ID the table does not know refuses at start, before any store opens, naming the three ways to set it: <code>--model</code>, <code>RIG_MODEL</code>, <code>settings.json</code>'s <code>model</code>.</p></div>
+      <div class="row" role="listitem"><span class="os">bwrap</span><p class="what">Missing bubblewrap refuses with both settings keys named. On Ubuntu 24.04 and friends, AppArmor blocks bwrap's user namespace: the fix is <code>kernel.apparmor_restrict_unprivileged_userns=0</code>, named in the refusal.</p></div>
+      <div class="row" role="listitem"><span class="os">plugins.max</span><p class="what">The cap is read with the settings at startup; raising it takes a restart. An over-cap load is skipped, naming the cap — the first N files by name win.</p></div>
+      <div class="row" role="listitem"><span class="os">allow</span><p class="what">A <code>settings.json</code> that writes its own <code>allow</code> key replaces the built-in default whole. It must carry <code>plugin</code>, or every door call is refused; a <code>plugins</code> entry is dropped with a notice.</p></div>
+      <div class="row" role="listitem"><span class="os">resume</span><p class="what"><code>--resume &lt;id&gt;</code> rebuilds the session from the state store in one read-only transaction. It refuses beside <code>-p</code>: a one-shot stays one-shot.</p></div>
+    </div>
+  </section>
+
+  <footer>
+    <p class="built">The full knob table, the row invariants, and the sandbox profile: <a href="https://github.com/mrsirg97-rgb/rig/blob/main/docs/SETUP.md">docs/SETUP.md</a>.</p>
+    <nav class="links" aria-label="links">
+      <a href="https://github.com/mrsirg97-rgb/rig">github</a>
+      <a href="https://github.com/mrsirg97-rgb/rig/releases">releases</a>
+      <a href="https://github.com/mrsirg97-rgb/evt">evt</a>
+      <a href="https://github.com/mrsirg97-rgb/rig/blob/main/docs/SETUP.md">setup doc</a>
+      <a href="https://github.com/mrsirg97-rgb/rig/tree/main/specs">specs</a>
+      <a href="https://github.com/mrsirg97-rgb/rig/blob/main/docs/EMBED.md">embed</a>
+    </nav>
+    <p class="stamp">rig {{RIG_VERSION}} · a small operating system for agents · MIT</p>
+  </footer>
+
+</main>
+</body>
+</html>

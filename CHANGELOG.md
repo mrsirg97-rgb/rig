@@ -1,4 +1,32 @@
 # Changelog
+## [3.3.5]: the site is a manual now, and every number on it is computed
+
+The GitHub Pages site was one page that undersold the machine. It is
+seven now, sharing one stylesheet and one navigation: the overview keeps
+the nameplate, the install and the rating strip, and adds the parts a
+reader actually chooses on — an honest comparison with pi, oh-my-pi and
+opencode read from each project's own docs, the tool table, and the
+concurrency model with its priority numbers; then `setup` (the rig home,
+the model room as the thing that replaced the router, loading and
+unloading as ordered claims, the TUI versus the dashboard), `performance`
+(the store's cache ratio era by era, the loop and the swarm's size, the
+room's measured numbers), `developing` (the Go module, the seams, the
+kernel's nine options, a worked example, the freeze), `plugins` (the
+contract, the three zones, the door, promotion, the train zone),
+`subagents` (delegate, scheduler and swarm on one queue; places, not
+slots; the priority table) and `decision` (the wire, the store, the
+split, the trainer, the promotion rule). The footer carries the engine's
+own repository, `github.com/mrsirg97-rgb/evt`, on every page.
+
+The rendering moved out of `pages.yml` and into `scripts/site-build`,
+which copies the tree, substitutes the version from `cmd/rig/main.go`,
+the commit count from the log, the cache numbers from
+`docs/measured.json`, and the tree sizes from `scripts/readme-measured`'s
+own walker — one implementation, so the site, the README and the store
+cannot disagree. It refuses an unrendered placeholder and any relative
+link that resolves to nothing, and CI runs it on every PR instead of
+finding a dead link after a deploy. No Go behavior changed.
+
 ## [3.3.4]: the suite's slow blocks cost what they prove, and a jailed worker runs the operator's interpreter
 
 The suite's 7m25s build job was one shape, not one test: 108 tests took

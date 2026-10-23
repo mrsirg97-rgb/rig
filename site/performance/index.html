@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="rig measured: cache ratios, loop size, the model room's numbers, and the mechanisms behind each one.">
+<meta name="theme-color" content="#0e0f11">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://tryrig.ai/performance/">
+<meta property="og:title" content="rig — performance">
+<meta property="og:description" content="Numbers, not adjectives — and each one names its mechanism.">
+<meta property="og:image" content="https://tryrig.ai/og.png">
+<meta name="twitter:card" content="summary_large_image">
+<title>rig — performance</title>
+<link rel="stylesheet" href="../site.css">
+</head>
+<body>
+
+<a class="skip" href="#main">skip to content</a>
+
+<header class="topbar">
+  <a class="brand" href="../" aria-label="rig, home"><b>rig</b><span>{{RIG_VERSION}}</span></a>
+  <nav class="topnav" aria-label="pages">
+    <a href="../">overview</a>
+    <a href="../setup/">setup</a>
+    <a href="../performance/" aria-current="page">performance</a>
+    <a href="../developing/">developing</a>
+    <a href="../plugins/">plugins</a>
+    <a href="../subagents/">subagents</a>
+    <a href="../decision/">decision</a>
+    <a href="https://github.com/mrsirg97-rgb/rig">github</a>
+  </nav>
+</header>
+<div class="topbar-rule" aria-hidden="true"></div>
+
+<main class="doc" id="main">
+
+  <section>
+    <p class="eyebrow">performance</p>
+    <h1>Numbers, <em>not adjectives.</em></h1>
+    <div class="lede">
+      <p>Every number on this page is computed, and each one names the mechanism that produces it. The store numbers come from one SQL read of the session state — the same arithmetic <code>sessions summary</code> runs. The tree numbers are re-read live by <code>scripts/readme-measured</code>, and CI refuses drift, so a number here cannot quietly go stale.</p>
+      <p>The honest scope: <b>these are this repo's own numbers</b>, over {{RIG_SESSIONS}} sessions and {{RIG_TURNS}} turns of real work — not a cross-harness benchmark, and not a claim about your endpoint's tok/s. Where a number came from one machine, it says so.</p>
+    </div>
+    <div class="toc" aria-label="on this page">
+      <a href="#cache">the cache ratio</a>
+      <a href="#eras">era by era</a>
+      <a href="#size">the size of things</a>
+      <a href="#mechanisms">mechanism → number</a>
+      <a href="#room">the room's measurements</a>
+      <a href="#reproduce">reproduce it</a>
+    </div>
+  </section>
+
+  <section class="rating" aria-label="headline numbers">
+    <div><span class="n">{{RIG_TOKENS}}<small>B</small></span><span class="l">prompt tokens served</span></div>
+    <div><span class="n">{{RIG_CACHE_PCT}}<small>%</small></span><span class="l">of them served from cache</span></div>
+    <div><span class="n">{{RIG_TURNS}}</span><span class="l">recorded turns, over {{RIG_SESSIONS}} sessions</span></div>
+  </section>
+
+  <section id="cache">
+    <p class="eyebrow">the cache ratio</p>
+    <h2>About 98 cents of every prompt dollar</h2>
+    <p>The ratio is <code>cache_read / prompt</code>, and the reason it is so high is not a trick: <b>the request's prefix never changes a byte.</b> The system prompt, the tool schemas and the message order are lean and byte-stable by construction, so the provider's cache can reuse almost the whole conversation on every turn. A stray timestamp, a random tool ordering, or a reworded guideline would quietly kill it — so the tests hold the line:</p>
+    <div class="table" role="list">
+      <div class="row" role="listitem"><span class="os">prompt</span><p class="what"><code>TestSystemPromptIsByteStableAcrossBuilds</code> — the preamble is a constant, not a composition.</p></div>
+      <div class="row" role="listitem"><span class="os">wire</span><p class="what"><code>TestWireMarshalingIsDeterministic</code> — one request marshals to the same bytes every time.</p></div>
+      <div class="row" role="listitem"><span class="os">messages</span><p class="what"><code>TestWireMessagesAreAppendOnly</code> — the conversation grows at the end; it does not re-order behind you.</p></div>
+      <div class="row" role="listitem"><span class="os">bytes</span><p class="what">The wire job renders the request bodies at the merge-base and at the head and posts their diff: a byte that moves is reviewed, not trusted. The menu aims under 15,000 characters and the build fails past 16,500.</p></div>
+    </div>
+    <p>One ratio spans two provider wires, and the denominator is each endpoint's own number: on the OpenAI wire the cached tokens sit inside <code>prompt</code>; on the Anthropic wire rig sums input with the cache read and the cache write to land on the same convention. One ratio over both, and the convention is the reason it holds.</p>
+  </section>
+
+  <section id="eras">
+    <p class="eyebrow">era by era</p>
+    <h2>The kink is visible</h2>
+    <p class="sheet-intro">Every recorded turn since the first store, split by the version each session recorded at start. New tokens per turn is <code>(prompt − cache_read) / turns</code>: what the model actually had to read cold.</p>
+    <div class="table" role="list">
+{{RIG_ERA_ROWS}}    </div>
+    <p>The 2.1.x consolidation rethought the system prompt and the toolset and kept the machinery: the 2.0–2.9 row carries slightly fewer new tokens per turn than the era before it, and the cache line holds. <b>The last row is the fleet's own traffic</b> — swarm workers and delegates are short-lived sessions whose first turns cannot hit a cache that does not exist yet, and the models rotate. The interactive sessions of that era hold the ~98% line; the row is honest about the dip, and the reason is on the row.</p>
+  </section>
+
+  <section id="size">
+    <p class="eyebrow">the size of things</p>
+    <h2>What the whole machine costs to own</h2>
+    <div class="rating" aria-label="code sizes">
+      <div><span class="n">{{RIG_LOOP_LINES}}</span><span class="l">lines is the loop — <code>loop.go</code> + <code>batch.go</code>, stdlib only</span></div>
+      <div><span class="n">{{RIG_SWARM_LINES}}</span><span class="l">lines is the whole swarm — claim, spawn, complete, verdict, reap, the status throttle</span></div>
+      <div><span class="n">{{RIG_GO_LINES}}</span><span class="l">lines of Go, with {{RIG_TEST_LINES}} lines of tests</span></div>
+    </div>
+    <p>The loop is the part you must trust, so it is the part kept small. The rest is a tree of leaves that plug into typed seams — a tool, a provider, a policy, a frontend, a middleware: <b>one file plus one registration line</b>, and the loop never names a concrete type. The one store dependency is pure-Go SQLite, which is why the binary has no runtime beside it.</p>
+    <p class="sub">{{RIG_COMMITS}} commits. Most of them written by rig, running inside rig — the git log is the receipt.</p>
+  </section>
+
+  <section id="mechanisms">
+    <p class="eyebrow">mechanism → number</p>
+    <h2>Every figure has a cause</h2>
+    <div class="table" role="list">
+      <div class="row" role="listitem"><span class="os">cache</span><p class="what"><code>{{RIG_CACHE_PCT}}%</code> of {{RIG_TOKENS}} billion prompt tokens — the byte-stable prefix, tested at the build.<span class="where">core/ · policy/compact · scripts/wire-check</span></p></div>
+      <div class="row" role="listitem"><span class="os">concurrency</span><p class="what">Reads overlap eight at a time; effects serialize in call order; nothing polls, so a waiting step costs no timer and no lock.<span class="where">loop/batch.go · kernel.DefaultParallel</span></p></div>
+      <div class="row" role="listitem"><span class="os">ordering</span><p class="what">One priority queue orders input 90, a delegate's return 70, a write 60, a read 50, the fleet 30, the reviewer 10 — a worker's message costs one post.<span class="where">evt/ · kernel.go</span></p></div>
+      <div class="row" role="listitem"><span class="os">stores</span><p class="what">One SQLite file per concern, WAL, migrated on open; the session summary is one read, not a replay.<span class="where">store/ · store/state</span></p></div>
+      <div class="row" role="listitem"><span class="os">bounds</span><p class="what">Every tool result is capped at 64 KiB by default with a loud <code>[TRUNCATED]</code> marker; identical re-issuance is bounded per turn; a corrected call always runs.<span class="where">middleware/guard</span></p></div>
+      <div class="row" role="listitem"><span class="os">the room</span><p class="what">No router process, no poll: a claim is ordered by priority, then tick, member, nonce; the port is read from the world at a join.<span class="where">room/ · specs/SPEC_ROOM.md</span></p></div>
+    </div>
+  </section>
+
+  <section id="room">
+    <p class="eyebrow">the room, measured</p>
+    <h2>Why the router had to become an order</h2>
+    <p>The room's design note carries its own numbers, from one machine (battlestation, 2026-10-11, <code>huihui-alpha-s</code> on the Maya engine behind llama-swap). They are the reason 3.0.0 removed the router:</p>
+    <div class="rating" aria-label="room measurements">
+      <div><span class="n">6</span><span class="l">workers arriving first — the operator's turn waited behind whichever one reached the server first</span></div>
+      <div><span class="n">64 → 90</span><span class="l">tok/s when two conversations decode at once, against 64 alone</span></div>
+      <div><span class="n">45</span><span class="l">tok/s median for a single overlapped stream — one in ten under 32, the slowest at 12; alone, the slowest was 55</span></div>
+    </div>
+    <p>The engine's fair slice lets a waiting request cut into a long answer — <b>but only a request that is waiting at the engine.</b> So the fix was not a faster router; it was deciding who is waiting. The room orders it: the operator's turn 90, a delegate's return 70, a fleet worker 30, a child's start or stop 20, an outside client 0. A swap takes about 50 s and ends whatever is in flight, so swaps are ordered acts too, at the holders' end.</p>
+    <p>The mesh's cost is measured the same way: one horizon (four periods, 250 ms by default) at the front of a remote request, <b>about 1.3 s on loopback at the defaults</b> — the price of a claim that must reach the key's home machine. A lone mesh member idles between ticks.</p>
+  </section>
+
+  <section id="reproduce">
+    <p class="eyebrow">reproduce it</p>
+    <h2>The receipt is the store</h2>
+    <p>Nothing here is typed by hand. <code>scripts/readme-measured</code> reads the stores, writes the aggregates to <code>docs/measured.json</code>, and renders the marked block in the README; the <code>check</code> mode re-reads the tree and refuses when the README drifts. The site's numbers are rendered from the same file by <code>scripts/site-build</code>, so the page, the README and the store agree by construction.</p>
+<pre class="code"><span class="c"># the aggregate, from your own sessions</span>
+python3 scripts/readme-measured <span class="k">update</span>
+
+<span class="c"># the drift gate CI runs</span>
+python3 scripts/readme-measured <span class="k">check</span></pre>
+    <div class="note">
+      <p class="label">what the page does not claim</p>
+      <p>No cross-harness benchmark, no tok/s league table, no "faster than X" — those depend on your endpoint, your model and your machine, and a number measured on someone else's box is a story, not a measurement. The store numbers and the room's numbers are ours, and each names its mechanism and its date. If you want to compare, run your own traffic through both harnesses and read the stores.</p>
+    </div>
+  </section>
+
+  <footer>
+    <p class="built">The measured block in the README is computed the same way. <a href="https://github.com/mrsirg97-rgb/rig/blob/main/scripts/readme-measured">Read the script.</a></p>
+    <nav class="links" aria-label="links">
+      <a href="https://github.com/mrsirg97-rgb/rig">github</a>
+      <a href="https://github.com/mrsirg97-rgb/rig/releases">releases</a>
+      <a href="https://github.com/mrsirg97-rgb/evt">evt</a>
+      <a href="https://github.com/mrsirg97-rgb/rig/blob/main/docs/SETUP.md">setup doc</a>
+      <a href="https://github.com/mrsirg97-rgb/rig/tree/main/specs">specs</a>
+      <a href="https://github.com/mrsirg97-rgb/rig/blob/main/docs/EMBED.md">embed</a>
+    </nav>
+    <p class="stamp">rig {{RIG_VERSION}} · a small operating system for agents · MIT</p>
+  </footer>
+
+</main>
+</body>
+</html>

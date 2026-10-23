@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="rig's decision pipeline: typed questions, a reviewer, a store that is the training set, and a measured promotion.">
+<meta name="theme-color" content="#0e0f11">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://tryrig.ai/decision/">
+<meta property="og:title" content="rig — the decision pipeline">
+<meta property="og:description" content="A small model does the sorting. The answers are proposals, never actions.">
+<meta property="og:image" content="https://tryrig.ai/og.png">
+<meta name="twitter:card" content="summary_large_image">
+<title>rig — the decision pipeline</title>
+<link rel="stylesheet" href="../site.css">
+</head>
+<body>
+
+<a class="skip" href="#main">skip to content</a>
+
+<header class="topbar">
+  <a class="brand" href="../" aria-label="rig, home"><b>rig</b><span>{{RIG_VERSION}}</span></a>
+  <nav class="topnav" aria-label="pages">
+    <a href="../">overview</a>
+    <a href="../setup/">setup</a>
+    <a href="../performance/">performance</a>
+    <a href="../developing/">developing</a>
+    <a href="../plugins/">plugins</a>
+    <a href="../subagents/">subagents</a>
+    <a href="../decision/" aria-current="page">decision</a>
+    <a href="https://github.com/mrsirg97-rgb/rig">github</a>
+  </nav>
+</header>
+<div class="topbar-rule" aria-hidden="true"></div>
+
+<main class="doc" id="main">
+
+  <section>
+    <p class="eyebrow">the decision pipeline</p>
+    <h1>A small model does the sorting. <em>Proposals, never actions.</em></h1>
+    <div class="lede">
+      <p>Point rig at a decision server — <b>one URL</b>, a model running as a sidecar — and the big model hands over its sorting: one typed question over a thousand items instead of reading them through context. Every bash call grows a pending risk proposal, and a reviewer settles the rows in the idle gaps, at the lowest priority. Nothing ever waits on a label.</p>
+      <p>The pipeline is also a training loop. Every question, answer, confidence and verdict lands in one store — and that store is the training set. rig exports the settled rows, scores a candidate trainer's checkpoint against the incumbent <b>and</b> the constant baseline, and promotes only a measured win.</p>
+    </div>
+    <div class="toc" aria-label="on this page">
+      <a href="#wire">the wire</a>
+      <a href="#three">three things start happening</a>
+      <a href="#store">the store</a>
+      <a href="#review">the reviewer</a>
+      <a href="#curate">curating the rows</a>
+      <a href="#train">training in the pipeline</a>
+      <a href="#promote">promotion is a measurement</a>
+      <a href="#why">why this belongs in the harness</a>
+    </div>
+  </section>
+
+  <section id="wire">
+    <p class="eyebrow">the wire</p>
+    <h2>One URL, one typed question</h2>
+    <p><code>decisionUrl</code> is rig's half of a wire: one <code>POST &lt;url&gt;/v1/systemone</code> per batch. The server behind it is <b>yours to run and yours to train</b> — rig is only the client. A <code>Question</code> is typed, and that is why the answers are comparable across a thousand items:</p>
+    <div class="table" role="list">
+      <div class="row" role="listitem"><span class="os">choice</span><p class="what">Pick one label, described. "Which of these is the failing step?"</p></div>
+      <div class="row" role="listitem"><span class="os">score</span><p class="what">Sort the items against ordered criteria, worst first.</p></div>
+      <div class="row" role="listitem"><span class="os">binary</span><p class="what">Yes or no — does this line hide a bug?</p></div>
+    </div>
+    <p>An <code>Answer</code> carries the value, the confidence, and who gave it — the decider. The model's context never sees the 1,197 quiet lines; it sees one question, three flags, and the row numbers.</p>
+  </section>
+
+  <section id="three">
+    <p class="eyebrow">three things start happening</p>
+    <h2>The menu grows, the bash call grows a question, the reviewer wakes</h2>
+    <div class="table" role="list">
+      <div class="row" role="listitem"><span class="os">the tool</span><p class="what"><code>decide</code> joins the live table. The model hands over its sorting: a thousand items classified by a typed question instead of read through context. Unset the URL, and the menu, the wire sha and the system prompt do not move.</p></div>
+      <div class="row" role="listitem"><span class="os">the risk</span><p class="what">Every bash call gains a pending risk proposal. The proposal is a row, not a gate: the call is never blocked on it.</p></div>
+      <div class="row" role="listitem"><span class="os">the bite</span><p class="what">A reviewer settles pending rows in batches at <code>PriorityReview</code> 10 — it starts only when nothing else is queued. Labeling gets the idle time; nothing waits on the labels. <code>reviewBatch</code> controls how many rows a fire settles (default 3; 0 leaves the reviewer off).</p></div>
+    </div>
+    <p>There is a fourth consumer when the code map is on: the pack scorer is the same decision server. The task pack builds its candidate blocks, hands the prefix to the scorer, and loads the blocks the yes set promotes. A scorer reply whose verdict count differs from the candidate count refuses the pack — <b>the reply is untrusted, and a mismatch would index past the candidates.</b></p>
+  </section>
+
+  <section id="store">
+    <p class="eyebrow">the store</p>
+    <h2>A row per decision, and the receipt is the row</h2>
+    <p>One SQLite file under the rig home, scoped like the todo board. A row carries the site, state, question, answer, confidence, decider, session, scope, and — once reviewed — the status (<code>final</code>, <code>pending</code>, <code>approved</code>, <code>denied</code>), the reviewer, the reviewer's answer, and the outcome once it is known.</p>
+    <p>Two rules make the store safe to depend on: <b>recording never changes a decision</b>, and <b>a store error never fails a call</b>. The gates record their finals; the reviewer settles pending rows. The store is an audit trail first and a dataset second — and it is only the dataset because it is the audit trail.</p>
+<pre class="code">  bash call ──► risk proposal ──┐
+  decide    ──► typed question ──┼──► decision store ──► reviewer (idle, 10)
+                                 │          │
+                  approved ──────┘          └────── denied
+                  (keeps the proposer)              (keeps the correction)
+                                 │          │
+                                 └──────► settled rows ──► 80/20 split
+                                                              │
+                                              trainer ──► score vs baseline + incumbent
+                                                              │
+                                                     win on every question ──► promote</pre>
+  </section>
+
+  <section id="review">
+    <p class="eyebrow">the reviewer</p>
+    <h2>An LLM reads before anything acts</h2>
+    <p>The rule that names the shape: <b>an answer is a proposal an LLM reviews, never an action.</b> The reviewer is a rig worker on the row's model, at the row's lowest effort — judging a row is a glance, not a deep pass. It reads the pending row and settles it: approve keeps the proposer's answer, deny keeps the reviewer's correction.</p>
+    <p>Because the bite rides the queue at priority 10, a busy session delays it and loses nothing; because the rows carry their status, a restart picks up where the idle time left off. The reviewer is not in the critical path of your turn, your tool call, or your bash command.</p>
+  </section>
+
+  <section id="curate">
+    <p class="eyebrow">curating the rows</p>
+    <h2>The store becomes a dataset</h2>
+    <p>The gold rows are the reviewer's <b>settled</b> rows. The export is deterministic:</p>
+    <div class="table" role="list">
+      <div class="row" role="listitem"><span class="os">approved</span><p class="what">The row keeps the proposer's answer — the small model got it right, and the reviewer agreed.</p></div>
+      <div class="row" role="listitem"><span class="os">denied</span><p class="what">The row keeps the reviewer's correction — the exact error the next checkpoint should learn.</p></div>
+      <div class="row" role="listitem"><span class="os">split</span><p class="what">Four-to-one, stratified, deterministic (80% train / 20% held-out) into <code>~/.rig/decision/train/&lt;utc-tag&gt;/rig-train.jsonl</code> and <code>rig-heldout.jsonl</code>.</p></div>
+      <div class="row" role="listitem"><span class="os">not gold</span><p class="what">Pending, final-but-unreviewed, and the reviewer's own chatter never enter the split.</p></div>
+    </div>
+    <p>Because the split is deterministic, two runs over the same store produce the same held-out rows — which is what makes "the candidate beat the incumbent" a comparison and not a coin flip.</p>
+  </section>
+
+  <section id="train">
+    <p class="eyebrow">training in the pipeline</p>
+    <h2>A trainer is a file in a zone</h2>
+    <p><code>train/</code> sits beside <code>plugins/</code> and shares its machinery: the same zones, the same filename rule, a contract checked before any code runs. A trainer file exposes <code>train(rows_path, out_dir)</code> and <code>evaluate(checkpoint, rows_path)</code>, and each returns a report naming its checkpoint and its per-question scores.</p>
+    <p>The run is headless and never inside a turn:</p>
+<pre class="code"><span class="c"># the runner: the train zone's own interpreter, torch and all</span>
+rig decision train laya
+
+<span class="c"># or enqueue it as a one-shot scheduler job (never in the turn)</span>
+<span class="a">/decision</span> train laya
+
+<span class="c"># the nightly is your own cron line</span>
+0 3 * * *  rig decision train laya</pre>
+    <p><code>trainPython</code> names the zone's own venv — torch is two gigabytes and does not belong in the session kernel's venv. Unset, a training run refuses, naming the key. Every run's three reports and the promoted word land in the decision store either way: <b>a training run that promotes nothing still leaves a receipt.</b></p>
+  </section>
+
+  <section id="promote">
+    <p class="eyebrow">promotion</p>
+    <h2>A tie is not a beat</h2>
+    <p>Promotion is a measurement, not a vibe. rig scores three things on the <b>same held-out rows</b>: the candidate's checkpoint, the incumbent checkpoint, and the constant baseline. The candidate must beat <b>both</b> — and it must beat them <b>on every question</b>. A tie is not a beat; a win on the average that loses one question is not a promotion.</p>
+    <div class="table" role="list">
+      <div class="row" role="listitem"><span class="os">the unit</span><p class="what"><code>decisionUnit</code> names the systemd user unit. On a win, rig rewrites the one <code>Environment=</code> line carrying <code>RIG_DECISION_CHECKPOINT=</code> — and nothing else is touched.</p></div>
+      <div class="row" role="listitem"><span class="os">the restart</span><p class="what">rig does not run <code>systemctl</code>. The reply prints the daemon-reload and restart for you to run: <b>rig restarts no service it does not own.</b></p></div>
+      <div class="row" role="listitem"><span class="os">the no-unit case</span><p class="what">Without <code>decisionUnit</code> the run trains, records, and promotes nothing — there is nothing served to beat.</p></div>
+      <div class="row" role="listitem"><span class="os">the receipt</span><p class="what">Every run's three reports and the promoted word land in the decision store. The comparison is reproducible from the held-out file.</p></div>
+    </div>
+  </section>
+
+  <section id="why">
+    <p class="eyebrow">why this belongs in the harness</p>
+    <h2>The harness makes the labels; the labels make the model</h2>
+    <p>Most harnesses treat a small classifier as someone else's service: you wire a URL, you hope. rig closes the loop because the harness is where the traffic already is. The gates produce the questions as a by-product of doing work, the reviewer produces the gold labels in idle time, the store keeps them with their provenance, and the trainer is one file in a zone with its own interpreter.</p>
+    <p>That is the difference between "we could train a router" and <b>"the runtime trains the model it actually uses."</b> Nothing about it is model-specific: any decider that speaks the wire can sit behind <code>decisionUrl</code>, and the promotion rule does not care whose checkpoint wins, only that it wins on every question.</p>
+  </section>
+
+  <footer>
+    <p class="built">The typed question, the gates, the store and the promotion rule: <a href="https://github.com/mrsirg97-rgb/rig/blob/main/specs/SPEC_DECISION.md">specs/SPEC_DECISION.md</a>.</p>
+    <nav class="links" aria-label="links">
+      <a href="https://github.com/mrsirg97-rgb/rig">github</a>
+      <a href="https://github.com/mrsirg97-rgb/rig/releases">releases</a>
+      <a href="https://github.com/mrsirg97-rgb/evt">evt</a>
+      <a href="https://github.com/mrsirg97-rgb/rig/blob/main/docs/SETUP.md">setup doc</a>
+      <a href="https://github.com/mrsirg97-rgb/rig/tree/main/specs">specs</a>
+      <a href="https://github.com/mrsirg97-rgb/rig/blob/main/docs/EMBED.md">embed</a>
+    </nav>
+    <p class="stamp">rig {{RIG_VERSION}} · a small operating system for agents · MIT</p>
+  </footer>
+
+</main>
+</body>
+</html>
