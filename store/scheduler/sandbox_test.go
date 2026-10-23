@@ -272,3 +272,44 @@ func TestJailedRunRefusesOnANonLinuxPlatform(t *testing.T) {
 		t.Fatalf("the refusal must name the platform, the linux-only fact, and the profile: %q", v)
 	}
 }
+
+func TestJailedRunCarriesTheInterpreterIntoTheJail(t *testing.T) {
+	linuxJail(t)
+	venv := t.TempDir()
+	py := venvAt(t, venv)
+	for _, c := range []struct {
+		name   string
+		python string
+		want   bool
+	}{
+		{"set", py, true},
+		{"unset", "", false},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			cwd := t.TempDir()
+			h, key := setupJob(t, cwd, nil)
+			if err := os.MkdirAll(filepath.Join(h.home, "kernel"), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			shimDir := t.TempDir()
+			if err := os.WriteFile(filepath.Join(shimDir, "bwrap"), []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			t.Setenv("PATH", shimDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+			spawn := &envSpawn{result: sched.SpawnResult{Exit: 0}}
+			opts := runSandboxOpts(h, spawn.spawn, "")
+			opts.Python = c.python
+			mustOK(t, sched.RunJob(key, opts))
+			if len(spawn.calls) != 1 {
+				t.Fatalf("spawn calls = %d, want 1", len(spawn.calls))
+			}
+			argv := spawn.calls[0].Argv
+			if got := carriesSetenv(argv, "RIG_PYTHON", py); got != c.want {
+				t.Fatalf("RIG_PYTHON on the jail env = %v, want %v: %v", got, c.want, argv)
+			}
+			if got := strings.Contains(strings.Join(argv, " "), "--ro-bind "+venv+" "+venv); got != c.want {
+				t.Fatalf("the interpreter's venv ro-bind = %v, want %v: %v", got, c.want, argv)
+			}
+		})
+	}
+}

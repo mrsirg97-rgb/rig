@@ -109,7 +109,11 @@ default path and keeps it.
   pip-install on first use wants an explicit out, so `main` reads
   `RIG_PYTHON` and passes the operator's interpreter to `NewWith`:
   an explicit choice is an explicit choice, and the bootstrap is
-  skipped with it.
+  skipped with it. In a jailed worker the choice rides the jail
+  (SPEC_SANDBOX 1): the runner's resolved interpreter is `RIG_PYTHON`
+  on the jail env and its venv root an ro-bind, so the door runs the
+  operator's kernel instead of bootstrapping from PyPI in a netless
+  jail; with none configured the jail's absent network is the refusal.
 - **Queue, then dispatch.** One dispatch at a time (pane's promise chain).
   The timeout timer starts only after the slot is taken, so queue time is
   never charged to the cell's own timeout (pane's named case).

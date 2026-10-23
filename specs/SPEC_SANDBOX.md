@@ -104,6 +104,7 @@ bwrap
   --unshare-all --die-with-parent --clearenv
   --setenv PATH <the jail's path> --setenv HOME /tmp
   --setenv RIG_HOME <job cwd>/.rig-job
+  [--setenv RIG_PYTHON <the operator's interpreter>]
   --ro-bind /usr /usr --ro-bind /lib /lib --ro-bind /lib64 /lib64
   --ro-bind /bin /bin --ro-bind /sbin /sbin --ro-bind /etc /etc
   --proc /proc --dev /dev --tmpfs /tmp
@@ -111,6 +112,7 @@ bwrap
   --ro-bind <rig home>/kernel <rig home>/kernel
   --ro-bind <the rig binary> <the rig binary>
   [--ro-bind or --bind per sandbox.binds]
+  [--ro-bind <the interpreter's venv root> when it is not already visible]
   --chdir <job cwd>
   -- <the rig binary> -p -
 ```
@@ -118,6 +120,21 @@ bwrap
 The prompt never rides argv (2.9.3): `-p -` reads it from stdin, which
 the spawn pipes in; Linux caps one argument at 128 KiB and a review
 fire's prompt is sized by the model's window.
+
+- The python door's interpreter (SPEC_PYTHON) is the operator's, one
+  field the runner is constructed with: the resolved `RIG_PYTHON` (the
+  env over `settings.python`, the same resolution `main` hands
+  `NewWith`) rides the jail env, and the interpreter's venv root (the
+  directory holding its `pyvenv.cfg`) is ro-bound when the interpreter
+  is a venv and the root is not already visible — the cwd, the kernel
+  dir, `sandboxBinds`, or the system binds below. The bind is the
+  python door's runtime, the kernel bind's shape: one named path,
+  read-only. The rest of the operator's home stays absent; a non-venv
+  interpreter is visible only where the system binds or a
+  `sandboxBinds` entry already put it. No interpreter configured: the
+  worker behaves as today — the door bootstraps ipython/numpy/pandas
+  and the netless jail turns that into the named refusal
+  (`kernel bootstrap failed (needs python3 + network): ...`).
 
 - The whole worker process tree is inside: bash, the kernel, the
   kernel's children, a plugin's subprocesses. One boundary.
@@ -139,11 +156,14 @@ fire's prompt is sized by the model's window.
   transcript. The cost, named: a worker's rem reflections do not
   persist to the shared store; the report is the deliverable.
 - The environment is the whole list, not the operator's:
-  `--clearenv` plus the named `--setenv`s (PATH, HOME, RIG_HOME;
-  `RIG_DELEGATE=1` for a delegate worker) are everything a worker
-  sees, so an exported API key or token on the operator's shell never
-  reaches the model's subprocesses. A future knob extends the list
-  deliberately; nothing passes today.
+  `--clearenv` plus the named `--setenv`s (PATH, HOME, RIG_HOME; the
+  model row's `RIG_MODEL_*`, since the scratch home holds no settings
+  file; the operator's `RIG_PYTHON` when one is configured;
+  `RIG_DELEGATE=1` for a delegate worker; `RIG_FLEET` for every jailed
+  worker) are everything a worker sees, so an exported API key or
+  token on the operator's shell never reaches the model's
+  subprocesses. A future knob extends the list deliberately; nothing
+  else passes today.
 - Fail closed: profile `jailed` and no bwrap on `$PATH` refuses the
   run loud (the outcome row carries the refusal); `sandbox: "off"` in
   settings flips the default to unjailed with one loud line per run.
@@ -320,7 +340,8 @@ where Landlock can carry them, each residual named.
   /home/fixture`: the worker's home is the jail's private /tmp and the
   operator's home is absent; `bash curl 127.0.0.1:8090`; no network; a write
   inside the cwd lands; a write outside refuses; the kernel's python
-  sees the same walls (one boundary, both tools).
+  sees the same walls (one boundary, both tools) on the operator's
+  interpreter, its venv root read-only, and the cwd write lands.
 - the socket: the jailed worker completes a model call through the
   bound socket against a scripted provider; nothing else answers.
 - fail closed: bwrap absent (PATH scrubbed): the run refuses loud

@@ -163,9 +163,9 @@ nothing scheduled) and a resumable transcript in the state store.
   configured (SPEC_DELEGATE): wired with the session's cwd-scope
   scheduler store, the scheduler home, the operator's rig home and
   state-store directory, the swap URL, `self` as the worker command,
-  the fleet's model, the fleet's slots, the sandbox, and the
-  operator's allow-list (the worker's is its intersection with the
-  doing set, `doing.go`).
+  the fleet's model, the fleet's slots, the sandbox, the operator's
+  interpreter, and the operator's allow-list (the worker's is its
+  intersection with the doing set, `doing.go`).
 
 ## Gotchas
 

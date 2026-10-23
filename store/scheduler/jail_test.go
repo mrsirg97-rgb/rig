@@ -1,6 +1,8 @@
 package scheduler_test
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -238,5 +240,79 @@ func TestJailArgvCarriesTheWorkerEnv(t *testing.T) {
 	}
 	if !clearenv {
 		t.Fatalf("the profile must clear the operator's environment: %v", argv)
+	}
+}
+
+func venvAt(t *testing.T, dir string) string {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Join(dir, "bin"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	py := filepath.Join(dir, "bin", "python")
+	if err := os.WriteFile(py, []byte("#!/bin/sh\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "pyvenv.cfg"), []byte("home = /usr/bin\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return py
+}
+
+func TestJailArgvInterpreterVenvFollowsTheProfile(t *testing.T) {
+	venv := t.TempDir()
+	py := venvAt(t, venv)
+	for _, c := range []struct {
+		name   string
+		python string
+		want   bool
+	}{
+		{"set", py, true},
+		{"unset", "", false},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			p := sched.JailProfile{
+				Bwrap:    "/usr/bin/bwrap",
+				Binary:   "/opt/rig/bin/rig",
+				BaseURL:  "unix:/ws/j/.rig-job.sock",
+				Model:    "m",
+				Cwd:      "/ws/j",
+				SockPath: "/ws/j/.rig-job.sock",
+				Python:   c.python,
+			}
+			argv, err := sched.JailArgv(p)
+			if err != nil {
+				t.Fatalf("JailArgv: %v", err)
+			}
+			got := strings.Contains(strings.Join(argv, " "), "--ro-bind "+venv+" "+venv)
+			if got != c.want {
+				t.Fatalf("the interpreter's venv ro-bind = %v, want %v: %v", got, c.want, argv)
+			}
+		})
+	}
+}
+
+func TestJailArgvSkipsTheInterpreterVenvItAlreadySees(t *testing.T) {
+	cwd := t.TempDir()
+	venv := filepath.Join(cwd, "venv")
+	py := venvAt(t, venv)
+	p := sched.JailProfile{
+		Bwrap:    "/usr/bin/bwrap",
+		Binary:   "/opt/rig/bin/rig",
+		BaseURL:  "unix:/ws/j/.rig-job.sock",
+		Model:    "m",
+		Cwd:      cwd,
+		SockPath: "/ws/j/.rig-job.sock",
+		Python:   py,
+	}
+	argv, err := sched.JailArgv(p)
+	if err != nil {
+		t.Fatalf("JailArgv: %v", err)
+	}
+	join := strings.Join(argv, " ")
+	if !strings.Contains(join, "--bind "+cwd+" "+cwd) {
+		t.Fatalf("the fixture's cwd must be the jail's rw bind: %v", argv)
+	}
+	if strings.Contains(join, "--ro-bind "+venv+" "+venv) {
+		t.Fatalf("a venv under the cwd is already visible; no second bind: %v", argv)
 	}
 }

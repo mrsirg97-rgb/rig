@@ -101,6 +101,7 @@ func (c *Controller) delegateWork(w *worker, id string, task todostore.TaskInfo)
 		Timeout:       noTimeout,
 		Sandbox:       c.opts.Sandbox,
 		SandboxBinds:  c.opts.SandboxBinds,
+		Python:        c.opts.Python,
 		RigHome:       c.opts.RigHome,
 		StateDir:      c.opts.StateDir,
 		Allow:         c.allow(w),

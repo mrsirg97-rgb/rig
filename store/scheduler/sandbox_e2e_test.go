@@ -196,9 +196,6 @@ func jailFixture(t *testing.T, replies []string, binds []string, py string) (str
 	h, key := setupJobHome(t, cwd, opHome, nil)
 
 	t.Setenv("HOME", "/home/fixture")
-	if py != "" {
-		t.Setenv("RIG_PYTHON", py)
-	}
 
 	s := &jailSrv{replies: replies}
 	srv := newJailSrv(t, s)
@@ -219,6 +216,7 @@ func jailFixture(t *testing.T, replies []string, binds []string, py string) (str
 		SwapURL:      srv.URL,
 		Sandbox:      "jailed",
 		SandboxBinds: binds,
+		Python:       py,
 		RigHome:      opHome,
 		Models:       func() models.Table { return table },
 		Now:          func() time.Time { return runnerNow },
@@ -317,13 +315,29 @@ func TestJailPythonSeesTheSameWalls(t *testing.T) {
 	requireJailBox(t)
 	py := kernelPython(t)
 	venv := filepath.Dir(filepath.Dir(py))
+	code := "import os, sys\n" +
+		"print('home:', os.environ.get('HOME'))\n" +
+		"print('prefix:', sys.prefix)\n" +
+		"try:\n" +
+		"    open(os.path.join(sys.prefix, 'pyfile.txt'), 'w').write('x')\n" +
+		"    print('prefix: writable')\n" +
+		"except OSError:\n" +
+		"    print('prefix: denied')\n" +
+		"open('pyfile.txt', 'w').write('py')\n" +
+		"print('wrote: pyfile.txt')"
 	cwd, srv := jailFixture(t, []string{
-		pythonCall(t, "c1", "import os\nhome = os.environ.get('HOME')\nprint('home_exists:', os.path.exists(home))\nopen('pyfile.txt', 'w').write('py')\nprint('wrote: pyfile.txt')"),
+		pythonCall(t, "c1", code),
 		jailFinalReply,
-	}, []string{venv, "/etc/alternatives"}, py)
+	}, nil, py)
 	result := toolResultOfJail(t, lastBodyOf(t, srv))
-	if !strings.Contains(result, "home_exists: False") {
-		t.Fatalf("the python kernel must see the absent home, got %q", result)
+	if !strings.Contains(result, "home: /tmp") {
+		t.Fatalf("the python kernel must see the jail's home, got %q", result)
+	}
+	if !strings.Contains(result, "prefix: "+venv) {
+		t.Fatalf("the python kernel must run the operator's venv, got %q", result)
+	}
+	if !strings.Contains(result, "prefix: denied") {
+		t.Fatalf("the interpreter's venv must be read-only inside the jail, got %q", result)
 	}
 	if !strings.Contains(result, "wrote: pyfile.txt") {
 		t.Fatalf("the python kernel must write in the cwd, got %q", result)

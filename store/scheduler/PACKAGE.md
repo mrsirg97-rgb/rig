@@ -164,14 +164,20 @@ A command job's fire skips the busy probe and
   drift and a bare repair cannot install a past-due crontab line for
   it.
 - `jail.go`: the bwrap jail argv composition: `--clearenv` and the named
-  `--setenv` list (PATH, HOME, RIG_HOME; `RIG_DELEGATE=1` for a delegate
-  worker; `RIG_FLEET=<member id>` for every jailed worker — the runner's
-  origin or the worker's own member — so heartbeats, `tool_start` frames
-  and the verdict pipe reach the worker inside the jail), each entry
+  `--setenv` list (PATH, HOME, RIG_HOME; the model row's `RIG_MODEL_*`;
+  the operator's `RIG_PYTHON` when one is configured; `RIG_DELEGATE=1`
+  for a delegate worker; `RIG_FLEET=<member id>` for every jailed
+  worker — the runner's origin or the worker's own member — so
+  heartbeats, `tool_start` frames and the verdict pipe reach the worker
+  inside the jail), each entry
   split into explicit VAR VALUE pairs (bwrap's
   `--setenv` takes two arguments; an entry without an `=` refuses), are
   the worker's whole environment, so the operator's exported
-  secrets never reach a jailed worker.
+  secrets never reach a jailed worker. The interpreter's venv root (the
+  directory holding its `pyvenv.cfg`) is ro-bound when the interpreter
+  is a venv and the root is not already visible (the cwd, the kernel
+  dir, `sandboxBinds`, the system binds); no interpreter configured,
+  no bind.
 - `landlock.go`: the domain arrives with the image, not in-process: an
   in-process `restrict_self` cannot cover the worker's own goroutines
   (it commits per-thread creds and Go's runtime has threads before

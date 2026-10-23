@@ -52,6 +52,10 @@ func runJob(args []string) int {
 	if v := os.Getenv("RIG_SWAP_URL"); v != "" {
 		swapURL = v
 	}
+	python := cfg.Settings.Python
+	if v := os.Getenv("RIG_PYTHON"); v != "" {
+		python = v
+	}
 	model := cfg.Settings.Model
 	if v := os.Getenv("RIG_MODEL"); v != "" {
 		model = v
@@ -105,6 +109,7 @@ func runJob(args []string) int {
 
 		Sandbox:      cfg.Settings.Sandbox,
 		SandboxBinds: cfg.Settings.SandboxBinds,
+		Python:       python,
 		RigHome:      cfgDir,
 		StateDir:     filepath.Join(cfgDir, "sessions"),
 		Models:       func() models.Table { return cfg.Models },
