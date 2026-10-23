@@ -60,7 +60,7 @@ func (r *dbReviews) Settled(ctx context.Context, site string, q decision.Questio
 	return decisionstore.Settled(ctx, r.db, site, q, state)
 }
 
-func (r *root) reviewFire(home string, db store.DB, swapURL, self, cfgDir, sandbox string, sandboxBinds []string, python string, del func(sched.DelegateInput) (sched.DelegateResult, error)) decision.Fire {
+func (r *root) reviewFire(home string, db store.DB, swapURL, self, cfgDir, sandbox string, sandboxBinds []string, python, ffmpeg, browser string, del func(sched.DelegateInput) (sched.DelegateResult, error)) decision.Fire {
 	return func(ctx context.Context, prompt string, voice broadcast.Member) (string, error) {
 		res, err := del(sched.DelegateInput{
 			DB:            db,
@@ -83,6 +83,8 @@ func (r *root) reviewFire(home string, db store.DB, swapURL, self, cfgDir, sandb
 			Sandbox:       sandbox,
 			SandboxBinds:  sandboxBinds,
 			Python:        python,
+			FFmpeg:        ffmpeg,
+			Browser:       browser,
 			Bare:          true,
 			Allow:         []string{"read", "rem", "verdict"},
 			Member:        voice,

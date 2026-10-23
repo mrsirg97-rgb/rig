@@ -284,7 +284,7 @@ func (p *provider) toolResultBlock(m core.Message, owner callTable) wireContent 
 	}
 	inner := []wireContent{{Type: "text", Text: text}}
 	if p.blobs != nil && owner.nameOf(m.ToolID) == viewToolName {
-		if ref, ok := imagemarker.Parse(m.Content); ok {
+		if ref, ok := imagemarker.ParseLast(m.Content); ok {
 			inner = p.imageBlocks(ref)
 		}
 	}

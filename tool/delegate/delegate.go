@@ -39,6 +39,8 @@ type Opts struct {
 	Sandbox      string
 	SandboxBinds []string
 	Python       string
+	FFmpeg       string
+	Browser      string
 	Allow        []string
 	Fetch        sched.Fetch
 	Spawn        sched.Spawn
@@ -281,6 +283,8 @@ func (a *adapter) run(ctx context.Context, c delegateCall) (string, error) {
 		Sandbox:       a.Sandbox,
 		SandboxBinds:  a.SandboxBinds,
 		Python:        a.Python,
+		FFmpeg:        a.FFmpeg,
+		Browser:       a.Browser,
 		RigHome:       a.RigHome,
 		StateDir:      a.StateDir,
 		Allow:         doingAllow(a.Allow),

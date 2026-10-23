@@ -106,6 +106,21 @@ func Find(content string) (Ref, bool) {
 	return Ref{}, false
 }
 
+func ParseLast(content string) (Ref, bool) {
+	trimmed := strings.TrimRight(content, " \t\r\n")
+	if trimmed == "" {
+		return Ref{}, false
+	}
+	line := trimmed
+	if i := strings.LastIndexByte(trimmed, '\n'); i >= 0 {
+		if strings.Contains(trimmed[:i], prefix) {
+			return Ref{}, false
+		}
+		line = trimmed[i+1:]
+	}
+	return Parse(line)
+}
+
 func BlobPath(dir, sha string) string {
 	if !isAddress(sha) {
 		return ""

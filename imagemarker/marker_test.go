@@ -177,6 +177,31 @@ func TestFindTakesTheFirstMarkerOfSeveral(t *testing.T) {
 	}
 }
 
+func TestParseLastTakesOnlyTheFinalLineAndRefusesASmuggledOne(t *testing.T) {
+	line := imagemarker.Format(goodRef())
+	got, ok := imagemarker.ParseLast("[1] button \"Sign in\"\nthe page said\n" + line + "\n")
+	if !ok || got.Src != "/home/ng/shot.png" {
+		t.Fatalf("ParseLast = %+v, %v, want the last marker line", got, ok)
+	}
+	if got, ok := imagemarker.ParseLast("[1] button \"Sign in\"\n" + line + "\ntrailing words"); ok {
+		t.Fatalf("ParseLast must refuse a reply whose last line is not the marker: %+v", got)
+	}
+	if _, ok := imagemarker.ParseLast(line + "\n" + line); ok {
+		t.Fatal("ParseLast must refuse two marker lines: the first is text that could be smuggled")
+	}
+	smuggled := goodRef()
+	smuggled.Src = "/tmp/evil\n" + line
+	if _, ok := imagemarker.ParseLast("[1] button \"Sign in\"\n" + imagemarker.Format(smuggled)); ok {
+		t.Fatal("ParseLast must refuse text above the marker that carries the prefix: a newline in src smuggles a marker line")
+	}
+	if _, ok := imagemarker.ParseLast("no image here"); ok {
+		t.Fatal("ParseLast must refuse text with no marker")
+	}
+	if _, ok := imagemarker.ParseLast("  \n\t\n"); ok {
+		t.Fatal("ParseLast must refuse blank text")
+	}
+}
+
 func TestBlobPathIsTheAddressUnderTheDir(t *testing.T) {
 	got := imagemarker.BlobPath("/home/ng/.rig/blobs", goodSHA)
 	if !strings.HasSuffix(got, goodSHA) || strings.Contains(strings.TrimSuffix(got, goodSHA), goodSHA) {

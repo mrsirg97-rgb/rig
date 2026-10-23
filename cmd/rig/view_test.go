@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
@@ -272,4 +273,31 @@ func gradientPNG(t *testing.T, w, h int) []byte {
 		t.Fatal(err)
 	}
 	return buf.Bytes()
+}
+
+type closingView struct {
+	tool.Definition
+	closed bool
+}
+
+func (c *closingView) Exec(ctx context.Context, args json.RawMessage) (string, error) {
+	return "", nil
+}
+
+func (c *closingView) Close() { c.closed = true }
+
+func TestAModelSwitchOffClosesTheViewsBrowser(t *testing.T) {
+	r := testRoot(nullFrontend{})
+	ct := &closingView{Definition: tool.Def("view")}
+	if r.tools == nil {
+		r.tools = map[string]core.Tool{}
+	}
+	r.tools["view"] = ct
+	r.applyVision()
+	if !ct.closed {
+		t.Fatal("a row without vision must close the browser the tool kept")
+	}
+	if _, ok := r.tools["view"]; ok {
+		t.Fatal("the tool leaves the table with the row's vision")
+	}
 }

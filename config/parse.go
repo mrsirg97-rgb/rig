@@ -57,6 +57,16 @@ func parseSettings(data []byte, path string) (Settings, error) {
 	} else if ok && v != "" {
 		s.Python = v
 	}
+	if v, ok, err := str("ffmpeg"); err != nil {
+		return Settings{}, err
+	} else if ok && v != "" {
+		s.FFmpeg = v
+	}
+	if v, ok, err := str("browser"); err != nil {
+		return Settings{}, err
+	} else if ok && v != "" {
+		s.Browser = v
+	}
 	if v, ok, err := str("searxngUrl"); err != nil {
 		return Settings{}, err
 	} else if ok && v != "" {

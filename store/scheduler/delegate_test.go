@@ -161,10 +161,20 @@ func TestAJailedDelegateCarriesTheInterpreter(t *testing.T) {
 	}
 	t.Setenv("PATH", shimDir+string(os.PathListSeparator)+os.Getenv("PATH"))
 	spawn := &delegateSpawn{result: sched.SpawnResult{Exit: 0}}
+	ffDir, brDir := t.TempDir(), t.TempDir()
+	ff := filepath.Join(ffDir, "ffmpeg")
+	br := filepath.Join(brDir, "chrome-headless-shell")
+	for _, p := range []string{ff, br} {
+		if err := os.WriteFile(p, []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
 	in := delegateInput(t, delegateFetch(t, false, ""), spawn.spawn, func(in *sched.DelegateInput) {
 		in.Sandbox = "jailed"
 		in.RigHome = rigHome
 		in.Python = py
+		in.FFmpeg = ff
+		in.Browser = br
 	})
 	if _, err := sched.Delegate(in); err != nil {
 		t.Fatalf("delegate: %v", err)
@@ -176,8 +186,17 @@ func TestAJailedDelegateCarriesTheInterpreter(t *testing.T) {
 	if !carriesSetenv(argv, "RIG_PYTHON", py) {
 		t.Fatalf("the jailed delegate worker must carry the operator's interpreter, got %v", argv)
 	}
-	if !strings.Contains(strings.Join(argv, " "), "--ro-bind "+venv+" "+venv) {
+	joined := strings.Join(argv, " ")
+	if !strings.Contains(joined, "--ro-bind "+venv+" "+venv) {
 		t.Fatalf("the interpreter's venv must ride the jail read-only, got %v", argv)
+	}
+	for _, c := range []struct{ knob, bin string }{
+		{"RIG_FFMPEG", ff},
+		{"RIG_BROWSER", br},
+	} {
+		if !carriesSetenv(argv, c.knob, c.bin) {
+			t.Fatalf("%s must ride a jailed delegate's env: %v", c.knob, argv)
+		}
 	}
 }
 

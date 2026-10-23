@@ -57,7 +57,9 @@ func (k *kernel) start() (*proc, error) {
 	cmd := exec.Command(argv[0], argv[1:]...)
 	cmd.Dir = k.cwd
 
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	attr := &syscall.SysProcAttr{Setpgid: true}
+	execwrap.ParentDeathAttr(attr)
+	cmd.SysProcAttr = attr
 	cmd.WaitDelay = waitDelay
 	stdin, err := cmd.StdinPipe()
 	if err != nil {

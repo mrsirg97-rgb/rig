@@ -266,6 +266,56 @@ func TestOverlappingFiresDoNotStompEachOthersSocket(t *testing.T) {
 	}
 }
 
+func TestJailedRunCarriesThePixelsBinariesIntoTheJail(t *testing.T) {
+	linuxJail(t)
+	ffDir, brDir := t.TempDir(), t.TempDir()
+	mk := func(dir, name string) string {
+		p := filepath.Join(dir, name)
+		if err := os.WriteFile(p, []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		return p
+	}
+	ff, br := mk(ffDir, "ffmpeg"), mk(brDir, "chrome-headless-shell")
+	cwd := t.TempDir()
+	h, key := setupJob(t, cwd, nil)
+	if err := os.MkdirAll(filepath.Join(h.home, "kernel"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	shimDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(shimDir, "bwrap"), []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", shimDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	spawn := &envSpawn{result: sched.SpawnResult{Exit: 0}}
+	opts := runSandboxOpts(h, spawn.spawn, "")
+	opts.FFmpeg = ff
+	opts.Browser = br
+	mustOK(t, sched.RunJob(key, opts))
+	argv := spawn.calls[0].Argv
+	joined := strings.Join(argv, " ")
+	for _, c := range []struct{ knob, bin string }{
+		{"RIG_FFMPEG", ff},
+		{"RIG_BROWSER", br},
+	} {
+		if !carriesSetenv(argv, c.knob, c.bin) {
+			t.Fatalf("%s must ride the jail env: %v", c.knob, argv)
+		}
+		dir := filepath.Dir(c.bin)
+		if !strings.Contains(joined, "--ro-bind "+dir+" "+dir) {
+			t.Fatalf("the binary's directory must ride the jail read-only, got %v", argv)
+		}
+	}
+
+	spawn2 := &envSpawn{result: sched.SpawnResult{Exit: 0}}
+	opts2 := runSandboxOpts(h, spawn2.spawn, "")
+	mustOK(t, sched.RunJob(key, opts2))
+	joined = strings.Join(spawn2.calls[0].Argv, " ")
+	if strings.Contains(joined, "RIG_FFMPEG") || strings.Contains(joined, "RIG_BROWSER") {
+		t.Fatalf("an unset knob must not ride the env: %v", spawn2.calls[0].Argv)
+	}
+}
+
 func TestJailedRunRefusesOnANonLinuxPlatform(t *testing.T) {
 	v := sched.PlatformRefusal("windows")
 	if !strings.Contains(v, "windows") || !strings.Contains(v, "linux") || !strings.Contains(v, "jailed") {

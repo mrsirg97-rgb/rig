@@ -231,7 +231,7 @@ the core is frozen.
 <!-- measured:begin (scripts/readme-measured; do not hand-edit) -->
 Numbers, not adjectives — and each one names its mechanism. The block is computed: `scripts/readme-measured` reads the stores and the tree, CI refuses drift, so it cannot go stale on you. One SQL read of the state store: the store is the receipt.
 
-**97.6% of 7.3 billion prompt tokens served from cache**, across 3,343 sessions and 65,549 recorded turns — the earliest on v0.2.0. The ratio is `cache_read / prompt`, the arithmetic `sessions summary` runs; the byte-stable prefix is why the provider can reuse so much of it. Cost per turn, era by era:
+**97.6% of 7.4 billion prompt tokens served from cache**, across 3,377 sessions and 66,101 recorded turns — the earliest on v0.2.0. The ratio is `cache_read / prompt`, the arithmetic `sessions summary` runs; the byte-stable prefix is why the provider can reuse so much of it. Cost per turn, era by era:
 
 | era | turns | new tokens / turn | completion / turn | cache |
 |---------|--------|------|------|--------|
@@ -245,7 +245,7 @@ The 2.1.x consolidation rethought the system prompt and the toolset and kept the
 
 **A few thousand bytes of preamble.** The system prompt and the tool schemas are lean, byte-stable, and carefully chosen, and the tests say so: `TestSystemPromptIsByteStableAcrossBuilds`, `TestWireMarshalingIsDeterministic`, `TestWireMessagesAreAppendOnly`. A stray timestamp cannot quietly kill the cache.
 
-**448 lines is the loop** — `loop.go` plus `batch.go`, stdlib only. **682 lines is the whole swarm** — claim, spawn, complete, verdict, reap, and the status throttle. **51,229 lines of Go, 87,050 of tests.** The one store dependency is pure-Go SQLite.
+**448 lines is the loop** — `loop.go` plus `batch.go`, stdlib only. **686 lines is the whole swarm** — claim, spawn, complete, verdict, reap, and the status throttle. **53,193 lines of Go, 88,390 of tests.** The one store dependency is pure-Go SQLite.
 
 <!-- measured:end -->
 
@@ -283,7 +283,7 @@ live read of what it has loaded). Restrict them with `--allow`:
 |------|--------------|
 | `bash` | run shell commands; output bounded |
 | `read` / `write` / `edit` | files; read is the observation path (drift-checked), edits are exact-match, provenance-checked |
-| `view` | look at an image: downscaled, content-addressed, sent to a vision model (off unless your model row has `"vision": true`) |
+| `view` | look at pixels: an image (downscaled, content-addressed), a video's frames as one labelled contact sheet, or a live browser page driven by refs — sent to a vision model (off unless your model row has `"vision": true`) |
 | `python` | a persistent IPython kernel; variables and imports survive |
 | `web` | search a local SearXNG, or fetch a URL as readable text; private addresses refused |
 | `todo` | the task queue, scoped to the project (a repo's worktrees share one); tasks link with `requires`/`blocks` |

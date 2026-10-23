@@ -45,6 +45,8 @@ type RunOpts struct {
 	Sandbox      string
 	SandboxBinds []string
 	Python       string
+	FFmpeg       string
+	Browser      string
 	RigHome      string
 	StateDir     string
 	LandlockABI  func() (int, error)

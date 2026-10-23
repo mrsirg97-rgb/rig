@@ -102,6 +102,8 @@ func (c *Controller) delegateWork(w *worker, id string, task todostore.TaskInfo)
 		Sandbox:       c.opts.Sandbox,
 		SandboxBinds:  c.opts.SandboxBinds,
 		Python:        c.opts.Python,
+		FFmpeg:        c.opts.FFmpeg,
+		Browser:       c.opts.Browser,
 		RigHome:       c.opts.RigHome,
 		StateDir:      c.opts.StateDir,
 		Allow:         c.allow(w),

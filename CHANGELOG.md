@@ -1,4 +1,68 @@
 # Changelog
+## [3.4.0]: view grows sources — a video becomes a sheet, a browser becomes a page of refs
+
+`view` was one verb: a path in, one image out. It is an action door now
+with three sources that all produce the same thing — one `[[rig:image …]]`
+line, with the bytes in the content-addressed store and a real image part
+on the wire. `image` is the default, so every 3.3.5 call shape and the
+golden wire keep working; the registry's `defaultAction` is why the tool
+stays a read that runs beside its admitted neighbours.
+
+`view {action:"video", path}` samples a clip with ffmpeg and replies one
+contact sheet: `frames` frames (6 by default, 12 at most) evenly spaced,
+tiled into a grid under the same 1568 bound, each labelled with its
+timestamp. `at: "90"` or `at: "1:30"` replies that one frame alone at the
+bound. The frames are decoded in Go and ride the image path's resampler,
+re-encode and blob store, so the same file and arguments give the same
+blob. Three caps sit beside the image caps — 512 MiB of source, 3600 s of
+clip, 1..12 frames — and each refusal names the cap and the way around it.
+ffmpeg is `RIG_FFMPEG` over `settings.ffmpeg`, falling back to PATH; absent,
+the refusal names both knobs. A jailed worker gets the env and a read-only
+bind of the binary's directory, the `RIG_PYTHON` way. The input is
+`file:<abs path>` with `-protocol_whitelist file,pipe`, so a playlist or a
+`concat:`-style name cannot make ffmpeg dial or read past the file.
+
+`view {action:"browser", step:…}` drives one headless Chromium per session
+over `--remote-debugging-pipe` — NUL-delimited JSON on fds 3/4, stdlib
+only, no websocket dependency. The process starts on first use and stays,
+so the page keeps its state across calls; it is closed at session end and
+when the row loses vision, and a death is named once on the next call in
+the python kernel's words. The steps are `open`, `click`, `type`, `scroll`,
+`shot`, `close`; every one replies with the page's interactive elements as
+a numbered list (`[2] button "Sign in"`), and `open`/`shot` — or `shot:true`
+on any step — also attach a screenshot. The model acts by ref, never by
+pixel. The binary is `RIG_BROWSER` over `settings.browser`; absent, the
+refusal names both. Every request is guarded, not only the one the model
+asked to open: the CDP `Fetch` domain pauses each one and it goes through
+`tool/web`'s SSRF door — a redirect hop, a link, an image or a `fetch()` to
+a private address is failed and named in the step's reply — while `file://`
+resolves through pathguard and `data:`/`blob:` continue. Under that, the
+browser has no network of its own: Chromium's only route out is a forward
+proxy rig runs on loopback for it, with no loopback bypass and WebRTC held
+to proxied UDP. The egress resolves each host once through `web.PinHost`,
+refuses a private answer, and dials only the pinned address, so a DNS
+rebind between the check and the dial, and a WebSocket the `Fetch` domain
+never pauses, reach nothing. A configured `webFetchProxy` is the egress's
+upstream and is handed the pin, not the name. A parent-death signal takes
+the browser down with a SIGKILLed rig; the python kernel had the same gap
+and gets the same one. The page's text is untrusted: names and titles lose
+their control characters and `[[rig:` prefixes, and the marker is written
+last.
+
+That last fact moved the provider's rule: a `view` result is an image when
+its last line is a marker (`imagemarker.ParseLast`), not only when the
+whole result is one line. Text above the marker stays text, and a text
+that carries the marker prefix above the final line refuses the whole
+reply, so a newline in `src` cannot smuggle a second marker. The marker the
+provider honors is still only the one `view` wrote.
+
+The tool menu's golden row is a text row, so its 16,174 characters and
+byte-identical wire do not move; `view`'s own entry grew from 469 to 1,363
+characters for the vision rows that carry it. CI installs ffmpeg and
+chrome-headless-shell as fixtures, the way it installs bubblewrap and the
+kernel venv, and the video and browser cases skip by name where they are
+absent.
+
 ## [3.3.5]: the site is a manual now, and every number on it is computed
 
 The GitHub Pages site was one page that undersold the machine. It is

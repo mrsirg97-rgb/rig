@@ -390,6 +390,26 @@ func TestAReusedCallIDOnALaterReadIsScopedToThatTurnsCall(t *testing.T) {
 	}
 }
 
+func TestAViewResultWithBrowserTextAboveTheMarkerCarriesOneImage(t *testing.T) {
+	dir := t.TempDir()
+	e := captureEndpoint(t)
+	sha := writeBlob(t, dir, blobPayload)
+	content := "[1] textbox \"Email\"\n[2] button \"Sign in\"\n" + marker(sha, "image/png", "https://example.test/")
+	msgs := []core.Message{
+		{Role: core.RoleUser, Content: "look"},
+		{Role: core.RoleAssistant, ToolCalls: []core.ToolCall{{ID: "c1", Name: "view", Args: json.RawMessage(`{"action":"browser","url":"https://example.test/"}`)}}},
+		{Role: core.RoleTool, ToolID: "c1", Content: content},
+	}
+	streamMustNotFault(t, openai.NewWithConfig(openai.Config{BaseURL: e.url, Model: "vision-model", BlobsDir: dir}), msgs)
+	body := e.last(t)
+	if got := roles(body); got != "user,assistant,tool,user" {
+		t.Fatalf("roles = %s, want the image message after the tool result", got)
+	}
+	if got := body.Messages[2].text(t); got != content {
+		t.Fatalf("the tool result keeps its text whole: %q", got)
+	}
+}
+
 func TestAViewResultCarryingASmuggledMarkerIsTextOnly(t *testing.T) {
 	dir := t.TempDir()
 	e := captureEndpoint(t)
@@ -412,7 +432,24 @@ func TestAViewResultCarryingASmuggledMarkerIsTextOnly(t *testing.T) {
 	streamMustNotFault(t, openai.NewWithConfig(openai.Config{BaseURL: e.url, Model: "vision-model", BlobsDir: dir}), msgs)
 	body := e.last(t)
 	if got := roles(body); got != "user,assistant,tool" {
-		t.Fatalf("roles = %s, want no image message for a result that is not exactly the marker line", got)
+		t.Fatalf("roles = %s, want no image message for a result that smuggles a marker line", got)
+	}
+}
+
+func TestAViewResultWhoseLastLineIsNotAMarkerStaysText(t *testing.T) {
+	dir := t.TempDir()
+	e := captureEndpoint(t)
+	sha := writeBlob(t, dir, blobPayload)
+	content := marker(sha, "image/png", "/tmp/shot.png") + "\ntrailing words"
+	msgs := []core.Message{
+		{Role: core.RoleUser, Content: "look"},
+		{Role: core.RoleAssistant, ToolCalls: []core.ToolCall{{ID: "c1", Name: "view", Args: json.RawMessage(`{}`)}}},
+		{Role: core.RoleTool, ToolID: "c1", Content: content},
+	}
+	streamMustNotFault(t, openai.NewWithConfig(openai.Config{BaseURL: e.url, Model: "vision-model", BlobsDir: dir}), msgs)
+	body := e.last(t)
+	if got := roles(body); got != "user,assistant,tool" {
+		t.Fatalf("roles = %s, want no image message for a result whose last line is text", got)
 	}
 }
 

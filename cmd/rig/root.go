@@ -70,6 +70,9 @@ type root struct {
 
 	pluginsDir string
 	rigHome    string
+	ffmpeg     string
+	browser    string
+	proxy      string
 
 	activeID string
 	row      models.Model
@@ -357,9 +360,23 @@ func (r *root) applyVision() {
 			r.tools = map[string]core.Tool{}
 		}
 		if _, ok := r.tools["view"]; !ok {
-			r.tools["view"] = viewtool.New(r.blobsDir())
+			r.tools["view"] = viewtool.NewWith(viewtool.Config{
+				Blobs: r.blobsDir(), FFmpeg: r.ffmpeg, Browser: r.browser, Proxy: r.proxy,
+				Cwd: r.cwd, RigHome: r.rigHome,
+			})
 		}
 		return
+	}
+	r.closeView()
+}
+
+func (r *root) closeView() {
+	t, ok := r.tools["view"]
+	if !ok {
+		return
+	}
+	if c, ok := t.(interface{ Close() }); ok {
+		c.Close()
 	}
 	delete(r.tools, "view")
 }
