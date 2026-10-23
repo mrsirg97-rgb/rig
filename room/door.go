@@ -57,7 +57,7 @@ func NewDoor(member Member, cfg broadcast.MeshConfig, remote, home []int64, told
 		engine:  engine,
 		cancel:  cancel,
 		gone:    ctx.Done(),
-		window:  cfg.Window,
+		window:  cfg.Window(),
 		remote:  remote,
 		home:    make(map[int64]bool, len(home)),
 		foreign: make(map[broadcast.Mint]broadcast.Act),
@@ -67,18 +67,22 @@ func NewDoor(member Member, cfg broadcast.MeshConfig, remote, home []int64, told
 	for _, key := range home {
 		d.home[key] = true
 	}
-	cfg.Voice = PriorityFleet
-	cfg.Rounds = meshRounds
-	cfg.Timeout = meshDial
-	cfg.Idle = meshIdle
-	cfg.Told = d.told
-	probe, err := net.Listen("tcp", cfg.Addr)
+	meshCfg := broadcast.NewMeshConfig(cfg.Machine(), cfg.Addr(), cfg.Clock(),
+		broadcast.WithPeers(cfg.Peers()...),
+		broadcast.WithWindow(cfg.Window()),
+		broadcast.WithVoice(PriorityFleet),
+		broadcast.WithRounds(meshRounds),
+		broadcast.WithTimeout(meshDial),
+		broadcast.WithIdle(meshIdle),
+		broadcast.WithTold(d.told),
+	)
+	probe, err := net.Listen("tcp", meshCfg.Addr())
 	if err != nil {
 		cancel()
 		return nil, err
 	}
 	probe.Close()
-	d.mesh = broadcast.NewMesh(broadcast.MemberOf([]byte(cfg.Machine)), cfg)
+	d.mesh = broadcast.NewMesh(broadcast.MemberOf([]byte(meshCfg.Machine())), meshCfg)
 	go func() {
 		if err := d.mesh.Start(ctx); err != nil && ctx.Err() == nil && told != nil {
 			told(evt.Notice{Source: "room", Level: evt.LevelError, Text: "mesh: the gossip link died: " + err.Error()})
@@ -122,31 +126,31 @@ func (d *door) told(act broadcast.Act) {
 }
 
 func (d *door) absorb(act broadcast.Act) {
-	switch act.Kind {
+	switch act.Kind() {
 	case broadcast.ActClaim:
-		if !d.home[act.Key] {
+		if !d.home[act.Key()] {
 			d.foreign[mirrored(act)] = act
 			return
 		}
-		if d.in[act.Key] == nil {
-			d.in[act.Key] = make(map[broadcast.Mint]*repost)
+		if d.in[act.Key()] == nil {
+			d.in[act.Key()] = make(map[broadcast.Mint]*repost)
 		}
-		if _, ok := d.in[act.Key][act.Mint]; ok {
+		if _, ok := d.in[act.Key()][act.Mint()]; ok {
 			return
 		}
-		d.in[act.Key][act.Mint] = &repost{priority: act.Priority, remote: mirrored(act), machine: act.Machine}
-		d.member.Claim(act.Key, act.Priority, 0, d.entered(act.Key, act.Mint))
+		d.in[act.Key()][act.Mint()] = &repost{priority: act.Priority(), remote: mirrored(act), machine: act.Machine()}
+		d.member.Claim(act.Key(), act.Priority(), 0, d.entered(act.Key(), act.Mint()))
 	case broadcast.ActRelease:
-		if act.Claim == nil {
+		if act.Claim() == nil {
 			return
 		}
-		r, ok := d.in[act.Claim.Key][act.Claim.Mint]
+		r, ok := d.in[act.Claim().Key()][act.Claim().Mint()]
 		if !ok {
 			return
 		}
 		if r.admitted {
-			d.member.Release(r.claim, act.Priority)
-			d.forget(act.Claim.Key, act.Claim.Mint)
+			d.member.Release(r.claim, act.Priority())
+			d.forget(act.Claim().Key(), act.Claim().Mint())
 			return
 		}
 		r.released = true
@@ -204,10 +208,10 @@ func (d *door) Release(mint broadcast.Mint) {
 }
 
 func mirrored(act broadcast.Act) broadcast.Mint {
-	if act.Claim == nil {
+	if act.Claim() == nil {
 		return broadcast.Mint{}
 	}
-	return act.Claim.Mint
+	return act.Claim().Mint()
 }
 
 func (d *door) Holding(key int64, mint broadcast.Mint) (bool, string, int) {
@@ -251,7 +255,7 @@ func (d *door) Refused(key int64, mint broadcast.Mint, since int64) bool {
 	answer := make(chan bool, 1)
 	d.engine.Add(evt.Func(func(context.Context) {
 		for _, act := range d.mesh.Holders(key) {
-			if act.Claim != nil && act.Claim.Mint == mint {
+			if act.Claim() != nil && act.Claim().Mint() == mint {
 				answer <- false
 				return
 			}
@@ -302,7 +306,7 @@ func (d *door) sweep() {
 	for key := range d.home {
 		held := make(map[broadcast.Mint]bool)
 		for _, act := range d.mesh.Holders(key) {
-			held[act.Mint] = true
+			held[act.Mint()] = true
 		}
 		for mint, r := range d.in[key] {
 			if held[mint] {

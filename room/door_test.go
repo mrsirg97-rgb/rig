@@ -53,13 +53,10 @@ func doorMember(t *testing.T, home string) Member {
 }
 
 func doorConfig(machine, addr string, peers []string) broadcast.MeshConfig {
-	return broadcast.MeshConfig{
-		Machine: machine,
-		Addr:    addr,
-		Peers:   peers,
-		Clock:   broadcast.NewTickClock(doorTestPeriod, doorTestWindow, PriorityFleet),
-		Window:  doorTestWindow,
-	}
+	return broadcast.NewMeshConfig(machine, addr, broadcast.NewTickClock(doorTestPeriod, doorTestWindow, PriorityFleet),
+		broadcast.WithPeers(peers...),
+		broadcast.WithWindow(doorTestWindow),
+	)
 }
 
 func TestTheDoorAnswersTheMintsItSawUnderKeysItDoesNotCarry(t *testing.T) {
@@ -269,13 +266,10 @@ func TestTheDoorProvesAClaimRefusedPastTheHorizon(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer da.Close()
-	db, err := NewDoor(mb, broadcast.MeshConfig{
-		Machine: "b",
-		Addr:    addrs[1],
-		Peers:   []string{addrs[0]},
-		Clock:   broadcast.NewTickClock(doorTestPeriod/2, doorTestWindow, PriorityFleet),
-		Window:  doorTestWindow,
-	}, nil, []int64{key}, nil)
+	db, err := NewDoor(mb, broadcast.NewMeshConfig("b", addrs[1], broadcast.NewTickClock(doorTestPeriod/2, doorTestWindow, PriorityFleet),
+		broadcast.WithPeers(addrs[0]),
+		broadcast.WithWindow(doorTestWindow),
+	), nil, []int64{key}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -296,7 +290,7 @@ func TestTheDoorProvesAClaimRefusedPastTheHorizon(t *testing.T) {
 
 func TestTheRoomSWireCarriesNoMeshSignal(t *testing.T) {
 	enc := Codec()
-	_, err := enc.Encode(broadcast.NewMessage(1, true, broadcast.Act{Machine: "a"}))
+	_, err := enc.Encode(broadcast.NewMessage(1, true, broadcast.NewAct(broadcast.Mint{}, 0, 0, "a", "", nil, nil, nil)))
 	if err == nil || !strings.Contains(err.Error(), "does not cross a transport") {
 		t.Fatalf("the mesh's act must not cross the unix room's wire (the instances never join the mesh, so the wire cannot change): %v", err)
 	}

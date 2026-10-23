@@ -82,10 +82,13 @@ the five signals the instances exchange beside the protocol's own.
   one mesh member beside the unix room, constructed only when
   settings.json's `mesh` is set. The mesh member's id is the machine's
   (`broadcast.MemberOf` over the door address), not the unix room
-  member's process id. The config carries
-  `broadcast.NewTickClock(period, window, the fleet priority)` — the
+  member's process id. The config is built by `broadcast.NewMeshConfig`
+  over `broadcast.NewTickClock(period, window, the fleet priority)` — the
   machine's time counted in periods, no proof, nothing computed between
-  ticks — and the mesh's order is advisory: the key's home machine is its
+  ticks — with the peers and the window as options; the door adds its
+  voice, rounds, timeout, idle bound and told callback as options too, so
+  the built config is read-only and no caller can move it under the
+  mesh. The mesh's order is advisory: the key's home machine is its
   authority. The door mirrors the two orders: a fold hold on a key whose
   row names another machine's front posts into the mesh, and a foreign
   claim past the freshness horizon (the window) reposts into the unix

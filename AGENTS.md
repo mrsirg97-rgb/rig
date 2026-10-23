@@ -141,8 +141,8 @@ lot, and it is the bar.
   ```
 
   Not this: `cfg := MeshConfig{...}` and then `cfg.Voice = v`,
-  `cfg.Rounds = r` four lines later (`room/door.go` today, until rig
-  takes evt 0.5.0). The correctness reason: a struct filled in steps is
+  `cfg.Rounds = r` four lines later (`room/door.go` did, until 3.4.1
+  took evt 0.5.1). The correctness reason: a struct filled in steps is
   visible half-filled, a forgotten field is a silent zero, and anyone
   holding it can change it under the code that already read it. With
   options, every knob is named at the one call that builds it, defaults
