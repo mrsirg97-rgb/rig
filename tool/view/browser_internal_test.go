@@ -6,6 +6,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
+	"net/http"
+	"net/http/httptest"
+	"net/url"
 	"os"
 	"os/exec"
 	"strconv"
@@ -263,16 +267,91 @@ func TestBrowserParentHelper(t *testing.T) {
 	time.Sleep(60 * time.Second)
 }
 
-func TestTheProxyIsToldNotToBypassLoopback(t *testing.T) {
-	with := strings.Join((&browser{cfg: Config{Proxy: "http://127.0.0.1:8889"}}).argv("profile"), " ")
-	if !strings.Contains(with, "--proxy-server=http://127.0.0.1:8889") {
-		t.Fatalf("a configured proxy must ride the flags: %s", with)
+func TestTheBrowserReachesTheNetworkOnlyThroughItsEgress(t *testing.T) {
+	args := strings.Join((&browser{cfg: Config{Proxy: "http://127.0.0.1:8889"}}).argv("profile", "http://127.0.0.1:4321"), " ")
+	for _, want := range []string{
+		"--proxy-server=http://127.0.0.1:4321",
+		"--proxy-bypass-list=<-loopback>",
+		"--force-webrtc-ip-handling-policy=disable_non_proxied_udp",
+	} {
+		if !strings.Contains(args, want) {
+			t.Fatalf("the flags must carry %s: %s", want, args)
+		}
 	}
-	if !strings.Contains(with, "--proxy-bypass-list=<-loopback>") {
-		t.Fatalf("loopback must go through the proxy, not around it: %s", with)
+	if strings.Contains(args, "8889") {
+		t.Fatalf("the configured proxy is the egress's upstream, never the browser's: %s", args)
 	}
-	without := strings.Join((&browser{cfg: Config{}}).argv("profile"), " ")
-	if strings.Contains(without, "--proxy") {
-		t.Fatalf("no proxy is configured, so no proxy flag: %s", without)
+}
+
+func TestTheEgressDialsThePinAndKeepsTheName(t *testing.T) {
+	var host string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		host = r.Host
+		w.Write([]byte("ok"))
+	}))
+	defer srv.Close()
+	_, port, _ := net.SplitHostPort(srv.Listener.Addr().String())
+	var dialed string
+	var refused []string
+	e, err := newEgress(Config{
+		Lookup: func(ctx context.Context, h string) ([]string, error) {
+			if h == "inside.test" {
+				return []string{"10.0.0.7"}, nil
+			}
+			return []string{"93.184.216.34"}, nil
+		},
+		Dial: func(ctx context.Context, network, addr string) (net.Conn, error) {
+			dialed = addr
+			var d net.Dialer
+			return d.DialContext(ctx, network, srv.Listener.Addr().String())
+		},
+	}, func(raw, why string) { refused = append(refused, raw+": "+why) })
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer e.close()
+	proxy, _ := url.Parse(e.url())
+	client := &http.Client{Transport: &http.Transport{Proxy: http.ProxyURL(proxy)}}
+	res, err := client.Get("http://site.test:" + port + "/")
+	if err != nil {
+		t.Fatal(err)
+	}
+	res.Body.Close()
+	if dialed != "93.184.216.34:"+port || host != "site.test:"+port {
+		t.Fatalf("dialed %q with Host %q; want the pin, with the name kept", dialed, host)
+	}
+	dialed = ""
+	res, err = client.Get("http://inside.test:" + port + "/")
+	if err != nil {
+		t.Fatal(err)
+	}
+	res.Body.Close()
+	if res.StatusCode != http.StatusForbidden || dialed != "" || len(refused) != 1 || !strings.Contains(refused[0], "private address 10.0.0.7") {
+		t.Fatalf("a private answer refuses before any dial: status %d, dialed %q, refused %v", res.StatusCode, dialed, refused)
+	}
+}
+
+func TestTheEgressTunnelsThroughTheUpstreamByThePin(t *testing.T) {
+	asked := make(chan string, 1)
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		asked <- r.Method + " " + r.Host
+		w.WriteHeader(http.StatusForbidden)
+	}))
+	defer upstream.Close()
+	e, err := newEgress(Config{
+		Proxy:  upstream.URL,
+		Lookup: func(ctx context.Context, h string) ([]string, error) { return []string{"93.184.216.34"}, nil },
+	}, func(string, string) {})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer e.close()
+	proxy, _ := url.Parse(e.url())
+	client := &http.Client{Transport: &http.Transport{Proxy: http.ProxyURL(proxy)}}
+	if _, err := client.Get("https://site.test/"); err == nil {
+		t.Fatal("the upstream refused the tunnel, so the fetch must fail")
+	}
+	if got := <-asked; got != "CONNECT 93.184.216.34:443" {
+		t.Fatalf("the upstream was asked %q; it must be handed the pin, never the name it would resolve again", got)
 	}
 }

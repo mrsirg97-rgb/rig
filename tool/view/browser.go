@@ -69,6 +69,7 @@ type deathNote struct {
 type bProc struct {
 	cmd     *exec.Cmd
 	conn    *cdpConn
+	egress  *egress
 	session string
 	profile string
 	stderr  *tailBuffer
@@ -343,23 +344,30 @@ func (b *browser) start(ctx context.Context) (*bProc, error) {
 	if err != nil {
 		return nil, err
 	}
+	out, err := newEgress(b.cfg, b.noteRefusal)
+	if err != nil {
+		return nil, err
+	}
 	profile, err := os.MkdirTemp("", "rig-browser-")
 	if err != nil {
+		out.close()
 		return nil, fmt.Errorf("view: the browser's profile directory: %v", err)
 	}
 	cmdR, cmdW, err := os.Pipe()
 	if err != nil {
+		out.close()
 		os.RemoveAll(profile)
 		return nil, fmt.Errorf("view: the browser's pipe: %v", err)
 	}
 	resR, resW, err := os.Pipe()
 	if err != nil {
+		out.close()
 		cmdR.Close()
 		cmdW.Close()
 		os.RemoveAll(profile)
 		return nil, fmt.Errorf("view: the browser's pipe: %v", err)
 	}
-	cmd := exec.Command(bin, b.argv(profile)...)
+	cmd := exec.Command(bin, b.argv(profile, out.url())...)
 	cmd.Dir = b.cfg.Cwd
 	attr := &syscall.SysProcAttr{Setpgid: true}
 	execwrap.ParentDeathAttr(attr)
@@ -368,6 +376,7 @@ func (b *browser) start(ctx context.Context) (*bProc, error) {
 	tail := &tailBuffer{}
 	cmd.Stderr = tail
 	if err := cmd.Start(); err != nil {
+		out.close()
 		cmdR.Close()
 		cmdW.Close()
 		resR.Close()
@@ -380,6 +389,7 @@ func (b *browser) start(ctx context.Context) (*bProc, error) {
 	p := &bProc{
 		cmd:     cmd,
 		conn:    newCDP(cmdW, resR),
+		egress:  out,
 		profile: profile,
 		stderr:  tail,
 		dead:    make(chan struct{}),
@@ -415,6 +425,7 @@ func (b *browser) waitLoop(p *bProc) {
 	}
 	b.mu.Unlock()
 	p.conn.close()
+	p.egress.close()
 	close(p.dead)
 	if current {
 		os.RemoveAll(p.profile)
@@ -428,6 +439,7 @@ func (b *browser) teardown(p *bProc) {
 	}
 	b.mu.Unlock()
 	p.conn.close()
+	p.egress.close()
 	if p.cmd.Process != nil {
 		syscall.Kill(-p.cmd.Process.Pid, syscall.SIGKILL)
 	}

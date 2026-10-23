@@ -49,6 +49,7 @@ type Config struct {
 	Cwd     string
 	RigHome string
 	Lookup  LookupFn
+	Dial    DialFn
 }
 
 type Clip struct {

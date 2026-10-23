@@ -57,16 +57,11 @@ type fetch struct {
 func newFetch(cfg FetchConfig) *fetch {
 	f := &fetch{
 		proxy:    cfg.Proxy,
-		lookup:   cfg.Lookup,
+		lookup:   systemLookup(cfg.Lookup),
 		maxBytes: cfg.MaxBytes,
 	}
 	if f.maxBytes == 0 {
 		f.maxBytes = maxBytesDefault
-	}
-	if f.lookup == nil {
-		f.lookup = func(ctx context.Context, host string) ([]string, error) {
-			return net.DefaultResolver.LookupHost(ctx, host)
-		}
 	}
 	if cfg.Trafilatura != nil {
 		f.traf = *cfg.Trafilatura
@@ -167,24 +162,31 @@ func guardedURL(ctx context.Context, raw string, base *url.URL, lookup LookupFn)
 	if u.Scheme != "http" && u.Scheme != "https" {
 		return nil, nil, fmt.Errorf("only http(s) is fetchable, got %s", u.Scheme)
 	}
-	host := u.Hostname()
+	pins, err := pinHost(ctx, u.Hostname(), lookup)
+	if err != nil {
+		return nil, nil, err
+	}
+	return u, pins, nil
+}
+
+func pinHost(ctx context.Context, host string, lookup LookupFn) ([]netip.Addr, error) {
 	addrs, err := lookup(ctx, host)
 	if err != nil {
 		if ctxErr := ctx.Err(); ctxErr != nil {
-			return nil, nil, ctxErr
+			return nil, ctxErr
 		}
-		return nil, nil, fmt.Errorf("cannot resolve host: %s (%v)", host, err)
+		return nil, fmt.Errorf("cannot resolve host: %s (%v)", host, err)
 	}
 	if len(addrs) == 0 {
-		return nil, nil, fmt.Errorf("cannot resolve host: %s", host)
+		return nil, fmt.Errorf("cannot resolve host: %s", host)
 	}
 	pins := make([]netip.Addr, 0, len(addrs))
 	for _, a := range addrs {
 		p, ok := publicAddr(a)
 		if !ok {
-			return nil, nil, fmt.Errorf("refused: %s resolves to private address %s", host, a)
+			return nil, fmt.Errorf("refused: %s resolves to private address %s", host, a)
 		}
 		pins = append(pins, p)
 	}
-	return u, pins, nil
+	return pins, nil
 }

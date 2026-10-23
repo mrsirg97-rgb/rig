@@ -19,8 +19,9 @@ its reference. The tool is registered only for a model row with `vision`
   decode live in the verb, so a Go caller and the model meet the same words
   and the same refusal; a cancelled ctx refuses before the filesystem is
   touched. `New(blobsDir)` is the image-only shape; `NewWith(Config)`
-  carries the knobs (`FFmpeg`, `Browser`, `Proxy`, `Cwd`, `RigHome`, and a
-  lookup seam for the SSRF guard). The struct is unexported.
+  carries the knobs (`FFmpeg`, `Browser`, `Proxy`, `Cwd`, `RigHome`, and
+  the lookup and dial seams for the SSRF guard and the egress). The struct
+  is unexported.
 - `view.go`: the action door, the image path, and `publish` — resample to
   the 1568 bound, re-encode by the lossy/opaque rule, write the blob once,
   format the marker. Video frames and screenshots hand `publish` pixels;
@@ -39,9 +40,17 @@ its reference. The tool is registered only for a model row with `vision`
   the ready polls, the element snapshot, the screenshot, the exit words.
 - `browserguard.go`: the one guard (web's SSRF guard for `http(s)`,
   pathguard for `file://`, `data:`/`blob:` allowed), the binary resolution,
-  and the flags (`--proxy-bypass-list=<-loopback>` with a proxy, so loopback
-  rides it too). The CDP `Fetch` domain pauses every request, not only
+  and the flags. The CDP `Fetch` domain pauses every request, not only
   `open`'s, and hands each one to this guard.
+- `browseregress.go`: the browser's only way out. A forward proxy on
+  loopback, one per browser process, that Chromium is pointed at with no
+  bypass (`--proxy-bypass-list=<-loopback>`, WebRTC held to proxied UDP).
+  Every CONNECT and proxied request resolves its host through
+  `web.PinHost`, refuses a private answer, and dials only the pinned
+  address, so the address dialed is the address checked: a DNS rebind
+  between the guard and the dial, and a WebSocket the `Fetch` domain never
+  pauses, both meet it. A configured `webFetchProxy` is its upstream and is
+  handed the pin, never the name.
 - `browserreply.go`: the reply's lines — the page line, the capped element
   list, and the sanitiser that strips control characters and `[[rig:`.
 - `cdp.go`: the DevTools client on `--remote-debugging-pipe` — NUL-delimited

@@ -36,10 +36,14 @@ refusal names both. Every request is guarded, not only the one the model
 asked to open: the CDP `Fetch` domain pauses each one and it goes through
 `tool/web`'s SSRF door — a redirect hop, a link, an image or a `fetch()` to
 a private address is failed and named in the step's reply — while `file://`
-resolves through pathguard and `data:`/`blob:` continue. A configured
-`webFetchProxy` rides `--proxy-server` with
-`--proxy-bypass-list=<-loopback>`, because Chromium's default bypass list
-would otherwise skip the proxy for loopback. A parent-death signal takes
+resolves through pathguard and `data:`/`blob:` continue. Under that, the
+browser has no network of its own: Chromium's only route out is a forward
+proxy rig runs on loopback for it, with no loopback bypass and WebRTC held
+to proxied UDP. The egress resolves each host once through `web.PinHost`,
+refuses a private answer, and dials only the pinned address, so a DNS
+rebind between the check and the dial, and a WebSocket the `Fetch` domain
+never pauses, reach nothing. A configured `webFetchProxy` is the egress's
+upstream and is handed the pin, not the name. A parent-death signal takes
 the browser down with a SIGKILLed rig; the python kernel had the same gap
 and gets the same one. The page's text is untrusted: names and titles lose
 their control characters and `[[rig:` prefixes, and the marker is written

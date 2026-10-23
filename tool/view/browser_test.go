@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -37,11 +38,25 @@ func requireBrowser(t *testing.T) string {
 	return ""
 }
 
+const fakePublic = "93.184.216.34"
+
 func loopbackLookup(ctx context.Context, host string) ([]string, error) {
 	if host == "localhost" {
 		return []string{"127.0.0.1"}, nil
 	}
-	return []string{"93.184.216.34"}, nil
+	return []string{fakePublic}, nil
+}
+
+func publicDial(ctx context.Context, network, addr string) (net.Conn, error) {
+	host, port, err := net.SplitHostPort(addr)
+	if err != nil {
+		return nil, err
+	}
+	if host == fakePublic {
+		addr = net.JoinHostPort("127.0.0.1", port)
+	}
+	var d net.Dialer
+	return d.DialContext(ctx, network, addr)
 }
 
 type pageServer struct {
@@ -108,6 +123,7 @@ func browserTool(t *testing.T, blobs string) view.View {
 		Blobs:   blobs,
 		Browser: bin,
 		Lookup:  loopbackLookup,
+		Dial:    publicDial,
 		Cwd:     t.TempDir(),
 		RigHome: t.TempDir(),
 	})
@@ -375,5 +391,61 @@ func TestBrowserStepsAreSerialWithinOneSession(t *testing.T) {
 		if err != nil {
 			t.Fatalf("a serial step failed: %v", err)
 		}
+	}
+}
+
+func TestTheBrowserDialsTheAddressItCheckedNotASecondAnswer(t *testing.T) {
+	var hits atomic.Int64
+	page := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hits.Add(1)
+		fmt.Fprint(w, `<!doctype html><title>rebound</title><button>Go</button>`)
+	}))
+	defer page.Close()
+	port := page.URL[strings.LastIndex(page.URL, ":")+1:]
+	const checks = 2
+	var asked atomic.Int64
+	rebind := func(ctx context.Context, host string) ([]string, error) {
+		if host == "rebind.test" && asked.Add(1) > checks {
+			return []string{"127.0.0.1"}, nil
+		}
+		return loopbackLookup(ctx, host)
+	}
+	tl := view.NewWith(view.Config{
+		Blobs:   realTemp(t),
+		Browser: requireBrowser(t),
+		Lookup:  rebind,
+		Dial:    publicDial,
+		Cwd:     t.TempDir(),
+		RigHome: t.TempDir(),
+	})
+	defer tl.Close()
+	out, err := tl.Exec(context.Background(), stepArgs(t, map[string]any{"step": "open", "url": "http://rebind.test:" + port + "/"}))
+	t.Logf("open: %s (err=%v)", out, err)
+	if got := hits.Load(); got != 0 {
+		t.Fatalf("a host that answered public to the checks and loopback to the dial reached the server %d time(s)", got)
+	}
+	if !strings.Contains(out+fmt.Sprint(err), "private address 127.0.0.1") {
+		t.Fatalf("the refused dial must be named: %s (err=%v)", out, err)
+	}
+}
+
+func TestAWebSocketRidesTheSameWall(t *testing.T) {
+	tl := browserTool(t, realTemp(t))
+	defer tl.Close()
+	var hits atomic.Int64
+	leak := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hits.Add(1)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer leak.Close()
+	port := leak.URL[strings.LastIndex(leak.URL, ":")+1:]
+	page := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprintf(w, `<!doctype html><title>socket</title><script>try { new WebSocket(%q) } catch (e) {}</script>`, "ws://localhost:"+port+"/socket")
+	}))
+	defer page.Close()
+	execStep(t, tl, map[string]any{"step": "open", "url": page.URL})
+	execStep(t, tl, map[string]any{"step": "shot"})
+	if got := hits.Load(); got != 0 {
+		t.Fatalf("a WebSocket reached the loopback server %d time(s)", got)
 	}
 }

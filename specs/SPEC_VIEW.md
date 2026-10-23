@@ -90,6 +90,7 @@ tool/view/                       the tool
   browserpage.go                 handshake, navigate, ready polls, snapshot,
                                  screenshot, the death description
   browserguard.go                the URL walls, the binary, the flags
+  browseregress.go               the browser's only route out: resolve, pin, dial
   browserreply.go                the page line, the element list, the sanitiser
   cdp.go                         the DevTools pipe client (NUL-delimited JSON)
   page.js                        the element snapshot the page evaluates
@@ -245,7 +246,7 @@ store/scheduler/jail.go          RIG_FFMPEG/RIG_BROWSER on the jail env and a
   start at all; the jail, not Chromium's sandbox, is the worker's boundary.
   `--disable-background-networking` keeps an idle browser off the network,
   `--window-size=1280x800` is under the 1568 bound so a screenshot needs no
-  resample, and `--proxy-server` carries `webFetchProxy` when it is set.
+  resample, and `--proxy-server` names the browser's egress (below).
 - **Steps**: `open url`, `click ref`, `type ref text`, `scroll amount`
   (default one viewport), `shot`, `close`. Every step replies with
   `page <url> — <title>` and the numbered interactive elements
@@ -264,9 +265,20 @@ store/scheduler/jail.go          RIG_FFMPEG/RIG_BROWSER on the jail env and a
   arrives as its own paused request, so every hop is vetted), `file://`
   through the resolve-and-pathguard check, `data:` and `blob:` continued,
   everything else failed with `BlockedByClient` and named in the step's
-  reply. `--proxy-server` carries `webFetchProxy` when configured, and
-  `--proxy-bypass-list=<-loopback>` keeps loopback inside it: Chromium's
-  default bypass list does not.
+  reply.
+- **The address dialed is the address checked**: a check that resolves a
+  name and a browser that resolves it again can disagree (a DNS rebind),
+  and a WebSocket handshake is never paused by `Fetch`. So Chromium has no
+  network of its own: `--proxy-server` names a forward proxy rig runs on
+  loopback for that browser process, `--proxy-bypass-list=<-loopback>`
+  removes Chromium's default loopback exemption, and
+  `--force-webrtc-ip-handling-policy=disable_non_proxied_udp` keeps WebRTC
+  inside it. The egress resolves each CONNECT and proxied request's host
+  once through `web.PinHost`, refuses a private answer (named in the step's
+  reply like the `Fetch` refusals), and dials only the pinned address,
+  keeping the name in `Host` and in TLS. `webFetchProxy`, when set, is the
+  egress's upstream: it is handed `CONNECT <pin>:<port>`, never a name it
+  would resolve again.
 - **The page is untrusted text**: the title and the accessible names are
   sanitised (no control characters, no `[[rig:` prefix, 80 runes), and the
   reply's marker is written last, so the only marker the provider can honor
@@ -309,7 +321,14 @@ Named cases, the real filesystem in `t.TempDir()`, the real encoders:
 - An `httptest` page whose redirect, link, image and `fetch()` point at a
   second server named `localhost` (private to the guard): every one is
   refused, each is named in a step's reply, and the second server sees zero
-  requests; the proxy flags carry the loopback bypass.
+  requests; the flags point Chromium at its egress with no loopback bypass.
+- The egress: a proxied request dials the pinned address with the name
+  kept in `Host`, a private answer refuses before any dial and is named,
+  and an upstream proxy is asked `CONNECT <pin>:443`, not the name. A host
+  that answers public to the checks and loopback to the dial reaches
+  nothing and the refusal names the private address; a WebSocket at a
+  loopback server reaches nothing. Both fail when the egress flags are
+  removed, so they prove the egress and not the resolver.
 - The browser cases and the ffmpeg cases skip with the binary's name when it
   is absent; CI installs both as fixtures (the python venv's shape), so they
   run there.
@@ -338,8 +357,9 @@ Named cases, the real filesystem in `t.TempDir()`, the real encoders:
 ## scope
 
 New: `tool/view/video.go`, `tool/view/sheet.go`, `tool/view/browser.go`,
-`tool/view/cdp.go`, `tool/view/page.js`, `tool/web/guard.go` (the SSRF guard
-as one exported door), this spec, and the package docs.
+`tool/view/cdp.go`, `tool/view/page.js`, `tool/view/browseregress.go`,
+`tool/web/guard.go` (the SSRF guard and its host pin as exported doors),
+this spec, and the package docs.
 Changed: `tool/view/view.go` (the door, `publish`, the interface),
 `imagemarker` (`ParseLast`), the two providers (the last-line rule),
 `config` (`ffmpeg`, `browser`), `cmd/rig` (one construction, the close, the

@@ -77,7 +77,7 @@ func (b *browser) binary() (string, error) {
 	return p, nil
 }
 
-func (b *browser) argv(profile string) []string {
+func (b *browser) argv(profile, egress string) []string {
 	args := []string{
 		"--remote-debugging-pipe",
 		"--headless",
@@ -90,10 +90,12 @@ func (b *browser) argv(profile string) []string {
 		"--mute-audio",
 		fmt.Sprintf("--window-size=%d,%d", viewportW, viewportH),
 	}
-	if b.cfg.Proxy != "" {
-		args = append(args, "--proxy-server="+b.cfg.Proxy, "--proxy-bypass-list=<-loopback>")
-	}
-	args = append(args, "--no-sandbox")
+	args = append(args,
+		"--proxy-server="+egress,
+		"--proxy-bypass-list=<-loopback>",
+		"--force-webrtc-ip-handling-policy=disable_non_proxied_udp",
+		"--no-sandbox",
+	)
 	return args
 }
 
