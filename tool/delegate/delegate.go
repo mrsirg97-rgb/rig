@@ -38,6 +38,7 @@ type Opts struct {
 	DefaultModel string
 	Sandbox      string
 	SandboxBinds []string
+	Python       string
 	Allow        []string
 	Fetch        sched.Fetch
 	Spawn        sched.Spawn
@@ -279,6 +280,7 @@ func (a *adapter) run(ctx context.Context, c delegateCall) (string, error) {
 		Timeout:       noTimeout,
 		Sandbox:       a.Sandbox,
 		SandboxBinds:  a.SandboxBinds,
+		Python:        a.Python,
 		RigHome:       a.RigHome,
 		StateDir:      a.StateDir,
 		Allow:         doingAllow(a.Allow),

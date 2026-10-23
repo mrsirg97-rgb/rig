@@ -17,6 +17,7 @@ type workerWiring struct {
 	DefaultModel string
 	Sandbox      string
 	SandboxBinds []string
+	Python       string
 	Allow        []string
 	Fetch        sched.Fetch
 	Spawn        sched.Spawn

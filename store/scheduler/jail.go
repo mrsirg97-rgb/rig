@@ -21,10 +21,13 @@ type JailProfile struct {
 	KernelDir string
 	SockPath  string
 	Binds     []string
+	Python    string
 	StateDir  string
 	Allow     string
 	Env       []string
 }
+
+var jailRO = []string{"/usr", "/lib", "/lib64", "/bin", "/sbin", "/etc"}
 
 func JailArgv(p JailProfile) ([]string, error) {
 	argv := []string{
@@ -38,13 +41,10 @@ func JailArgv(p JailProfile) ([]string, error) {
 		}
 		argv = append(argv, "--setenv", k, v)
 	}
+	for _, root := range jailRO {
+		argv = append(argv, "--ro-bind", root, root)
+	}
 	argv = append(argv,
-		"--ro-bind", "/usr", "/usr",
-		"--ro-bind", "/lib", "/lib",
-		"--ro-bind", "/lib64", "/lib64",
-		"--ro-bind", "/bin", "/bin",
-		"--ro-bind", "/sbin", "/sbin",
-		"--ro-bind", "/etc", "/etc",
 		"--proc", "/proc",
 		"--dev", "/dev",
 		"--tmpfs", "/tmp",
@@ -58,16 +58,22 @@ func JailArgv(p JailProfile) ([]string, error) {
 	if p.StateDir != "" {
 		argv = append(argv, "--bind", p.StateDir, filepath.Join(p.Cwd, ".rig-job", "sessions"))
 	}
+	visible := []string{p.Cwd, p.KernelDir}
+	visible = append(visible, jailRO...)
 	for i, entry := range p.Binds {
 		src, rw, err := parseBind(entry, i)
 		if err != nil {
 			return nil, err
 		}
+		visible = append(visible, src)
 		if rw {
 			argv = append(argv, "--bind", src, src)
 		} else {
 			argv = append(argv, "--ro-bind", src, src)
 		}
+	}
+	if root := venvRoot(p.Python); root != "" && !visibleUnder(root, visible) {
+		argv = append(argv, "--ro-bind", root, root)
 	}
 	argv = append(argv,
 		"--chdir", p.Cwd,
@@ -86,6 +92,26 @@ func JailArgv(p JailProfile) ([]string, error) {
 		argv = append(argv, "-allow", p.Allow)
 	}
 	return argv, nil
+}
+
+func venvRoot(python string) string {
+	if python == "" || !filepath.IsAbs(python) {
+		return ""
+	}
+	root := filepath.Clean(filepath.Dir(filepath.Dir(python)))
+	if _, err := os.Stat(filepath.Join(root, "pyvenv.cfg")); err != nil {
+		return ""
+	}
+	return root
+}
+
+func visibleUnder(root string, roots []string) bool {
+	for _, r := range roots {
+		if r != "" && (root == r || strings.HasPrefix(root, r+"/")) {
+			return true
+		}
+	}
+	return false
 }
 
 func parseBind(entry string, i int) (string, bool, error) {
@@ -191,6 +217,9 @@ func jailSpawn(opts RunOpts, cwd, sockID string, workerCmd []string, model, effo
 		"RIG_HOME=" + scratch,
 	}
 	env = append(env, modelEnv(opts, model)...)
+	if opts.Python != "" {
+		env = append(env, "RIG_PYTHON="+opts.Python)
+	}
 	if fleet != nil {
 		env = append(env, fleetEnv(fleet)...)
 	}
@@ -206,6 +235,7 @@ func jailSpawn(opts RunOpts, cwd, sockID string, workerCmd []string, model, effo
 		KernelDir: kernelDir,
 		SockPath:  sock,
 		Binds:     opts.SandboxBinds,
+		Python:    opts.Python,
 		StateDir:  opts.StateDir,
 		Allow:     allow,
 		Env:       env,

@@ -60,6 +60,7 @@ type Opts struct {
 	SwapURL      string
 	Sandbox      string
 	SandboxBinds []string
+	Python       string
 	RigHome      string
 	StateDir     string
 	Allow        []string

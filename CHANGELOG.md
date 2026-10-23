@@ -1,4 +1,57 @@
 # Changelog
+## [3.3.4]: the suite's slow blocks cost what they prove, and a jailed worker runs the operator's interpreter
+
+The suite's 7m25s build job was one shape, not one test: 108 tests took
+74% of every test-second, and the biggest of them measured the wall
+clock for a query whose proof was its plan. The audit measured first —
+CI's shape (`taskset -c 0-3`, `-race -p 2`) as the number to beat, not
+the 48-core one — then fixed each block by its cause: the listing test
+drops its timing half (the `EXPLAIN QUERY PLAN` assertion is the
+proof); `store/todo`'s and `store/scheduler`'s compaction fixtures
+cross their real thresholds through one shared age helper that writes
+its events in a single transaction instead of a thousand fsync'd ones;
+the precedence test decides the proxy without dialling a public
+address; the package binary is built once per tree instead of 49
+times; the view and graph fixtures stop costing more than their
+bounds; the delegate snapshot flake waits on the worker's return
+event, not on `t.TempDir`'s cleanup. `room`'s member `ask` was a live
+data race, not a slow test: its result now crosses the channel. Two
+tests folded into the ones that already prove their behavior, the PR
+naming the covering test for each. The runner's build job landed at
+287–292s (4m47–52s) with the same behaviors green.
+
+The CI runner now carries the python kernel's venv as a fixture, the
+way it installs bubblewrap, and `testenv.SeedKernel` links it into
+every throwaway home: the suite's one PyPI dial is gone, and the
+jail's python door stops skipping.
+
+That door was hiding a bug. `jailSpawn` builds the worker's env from
+scratch (`bwrap --clearenv`, then PATH, HOME=/tmp, RIG_HOME, the model
+row's `RIG_MODEL_*`, the fleet vars), so the operator's interpreter —
+resolved once as `RIG_PYTHON` over `settings.python` — never crossed
+into the jail. The worker's python tool fell back to
+`$HOME/.pi/agent/kernel-venv` inside the jail's empty /tmp, tried to
+bootstrap ipython/numpy/pandas from PyPI, and the netless jail refused
+it (`Temporary failure in name resolution`). The resolved interpreter
+is now one field the runner is constructed with, threaded where
+Sandbox and SandboxBinds already ride (the root's wiring, the
+delegate, the swarm, the review fire, `run-job`); `jailSpawn` puts
+`RIG_PYTHON` on the jail env when it is set, and the interpreter's
+venv root — the directory holding its `pyvenv.cfg` — is ro-bound when
+it is not already visible (the cwd, the kernel dir, `sandboxBinds`,
+the system binds), so the door runs the operator's kernel with its
+venv read-only. No interpreter configured: the worker behaves as
+today and the jail's absent network is the named refusal. The landlock
+and off profiles are unchanged.
+
+`TestJailPythonSeesTheSameWalls` runs for the first time: the fixture
+passes the interpreter as the field rather than a dropped
+`t.Setenv("RIG_PYTHON")`, drops the venv from the binds (the jail
+carries it), and asserts what the jail actually holds — HOME is /tmp,
+`sys.prefix` is the operator's venv and read-only, and the cwd write
+lands. The old `home_exists: False` never held: the jail's HOME is
+/tmp, and it exists.
+
 ## [3.3.2]: the decision train is watched, not timed
 
 j491 died at the cell cap: `laya.train: timed out after 600s`, with rows

@@ -140,7 +140,7 @@ func TestTheReviewFireNamesTheDeathAndTheRunLog(t *testing.T) {
 		}, nil
 	}
 	fleet(r)
-	fire := r.reviewFire(home, store.DB{}, "http://127.0.0.1:1", "rig", t.TempDir(), "", nil, del)
+	fire := r.reviewFire(home, store.DB{}, "http://127.0.0.1:1", "rig", t.TempDir(), "", nil, "", del)
 	_, err := fire(context.Background(), "review these", r.room.Mint())
 	if err == nil {
 		t.Fatal("a dead fire is an error")
@@ -168,7 +168,7 @@ func TestTheReviewFireAsksForTheRowsLowestEffort(t *testing.T) {
 		return sched.DelegateResult{Model: "ox-alpha", Exit: 0}, nil
 	}
 	fleet(r)
-	fire := r.reviewFire(t.TempDir(), store.DB{}, "http://127.0.0.1:1", "rig", t.TempDir(), "", nil, del)
+	fire := r.reviewFire(t.TempDir(), store.DB{}, "http://127.0.0.1:1", "rig", t.TempDir(), "", nil, "", del)
 	if _, err := fire(context.Background(), "review these", r.room.Mint()); err != nil {
 		t.Fatal(err)
 	}
@@ -178,7 +178,7 @@ func TestTheReviewFireAsksForTheRowsLowestEffort(t *testing.T) {
 
 	r2 := &root{activeID: "ox-alpha", cwd: t.TempDir(), row: models.Model{ID: "ox-alpha"}}
 	fleet(r2)
-	fire2 := r2.reviewFire(t.TempDir(), store.DB{}, "http://127.0.0.1:1", "rig", t.TempDir(), "", nil, del)
+	fire2 := r2.reviewFire(t.TempDir(), store.DB{}, "http://127.0.0.1:1", "rig", t.TempDir(), "", nil, "", del)
 	seen = sched.DelegateInput{}
 	if _, err := fire2(context.Background(), "review these", r2.room.Mint()); err != nil {
 		t.Fatal(err)
@@ -194,7 +194,7 @@ func TestAHealthyReviewFireReturnsTheModel(t *testing.T) {
 		return sched.DelegateResult{Model: "ox-alpha", Exit: 0}, nil
 	}
 	fleet(r)
-	fire := r.reviewFire(t.TempDir(), store.DB{}, "http://127.0.0.1:1", "rig", t.TempDir(), "", nil, del)
+	fire := r.reviewFire(t.TempDir(), store.DB{}, "http://127.0.0.1:1", "rig", t.TempDir(), "", nil, "", del)
 	model, err := fire(context.Background(), "review these", r.room.Mint())
 	if err != nil {
 		t.Fatal(err)

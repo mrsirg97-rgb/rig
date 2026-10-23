@@ -44,6 +44,7 @@ type RunOpts struct {
 	Now          func() time.Time
 	Sandbox      string
 	SandboxBinds []string
+	Python       string
 	RigHome      string
 	StateDir     string
 	LandlockABI  func() (int, error)

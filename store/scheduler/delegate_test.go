@@ -147,6 +147,40 @@ func TestAJailedDelegateCarriesTheFleetEnvAndItsMemberId(t *testing.T) {
 	}
 }
 
+func TestAJailedDelegateCarriesTheInterpreter(t *testing.T) {
+	linuxJail(t)
+	rigHome := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(rigHome, "kernel"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	venv := t.TempDir()
+	py := venvAt(t, venv)
+	shimDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(shimDir, "bwrap"), []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", shimDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	spawn := &delegateSpawn{result: sched.SpawnResult{Exit: 0}}
+	in := delegateInput(t, delegateFetch(t, false, ""), spawn.spawn, func(in *sched.DelegateInput) {
+		in.Sandbox = "jailed"
+		in.RigHome = rigHome
+		in.Python = py
+	})
+	if _, err := sched.Delegate(in); err != nil {
+		t.Fatalf("delegate: %v", err)
+	}
+	if spawn.count() != 1 {
+		t.Fatalf("spawn calls = %d, want 1", spawn.count())
+	}
+	argv := spawn.calls[0].Argv
+	if !carriesSetenv(argv, "RIG_PYTHON", py) {
+		t.Fatalf("the jailed delegate worker must carry the operator's interpreter, got %v", argv)
+	}
+	if !strings.Contains(strings.Join(argv, " "), "--ro-bind "+venv+" "+venv) {
+		t.Fatalf("the interpreter's venv must ride the jail read-only, got %v", argv)
+	}
+}
+
 func TestDelegateHolderSkipStillRefuses(t *testing.T) {
 	spawn := &delegateSpawn{result: sched.SpawnResult{Exit: 0}}
 	in := delegateInput(t, delegateFetch(t, true, ""), spawn.spawn, nil)

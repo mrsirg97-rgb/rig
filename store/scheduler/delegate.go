@@ -36,6 +36,7 @@ type DelegateInput struct {
 	Timeout       time.Duration
 	Sandbox       string
 	SandboxBinds  []string
+	Python        string
 	RigHome       string
 	StateDir      string
 	Allow         []string
@@ -423,6 +424,7 @@ func (in DelegateInput) toRunOpts() RunOpts {
 		RigHome:      in.RigHome,
 		Sandbox:      in.Sandbox,
 		SandboxBinds: in.SandboxBinds,
+		Python:       in.Python,
 		StateDir:     in.StateDir,
 		LandlockABI:  in.LandlockABI,
 		SwapURL:      in.SwapURL,

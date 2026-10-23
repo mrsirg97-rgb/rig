@@ -54,7 +54,7 @@ import (
 	webtool "github.com/mrsirg97-rgb/rig/v3/tool/web"
 )
 
-const Version = "3.3.2"
+const Version = "3.3.4"
 
 func claimPriority(prompt string, served bool) (int, error) {
 	if v := os.Getenv("RIG_PRIORITY"); v != "" {
@@ -380,10 +380,11 @@ func rigMain() int {
 	defer stop()
 
 	rt := runtimeTable(cfg.Models, modelID, row)
+	python := envOr("RIG_PYTHON", cfg.Settings.Python)
 	wiring := workerWiring{
 		DB: scdb, Home: schedHome, RigHome: cfgDir, StateDir: filepath.Join(cfgDir, "sessions"),
 		SwapURL: swapURL, WorkerCmd: []string{self}, DefaultModel: modelID,
-		Sandbox: cfg.Settings.Sandbox, SandboxBinds: cfg.Settings.SandboxBinds, Allow: allowList,
+		Sandbox: cfg.Settings.Sandbox, SandboxBinds: cfg.Settings.SandboxBinds, Python: python, Allow: allowList,
 		Fetch: sched.RealFetch(0), Spawn: sched.RealSpawn, Models: func() models.Table { return rt }, Room: fleetroom,
 	}
 	piped := *prompt != ""
@@ -392,13 +393,13 @@ func rigMain() int {
 		Ctx: ctx, Await: piped,
 		DB: wiring.DB, Home: wiring.Home, RigHome: wiring.RigHome, StateDir: wiring.StateDir,
 		SwapURL: wiring.SwapURL, WorkerCmd: wiring.WorkerCmd, DefaultModel: wiring.DefaultModel,
-		Sandbox: wiring.Sandbox, SandboxBinds: wiring.SandboxBinds, Allow: wiring.Allow,
+		Sandbox: wiring.Sandbox, SandboxBinds: wiring.SandboxBinds, Python: wiring.Python, Allow: wiring.Allow,
 		Fetch: wiring.Fetch, Spawn: wiring.Spawn, Models: wiring.Models, Room: wiring.Room,
 		Cap: handoff,
 	})
 
 	py := pythontool.New(del)
-	if python := envOr("RIG_PYTHON", cfg.Settings.Python); python != "" {
+	if python != "" {
 		py = pythontool.NewWith(python, pythontool.DefaultHost(), del, cwd)
 	}
 	defer py.Close()
@@ -551,7 +552,7 @@ func rigMain() int {
 			},
 			Cwd:       cwd,
 			WorkerCmd: wiring.WorkerCmd, Fetch: wiring.Fetch, Spawn: wiring.Spawn, SwapURL: wiring.SwapURL,
-			Sandbox: wiring.Sandbox, SandboxBinds: wiring.SandboxBinds, RigHome: wiring.RigHome, StateDir: wiring.StateDir,
+			Sandbox: wiring.Sandbox, SandboxBinds: wiring.SandboxBinds, Python: wiring.Python, RigHome: wiring.RigHome, StateDir: wiring.StateDir,
 			Allow: wiring.Allow, DefaultModel: wiring.DefaultModel,
 			Models: func() models.Table { return r.runtime },
 			Engine: r.engine, Room: r.room, Cap: handoff,
@@ -676,7 +677,7 @@ func rigMain() int {
 			r.decQ = decision.NewQueue(dec, sink, reviews, drec, nil, voice)
 		} else {
 			rev := decision.NewReviewer(ctx, r.engine, reviews,
-				r.reviewFire(schedHome, scdb, swapURL, self, cfgDir, cfg.Settings.Sandbox, cfg.Settings.SandboxBinds, sched.Delegate),
+				r.reviewFire(schedHome, scdb, swapURL, self, cfgDir, cfg.Settings.Sandbox, cfg.Settings.SandboxBinds, python, sched.Delegate),
 				cfg.Settings.ReviewBatchOrDefault(), row, fleetroom, scope.Key(cwd))
 			r.decRev = rev
 			r.decQ = decision.NewQueue(dec, sink, reviews, drec, rev.Land, voice)
