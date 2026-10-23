@@ -93,7 +93,7 @@ func itoa(n int) string {
 	return string(b)
 }
 
-func batchKernel(t *testing.T, tools []core.Tool, calls []core.ToolCall, opts ...rig.Option) (*rig.Kernel, *recorderFrontend, *core.Session) {
+func batchKernel(t *testing.T, tools []core.Tool, calls []core.ToolCall, opts ...rig.Option) (rig.Kernel, *recorderFrontend, *core.Session) {
 	t.Helper()
 	evs := make([]evt.Signal, 0, len(calls)+1)
 	for _, c := range calls {
@@ -107,8 +107,7 @@ func batchKernel(t *testing.T, tools []core.Tool, calls []core.ToolCall, opts ..
 	f := &recorderFrontend{inputs: make(chan string, 1)}
 	s := core.NewSession()
 	base := []rig.Option{rig.WithProvider(p), rig.WithFrontend(f), rig.WithPolicy(&transcriptPolicy{}), rig.WithTools(tools...)}
-	k := rig.New(append(base, opts...)...)
-	k.Session = s
+	k := rig.New(append(append(base, rig.WithSession(s)), opts...)...)
 	f.inputs <- "go"
 	close(f.inputs)
 	return k, f, s
@@ -242,8 +241,7 @@ func TestBatchCancellationMidRunDrainsTheBatch(t *testing.T) {
 	p := &scriptedProvider{turns: []scriptedTurn{{events: evs}, {holdCtx: true}}}
 	f := &recorderFrontend{inputs: make(chan string, 1)}
 	s := core.NewSession()
-	k := rig.New(rig.WithProvider(p), rig.WithFrontend(f), rig.WithPolicy(&transcriptPolicy{}), rig.WithTools(read), rig.WithPriority(writesFirst))
-	k.Session = s
+	k := rig.New(rig.WithProvider(p), rig.WithFrontend(f), rig.WithPolicy(&transcriptPolicy{}), rig.WithTools(read), rig.WithPriority(writesFirst), rig.WithSession(s))
 	f.inputs <- "go"
 	close(f.inputs)
 	if err := loop.Run(ctx, k); err != nil {
@@ -537,8 +535,7 @@ func TestInterruptMidDrainCancelsTheRest(t *testing.T) {
 	p := &scriptedProvider{turns: []scriptedTurn{{events: evs}, {holdCtx: true}}}
 	f := &recorderFrontend{inputs: make(chan string, 1)}
 	s := core.NewSession()
-	k := rig.New(rig.WithProvider(p), rig.WithFrontend(f), rig.WithPolicy(&transcriptPolicy{}), rig.WithTools(edit, read), rig.WithPriority(writesFirst))
-	k.Session = s
+	k := rig.New(rig.WithProvider(p), rig.WithFrontend(f), rig.WithPolicy(&transcriptPolicy{}), rig.WithTools(edit, read), rig.WithPriority(writesFirst), rig.WithSession(s))
 	f.inputs <- "go"
 	close(f.inputs)
 	if err := loop.Run(ctx, k); err != nil {

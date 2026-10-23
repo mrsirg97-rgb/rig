@@ -65,7 +65,6 @@ func TestConsumerIsOneGoroutine(t *testing.T) {
 	}}
 	f := &overlapFrontend{inputs: make(chan string, 2)}
 	k := rig.New(rig.WithProvider(p), rig.WithFrontend(&turnMarking{f}), rig.WithPolicy(&transcriptPolicy{}), rig.WithTools(read), rig.WithPriority(writesFirst))
-	k.Session = core.NewSession()
 	f.inputs <- "go"
 	f.inputs <- "again"
 	close(f.inputs)
@@ -117,14 +116,13 @@ func TestStaleCompletionIsIgnored(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	slow.cancel = cancel
 	k := rig.New(rig.WithProvider(p), rig.WithFrontend(f), rig.WithPolicy(&transcriptPolicy{}), rig.WithTools(slow))
-	k.Session = core.NewSession()
 	f.inputs <- "go"
 	close(f.inputs)
 	if err := loop.Run(ctx, k); err != nil {
 		t.Fatalf("run: %v", err)
 	}
-	if len(k.Session.Messages) < 3 || k.Session.Messages[2].Role != core.RoleTool {
-		t.Fatalf("the completion that landed before the run ended must be in the transcript: %s", dump(k.Session))
+	if len(k.Session().Messages) < 3 || k.Session().Messages[2].Role != core.RoleTool {
+		t.Fatalf("the completion that landed before the run ended must be in the transcript: %s", dump(k.Session()))
 	}
 }
 

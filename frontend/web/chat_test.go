@@ -27,10 +27,10 @@ func (echoCmd) Run(_ context.Context, args string, _ any) (string, error) {
 	return "said " + args, nil
 }
 
-func newChatServer(t *testing.T) (*Server, string) {
+func newChatServer(t *testing.T) (*server, string) {
 	t.Helper()
 	home := seedHome(t)
-	srv, err := New(home, WithCWD(testCWD), WithModels(modelsTable(t)), WithCrontab(&fakeCrontab{}), WithNatives([]string{"bash", "read"}...), WithRoot(home), WithCommands([]core.Command{echoCmd{}}...), WithStatus(func(context.Context) Status {
+	srv, err := build(home, WithCWD(testCWD), WithModels(modelsTable(t)), WithCrontab(&fakeCrontab{}), WithNatives([]string{"bash", "read"}...), WithRoot(home), WithCommands([]core.Command{echoCmd{}}...), WithStatus(func(context.Context) Status {
 		return Status{Model: "m1", Effort: "high", Session: "sess-1", Up: 12, Rows: []string{"projects held: 2"}}
 	}))
 	if err != nil {

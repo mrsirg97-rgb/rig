@@ -233,8 +233,12 @@ lot, and it is the bar.
   by priority then arrival. The turn loop is its consumer: every step
   of a turn is a closure on the loop goroutine.
 - `kernel.go` (root package `rig`): the composition kernel: the
-  dependency bag the loop drives, assembled from options — the priority
-  table (a write is 60, a read is 50) and `WithPriority` live here.
+  read-only `Kernel` the loop drives, assembled from options — the priority
+  table (a write is 60, a read is 50) and `WithPriority` live here. The
+  provider, policy, session and frontend are its `Seat`: fixed from
+  `WithProvider`/`WithPolicy`/`WithSession`/`WithFrontend`, or the root's
+  live seat (`WithSeat`) that `/models`, `/role` and `/new` swap in one
+  atomic store.
 - `cmd/rig`: the binary and composition root: flag/env/file config
   resolution, the store wiring (the rem migration), plugin discovery.
   The only package that imports the whole tree.

@@ -10,7 +10,7 @@ import (
 //go:embed static
 var staticFS embed.FS
 
-func (s *Server) serveStatic(w http.ResponseWriter, name, ct string) {
+func (s *server) serveStatic(w http.ResponseWriter, name, ct string) {
 	data, err := fs.ReadFile(s.static, name)
 	if err != nil {
 		http.Error(w, "not found", http.StatusNotFound)
@@ -21,7 +21,7 @@ func (s *Server) serveStatic(w http.ResponseWriter, name, ct string) {
 	_, _ = w.Write(data)
 }
 
-func (s *Server) serveStaticFile(w http.ResponseWriter, r *http.Request, name string) {
+func (s *server) serveStaticFile(w http.ResponseWriter, r *http.Request, name string) {
 	if name == "" || strings.Contains(name, "..") {
 		http.NotFound(w, r)
 		return
@@ -36,7 +36,7 @@ func (s *Server) serveStaticFile(w http.ResponseWriter, r *http.Request, name st
 	_, _ = w.Write(data)
 }
 
-func (s *Server) serveManifest(w http.ResponseWriter, r *http.Request) {
+func (s *server) serveManifest(w http.ResponseWriter, r *http.Request) {
 	data, err := fs.ReadFile(s.static, "manifest.webmanifest")
 	if err != nil {
 		http.NotFound(w, r)

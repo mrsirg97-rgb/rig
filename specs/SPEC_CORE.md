@@ -565,8 +565,14 @@ tool's execution; is a producer goroutine that posts. One goroutine
 touches the session; the steps and their order are unchanged.
 
 ```go
-func Run(ctx context.Context, k *Kernel) error
+func Run(ctx context.Context, k Kernel) error
 ```
+
+The kernel is read-only (3.4.1): an interface over an unexported struct,
+whole at `New`. The provider, the policy, the session and the frontend
+are its `Seat`, read at every use, so a swap at the root (`/models`,
+`/role`, `/new`) lands on the loop's next read without the loop or the
+kernel being written.
 
 Per turn (deliverable 7 adds the named changes; SPEC_HARDENING has the
 argument):

@@ -66,8 +66,10 @@ the Apple meta tags, safe-area insets).
   flag; `GET /api/swarm` is the last swarm status the loop published.
   The POST doors ride the write's walls (Origin, the body cap); the
   stream and the reads ride the token gate.
-- **`Server` / `New` / `ListenAndServe` / `Handler` / `Close`**: the
-  dashboard: the static inputs (the rig home, the serve cwd, the models
+- **`Server` / `New` / `ListenAndServe` / `Handler` / `Close`**: `Server`
+  is the interface `New` returns (the frontend seams, `Ask`, the token and
+  the HTTP doors), the struct unexported; the package's own tests build
+  through `build`, which hands back the struct. The dashboard: the static inputs (the rig home, the serve cwd, the models
   table, the crontab, the runner command), the token, the allowed
   origins, the store cache, the rooted static assets.
 - **The token gate** (SPEC_SERVE 5): `serve.token` (0600) minted once and

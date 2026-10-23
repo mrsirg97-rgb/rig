@@ -42,7 +42,7 @@ func wirePath(path string) bool {
 	return modelPath(path) || path == "/running" || path == "/unload"
 }
 
-func (s *Server) handleWire(w http.ResponseWriter, r *http.Request, path string) {
+func (s *server) handleWire(w http.ResponseWriter, r *http.Request, path string) {
 	switch path {
 	case "/v1/models":
 		s.handleWireModels(w)
@@ -55,7 +55,7 @@ func (s *Server) handleWire(w http.ResponseWriter, r *http.Request, path string)
 	}
 }
 
-func (s *Server) handleWireModels(w http.ResponseWriter) {
+func (s *server) handleWireModels(w http.ResponseWriter) {
 	data := []map[string]any{}
 	for _, id := range s.models.Known() {
 		m, _ := s.models.Get(id)
@@ -71,11 +71,11 @@ func (s *Server) handleWireModels(w http.ResponseWriter) {
 	writeJSON(w, http.StatusOK, map[string]any{"data": data})
 }
 
-func (s *Server) resolve(name string) (models.Model, bool) {
+func (s *server) resolve(name string) (models.Model, bool) {
 	return s.models.Get(name)
 }
 
-func (s *Server) upstream(w http.ResponseWriter, r *http.Request, body []byte, row models.Model) {
+func (s *server) upstream(w http.ResponseWriter, r *http.Request, body []byte, row models.Model) {
 	up, err := http.NewRequestWithContext(r.Context(), http.MethodPost, s.endpoint(row), bytes.NewReader(body))
 	if err != nil {
 		writeErr(w, http.StatusBadGateway, err.Error())
@@ -116,7 +116,7 @@ func (s *Server) upstream(w http.ResponseWriter, r *http.Request, body []byte, r
 	}
 }
 
-func (s *Server) handleWireChat(w http.ResponseWriter, r *http.Request) {
+func (s *server) handleWireChat(w http.ResponseWriter, r *http.Request) {
 	if s.machine == nil {
 		writeErr(w, http.StatusServiceUnavailable, "the wire front needs a member of the room")
 		return
@@ -243,14 +243,14 @@ func (s *Server) handleWireChat(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (s *Server) endpoint(m models.Model) string {
+func (s *server) endpoint(m models.Model) string {
 	if m.Port > 0 {
 		return "http://127.0.0.1:" + strconv.Itoa(m.Port) + "/v1/chat/completions"
 	}
 	return strings.TrimSuffix(m.BaseURL, "/") + "/chat/completions"
 }
 
-func (s *Server) handleRunning(w http.ResponseWriter) {
+func (s *server) handleRunning(w http.ResponseWriter) {
 	running := []map[string]any{}
 	for _, id := range s.models.Known() {
 		m, _ := s.models.Get(id)
@@ -261,7 +261,7 @@ func (s *Server) handleRunning(w http.ResponseWriter) {
 	writeJSON(w, http.StatusOK, map[string]any{"running": running})
 }
 
-func (s *Server) handleUnload(w http.ResponseWriter, r *http.Request) {
+func (s *server) handleUnload(w http.ResponseWriter, r *http.Request) {
 	if s.machine == nil {
 		writeErr(w, http.StatusServiceUnavailable, "the wire front needs a member of the room")
 		return

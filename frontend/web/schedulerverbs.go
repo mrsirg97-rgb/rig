@@ -12,7 +12,7 @@ import (
 
 var jobIDRe = regexp.MustCompile(`^j\d{1,9}$`)
 
-func (s *Server) handleSchedulerVerb(w http.ResponseWriter, r *http.Request, verb string) {
+func (s *server) handleSchedulerVerb(w http.ResponseWriter, r *http.Request, verb string) {
 	ctx, cancel := s.readCtx(r)
 	defer cancel()
 	cwd := r.URL.Query().Get("cwd")
@@ -52,7 +52,7 @@ func (s *Server) handleSchedulerVerb(w http.ResponseWriter, r *http.Request, ver
 	writeJSON(w, http.StatusOK, map[string]any{"cwd": cwd, "reply": reply})
 }
 
-func (s *Server) handleSchedulerRepair(w http.ResponseWriter, r *http.Request) {
+func (s *server) handleSchedulerRepair(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := s.readCtx(r)
 	defer cancel()
 	cwd := r.URL.Query().Get("cwd")
@@ -84,7 +84,7 @@ func (s *Server) handleSchedulerRepair(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"cwd": cwd, "reply": reply})
 }
 
-func (s *Server) handleSchedulerUpdate(w http.ResponseWriter, r *http.Request) {
+func (s *server) handleSchedulerUpdate(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := s.readCtx(r)
 	defer cancel()
 	cwd := r.URL.Query().Get("cwd")
@@ -114,7 +114,7 @@ func (s *Server) handleSchedulerUpdate(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"cwd": cwd, "reply": reply})
 }
 
-func (s *Server) handleSchedulerRuns(w http.ResponseWriter, r *http.Request) {
+func (s *server) handleSchedulerRuns(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := s.readCtx(r)
 	defer cancel()
 	id := strings.TrimSpace(r.URL.Query().Get("id"))

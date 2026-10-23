@@ -704,8 +704,7 @@ func TestSteerDuringRetry(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
-	k := rig.New(rig.WithProvider(compact.Decorator(prov, pol)), rig.WithFrontend(fe), rig.WithPolicy(pol))
-	k.Session = s
+	k := rig.New(rig.WithProvider(compact.Decorator(prov, pol)), rig.WithFrontend(fe), rig.WithPolicy(pol), rig.WithSession(s))
 
 	done := make(chan error, 1)
 	go func() { done <- loop.Run(context.Background(), k) }()
@@ -755,8 +754,7 @@ func TestRecoveryRewriteRaceFree(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
-	k := rig.New(rig.WithProvider(compact.Decorator(prov, pol)), rig.WithFrontend(fe), rig.WithPolicy(pol))
-	k.Session = s
+	k := rig.New(rig.WithProvider(compact.Decorator(prov, pol)), rig.WithFrontend(fe), rig.WithPolicy(pol), rig.WithSession(s))
 	if err := loop.Run(context.Background(), k); err != nil {
 		t.Fatalf("loop.Run: %v", err)
 	}

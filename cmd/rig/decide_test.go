@@ -56,7 +56,7 @@ func decideArgs(items ...string) json.RawMessage {
 func TestWithNoDecisionUrlNothingMoves(t *testing.T) {
 	r := testRoot(nullFrontend{})
 	k := wire(r)
-	for _, tool := range k.Tools {
+	for _, tool := range k.Tools() {
 		if tool.Name() == "decide" {
 			t.Fatal("without decisionUrl the tool menu does not carry decide")
 		}
@@ -80,7 +80,7 @@ func TestADecideToolJoinsTheTable(t *testing.T) {
 		t.Fatal("decide is a built-in entry, not a plugin")
 	}
 	found := false
-	for _, tool := range k.Tools {
+	for _, tool := range k.Tools() {
 		if tool.Name() == "decide" {
 			found = true
 		}
@@ -103,8 +103,8 @@ func TestAWiredDecideBringsThePackGuideline(t *testing.T) {
 	if !strings.Contains(r.fullSystem, "pack the task before reading files for it") {
 		t.Fatalf("the pack guideline joins the system prompt:\n%s", r.fullSystem)
 	}
-	if len(k.Middleware) != 10 {
-		t.Fatalf("the guideline is one link: %d", len(k.Middleware))
+	if len(k.Middleware()) != 10 {
+		t.Fatalf("the guideline is one link: %d", len(k.Middleware()))
 	}
 }
 
@@ -123,7 +123,7 @@ func TestADecideCallSortsAndRecords(t *testing.T) {
 	var exec core.ToolExec = func(ctx context.Context, call core.ToolCall) (string, error) {
 		return "ran", nil
 	}
-	for _, mw := range k.Middleware {
+	for _, mw := range k.Middleware() {
 		exec = mw.Wrap(exec)
 	}
 	ctx := core.WithSession(context.Background(), &core.Session{ID: "sess-3"})

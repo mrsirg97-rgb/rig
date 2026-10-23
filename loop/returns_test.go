@@ -42,8 +42,7 @@ func TestAReturnIsHandedOverAtTheStepBoundaryInsideTheTurn(t *testing.T) {
 	}}
 	f := &inboxFrontend{recorderFrontend: recorderFrontend{inputs: make(chan string, 8)}, blocks: []string{"delegate #1 returned · exit 0"}}
 	session := core.NewSession()
-	k := rig.New(rig.WithProvider(p), rig.WithFrontend(f), rig.WithPolicy(&transcriptPolicy{}), rig.WithTools(bash))
-	k.Session = session
+	k := rig.New(rig.WithProvider(p), rig.WithFrontend(f), rig.WithPolicy(&transcriptPolicy{}), rig.WithTools(bash), rig.WithSession(session))
 
 	f.inputs <- "go"
 	close(f.inputs)
@@ -72,8 +71,7 @@ func TestAFrontendWithNoInboxRunsAsBefore(t *testing.T) {
 	}}
 	f := &recorderFrontend{inputs: make(chan string, 8)}
 	session := core.NewSession()
-	k := rig.New(rig.WithProvider(p), rig.WithFrontend(f), rig.WithPolicy(&transcriptPolicy{}), rig.WithTools(bash))
-	k.Session = session
+	k := rig.New(rig.WithProvider(p), rig.WithFrontend(f), rig.WithPolicy(&transcriptPolicy{}), rig.WithTools(bash), rig.WithSession(session))
 	f.inputs <- "go"
 	close(f.inputs)
 	if err := loop.Run(context.Background(), k); err != nil {
@@ -93,7 +91,6 @@ func TestAnInterruptedTurnLeavesTheReturnsForTheNextInput(t *testing.T) {
 	}}
 	f := &inboxFrontend{recorderFrontend: recorderFrontend{inputs: make(chan string, 8)}, blocks: []string{"delegate #1 returned"}}
 	k := rig.New(rig.WithProvider(p), rig.WithFrontend(f), rig.WithPolicy(&transcriptPolicy{}), rig.WithTools(bash))
-	k.Session = core.NewSession()
 	f.inputs <- "go"
 	_ = loop.Run(ctx, k)
 	if f.asked != 0 || len(f.blocks) != 1 {

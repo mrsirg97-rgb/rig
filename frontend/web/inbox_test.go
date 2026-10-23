@@ -64,7 +64,7 @@ func TestTheStopButtonStopsTheWorkersWhenNoTurnIsLive(t *testing.T) {
 	var mu sync.Mutex
 	stopped := 0
 	home := seedHome(t)
-	srv, err := New(home, WithCWD(testCWD), WithModels(modelsTable(t)), WithCrontab(&fakeCrontab{}), WithRoot(home), WithStopWorkers(func() { mu.Lock(); stopped++; mu.Unlock() }))
+	srv, err := build(home, WithCWD(testCWD), WithModels(modelsTable(t)), WithCrontab(&fakeCrontab{}), WithRoot(home), WithStopWorkers(func() { mu.Lock(); stopped++; mu.Unlock() }))
 	if err != nil {
 		t.Fatal(err)
 	}

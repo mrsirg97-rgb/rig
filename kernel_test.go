@@ -20,11 +20,11 @@ func (s stubCmd) Run(ctx context.Context, args string, env any) (string, error) 
 
 func TestWithCommandsRegistersTheRegistry(t *testing.T) {
 	k := New(WithCommands(stubCmd{name: "alpha"}, stubCmd{name: "beta"}))
-	if len(k.Commands) != 2 {
-		t.Fatalf("kernel must carry the registered commands, got %d", len(k.Commands))
+	if len(k.Commands()) != 2 {
+		t.Fatalf("kernel must carry the registered commands, got %d", len(k.Commands()))
 	}
-	if k.Commands[0].Name() != "alpha" || k.Commands[1].Name() != "beta" {
-		t.Fatalf("registration order must be kept: %v", namesOf(k.Commands))
+	if k.Commands()[0].Name() != "alpha" || k.Commands()[1].Name() != "beta" {
+		t.Fatalf("registration order must be kept: %v", namesOf(k.Commands()))
 	}
 }
 
@@ -41,8 +41,8 @@ func TestWithCommandsDuplicateNamePanics(t *testing.T) {
 
 func TestKernelWithoutCommandsIsUnchanged(t *testing.T) {
 	k := New()
-	if k.Commands != nil {
-		t.Fatalf("the registry must be empty (nil) when unregistered, got %v", k.Commands)
+	if k.Commands() != nil {
+		t.Fatalf("the registry must be empty (nil) when unregistered, got %v", k.Commands())
 	}
 }
 
@@ -70,13 +70,49 @@ func TestCommandSeamShape(t *testing.T) {
 func TestWithEngineHandsTheLoopItsEngine(t *testing.T) {
 	e := evt.NewEngine()
 	k := New(WithEngine(e))
-	if k.Engine != e {
+	if k.Engine() != e {
 		t.Fatal("the kernel must carry the engine it was given")
 	}
-	if New().Engine != nil {
+	if New().Engine() != nil {
 		t.Fatal("a kernel built without one has none; the loop mints its own")
 	}
 	if !(PriorityInput > PriorityDelegate && PriorityDelegate > PriorityStream && PriorityStream >= PriorityTool && PriorityTool > PriorityFleet && PriorityFleet > PriorityReview) {
 		t.Fatalf("the review runs below the fleet, the fleet below the delegate, the delegate below the turn, the turn below the operator: %d %d %d %d %d %d", PriorityInput, PriorityDelegate, PriorityStream, PriorityTool, PriorityFleet, PriorityReview)
 	}
+}
+
+type swapSeat struct{ session *core.Session }
+
+func (s *swapSeat) Provider() core.Provider    { return nil }
+func (s *swapSeat) Frontend() core.Frontend    { return nil }
+func (s *swapSeat) Policy() core.ContextPolicy { return nil }
+func (s *swapSeat) Session() *core.Session     { return s.session }
+
+func TestAKernelReadsItsSeatAtEveryUse(t *testing.T) {
+	seat := &swapSeat{session: core.NewSession()}
+	k := New(WithSeat(seat))
+	next := core.NewSession()
+	seat.session = next
+	if k.Session() != next {
+		t.Fatal("the kernel must read the seat at the call, so a swap at the root lands without writing the kernel")
+	}
+}
+
+func TestAFixedSeatHasASession(t *testing.T) {
+	if New().Session() == nil {
+		t.Fatal("a kernel built from fixed parts mints its session when none is named")
+	}
+	s := core.NewSession()
+	if New(WithSession(s)).Session() != s {
+		t.Fatal("a named session is the kernel's session")
+	}
+}
+
+func TestASeatBesideFixedPartsPanics(t *testing.T) {
+	defer func() {
+		if r := recover(); r == nil || !strings.Contains(r.(string), "a seat or its fixed parts") {
+			t.Fatalf("a kernel given a seat and a fixed part must refuse at construction, naming both: %v", r)
+		}
+	}()
+	New(WithSeat(&swapSeat{}), WithSession(core.NewSession()))
 }

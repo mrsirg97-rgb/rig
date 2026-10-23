@@ -10,7 +10,7 @@ import (
 
 var todoIDRe = regexp.MustCompile(`^t\d{1,9}$`)
 
-func (s *Server) handleTodoVerb(w http.ResponseWriter, r *http.Request, verb string) {
+func (s *server) handleTodoVerb(w http.ResponseWriter, r *http.Request, verb string) {
 	ctx, cancel := s.readCtx(r)
 	defer cancel()
 	cwd := r.URL.Query().Get("cwd")

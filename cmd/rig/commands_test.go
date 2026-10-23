@@ -348,8 +348,8 @@ func (h *harness) sessionRowsByID(id string) (r struct {
 
 func TestNewKeepsPerProcessState(t *testing.T) {
 	h := newHarness(t, defaultRow(), "local", defaultsTable(t))
-	beforeTools := append([]core.Tool(nil), h.r.k.Tools...)
-	beforeMW := append([]core.ToolMiddleware(nil), h.r.k.Middleware...)
+	beforeTools := append([]core.Tool(nil), h.r.k.Tools()...)
+	beforeMW := append([]core.ToolMiddleware(nil), h.r.k.Middleware()...)
 	done := h.startRun()
 	h.in <- "one\n"
 	h.waitCount("pong", 1)
@@ -357,20 +357,20 @@ func TestNewKeepsPerProcessState(t *testing.T) {
 	h.waitOut("new: session")
 	h.finish(done)
 
-	if len(h.r.k.Tools) != len(beforeTools) {
-		t.Fatalf("tool count changed across /new: %d -> %d", len(beforeTools), len(h.r.k.Tools))
+	if len(h.r.k.Tools()) != len(beforeTools) {
+		t.Fatalf("tool count changed across /new: %d -> %d", len(beforeTools), len(h.r.k.Tools()))
 	}
 	for i := range beforeTools {
-		if h.r.k.Tools[i] != beforeTools[i] {
+		if h.r.k.Tools()[i] != beforeTools[i] {
 			t.Fatalf("tool %d (%s) changed across /new: the per-process tool instances survive", i, beforeTools[i].Name())
 		}
 	}
 
-	if len(h.r.k.Middleware) != len(beforeMW) {
+	if len(h.r.k.Middleware()) != len(beforeMW) {
 		t.Fatalf("middleware count changed across /new")
 	}
 	for i := range beforeMW {
-		a, b := h.r.k.Middleware[i], beforeMW[i]
+		a, b := h.r.k.Middleware()[i], beforeMW[i]
 		if reflect.TypeOf(a) != reflect.TypeOf(b) {
 			t.Fatalf("middleware %d changed across /new: %T -> %T", i, b, a)
 		}
@@ -380,7 +380,7 @@ func TestNewKeepsPerProcessState(t *testing.T) {
 	}
 
 	var afterPy, beforePy *fakePython
-	for _, tl := range h.r.k.Tools {
+	for _, tl := range h.r.k.Tools() {
 		if p, ok := tl.(*fakePython); ok {
 			afterPy = p
 		}

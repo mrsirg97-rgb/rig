@@ -16,7 +16,7 @@ type browseEntry struct {
 	Path string `json:"path"`
 }
 
-func (s *Server) handleBrowse(w http.ResponseWriter, r *http.Request) {
+func (s *server) handleBrowse(w http.ResponseWriter, r *http.Request) {
 	if s.root == "" {
 		writeErr(w, http.StatusInternalServerError, "no browse root (no home directory)")
 		return

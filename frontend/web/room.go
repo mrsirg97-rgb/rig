@@ -17,7 +17,7 @@ const (
 	servedShown  = 12
 )
 
-func (s *Server) handleRoom(w http.ResponseWriter, r *http.Request) {
+func (s *server) handleRoom(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := s.readCtx(r)
 	defer cancel()
 	members := []int64{}
@@ -52,7 +52,7 @@ func (s *Server) handleRoom(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (s *Server) handleUpdate(w http.ResponseWriter, r *http.Request) {
+func (s *server) handleUpdate(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodPost {
 		self, err := os.Executable()
 		if err != nil {

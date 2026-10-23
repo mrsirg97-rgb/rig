@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/mrsirg97-rgb/rig/v3/command"
 	"github.com/mrsirg97-rgb/rig/v3/core"
 	"github.com/mrsirg97-rgb/rig/v3/models"
 	"github.com/mrsirg97-rgb/rig/v3/room"
@@ -68,7 +69,19 @@ func WithReady(ready func(ctx context.Context, m models.Model) error) Option {
 }
 func WithStopWorkers(stop func()) Option { return func(o *options) { o.stopWorkers = stop } }
 
-type Server struct {
+type Server interface {
+	core.Frontend
+	core.Inbox
+	command.Steerer
+	Ask(ctx context.Context, prompt string) bool
+	Token() (string, bool, error)
+	Handler() http.Handler
+	WireHandler() http.Handler
+	ListenAndServe(ctx context.Context, addr string) error
+	Close() error
+}
+
+type server struct {
 	home      string
 	cwd       string
 	models    models.Table
@@ -93,7 +106,15 @@ type Server struct {
 	vitals  *stats.Sampler
 }
 
-func New(home string, opts ...Option) (*Server, error) {
+func New(home string, opts ...Option) (Server, error) {
+	s, err := build(home, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return s, nil
+}
+
+func build(home string, opts ...Option) (*server, error) {
 	if home == "" {
 		return nil, errors.New("web: home is required (the rig home)")
 	}
@@ -125,7 +146,7 @@ func New(home string, opts ...Option) (*Server, error) {
 		}
 		root = dir
 	}
-	return &Server{
+	return &server{
 		home:      home,
 		cwd:       o.cwd,
 		models:    o.models,
@@ -147,7 +168,7 @@ func New(home string, opts ...Option) (*Server, error) {
 	}, nil
 }
 
-func (s *Server) Token() (string, bool, error) {
+func (s *server) Token() (string, bool, error) {
 	s.tokenMu.Lock()
 	defer s.tokenMu.Unlock()
 	if s.token != "" {
@@ -161,7 +182,7 @@ func (s *Server) Token() (string, bool, error) {
 	return tok, minted, nil
 }
 
-func (s *Server) Handler() http.Handler {
+func (s *server) Handler() http.Handler {
 	tok, _, err := s.Token()
 	if err != nil {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -177,7 +198,7 @@ func (s *Server) Handler() http.Handler {
 	})
 }
 
-func (s *Server) WireHandler() http.Handler {
+func (s *server) WireHandler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !modelPath(r.URL.Path) {
 			http.NotFound(w, r)
@@ -187,7 +208,7 @@ func (s *Server) WireHandler() http.Handler {
 	})
 }
 
-func (s *Server) ListenAndServe(ctx context.Context, addr string) error {
+func (s *server) ListenAndServe(ctx context.Context, addr string) error {
 	if err := Loopback(addr); err != nil {
 		return err
 	}
@@ -258,7 +279,7 @@ func (s *Server) ListenAndServe(ctx context.Context, addr string) error {
 	}
 }
 
-func (s *Server) Close() error {
+func (s *server) Close() error {
 	s.stores.closeAll()
 	return nil
 }

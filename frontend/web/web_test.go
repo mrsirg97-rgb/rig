@@ -149,10 +149,10 @@ func modelsTable(t *testing.T) models.Table {
 	return table
 }
 
-func newTestServer(t *testing.T) (*Server, string) {
+func newTestServer(t *testing.T) (*server, string) {
 	t.Helper()
 	home := seedHome(t)
-	srv, err := New(home, WithCWD(testCWD), WithModels(modelsTable(t)), WithCrontab(&fakeCrontab{}), WithNatives([]string{"bash", "read"}...), WithRoot(home))
+	srv, err := build(home, WithCWD(testCWD), WithModels(modelsTable(t)), WithCrontab(&fakeCrontab{}), WithNatives([]string{"bash", "read"}...), WithRoot(home))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -184,7 +184,7 @@ func bearer(tok string) http.Header {
 
 func TestTheTokenMintsOnceUnderConcurrency(t *testing.T) {
 	home := seedHome(t)
-	srv, err := New(home, WithCWD(testCWD), WithModels(modelsTable(t)), WithCrontab(&fakeCrontab{}), WithNatives([]string{"bash", "read"}...), WithRoot(home))
+	srv, err := build(home, WithCWD(testCWD), WithModels(modelsTable(t)), WithCrontab(&fakeCrontab{}), WithNatives([]string{"bash", "read"}...), WithRoot(home))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -223,7 +223,7 @@ func TestTheTokenMintsOnceUnderConcurrency(t *testing.T) {
 
 func TestANewWithoutRootOrHomeRefuses(t *testing.T) {
 	t.Setenv("HOME", "")
-	_, err := New(seedHome(t), WithCWD(testCWD), WithModels(modelsTable(t)), WithCrontab(&fakeCrontab{}), WithNatives([]string{"bash", "read"}...))
+	_, err := build(seedHome(t), WithCWD(testCWD), WithModels(modelsTable(t)), WithCrontab(&fakeCrontab{}), WithNatives([]string{"bash", "read"}...))
 	if err == nil {
 		t.Fatal("a New with no Root and no HOME must refuse, not hand the folder browser an empty root")
 	}

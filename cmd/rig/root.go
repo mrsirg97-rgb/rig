@@ -112,14 +112,15 @@ type root struct {
 	pluginInfos []command.PluginInfo
 
 	fullSystem string
-	k          *rig.Kernel
+	k          rig.Kernel
+	seat       *seat
 
 	compactFn func(ctx context.Context) (core.Compacted, bool, error)
 }
 
 const defaultResultCap = 64 * 1024
 
-func wire(r *root) *rig.Kernel {
+func wire(r *root) rig.Kernel {
 	r.applyVision()
 	if r.askDoor == nil {
 		r.approve = approve.Auto
@@ -153,11 +154,9 @@ func wire(r *root) *rig.Kernel {
 
 	r.fullSystem = r.buildSystem()
 	provider, pol := r.buildPair()
-	fe := r.frontend()
+	r.seat = newSeat(provider, r.frontend(), pol, r.session)
 	k := rig.New(
-		rig.WithProvider(provider),
-		rig.WithFrontend(fe),
-		rig.WithPolicy(pol),
+		rig.WithSeat(r.seat),
 		rig.WithTools(append(
 			r.tableTools(),
 			r.pluginTools...,
@@ -171,7 +170,6 @@ func wire(r *root) *rig.Kernel {
 		}),
 		rig.WithEngine(r.engine),
 	)
-	k.Session = r.session
 	r.k = k
 	return k
 }
@@ -394,13 +392,9 @@ func (r *root) swapIn(s *core.Session, rec2 *state.Recorder) {
 	r.rec.Retarget(s.ID, s)
 	r.rec = rec2
 	r.session = s
-	r.k.Frontend = r.frontend()
-	r.k.Session = s
-
 	r.fullSystem = r.buildSystem()
 	provider, pol := r.buildPair()
-	r.k.Provider = provider
-	r.k.Policy = pol
+	r.seat.sitDown(s, r.frontend(), provider, pol)
 }
 
 func newFleet() (evt.Engine, broadcast.Room) {

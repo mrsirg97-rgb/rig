@@ -115,3 +115,6 @@ reopen kernel.go 2.17.0
 reopen core/frontend.go 2.18.0
 reopen loop/ 3.1.1
 reopen core/session.go 3.1.1
+reopen loop/ 3.4.1
+reopen kernel.go 3.4.1
+reopen kernel_test.go 3.4.1

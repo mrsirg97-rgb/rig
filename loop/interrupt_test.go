@@ -35,8 +35,8 @@ func steered(t *testing.T, cut []evt.Signal, at func(evt.Signal) bool) (*core.Se
 		rig.WithFrontend(f),
 		rig.WithPolicy(&transcriptPolicy{}),
 		rig.WithTools(&scriptedTool{name: "echo"}),
+		rig.WithSession(session),
 	)
-	k.Session = session
 	if err := loop.Run(context.Background(), k); err != nil {
 		t.Fatalf("steering must not end the run, got %v", err)
 	}
@@ -85,8 +85,8 @@ func TestACutBeforeTheFirstTokenAppendsNothing(t *testing.T) {
 		rig.WithProvider(hold),
 		rig.WithFrontend(f),
 		rig.WithPolicy(&transcriptPolicy{}),
+		rig.WithSession(session),
 	)
-	k.Session = session
 	if err := loop.Run(context.Background(), k); err != nil {
 		t.Fatalf("steering must not end the run, got %v", err)
 	}

@@ -29,11 +29,19 @@ built whole in `statusNow`, the command env's decision-train and
 trainer seams are parts of `commandEnvInput`, and the openai config
 step-fill is gone.
 
-The kernel stays the composition root's live wiring: the loop is
-running while `/models` switches the provider and the session, so the
-kernel must be a stable reference the loop reads. Its fields are
-unexported and only the root assigns them; that is the one documented
-mutable composition bag in this release. No user-facing behavior
+The kernel is read-only too. `rig.Kernel` is an interface over an
+unexported struct, built by `New(opts...)`; the loop reads it through
+methods. The parts a running loop must see change — the provider, the
+policy, the session and the frontend, which `/models`, `/role` and
+`/new` swap mid-run — are one seam, `rig.Seat`, which the kernel embeds:
+`WithProvider`/`WithPolicy`/`WithSession`/`WithFrontend` give a fixed
+seat (with a fresh session when none is named), and the root hands
+`WithSeat` its live one, which swaps in one atomic store, so a turn
+never reads a new provider beside an old policy. Nothing assigns a
+kernel field after `New`, and a seat beside fixed parts refuses at
+construction. The dashboard's `web.Server` is an interface of the seams
+it serves (the frontend, the inbox, the steerer, `Ask`, the token and
+the HTTP doors) over an unexported struct. No user-facing behavior
 changed; all wire bytes in the room, the decisions store and the
 providers' tests are pinned.
 

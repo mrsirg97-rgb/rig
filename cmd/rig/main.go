@@ -584,7 +584,7 @@ func rigMain() int {
 	})
 
 	var fe core.Frontend
-	var webSrv *web.Server
+	var webSrv web.Server
 	closeFrontend := func() {}
 	if serveAddr != "" {
 		var door machineroom.Door

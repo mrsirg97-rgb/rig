@@ -192,15 +192,15 @@ func TestWireRegistersEverySeam(t *testing.T) {
 	if k == nil {
 		t.Fatal("wire returned nil")
 	}
-	if k.Provider == nil || k.Frontend == nil || k.Policy == nil {
+	if k.Provider() == nil || k.Frontend() == nil || k.Policy() == nil {
 		t.Fatal("every required seam must be registered")
 	}
 	want := []string{"bash", "delegate", "edit", "plugin", "python", "read", "rem", "scheduler", "sessions", "todo", "web", "write"}
 	if got := k.SortedToolNames(); !reflect.DeepEqual(got, want) {
 		t.Fatalf("the worker tools always register (the fleet is the resident model): %v, want %v", got, want)
 	}
-	if len(k.Middleware) != 9 {
-		t.Fatalf("middleware = %d links, want the approval gate, the path boundary, the router, the cutoff link, the provenance rule, the allow-list, the bound, the round cap, and the result bound (SPEC_PLUGINS 8's seam; SPEC_SANDBOX 2; SPEC_HARDENING decisions 9 and 10; the observation tap is retired: the loop's events are the source)", len(k.Middleware))
+	if len(k.Middleware()) != 9 {
+		t.Fatalf("middleware = %d links, want the approval gate, the path boundary, the router, the cutoff link, the provenance rule, the allow-list, the bound, the round cap, and the result bound (SPEC_PLUGINS 8's seam; SPEC_SANDBOX 2; SPEC_HARDENING decisions 9 and 10; the observation tap is retired: the loop's events are the source)", len(k.Middleware()))
 	}
 }
 
@@ -237,7 +237,7 @@ func TestAllowGatesExecutionAndNotTheWire(t *testing.T) {
 		t.Fatalf("an operator allow must not filter the tool specs on the wire: %v, want %v (allow is the execution gate, the wire is the model's menu)", got, want)
 	}
 	found := false
-	for _, tl := range partial.Tools {
+	for _, tl := range partial.Tools() {
 		if tl.Name() == "plugin" {
 			found = true
 		}
@@ -260,7 +260,7 @@ func TestManualApprovalRidesTheDoor(t *testing.T) {
 	var exec core.ToolExec = func(ctx context.Context, call core.ToolCall) (string, error) {
 		return "sentinel", nil
 	}
-	for _, mw := range k.Middleware {
+	for _, mw := range k.Middleware() {
 		exec = mw.Wrap(exec)
 	}
 	content, err := exec(context.Background(), core.ToolCall{ID: "c1", Name: "bash", Args: json.RawMessage(`{"command":"echo hi"}`)})
@@ -300,7 +300,7 @@ func TestGuidelinesAreCollectedIntoTheSystemPrompt(t *testing.T) {
 func TestWireSystemPromptCarriesTheBase(t *testing.T) {
 	r := testRoot(nullFrontend{})
 	k := wire(r)
-	msgs, err := k.Policy.Assemble(context.Background(), core.NewSession())
+	msgs, err := k.Policy().Assemble(context.Background(), core.NewSession())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -485,7 +485,7 @@ func TestRoleSwitchRebuildsThePair(t *testing.T) {
 	if r.fullSystem == before || !strings.Contains(r.fullSystem, "architect") {
 		t.Fatalf("the switch must recompute the assembly with the stance: %q", r.fullSystem)
 	}
-	msgs, err := r.k.Policy.Assemble(context.Background(), core.NewSession())
+	msgs, err := r.k.Policy().Assemble(context.Background(), core.NewSession())
 	if err != nil {
 		t.Fatal(err)
 	}

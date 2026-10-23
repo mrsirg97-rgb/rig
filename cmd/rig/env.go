@@ -138,8 +138,7 @@ func (r *root) switchModel(ctx context.Context, id string) (string, error) {
 	r.applyVision()
 	r.live.Swap(append(r.tableTools(), r.pluginTools...), r.pluginNames()...)
 	provider, pol := r.buildPair()
-	r.k.Provider = provider
-	r.k.Policy = pol
+	r.seat.turnTo(provider, pol)
 	return note, nil
 }
 
@@ -203,8 +202,7 @@ func (r *root) switchRole(ctx context.Context, name string) error {
 	r.role = name
 	r.fullSystem = r.buildSystem()
 	provider, pol := r.buildPair()
-	r.k.Provider = provider
-	r.k.Policy = pol
+	r.seat.turnTo(provider, pol)
 	return nil
 }
 
