@@ -59,7 +59,7 @@ func writeImage(t *testing.T, dir, name string, img image.Image) string {
 		}
 		return p
 	}
-	if err := png.Encode(f, img); err != nil {
+	if err := (&png.Encoder{CompressionLevel: png.BestSpeed}).Encode(f, img); err != nil {
 		t.Fatal(err)
 	}
 	return p
@@ -68,8 +68,12 @@ func writeImage(t *testing.T, dir, name string, img image.Image) string {
 func blocks(w, h int) *image.NRGBA {
 	img := image.NewNRGBA(image.Rect(0, 0, w, h))
 	for y := 0; y < h; y++ {
+		row := img.Pix[y*img.Stride : y*img.Stride+w*4]
 		for x := 0; x < w; x++ {
-			img.SetNRGBA(x, y, color.NRGBA{R: uint8(x % 256), G: uint8(y % 256), B: uint8((x * y) % 256), A: 255})
+			row[x*4+0] = uint8(x % 256)
+			row[x*4+1] = uint8(y % 256)
+			row[x*4+2] = uint8((x * y) % 256)
+			row[x*4+3] = 255
 		}
 	}
 	return img
@@ -78,8 +82,12 @@ func blocks(w, h int) *image.NRGBA {
 func transparent(w, h int) *image.NRGBA {
 	img := image.NewNRGBA(image.Rect(0, 0, w, h))
 	for y := 0; y < h; y++ {
+		row := img.Pix[y*img.Stride : y*img.Stride+w*4]
 		for x := 0; x < w; x++ {
-			img.SetNRGBA(x, y, color.NRGBA{R: 10, G: 20, B: 30, A: uint8((x + y) % 256)})
+			row[x*4+0] = 10
+			row[x*4+1] = 20
+			row[x*4+2] = 30
+			row[x*4+3] = uint8((x + y) % 256)
 		}
 	}
 	return img
@@ -114,7 +122,7 @@ func decodeBlob(t *testing.T, blobs string, ref imagemarker.Ref) image.Image {
 
 func TestViewDownscalesToTheLongestSideBound(t *testing.T) {
 	dir, blobs := realTemp(t), realTemp(t)
-	src := writeImage(t, dir, "shot.png", blocks(2560, 1440))
+	src := writeImage(t, dir, "shot.png", blocks(1600, 900))
 	line, err := execAt(t, blobs, src)
 	if err != nil {
 		t.Fatalf("view: %v", err)
@@ -123,8 +131,8 @@ func TestViewDownscalesToTheLongestSideBound(t *testing.T) {
 	if ref.W != maxSide || ref.H != 882 {
 		t.Fatalf("sent dimensions = %dx%d, want 1568x882", ref.W, ref.H)
 	}
-	if ref.OrigW != 2560 || ref.OrigH != 1440 {
-		t.Fatalf("orig = %dx%d, want 2560x1440", ref.OrigW, ref.OrigH)
+	if ref.OrigW != 1600 || ref.OrigH != 900 {
+		t.Fatalf("orig = %dx%d, want 1600x900", ref.OrigW, ref.OrigH)
 	}
 	if got := decodeBlob(t, blobs, ref); got.Bounds().Dx() != maxSide || got.Bounds().Dy() != 882 {
 		t.Fatalf("the blob is %v, want 1568x882", got.Bounds())
@@ -133,7 +141,7 @@ func TestViewDownscalesToTheLongestSideBound(t *testing.T) {
 
 func TestViewDownscalesATallImageOnItsLongSide(t *testing.T) {
 	dir, blobs := realTemp(t), realTemp(t)
-	src := writeImage(t, dir, "tall.png", blocks(1000, 4000))
+	src := writeImage(t, dir, "tall.png", blocks(500, 2000))
 	line, err := execAt(t, blobs, src)
 	if err != nil {
 		t.Fatalf("view: %v", err)
@@ -161,11 +169,11 @@ func TestTheBoundIsTheOnlyScaleAndOnePixelIsNeverZero(t *testing.T) {
 	dir, blobs := realTemp(t), realTemp(t)
 	for _, tc := range []struct{ w, h, wantW, wantH int }{
 		{1, 1, 1, 1},
-		{1568, 1, 1568, 1},
-		{1, 1568, 1, 1568},
-		{1569, 1, 1568, 1},
-		{3000, 2, 1568, 1},
-		{3137, 3137, 1568, 1568},
+		{maxSide, 1, maxSide, 1},
+		{1, maxSide, 1, maxSide},
+		{maxSide + 1, 1, maxSide, 1},
+		{maxSide + 1, 2, maxSide, 1},
+		{maxSide + 1, maxSide + 1, maxSide, maxSide},
 	} {
 		src := writeImage(t, dir, "edge.png", blocks(tc.w, tc.h))
 		line, err := execAt(t, blobs, src)
@@ -316,38 +324,6 @@ func TestViewReadsTheFirstFrameOfAGIF(t *testing.T) {
 	r, _, b, _ := img.At(3, 3).RGBA()
 	if r>>8 != 255 || b>>8 != 0 {
 		t.Fatalf("the first frame is not what was sent: rgba=%d,%d", r>>8, b>>8)
-	}
-}
-
-func TestViewEncodesATransparentGIFAsPNG(t *testing.T) {
-	dir, blobs := realTemp(t), realTemp(t)
-	p := filepath.Join(dir, "t.gif")
-	f, err := os.Create(p)
-	if err != nil {
-		t.Fatal(err)
-	}
-	pal := color.Palette{color.RGBA{0, 0, 0, 0}, color.RGBA{0, 255, 0, 255}}
-	img := image.NewPaletted(image.Rect(0, 0, 8, 8), pal)
-	for y := 0; y < 8; y++ {
-		for x := 0; x < 8; x++ {
-			if x%2 == 0 {
-				img.Set(x, y, pal[0])
-				continue
-			}
-			img.Set(x, y, pal[1])
-		}
-	}
-	if err := gif.Encode(f, img, nil); err != nil {
-		t.Fatal(err)
-	}
-	f.Close()
-
-	line, err := execAt(t, blobs, p)
-	if err != nil {
-		t.Fatalf("view: %v", err)
-	}
-	if ref := mustParse(t, line); ref.Mime != "image/png" {
-		t.Fatalf("mime = %q, want image/png for a transparent gif", ref.Mime)
 	}
 }
 

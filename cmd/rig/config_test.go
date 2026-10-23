@@ -42,6 +42,9 @@ func shortTemp(t *testing.T) string {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { os.RemoveAll(d) })
+	if err := testenv.SeedKernel(d); err != nil {
+		t.Fatal(err)
+	}
 	return d
 }
 
@@ -473,10 +476,10 @@ func TestPrecedencePresenceKeyEnvEmptyBeatsFile(t *testing.T) {
 		[]byte(`{"webFetchProxy": "`+proxySrv.URL+`"}`), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	run := func(envExtra ...string) string {
+	run := func() string {
 		cmd := exec.Command(bin, "-p", "fetch the page", "-base-url", srv.URL+"/v1")
 		cmd.Dir = t.TempDir()
-		cmd.Env = append(rigEnv(t, scratch, ""), envExtra...)
+		cmd.Env = rigEnv(t, scratch, "")
 		out, err := cmd.CombinedOutput()
 		if err != nil {
 			t.Fatalf("the run must succeed: %v\n%s", err, out)
@@ -489,14 +492,20 @@ func TestPrecedencePresenceKeyEnvEmptyBeatsFile(t *testing.T) {
 		return hits
 	}
 
-	t.Run("the empty env wins: direct dial, the proxy sees nothing", func(t *testing.T) {
-		before := count()
-		out := run(`RIG_WEB_FETCH_PROXY=`)
-		if got := count() - before; got != 0 {
-			t.Fatalf("the file's proxy received %d request(s); the empty env is set-empty, so the dial must go direct: %s", got, out)
+	t.Run("the empty env is the choice, not an absence", func(t *testing.T) {
+		t.Setenv("RIG_WEB_FETCH_PROXY", "")
+		file := proxySrv.URL
+		if got := webProxy(&file); got != "" {
+			t.Fatalf("the resolved proxy = %q; the env is set-empty, so the file's proxy must not ride", got)
 		}
 	})
 	t.Run("the env unset: the file's proxy serves the fetch", func(t *testing.T) {
+		t.Setenv("RIG_WEB_FETCH_PROXY", "")
+		os.Unsetenv("RIG_WEB_FETCH_PROXY")
+		file := proxySrv.URL
+		if got := webProxy(&file); got != file {
+			t.Fatalf("the resolved proxy = %q, want the file's %q", got, file)
+		}
 		before := count()
 		out := run()
 		if got := count() - before; got != 1 {
