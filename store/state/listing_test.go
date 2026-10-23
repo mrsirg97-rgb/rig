@@ -18,13 +18,14 @@ func TestListSessionsSeeksNotScans(t *testing.T) {
 		}
 	}
 	const perSession = 100
-	for i := 0; i < state.ListCap; i++ {
+	sessions := state.ListCap + 1
+	for i := 0; i < sessions; i++ {
 		sid := fmt.Sprintf("s%03d", i)
 		if err := state.RecordSession(ctx, db, sid, "/w", "m", "v"); err != nil {
 			t.Fatal(err)
 		}
 		turns := 1
-		if i == state.ListCap-1 {
+		if i == sessions-1 {
 			turns = perSession
 		}
 		for j := 0; j < turns; j++ {
@@ -48,10 +49,13 @@ func TestListSessionsSeeksNotScans(t *testing.T) {
 		t.Fatal(err)
 	}
 	if len(rows) != state.ListCap {
-		t.Fatalf("rows: %d, want %d", len(rows), state.ListCap)
+		t.Fatalf("rows: %d over %d sessions, want the cap %d", len(rows), sessions, state.ListCap)
 	}
-	if rows[0].ID != fmt.Sprintf("s%03d", state.ListCap-1) {
+	if rows[0].ID != fmt.Sprintf("s%03d", sessions-1) {
 		t.Fatalf("the listing's head is %q, want the newest session", rows[0].ID)
+	}
+	if last := rows[len(rows)-1].ID; last != "s001" {
+		t.Fatalf("the listing's tail is %q, want s001: the oldest session falls past the cap", last)
 	}
 	if rows[0].Turns != perSession/2 {
 		t.Fatalf("turns: %d, want %d", rows[0].Turns, perSession/2)

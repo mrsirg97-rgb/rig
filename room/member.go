@@ -248,14 +248,11 @@ func (m *member) Live() []int64 {
 
 func ask[T any](m *member, f func() T) (T, bool) {
 	done := make(chan T, 1)
-	m.engine.Add(evt.Func(func(context.Context) { done <- f() }), PriorityFleet)
-	select {
-	case out := <-done:
-		return out, true
-	case <-m.gone:
+	if !m.Ask(func() { done <- f() }) {
 		var zero T
 		return zero, false
 	}
+	return <-done, true
 }
 
 func (m *member) Admits(version string) bool {
