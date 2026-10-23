@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="rig subagents: delegation, the scheduler and the swarm — three mechanisms, one queue, one model room.">
+<meta name="theme-color" content="#0e0f11">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://tryrig.ai/subagents/">
+<meta property="og:title" content="rig — subagents">
+<meta property="og:description" content="Work off the turn: delegate, schedule, swarm. One queue underneath.">
+<meta property="og:image" content="https://tryrig.ai/og.png">
+<meta name="twitter:card" content="summary_large_image">
+<title>rig — subagents</title>
+<link rel="stylesheet" href="../site.css">
+</head>
+<body>
+
+<a class="skip" href="#main">skip to content</a>
+
+<header class="topbar">
+  <a class="brand" href="../" aria-label="rig, home"><b>rig</b><span>{{RIG_VERSION}}</span></a>
+  <nav class="topnav" aria-label="pages">
+    <a href="../">overview</a>
+    <a href="../setup/">setup</a>
+    <a href="../performance/">performance</a>
+    <a href="../developing/">developing</a>
+    <a href="../plugins/">plugins</a>
+    <a href="../subagents/" aria-current="page">subagents</a>
+    <a href="../decision/">decision</a>
+    <a href="https://github.com/mrsirg97-rgb/rig">github</a>
+  </nav>
+</header>
+<div class="topbar-rule" aria-hidden="true"></div>
+
+<main class="doc" id="main">
+
+  <section>
+    <p class="eyebrow">subagents</p>
+    <h1>Work off the turn, <em>not off the machine.</em></h1>
+    <div class="lede">
+      <p>rig has three ways to put work beside your turn: a <b>delegate</b> for a bounded subtask, the <b>scheduler</b> for work that owns a clock, and the <b>swarm</b> for draining a board. They are not three runtimes. They are three doors onto one worker path, one store, and one priority queue.</p>
+      <p>That is the whole design argument: a worker is just another rig request. Where the model runs — a local child with two places, or a hosted endpoint that queues for you — changes nothing above it.</p>
+    </div>
+    <div class="toc" aria-label="on this page">
+      <a href="#three">the three</a>
+      <a href="#shared">what they share</a>
+      <a href="#agnostic">backend-agnostic workers</a>
+      <a href="#slot">one slot, many workers</a>
+      <a href="#queue">the priority queue</a>
+      <a href="#board">the board</a>
+      <a href="#when">when to use which</a>
+    </div>
+  </section>
+
+  <section id="three">
+    <p class="eyebrow">the three</p>
+    <h2>Delegation, schedule, swarm</h2>
+    <div class="scroll">
+      <table class="compare">
+        <thead><tr><th scope="col">axis</th><th scope="col">delegate</th><th scope="col">scheduler</th><th scope="col">swarm</th></tr></thead>
+        <tbody>
+          <tr><th scope="row">the job</th><td>one bounded subtask, now</td><td>a job that fires on a clock</td><td>drain a board, continuously</td></tr>
+          <tr><th scope="row">who starts it</th><td>a tool call in the turn</td><td>the crontab (or a one-shot <code>at</code>)</td><td><code>swarm start N</code></td></tr>
+          <tr><th scope="row">the shape</th><td>a headless <code>rig -p</code> run, or one deterministic bash line as a command worker</td><td>a one-shot <code>rig -p</code> in the job's own cwd, fired by <code>rig run-job &lt;key&gt;</code></td><td>N workers claiming tasks, plus reviewers taking verdicts</td></tr>
+          <tr><th scope="row">the bound</th><td><code>timeoutMs</code> is the kill bound for a command worker; a model worker has no clock</td><td>the job's <code>timeout</code> and <code>budget</code>, per fire</td><td>the swarm's own context — no stall kill; <code>budget=</code> caps the spend</td></tr>
+          <tr><th scope="row">how it returns</th><td>a <code>WorkerDone</code> message at priority 70: in hand at the turn's boundary</td><td>a recorded run in the scheduler store; the dashboard has the audit</td><td>the board: the worker completes, a reviewer accepts or rejects</td></tr>
+          <tr><th scope="row">the record</th><td>a run in the scheduler store, a resumable transcript, a log</td><td>the event log is the spine; the rows a projection</td><td>the todo board is the state; notes carry findings</td></tr>
+          <tr><th scope="row">the jail</th><td>the same runner as a scheduled fire</td><td>bubblewrap, landlock, or off by name</td><td>the same jail, the same allow-list narrowing</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="sheet-intro">A delegated batch can take two rows of its own in the TUI — the count and elapsed over the most recent call of any of its workers. The swarm band carries the live counts per role. Both are display, not state:</p>
+<pre class="tui"><span class="t-ok">delegate #1 returned · exit 0 · 41s · session 7d41d9c</span>
+<span class="t-dim">214 tests pass; two flaky under -race, noted on t2</span>
+
+<span class="t-ember">/swarm</span><span class="t-dim"> · </span><span class="t-text">start 2</span>
+<span class="t-dim">swarm: added 2 agents (role worker · model local)</span>
+<span class="t-dim">w1 claimed t1 · w2 waits for t1</span>
+<span class="t-dim">workers 2 · +3 ✓5 ✕1 · w2 t388 12s</span>
+<span class="t-dim">reviewer 1 · ⧗1 ✓1 ✕0</span></pre>
+  </section>
+
+  <section id="shared">
+    <p class="eyebrow">what they share</p>
+    <h2>One worker path, three callers</h2>
+    <p>Every worker — delegated, scheduled, or swarmed — is spawned through the same path: a one-shot <code>rig -p</code>, the row's model, the operator's interpreter, the sandbox profile, the socket proxy, the recorded run. The differences are who owns the trigger and who reads the result.</p>
+    <div class="table" role="list">
+      <div class="row" role="listitem"><span class="os">the prompt</span><p class="what"><code>rig -p -</code> takes the prompt from stdin, capped at the read tool's 1 MiB ceiling — which is why a worker's prompt is never an argv.</p></div>
+      <div class="row" role="listitem"><span class="os">the menu</span><p class="what">A worker gets the doing set — bash, read, write, edit, view, python, web, rem. The session's verbs (<code>todo</code> prune/accept/reject/move, <code>scheduler</code> remove, <code>plugin</code> delete) leave its menu and refuse at its gate. Only a reviewer holds <code>verdict</code>.</p></div>
+      <div class="row" role="listitem"><span class="os">the return</span><p class="what"><code>core.WorkerDone</code> carries the message, exit, duration, session and log. The frontend drains it at the prompt as the head of the next user message: returns first, then what you typed. A drain with no live turn starts one.</p></div>
+      <div class="row" role="listitem"><span class="os">the ownership</span><p class="what">A worker belongs to the session, not the turn that spawned it. The interrupt gesture with no turn live — esc on an empty prompt, the dashboard's stop — stops every running worker.</p></div>
+      <div class="row" role="listitem"><span class="os">the caps</span><p class="what"><code>maxWorkers</code> caps all workers at once across delegate and swarm; a delegate past the cap hands back <code>queued</code> and starts when one returns. <code>workerWindow</code> caps every worker's window at N tokens, scaling reserve and maxTokens by the same ratio; the session keeps its full window.</p></div>
+    </div>
+  </section>
+
+  <section id="agnostic">
+    <p class="eyebrow">backend-agnostic</p>
+    <h2>The model is a row, not a scheduler detail</h2>
+    <p>Nothing in the worker path names a backend. A worker is a request, and the row says where the request goes:</p>
+    <div class="split">
+      <div>
+        <h3>hosted row</h3>
+        <p><code>remote: true</code> or a named provider. A worker's request is just a second request: the endpoint queues it, rig counts the cost, and a 429 or 5xx retries with bounded backoff. The room's residency read is skipped entirely.</p>
+      </div>
+      <div>
+        <h3>local row</h3>
+        <p>The row's <code>baseUrl</code> is the endpoint and its child half knows how to start it. A worker claims the model's key in the room like every other client; what is loaded is read live from the port, and a model that is not resident refuses by name, naming the holder.</p>
+      </div>
+    </div>
+    <p>The scheduler never asks which one it is. It fires <code>rig -p</code>; the row answers. The swarm never asks either: each worker is a one-shot run, and the board is the shared state. <b>Swapping a local row for a hosted one changes one file, not one worker.</b></p>
+  </section>
+
+  <section id="slot">
+    <p class="eyebrow">one slot, many workers</p>
+    <h2>Places, not slots, and one counted key</h2>
+    <p>Here is the part most fleets get wrong: a model is <b>one counted key</b>, and the row says how many <b>places</b> it serves at once — two with two sequences, three for an <code>-np 3</code> child. The holder set is the guarded state. There is deliberately no key per slot: the child serves N interchangeable sequences, and per-place keys would invent identity the server does not have.</p>
+    <div class="table" role="list">
+      <div class="row" role="listitem"><span class="os">the claim</span><p class="what">An instance claims the key, and when the claim is final it sends its own request to the child's port. <b>Its completion is the release</b> — the stream's terminal event mints the next version on the chain.</p></div>
+      <div class="row" role="listitem"><span class="os">the entry</span><p class="what">A strictly higher-priority claim may enter while the places are full: one holder beyond the places, never two, and only strictly above every holder. Entry, never eviction — nothing kills a request mid-flight.</p></div>
+      <div class="row" role="listitem"><span class="os">the continuation</span><p class="what">Within one priority, the claim naming the conversation already in the model goes first. A dropped reply costs a full prompt re-read, and a slot's conversation state is the one thing the engine keeps.</p></div>
+      <div class="row" role="listitem"><span class="os">the cap</span><p class="what"><code>maxWorkers</code> is the delegate's hand-off cap on rig's own workers. It is <b>not</b> the model's places: one is how much work you start, the other is what the server can hold.</p></div>
+    </div>
+    <p>So "multiple workers on one slot" is not a special mode. It is N claims on one key, ordered by priority and arrival, released by their own completions, with the continuation rule keeping each conversation's cache warm. On a hosted row the same N requests simply queue at the endpoint instead. <b>Either way the worker code is identical, because the worker never sees the slot.</b></p>
+  </section>
+
+  <section id="queue">
+    <p class="eyebrow">the priority queue</p>
+    <h2>The scheduler is the queue</h2>
+    <p>One consumer runs the session; work arrives as closures ordered by <b>priority first, arrival second</b>. The fleet costs no extra machinery because the queue orders by priority, not by source: your input, a worker's return, a tool completion and a reviewer's verdict are all just producers.</p>
+<pre class="code"> 90  input      your line, at the boundary
+ 70  delegate   a worker's return — ahead of the turn in flight
+ 60  write      an effect, inline, in call order
+ 50  read       overlap, eight at a time
+ 50  stream · tool
+ 30  fleet      swarm notices and claims, in the gaps of a turn
+ 10  review     the reviewer's bite, only when nothing else is queued</pre>
+    <div class="table" role="list">
+      <div class="row" role="listitem"><span class="os">the return</span><p class="what">A delegate's return posts at 70, <em>above</em> the turn's own events. The work you asked for is in hand at the boundary of the turn in flight, however many turns queue behind it.</p></div>
+      <div class="row" role="listitem"><span class="os">the chatter</span><p class="what">The fleet's other deliveries post at 30, <em>below</em> the turn. A busy session delays them and loses nothing: the stores hold the facts. Starvation is the documented property here, not a bug to chase.</p></div>
+      <div class="row" role="listitem"><span class="os">the bite</span><p class="what">The reviewer's batch posts at 10 and starts only when nothing else is queued. Labelling gets the idle time; nothing waits on the labels.</p></div>
+      <div class="row" role="listitem"><span class="os">the wakeup</span><p class="what">No timer. A step that waits on the world spawns and posts its completion back: <b>the event is the wakeup.</b> That is why a fleet of workers adds producers, not threads you have to babysit.</p></div>
+    </div>
+  </section>
+
+  <section id="board">
+    <p class="eyebrow">the board</p>
+    <h2>The swarm is a board with workers</h2>
+    <p><code>swarm start &lt;count&gt; [role=worker|reviewer] [model=&lt;id&gt;] [budget=&lt;dollars&gt;]</code> puts drain workers and reviewers on the same loop, jail and return path as you. The count rides start and is capped at 16; a budget stops the controller's claims at the cap with a notice, and the spend is summed from the recorded run costs.</p>
+    <p>Each worker claims the next unblocked task, spawns a one-shot run through the delegate path, and submits for review. A reviewer takes the worker's <code>verdict</code> and calls <code>accept</code> or <code>reject</code>. The board's two links are the whole gate:</p>
+    <div class="table" role="list">
+      <div class="row" role="listitem"><span class="os">requires</span><p class="what">I wait for that task. <code>claim</code> takes the next task nothing waits for; a blocked claim refuses, naming the blocker.</p></div>
+      <div class="row" role="listitem"><span class="os">blocks</span><p class="what">That task waits for me. The DAG is validated at create, so a cycle never lands.</p></div>
+      <div class="row" role="listitem"><span class="os">the gate</span><p class="what">Who completes decides: a solo session lands <code>done</code>; a worker submits for <code>review</code>; the reviewer's verdict settles it. A dead claim is released through the store's reap door.</p></div>
+      <div class="row" role="listitem"><span class="os">the notes</span><p class="what">A task carries notes in order with their session and time — the worker's findings go there and in rem, not into tasks it creates.</p></div>
+    </div>
+    <p>The dashboard shows the same board, and its stop button is the same interrupt gesture: it stops every running worker and lets their returns name the interrupt as their exit.</p>
+  </section>
+
+  <section id="when">
+    <p class="eyebrow">when to use which</p>
+    <h2>Pick by who owns the clock</h2>
+    <div class="table" role="list">
+      <div class="row" role="listitem"><span class="os">delegate</span><p class="what"><b>Your turn needs the result, but not before it ends.</b> A test sweep, a broad read, one bounded sub-question. One line costs the turn; the return heads the next one.</p></div>
+      <div class="row" role="listitem"><span class="os">scheduler</span><p class="what"><b>The clock owns it.</b> A health check every two hours, a nightly training run, a job that must outlive the session and be auditable afterwards.</p></div>
+      <div class="row" role="listitem"><span class="os">swarm</span><p class="what"><b>The board owns it.</b> Many independent tasks of the same shape, with a review gate and a budget — a backlog you want drained while you review the results.</p></div>
+      <div class="row" role="listitem"><span class="os">none</span><p class="what"><b>Everything else.</b> A worker is not free: it is another request against the same model. The smallest correct thing is often the turn you are already in.</p></div>
+    </div>
+  </section>
+
+  <footer>
+    <p class="built">The fleet's message seams, the supervisor, the reap and the review gate: <a href="https://github.com/mrsirg97-rgb/rig/blob/main/docs/DESIGN.md">docs/DESIGN.md</a> and <code>specs/SPEC_SWARM.md</code>.</p>
+    <nav class="links" aria-label="links">
+      <a href="https://github.com/mrsirg97-rgb/rig">github</a>
+      <a href="https://github.com/mrsirg97-rgb/rig/releases">releases</a>
+      <a href="https://github.com/mrsirg97-rgb/evt">evt</a>
+      <a href="https://github.com/mrsirg97-rgb/rig/blob/main/docs/SETUP.md">setup doc</a>
+      <a href="https://github.com/mrsirg97-rgb/rig/tree/main/specs">specs</a>
+      <a href="https://github.com/mrsirg97-rgb/rig/blob/main/docs/EMBED.md">embed</a>
+    </nav>
+    <p class="stamp">rig {{RIG_VERSION}} · a small operating system for agents · MIT</p>
+  </footer>
+
+</main>
+</body>
+</html>

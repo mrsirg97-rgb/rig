@@ -38,6 +38,10 @@ jobs:
       # committed aggregates in docs/measured.json
       - name: measured-check
         run: python3 scripts/readme-measured check
+      # the site is assembled and checked on every PR too: a dead relative
+      # link or an unrendered placeholder fails here, not on main after deploy
+      - name: site
+        run: python3 scripts/site-build --out "$RUNNER_TEMP/site"
       - name: shellcheck install.sh and scripts/wire-check
         run: shellcheck install.sh scripts/wire-check
 

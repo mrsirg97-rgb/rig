@@ -1,0 +1,160 @@
+#!/usr/bin/env python3
+"""Assemble the site: copy site/ and install.sh into a dist dir, then render.
+
+Every number on the pages is computed here, never typed: the version from
+cmd/rig/main.go, the commit count from the log, the cache numbers from
+docs/measured.json, and the tree sizes from scripts/readme-measured's own
+walker (one implementation, so the site and the README cannot disagree).
+
+  python3 scripts/site-build [--repo .] [--out dist]
+
+Refuses a page that still carries a {{RIG_...}} placeholder, or a relative
+link that resolves to nothing in the artifact.
+"""
+
+import argparse
+import importlib.util
+import json
+import os
+import re
+import shutil
+import subprocess
+import sys
+from importlib.machinery import SourceFileLoader
+
+sys.dont_write_bytecode = True
+
+PLACEHOLDER = re.compile(r"\{\{RIG_[A-Z_]+\}\}")
+HREF = re.compile(r'(?:href|src)="([^"]+)"')
+VERSION = re.compile(r'const Version = "([^"]+)"')
+
+
+def load(name, path):
+    loader = SourceFileLoader(name, path)
+    spec = importlib.util.spec_from_loader(name, loader)
+    module = importlib.util.module_from_spec(spec)
+    loader.exec_module(module)
+    return module
+
+
+def version(repo):
+    with open(os.path.join(repo, "cmd/rig/main.go"), encoding="utf-8") as fh:
+        found = VERSION.search(fh.read())
+    if not found:
+        sys.exit("site-build: cmd/rig/main.go carries no Version const")
+    return found.group(1)
+
+
+def commits(repo):
+    out = subprocess.run(
+        ["git", "rev-list", "--count", "HEAD"], cwd=repo,
+        check=True, capture_output=True, text=True)
+    return out.stdout.strip()
+
+
+def era_rows(eras):
+    rows = []
+    for e in eras:
+        rows.append(
+            '      <div class="row" role="listitem"><span class="os">{era}</span>'
+            '<p class="what">{turns:,} turns · {new:,} new tokens a turn · '
+            '{out} out · {cache:.2f}% cache</p></div>'.format(
+                era=e["era"].replace("-", "\u2013"), turns=e["turns"],
+                new=e["new_per_turn"], out=e["completion_per_turn"],
+                cache=e["cache_pct"]))
+    return "\n".join(rows)
+
+
+def values(repo):
+    with open(os.path.join(repo, "docs/measured.json"), encoding="utf-8") as fh:
+        data = json.load(fh)
+    if not data.get("prompt"):
+        sys.exit("site-build: docs/measured.json holds no prompt tokens; "
+                 "nothing to measure")
+    tree = load(
+        "readme_measured",
+        os.path.join(repo, "scripts/readme-measured")).walk_tree(repo)
+    prompt_pct = 100.0 * data["cache_read"] / data["prompt"]
+    return {
+        "{{RIG_VERSION}}": version(repo),
+        "{{RIG_COMMITS}}": commits(repo),
+        "{{RIG_TOKENS}}": "{:.1f}".format(data["prompt"] / 1e9),
+        "{{RIG_CACHE_PCT}}": "{:.1f}".format(prompt_pct),
+        "{{RIG_SESSIONS}}": "{:,}".format(data["sessions"]),
+        "{{RIG_TURNS}}": "{:,}".format(data["turns"]),
+        "{{RIG_ERA_ROWS}}": era_rows(data["eras"]),
+        "{{RIG_LOOP_LINES}}": "{:,}".format(tree["loop_lines"]),
+        "{{RIG_SWARM_LINES}}": "{:,}".format(tree["swarm_lines"]),
+        "{{RIG_GO_LINES}}": "{:,}".format(tree["go_lines"]),
+        "{{RIG_TEST_LINES}}": "{:,}".format(tree["test_lines"]),
+    }
+
+
+def render(out, subs):
+    pages = []
+    for base, _, files in os.walk(out):
+        for name in files:
+            if name.endswith(".html"):
+                pages.append(os.path.join(base, name))
+    for path in sorted(pages):
+        with open(path, encoding="utf-8") as fh:
+            text = fh.read()
+        for key, val in subs.items():
+            text = text.replace(key, val)
+        left = PLACEHOLDER.search(text)
+        if left:
+            sys.exit(f"site-build: {path}: unrendered placeholder {left.group(0)}")
+        with open(path, "w", encoding="utf-8") as fh:
+            fh.write(text)
+
+
+def check_links(out):
+    broken = []
+    for base, _, files in os.walk(out):
+        for name in files:
+            if not name.endswith(".html"):
+                continue
+            page = os.path.join(base, name)
+            with open(page, encoding="utf-8") as fh:
+                links = HREF.findall(fh.read())
+            for href in links:
+                if not href or href.startswith(("#", "http:", "https:", "mailto:", "data:")):
+                    continue
+                target = href.split("#", 1)[0].split("?", 1)[0]
+                if not target:
+                    continue
+                path = os.path.normpath(os.path.join(base, target))
+                if target.endswith("/") or os.path.isdir(path):
+                    path = os.path.join(path, "index.html")
+                if not os.path.isfile(path):
+                    broken.append(f"{os.path.relpath(page, out)}: {href}")
+    if broken:
+        sys.exit("site-build: relative links resolve to nothing:\n  " +
+                 "\n  ".join(broken))
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__)
+    ap.add_argument("--repo", default=".")
+    ap.add_argument("--out", default="dist")
+    args = ap.parse_args()
+
+    repo = os.path.abspath(args.repo)
+    out = os.path.abspath(args.out)
+    src = os.path.join(repo, "site")
+
+    if out == repo or repo.startswith(out + os.sep):
+        sys.exit("site-build: refusing to write the artifact over the repo")
+    if os.path.isdir(out):
+        shutil.rmtree(out)
+    shutil.copytree(src, out)
+    shutil.copy2(os.path.join(repo, "install.sh"), os.path.join(out, "install.sh"))
+
+    subs = values(repo)
+    render(out, subs)
+    check_links(out)
+    print(f"site-build: {out} · {len(subs)} keys rendered")
+
+
+if __name__ == "__main__":
+    main()

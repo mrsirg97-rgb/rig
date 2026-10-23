@@ -1,0 +1,228 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="Developing on rig: the Go module, the seams, the kernel, a worked example, the freeze, and how to extend it.">
+<meta name="theme-color" content="#0e0f11">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://tryrig.ai/developing/">
+<meta property="og:title" content="rig — developing on it">
+<meta property="og:description" content="rig is a Go module before it is a binary.">
+<meta property="og:image" content="https://tryrig.ai/og.png">
+<meta name="twitter:card" content="summary_large_image">
+<title>rig — developing on it</title>
+<link rel="stylesheet" href="../site.css">
+</head>
+<body>
+
+<a class="skip" href="#main">skip to content</a>
+
+<header class="topbar">
+  <a class="brand" href="../" aria-label="rig, home"><b>rig</b><span>{{RIG_VERSION}}</span></a>
+  <nav class="topnav" aria-label="pages">
+    <a href="../">overview</a>
+    <a href="../setup/">setup</a>
+    <a href="../performance/">performance</a>
+    <a href="../developing/" aria-current="page">developing</a>
+    <a href="../plugins/">plugins</a>
+    <a href="../subagents/">subagents</a>
+    <a href="../decision/">decision</a>
+    <a href="https://github.com/mrsirg97-rgb/rig">github</a>
+  </nav>
+</header>
+<div class="topbar-rule" aria-hidden="true"></div>
+
+<main class="doc" id="main">
+
+  <section>
+    <p class="eyebrow">developing</p>
+    <h1>rig is a module <em>before it is a binary.</em></h1>
+    <div class="lede">
+      <p>The binary at <code>cmd/rig</code> is one wiring of <code>github.com/mrsirg97-rgb/rig/v3</code>. Import the module and the loop, the seams, the stores and the event engine are yours — with the same ordering and failure semantics the binary has, because it is the same code.</p>
+      <p>This page is the embedder's contract: the five seams, the nine kernel options, one working example, and the freeze that keeps the surface honest.</p>
+    </div>
+    <div class="toc" aria-label="on this page">
+      <a href="#get">get it</a>
+      <a href="#seams">the seams</a>
+      <a href="#kernel">the kernel</a>
+      <a href="#example">a worked example</a>
+      <a href="#freeze">the freeze</a>
+      <a href="#extend">extending it</a>
+      <a href="#process">the process</a>
+    </div>
+  </section>
+
+  <section id="get">
+    <p class="eyebrow">get it</p>
+    <h2>One import, no runtime</h2>
+<pre class="code">go get github.com/mrsirg97-rgb/rig/v3@latest
+
+<span class="c">// the module</span>
+import (
+    <span class="k">"github.com/mrsirg97-rgb/rig/v3"</span>        <span class="d">// the kernel: rig.New</span>
+    <span class="k">"github.com/mrsirg97-rgb/rig/v3/core"</span>     <span class="d">// the seams and the wire types</span>
+    <span class="k">"github.com/mrsirg97-rgb/rig/v3/loop"</span>     <span class="d">// loop.Run(ctx, k)</span>
+    <span class="k">"github.com/mrsirg97-rgb/rig/v3/store"</span>    <span class="d">// SQLite stores, migrations</span>
+)</pre>
+    <p>The core is standard library only. The one store dependency is pure-Go SQLite, so an embedding binary cross-builds with <code>CGO_ENABLED=0</code>. The event engine is its own module — <a href="https://github.com/mrsirg97-rgb/evt">github.com/mrsirg97-rgb/evt</a> — and it is the engine, not a directory in this tree.</p>
+  </section>
+
+  <section id="seams">
+    <p class="eyebrow">the seams</p>
+    <h2>Five interfaces hold the shape</h2>
+    <p class="sheet-intro">A seam is one method (or one small family) with a name that says what crosses it. The loop names none of the concrete types; every dependency is resolved at the composition root.</p>
+    <div class="scroll">
+      <table class="compare">
+        <thead><tr><th scope="col">seam</th><th scope="col">shape</th><th scope="col">role</th><th scope="col">swapped with</th></tr></thead>
+        <tbody>
+          <tr><th scope="row">Provider</th><td><code>Stream(ctx, Request) (&lt;-chan Event, error)</code></td><td>model access, streaming</td><td><code>WithProvider</code></td></tr>
+          <tr><th scope="row">Tool</th><td><code>Name / Description / Schema / Exec(ctx, args)</code></td><td>a capability</td><td><code>WithTools</code></td></tr>
+          <tr><th scope="row">Frontend</th><td><code>Input(ctx) (string, error)</code>; <code>Notify(Event)</code></td><td>human I/O and the event sink</td><td><code>WithFrontend</code></td></tr>
+          <tr><th scope="row">ContextPolicy</th><td><code>Assemble(ctx, session) ([]Message, error)</code></td><td>context construction, per turn</td><td><code>WithPolicy</code></td></tr>
+          <tr><th scope="row">ToolMiddleware</th><td><code>Wrap(ToolExec) ToolExec</code></td><td>cross-cutting tool policy</td><td><code>WithMiddleware</code></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>Two capabilities ride the middleware by assertion, not obligation: <code>TurnStart</code> lets a link observe the turn boundary (the guard clears its counts there), and <code>Guidelines</code> lets it contribute system-prompt prose. One mechanism, not a second.</p>
+  </section>
+
+  <section id="kernel">
+    <p class="eyebrow">the kernel</p>
+    <h2>Nine options, wired once</h2>
+    <p class="sheet-intro"><code>rig.New(opts ...Option)</code> is the composition root as a struct. Duplicate tool or command names panic at <code>New</code>, not at the first call. The binary wires seven of the nine; <code>WithCommands</code> rides the frontend dispatchers and <code>WithParallel</code> stays at its default.</p>
+    <div class="scroll">
+      <table class="compare">
+        <thead><tr><th scope="col">option</th><th scope="col">what it is</th><th scope="col">the binary's wiring</th></tr></thead>
+        <tbody>
+          <tr><th scope="row">WithProvider</th><td>one turn, streamed</td><td><code>openai.New(...)</code> / <code>anthropic.New(...)</code> on the row's wire</td></tr>
+          <tr><th scope="row">WithTools</th><td>the tool table</td><td>the <code>tool/*</code> adapters plus the plugin door</td></tr>
+          <tr><th scope="row">WithFrontend</th><td>input pull, event notify</td><td><code>tui</code>, <code>cli</code> or <code>oneshot</code></td></tr>
+          <tr><th scope="row">WithPolicy</th><td>message assembly</td><td><code>compact.New</code>, the per-model trigger</td></tr>
+          <tr><th scope="row">WithCommands</th><td>the slash-command set</td><td>unwired at the root: commands dispatch at the frontend seam</td></tr>
+          <tr><th scope="row">WithMiddleware</th><td>the tool-exec chain</td><td>toolset, approve, cutoff, perm, guard, paths; the graph tap inside, the decision links outside</td></tr>
+          <tr><th scope="row">WithPriority</th><td>a priority per tool call</td><td>the registry's predicate: a write 60, a read 50</td></tr>
+          <tr><th scope="row">WithParallel</th><td>the in-flight bound</td><td>unset; <code>DefaultParallel</code> is 8</td></tr>
+          <tr><th scope="row">WithEngine</th><td>the event engine</td><td>the root's engine, the fleet room's queue</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>The kernel also names the queue's priorities and the room's member ids, so an embedder can speak the same order the binary does: <code>PriorityInput</code> 90, <code>PriorityDelegate</code> 70, <code>PriorityWrite</code> 60, <code>PriorityRead</code> 50, <code>PriorityFleet</code> 30, <code>PriorityReview</code> 10.</p>
+  </section>
+
+  <section id="example">
+    <p class="eyebrow">a worked example</p>
+    <h2>A kernel, a fake provider, one turn</h2>
+    <p class="sheet-intro">The whole contract in one file: a frontend that returns one line, a policy that passes the session through, a provider that answers <code>done</code>, and <code>loop.Run</code>. Swap the three fakes for the real <code>openai</code>, <code>compact</code> and <code>tui</code> constructors and you have the binary's turn.</p>
+<pre class="code"><span class="k">package</span> main
+
+<span class="k">import</span> (
+    <span class="s">"context"</span>
+    <span class="s">"fmt"</span>
+    <span class="s">"log"</span>
+
+    <span class="s">"github.com/mrsirg97-rgb/evt"</span>
+    <span class="s">"github.com/mrsirg97-rgb/rig/v3"</span>
+    <span class="s">"github.com/mrsirg97-rgb/rig/v3/core"</span>
+    <span class="s">"github.com/mrsirg97-rgb/rig/v3/loop"</span>
+)
+
+<span class="c">// the human seam: one prompt, and the events it sees</span>
+<span class="k">type</span> frontend <span class="k">struct</span> {
+    prompt <span class="k">string</span>
+    events []evt.Signal
+}
+
+<span class="k">func</span> (f *frontend) Input(ctx context.Context) (<span class="k">string</span>, <span class="k">error</span>) { <span class="k">return</span> f.prompt, <span class="k">nil</span> }
+<span class="k">func</span> (f *frontend) Notify(ev evt.Signal)                     { f.events = <span class="k">append</span>(f.events, ev) }
+
+<span class="c">// the context seam: hand the transcript through unchanged</span>
+<span class="k">type</span> passthrough <span class="k">struct</span>{}
+
+<span class="k">func</span> (passthrough) Assemble(ctx context.Context, s *core.Session) ([]core.Message, <span class="k">error</span>) {
+    <span class="k">return</span> s.Messages, <span class="k">nil</span>
+}
+
+<span class="c">// the model seam: every stream ends in Done or Fault</span>
+<span class="k">type</span> stubProvider <span class="k">struct</span>{}
+
+<span class="k">func</span> (stubProvider) Stream(ctx context.Context, req core.Request) (&lt;-<span class="k">chan</span> evt.Signal, <span class="k">error</span>) {
+    ch := <span class="k">make</span>(<span class="k">chan</span> evt.Signal, <span class="d">2</span>)
+    ch &lt;- core.TextDelta{Text: <span class="s">"done"</span>}
+    ch &lt;- core.Done{StopReason: <span class="s">"stop"</span>}
+    <span class="k">close</span>(ch)
+    <span class="k">return</span> ch, <span class="k">nil</span>
+}
+
+<span class="k">func</span> main() {
+    f := &amp;frontend{prompt: <span class="s">"say something"</span>}
+    k := rig.New(
+        rig.WithProvider(stubProvider{}),
+        rig.WithFrontend(f),
+        rig.WithPolicy(passthrough{}),
+    )
+    <span class="k">if</span> err := loop.Run(context.Background(), k); err != <span class="k">nil</span> {
+        log.Fatal(err)
+    }
+    fmt.Println(<span class="s">"events:"</span>, <span class="k">len</span>(f.events))
+}</pre>
+    <p>What the loop does with that: assemble the context, stream the provider, execute any tool calls through the middleware chain, feed results back, repeat — and return on <code>Done</code>, <code>Fault</code>, or context cancel. A panic in a tool is recovered as that call's error; a fault surfaces through <code>Notify</code> and aborts the turn, and the session survives to its last complete message.</p>
+    <p>The stores are outside the kernel on purpose. The kernel holds no store handles: <code>todo.Create</code>, <code>todo.Complete</code> and their kin are the board's verbs, and the worker's <code>loop.Run</code> owns the turn. An embedding service wires both, and the worker cannot outlive the process.</p>
+  </section>
+
+  <section id="freeze">
+    <p class="eyebrow">the freeze</p>
+    <h2>core/ and loop/ are closed to modification</h2>
+    <p>The frozen surface is <b>the part you can depend on</b>: <code>core/</code> and <code>loop/</code> are open to pure addition only. The gate is <code>specs/FREEZE.txt</code>, read by <code>cmd/freeze</code> in the freeze job: every path a PR touches must match a line, and a touched path matching none fails, naming the path and the file. A real change to the frozen surface needs a <code>reopen &lt;path&gt; &lt;version&gt;</code> line, reviewed in the PR.</p>
+    <div class="table" role="list">
+      <div class="row" role="listitem"><span class="os">pure addition</span><p class="what">A new event type, a new seam method alongside the old, a new file in <code>core/</code>: lands without reopening.</p></div>
+      <div class="row" role="listitem"><span class="os">a reopening</span><p class="what">One line in <code>specs/FREEZE.txt</code> naming the path and the version that reopened it. The PR says why; the spec says what the surface now is.</p></div>
+      <div class="row" role="listitem"><span class="os">a refactor branch</span><p class="what">A branch carrying <code>-refactor</code> skips the gate; the PR names the reopening.</p></div>
+    </div>
+    <p>The structural test behind the freeze is simple: the loop never names a concrete tool, provider, policy, frontend or middleware. If an addition needs the loop to learn a name, it is a change to the surface, not an addition beside it.</p>
+  </section>
+
+  <section id="extend">
+    <p class="eyebrow">extending it</p>
+    <h2>One file, one registration line</h2>
+    <div class="table" role="list">
+      <div class="row" role="listitem"><span class="os">a tool</span><p class="what">Implement <code>core.Tool</code> in <code>tool/&lt;name&gt;/&lt;name&gt;.go</code>; register it in the root's <code>WithTools</code> and the default allow-list.<span class="where">tool/registry.json carries the model's words</span></p></div>
+      <div class="row" role="listitem"><span class="os">a provider</span><p class="what">Implement <code>core.Provider</code>: every stream ends in <code>Done</code> or <code>Fault</code>.<span class="where">provider/openai · provider/anthropic</span></p></div>
+      <div class="row" role="listitem"><span class="os">a policy</span><p class="what">Implement <code>core.ContextPolicy</code>; the compaction policy is the one the binary wires.<span class="where">policy/compact</span></p></div>
+      <div class="row" role="listitem"><span class="os">a frontend</span><p class="what">Implement <code>core.Frontend</code>; the TUI adds to the CLI's bytes, never changes them.<span class="where">frontend/tui · frontend/cli · frontend/web · frontend/oneshot</span></p></div>
+      <div class="row" role="listitem"><span class="os">a middleware</span><p class="what"><code>Wrap(ToolExec) ToolExec</code>, composed first-listed innermost; optional <code>TurnStart</code> and <code>Guidelines</code>.<span class="where">middleware/</span></p></div>
+      <div class="row" role="listitem"><span class="os">a store leaf</span><p class="what">The SQLite substrate is shared: statements, a schema version, a migration on open.<span class="where">store/ · store/sqlx</span></p></div>
+    </div>
+    <p>A Python plugin needs no Go at all: one file under <code>~/.rig/plugins/</code> is one tool, and the model's authoring lands in <code>pending/</code>. That is the <a href="../plugins/">plugins page</a>.</p>
+  </section>
+
+  <section id="process">
+    <p class="eyebrow">the process</p>
+    <h2>Spec first, tests before code</h2>
+    <p>Every behavior is one sentence in <code>specs/</code> with a test that holds it there; the governing spec is written and agreed before the code. Every Go package carries a <code>PACKAGE.md</code> that is its spec file: what it is, what it includes, how it is consumed, the gotchas. Read it before touching the package; keep it current when behavior changes.</p>
+<pre class="code">make test      <span class="c"># go vet ./... then go test -race ./...</span>
+make fmt-check <span class="c"># gofmt -l . must be empty; CI runs both</span>
+
+<span class="c"># the PR gates CI runs beyond those:</span>
+go run ./cmd/freeze -branch <span class="s">"$BRANCH"</span>   <span class="c"># every touched path matches FREEZE.txt</span>
+scripts/wire-check                    <span class="c"># the request bodies, merge-base vs head</span>
+python3 scripts/readme-measured check <span class="c"># the measured block did not drift</span></pre>
+    <p>The house patterns are worth reading before a first PR: interface first (the struct is unexported, the constructor returns the interface), one-method seams, a thing is whole when it is constructed, sorted output, one shape per concept, and no comments in Go — the code documents itself and the <code>PACKAGE.md</code> carries the English. <code>CONTRIBUTING.md</code> is the process; <code>AGENTS.md</code> is the map.</p>
+  </section>
+
+  <footer>
+    <p class="built">The long version, with the in-process worker: <a href="https://github.com/mrsirg97-rgb/rig/blob/main/docs/EMBED.md">docs/EMBED.md</a>.</p>
+    <nav class="links" aria-label="links">
+      <a href="https://github.com/mrsirg97-rgb/rig">github</a>
+      <a href="https://github.com/mrsirg97-rgb/rig/releases">releases</a>
+      <a href="https://github.com/mrsirg97-rgb/evt">evt</a>
+      <a href="https://github.com/mrsirg97-rgb/rig/blob/main/docs/SETUP.md">setup doc</a>
+      <a href="https://github.com/mrsirg97-rgb/rig/tree/main/specs">specs</a>
+      <a href="https://github.com/mrsirg97-rgb/rig/blob/main/docs/EMBED.md">embed</a>
+    </nav>
+    <p class="stamp">rig {{RIG_VERSION}} · a small operating system for agents · MIT</p>
+  </footer>
+
+</main>
+</body>
+</html>
