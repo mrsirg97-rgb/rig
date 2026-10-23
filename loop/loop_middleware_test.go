@@ -57,8 +57,8 @@ func TestDenialIsFedBackAndBounded(t *testing.T) {
 			perm.Allowlist("read"),
 			guard.Bound(3),
 		),
+		rig.WithSession(session),
 	)
-	k.Session = session
 
 	f.inputs <- "run bash"
 	close(f.inputs)
@@ -104,8 +104,8 @@ func TestToolFailureIsBoundedAndRecoverable(t *testing.T) {
 			perm.Allowlist("bash"),
 			guard.Bound(3),
 		),
+		rig.WithSession(session),
 	)
-	k.Session = session
 
 	f.inputs <- "go"
 	close(f.inputs)

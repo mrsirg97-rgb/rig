@@ -183,14 +183,7 @@ const pinnedBody = `{"model":"claude-fake","max_tokens":1024,"system":[{"type":"
 
 func TestBodyPinnedByteForByte(t *testing.T) {
 	e := captureEndpoint(t)
-	p := anthropic.New(anthropic.Config{
-		BaseURL:      e.url,
-		Model:        "claude-fake",
-		APIKey:       "test-key-1",
-		MaxTokens:    1024,
-		Thinking:     anthropic.Thinking{Budget: 512},
-		CacheControl: true,
-	})
+	p := anthropic.New("claude-fake", anthropic.WithBaseURL(e.url), anthropic.WithAPIKey("test-key-1"), anthropic.WithMaxTokens(1024), anthropic.WithCacheControl(true), anthropic.WithThinking(512))
 	if _, err := drain(t, context.Background(), p, pinnedRequest()); err != nil {
 		t.Fatalf("stream: %v", err)
 	}
@@ -214,7 +207,7 @@ func TestBodyPinnedByteForByte(t *testing.T) {
 
 func TestCacheControlOffOmitsEveryBreakpoint(t *testing.T) {
 	e := captureEndpoint(t)
-	p := anthropic.New(anthropic.Config{BaseURL: e.url, Model: "claude-fake"})
+	p := anthropic.New("claude-fake", anthropic.WithBaseURL(e.url))
 	if _, err := drain(t, context.Background(), p, pinnedRequest()); err != nil {
 		t.Fatalf("stream: %v", err)
 	}
@@ -225,7 +218,7 @@ func TestCacheControlOffOmitsEveryBreakpoint(t *testing.T) {
 
 func TestThinkingDisabledSendsNoThinkingBlocks(t *testing.T) {
 	e := captureEndpoint(t)
-	p := anthropic.New(anthropic.Config{BaseURL: e.url, Model: "claude-fake", MaxTokens: 1024})
+	p := anthropic.New("claude-fake", anthropic.WithBaseURL(e.url), anthropic.WithMaxTokens(1024))
 	req := pinnedRequest()
 	if _, err := drain(t, context.Background(), p, req); err != nil {
 		t.Fatalf("stream: %v", err)
@@ -241,7 +234,7 @@ func TestThinkingDisabledSendsNoThinkingBlocks(t *testing.T) {
 
 func TestRedactedThinkingCarriesBackVerbatim(t *testing.T) {
 	e := captureEndpoint(t)
-	p := anthropic.New(anthropic.Config{BaseURL: e.url, Model: "claude-fake", MaxTokens: 1024, Thinking: anthropic.Thinking{Budget: 512}})
+	p := anthropic.New("claude-fake", anthropic.WithBaseURL(e.url), anthropic.WithMaxTokens(1024), anthropic.WithThinking(512))
 	req := core.Request{
 		Messages: []core.Message{
 			{Role: core.RoleUser, Content: "go"},
@@ -275,7 +268,7 @@ data: {"type":"message_delta","delta":{"stop_reason":"tool_use"},"usage":{"outpu
 data: {"type":"message_stop"}
 
 `)
-	p := anthropic.New(anthropic.Config{BaseURL: e.url, Model: "claude-fake", MaxTokens: 1024})
+	p := anthropic.New("claude-fake", anthropic.WithBaseURL(e.url), anthropic.WithMaxTokens(1024))
 	events, err := drain(t, context.Background(), p, core.Request{Messages: []core.Message{{Role: core.RoleUser, Content: "ls"}}, MaxTokens: 1024})
 	if err != nil {
 		t.Fatalf("stream: %v", err)
@@ -317,7 +310,7 @@ data: {"type":"message_stop"}
 }
 
 func TestEmptyMessageListFailsLoud(t *testing.T) {
-	p := anthropic.New(anthropic.Config{BaseURL: "http://x", Model: "m"})
+	p := anthropic.New("m", anthropic.WithBaseURL("http://x"))
 	if _, err := p.Stream(context.Background(), core.Request{}); err == nil || !strings.Contains(err.Error(), "empty message list") {
 		t.Fatalf("err = %v, want the loud empty-list refusal", err)
 	}
@@ -325,7 +318,7 @@ func TestEmptyMessageListFailsLoud(t *testing.T) {
 
 func TestMaxTokensFallsBackToTheRowThenRefuses(t *testing.T) {
 	e := captureEndpoint(t)
-	p := anthropic.New(anthropic.Config{BaseURL: e.url, Model: "claude-fake", MaxTokens: 777})
+	p := anthropic.New("claude-fake", anthropic.WithBaseURL(e.url), anthropic.WithMaxTokens(777))
 	req := core.Request{Messages: []core.Message{{Role: core.RoleUser, Content: "hi"}}}
 	if _, err := drain(t, context.Background(), p, req); err != nil {
 		t.Fatalf("stream: %v", err)
@@ -334,7 +327,7 @@ func TestMaxTokensFallsBackToTheRowThenRefuses(t *testing.T) {
 	if !strings.Contains(body, `"max_tokens":777`) {
 		t.Fatalf("the config max_tokens is the fallback: %s", body)
 	}
-	bare := anthropic.New(anthropic.Config{BaseURL: e.url, Model: "claude-fake"})
+	bare := anthropic.New("claude-fake", anthropic.WithBaseURL(e.url))
 	if _, err := drain(t, context.Background(), bare, req); err == nil || !strings.Contains(err.Error(), "max_tokens") {
 		t.Fatalf("err = %v, want the loud max_tokens refusal", err)
 	}
@@ -342,7 +335,7 @@ func TestMaxTokensFallsBackToTheRowThenRefuses(t *testing.T) {
 
 func TestAnEmptyToolResultSendsANote(t *testing.T) {
 	e := captureEndpoint(t)
-	p := anthropic.New(anthropic.Config{BaseURL: e.url, Model: "claude-fake", MaxTokens: 1024})
+	p := anthropic.New("claude-fake", anthropic.WithBaseURL(e.url), anthropic.WithMaxTokens(1024))
 	req := core.Request{
 		Messages: []core.Message{
 			{Role: core.RoleUser, Content: "mkdir /tmp/a"},
@@ -362,7 +355,7 @@ func TestAnEmptyToolResultSendsANote(t *testing.T) {
 
 func TestTheThinkingBudgetDropsWhenMaxTokensLeavesNoRoom(t *testing.T) {
 	e := captureEndpoint(t)
-	p := anthropic.New(anthropic.Config{BaseURL: e.url, Model: "claude-fake", Thinking: anthropic.Thinking{Budget: 2048}})
+	p := anthropic.New("claude-fake", anthropic.WithBaseURL(e.url), anthropic.WithThinking(2048))
 	req := core.Request{
 		Messages: []core.Message{
 			{Role: core.RoleUser, Content: "go"},
@@ -394,7 +387,7 @@ func TestTheThinkingBudgetDropsWhenMaxTokensLeavesNoRoom(t *testing.T) {
 
 func TestForeignReasoningRecordsDoNotRideTheWire(t *testing.T) {
 	e := captureEndpoint(t)
-	p := anthropic.New(anthropic.Config{BaseURL: e.url, Model: "claude-fake", MaxTokens: 1024, Thinking: anthropic.Thinking{Budget: 512}})
+	p := anthropic.New("claude-fake", anthropic.WithBaseURL(e.url), anthropic.WithMaxTokens(1024), anthropic.WithThinking(512))
 	req := core.Request{
 		Messages: []core.Message{
 			{Role: core.RoleUser, Content: "go"},
@@ -418,7 +411,7 @@ func TestForeignReasoningRecordsDoNotRideTheWire(t *testing.T) {
 
 func TestAnAssistantTurnThatEncodesToNoBlocksIsSkipped(t *testing.T) {
 	e := captureEndpoint(t)
-	p := anthropic.New(anthropic.Config{BaseURL: e.url, Model: "claude-fake", MaxTokens: 1024})
+	p := anthropic.New("claude-fake", anthropic.WithBaseURL(e.url), anthropic.WithMaxTokens(1024))
 	req := core.Request{
 		Messages: []core.Message{
 			{Role: core.RoleUser, Content: "go"},
@@ -451,7 +444,7 @@ func TestAnAssistantTurnThatEncodesToNoBlocksIsSkipped(t *testing.T) {
 
 func TestTheAssistantReplayOrderIsThinkingThenTextThenToolUse(t *testing.T) {
 	e := captureEndpoint(t)
-	p := anthropic.New(anthropic.Config{BaseURL: e.url, Model: "claude-fake", MaxTokens: 1024, Thinking: anthropic.Thinking{Budget: 512}})
+	p := anthropic.New("claude-fake", anthropic.WithBaseURL(e.url), anthropic.WithMaxTokens(1024), anthropic.WithThinking(512))
 	req := core.Request{
 		Messages: []core.Message{
 			{Role: core.RoleUser, Content: "go"},

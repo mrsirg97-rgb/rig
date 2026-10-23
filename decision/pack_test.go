@@ -128,7 +128,7 @@ func packServer(t *testing.T, probe *packProbe, fake packFake) *httptest.Server 
 
 func httpDeciderAt(t *testing.T, srv *httptest.Server) decision.Decider {
 	t.Helper()
-	dec, err := decision.NewHTTP(decision.HTTPOptions{URL: srv.URL, Client: &http.Client{Transport: testenv.Transport()}})
+	dec, err := decision.NewHTTP(srv.URL, decision.WithHTTPClient(&http.Client{Transport: testenv.Transport()}))
 	if err != nil {
 		t.Fatal(err)
 	}

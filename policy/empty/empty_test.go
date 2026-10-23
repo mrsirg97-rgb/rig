@@ -123,10 +123,9 @@ func (f *testFrontend) steal() context.CancelFunc {
 	return c
 }
 
-func run(t *testing.T, prov *scriptedProvider, fe *testFrontend) *rig.Kernel {
+func run(t *testing.T, prov *scriptedProvider, fe *testFrontend) rig.Kernel {
 	t.Helper()
 	k := rig.New(rig.WithProvider(empty.Decorator(prov)), rig.WithFrontend(fe), rig.WithPolicy(passthrough{""}))
-	k.Session = core.NewSession()
 	if err := loop.Run(context.Background(), k); err != nil {
 		t.Fatalf("loop.Run: %v", err)
 	}
@@ -176,8 +175,8 @@ func TestEmptyTurnResamplesSameRequest(t *testing.T) {
 		{Role: core.RoleUser, Content: "go"},
 		{Role: core.RoleAssistant, Content: "answer", Reasoning: "thinking about an edit\n<invoke name=\"edit\" path=\"x\">ok", ContextTokens: 110},
 	}
-	if !reflect.DeepEqual(k.Session.Messages, want) {
-		t.Fatalf("the transcript must contain only the good turn: %+v", k.Session.Messages)
+	if !reflect.DeepEqual(k.Session().Messages, want) {
+		t.Fatalf("the transcript must contain only the good turn: %+v", k.Session().Messages)
 	}
 }
 
@@ -213,8 +212,8 @@ func TestThreeEmptyTurnsSurfaceTheFault(t *testing.T) {
 	if fault.Err.Error() != want {
 		t.Fatalf("fault = %q, want %q", fault.Err.Error(), want)
 	}
-	if !reflect.DeepEqual(k.Session.Messages, []core.Message{{Role: core.RoleUser, Content: "go"}}) {
-		t.Fatalf("the transcript must be unchanged after three empty turns: %+v", k.Session.Messages)
+	if !reflect.DeepEqual(k.Session().Messages, []core.Message{{Role: core.RoleUser, Content: "go"}}) {
+		t.Fatalf("the transcript must be unchanged after three empty turns: %+v", k.Session().Messages)
 	}
 }
 
@@ -277,8 +276,8 @@ func TestLengthFinishIsNotResampled(t *testing.T) {
 			t.Fatalf("the length-cut turn must keep the existing behavior, got %+v", ev)
 		}
 	}
-	if len(k.Session.Messages) != 2 || k.Session.Messages[1].Reasoning != "partial thinking" {
-		t.Fatalf("the length-cut thinking must persist as today: %+v", k.Session.Messages)
+	if len(k.Session().Messages) != 2 || k.Session().Messages[1].Reasoning != "partial thinking" {
+		t.Fatalf("the length-cut thinking must persist as today: %+v", k.Session().Messages)
 	}
 }
 
@@ -307,7 +306,6 @@ func TestCancelDuringResampleStopsClean(t *testing.T) {
 	}}
 	fe := &testFrontend{inputs: []string{"go"}}
 	k := rig.New(rig.WithProvider(empty.Decorator(prov)), rig.WithFrontend(fe), rig.WithPolicy(passthrough{""}))
-	k.Session = core.NewSession()
 	done := make(chan error, 1)
 	go func() { done <- loop.Run(context.Background(), k) }()
 

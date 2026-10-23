@@ -29,7 +29,7 @@ the Apple meta tags, safe-area insets).
   shows a return as it shows a notice), wakes `Input`, and drains at the
   top of `Input` as `core.WorkerBlock`, the same text the other frontends
   fold. The stop
-  button, with no turn to interrupt, calls `Options.StopWorkers` (the
+  button, with no turn to interrupt, calls `WithStopWorkers` (the
   root wires the delegate's `StopAll`): the interrupt gesture stops the
   workers, and a session with no delegate has no hook and behaves as it
   did. The drain hands over what returned since the last turn in arrival
@@ -66,8 +66,10 @@ the Apple meta tags, safe-area insets).
   flag; `GET /api/swarm` is the last swarm status the loop published.
   The POST doors ride the write's walls (Origin, the body cap); the
   stream and the reads ride the token gate.
-- **`Server` / `New` / `ListenAndServe` / `Handler` / `Close`**: the
-  dashboard: the static inputs (the rig home, the serve cwd, the models
+- **`Server` / `New` / `ListenAndServe` / `Handler` / `Close`**: `Server`
+  is the interface `New` returns (the frontend seams, `Ask`, the token and
+  the HTTP doors), the struct unexported; the package's own tests build
+  through `build`, which hands back the struct. The dashboard: the static inputs (the rig home, the serve cwd, the models
   table, the crontab, the runner command), the token, the allowed
   origins, the store cache, the rooted static assets.
 - **The token gate** (SPEC_SERVE 5): `serve.token` (0600) minted once and
@@ -147,7 +149,7 @@ the Apple meta tags, safe-area insets).
   404, a duplicate in the target zone the named 409). Same walls as
   every write.
 - **The folder browser** (`browse.go`, SPEC_SERVE 13): `GET /api/fs`:
-  directories only, rooted at `Options.Root` (the user's home by
+  directories only, rooted at `WithRoot` (the user's home by
   default), symlinks resolved before the root check, hidden entries off
   unless asked, the listing capped at 500, a path outside the root a
   403 by name.
@@ -189,11 +191,13 @@ the Apple meta tags, safe-area insets).
 
 ## How it is consumed
 
-- The root wires it with `web.New(web.Options{Home, CWD, Models,
-  Crontab, RunnerCmd, Machine, Version})` and `srv.ListenAndServe(ctx,
-  addr)`, behind the `serve` subcommand (`cmd/rig/serve.go`, one file
-  plus a registration line in `main.go`). `Machine` is the room member
-  the three pages read; `Version` is the build the update page shows.
+- The root wires it with `web.New(home, opts...)` (the home is the
+  part; `WithCWD`, `WithModels`, `WithCrontab`, `WithRunnerCmd`,
+  `WithMachine`, `WithVersion` and the rest are the knobs) and
+  `srv.ListenAndServe(ctx, addr)`, behind the `serve` subcommand
+  (`cmd/rig/serve.go`, one file plus a registration line in `main.go`).
+  `WithMachine` is the room member the three pages read; `WithVersion`
+  is the build the update page shows.
 - The room page shows the members and each model's residency: who holds
   it, who waits, whether the row's port answers, the last requests any
   rig served from it (`room.Recent`: the claim's class, the prompt and
@@ -232,7 +236,7 @@ the Apple meta tags, safe-area insets).
 - The wire front (`wire.go`) answers `/v1/chat/completions`,
   `/v1/models` (the rows' aliases), `/running` and `/unload` on
   loopback, and claims at the floor for anything that is not rig. A cold
-  row starts through `Options.Ready` (the root's same path a session
+  row starts through `WithReady` (the root's same path a session
   takes); a body over 256 MiB is a 413, each chunk of the reply is
   flushed as it arrives, and the reply lifts the server's write deadline
   the way the chat stream does (3.0.1): a cold start or a long reply

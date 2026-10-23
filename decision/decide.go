@@ -20,11 +20,7 @@ const decideQuestionID = "item"
 
 const unsureUnder = 0.5
 
-type DecideOptions struct {
-	Decider  Decider
-	Recorder Recorder
-	Parallel int
-}
+type DecideOption func(*decideTool)
 
 type Decide interface {
 	tool.Definition
@@ -42,14 +38,22 @@ type decideTool struct {
 	parallel int
 }
 
-func NewDecide(o DecideOptions) (Decide, error) {
-	if o.Decider == nil {
+func WithRecorder(rec Recorder) DecideOption {
+	return func(t *decideTool) { t.rec = rec }
+}
+
+func NewDecide(dec Decider, parallel int, opts ...DecideOption) (Decide, error) {
+	if dec == nil {
 		return nil, errors.New("decision: no decider")
 	}
-	if o.Parallel <= 0 {
-		return nil, fmt.Errorf("decision: parallel %d: the fan-out needs a bound", o.Parallel)
+	if parallel <= 0 {
+		return nil, fmt.Errorf("decision: parallel %d: the fan-out needs a bound", parallel)
 	}
-	return &decideTool{Definition: tool.Def("decide"), dec: o.Decider, rec: o.Recorder, parallel: o.Parallel}, nil
+	t := &decideTool{Definition: tool.Def("decide"), dec: dec, parallel: parallel}
+	for _, opt := range opts {
+		opt(t)
+	}
+	return t, nil
 }
 
 func (t *decideTool) Exec(ctx context.Context, data json.RawMessage) (string, error) {
@@ -86,17 +90,16 @@ func (t *decideTool) Choice(ctx context.Context, prompt string, labels []Label, 
 		}
 		seen[l.Label] = true
 	}
-	q := Question{ID: decideQuestionID, Kind: KindChoice, Prompt: prompt}
-	q.Choices = make([]string, len(labels))
+	choices := make([]string, len(labels))
+	description := make(map[string]string, len(labels))
 	for i, l := range labels {
-		q.Choices[i] = l.Label
+		choices[i] = l.Label
 		if l.Description != "" {
-			if q.Description == nil {
-				q.Description = make(map[string]string, len(labels))
-			}
-			q.Description[l.Label] = l.Description
+			description[l.Label] = l.Description
 		}
 	}
+	q := NewQuestion(QuestionInput{ID: decideQuestionID, Kind: KindChoice, Prompt: prompt},
+		WithChoices(choices...), WithDescription(description))
 	return t.run(ctx, KindChoice, q, labelNames(labels), items)
 }
 
@@ -104,7 +107,7 @@ func (t *decideTool) Binary(ctx context.Context, prompt string, items []string) 
 	if err := promptBound(prompt); err != nil {
 		return "", err
 	}
-	return t.run(ctx, KindBinary, Question{ID: decideQuestionID, Kind: KindBinary, Prompt: prompt}, nil, items)
+	return t.run(ctx, KindBinary, Binary(decideQuestionID, prompt), nil, items)
 }
 
 func (t *decideTool) Score(ctx context.Context, prompt string, criteria, items []string) (string, error) {
@@ -119,7 +122,7 @@ func (t *decideTool) Score(ctx context.Context, prompt string, criteria, items [
 			return "", errors.New("decide: an empty criterion")
 		}
 	}
-	return t.run(ctx, KindScore, Question{ID: decideQuestionID, Kind: KindScore, Prompt: prompt, Criteria: criteria}, nil, items)
+	return t.run(ctx, KindScore, Score(decideQuestionID, prompt, criteria...), nil, items)
 }
 
 func promptBound(prompt string) error {
@@ -160,7 +163,7 @@ func (t *decideTool) run(ctx context.Context, kind string, q Question, labels, i
 		}
 	}
 	for i, a := range answers {
-		if a.Question != q.ID {
+		if a.Question != q.ID() {
 			return "", fmt.Errorf("decide: item %d: the server replied no answer; nothing was sorted and no row was written", i+1)
 		}
 	}
@@ -185,7 +188,7 @@ func FanOut(ctx context.Context, dec Decider, parallel int, q Question, states [
 				return
 			}
 			for _, a := range out {
-				if a.Question == q.ID {
+				if a.Question == q.ID() {
 					answers[i] = a
 					return
 				}

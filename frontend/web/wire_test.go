@@ -45,13 +45,13 @@ func (d *stubDoor) Foreign(broadcast.Mint) bool               { return false }
 func (d *stubDoor) Refused(int64, broadcast.Mint, int64) bool { return false }
 func (d *stubDoor) Release(broadcast.Mint)                    {}
 
-func wireServer(t *testing.T) (*Server, string, *httptest.Server, room.Member) {
+func wireServer(t *testing.T) (*server, string, *httptest.Server, room.Member) {
 	return wireServerDoor(t, nil, nil)
 }
 
 var upstreamMint chan string
 
-func wireServerDoor(t *testing.T, machine room.Member, door room.Door) (*Server, string, *httptest.Server, room.Member) {
+func wireServerDoor(t *testing.T, machine room.Member, door room.Door) (*server, string, *httptest.Server, room.Member) {
 	t.Helper()
 	up := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/v1/chat/completions" {
@@ -82,7 +82,7 @@ func wireServerDoor(t *testing.T, machine room.Member, door room.Door) (*Server,
 		t.Cleanup(m.Close)
 		machine = m
 	}
-	srv, err := New(Options{Home: home, CWD: testCWD, Models: table, Crontab: &fakeCrontab{}, Natives: []string{"bash", "read"}, Root: home, Machine: machine, Door: door, Version: "3.0.0"})
+	srv, err := build(home, WithCWD(testCWD), WithModels(table), WithCrontab(&fakeCrontab{}), WithNatives([]string{"bash", "read"}...), WithRoot(home), WithMachine(machine), WithDoor(door), WithVersion("3.0.0"))
 	if err != nil {
 		t.Fatal(err)
 	}

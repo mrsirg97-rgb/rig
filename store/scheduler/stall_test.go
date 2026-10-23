@@ -425,7 +425,7 @@ func TestASilentCommandFireIsEndedByTheStall(t *testing.T) {
 	if !strings.Contains(logBody, "[runner: killed after stall]") {
 		t.Fatalf("a silent command fire must end by the stall watch: %s", logBody)
 	}
-	if told[len(told)-1].State != room.JobFailed {
+	if told[len(told)-1].State() != room.JobFailed {
 		t.Fatalf("the end is a failure: %+v", told[len(told)-1])
 	}
 }

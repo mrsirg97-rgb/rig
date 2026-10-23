@@ -26,7 +26,7 @@ func TestTheWiredGatesRecordIntoTheStore(t *testing.T) {
 	var exec core.ToolExec = func(ctx context.Context, call core.ToolCall) (string, error) {
 		return "ran", nil
 	}
-	for _, mw := range k.Middleware {
+	for _, mw := range k.Middleware() {
 		exec = mw.Wrap(exec)
 	}
 	out, err := exec(context.Background(), core.ToolCall{ID: "c1", Name: "no-such-tool", Args: nil})
@@ -62,8 +62,8 @@ func (f *fakeProposals) Propose(p decision.Pending) { f.got = append(f.got, p) }
 
 func TestWithNoProposerTheChainIsCanonical(t *testing.T) {
 	k := wire(testRoot(nullFrontend{}))
-	if len(k.Middleware) != 9 {
-		t.Fatalf("no decisionUrl, no link: %d", len(k.Middleware))
+	if len(k.Middleware()) != 9 {
+		t.Fatalf("no decisionUrl, no link: %d", len(k.Middleware()))
 	}
 }
 
@@ -72,13 +72,13 @@ func TestAProposerAddsOneSiteLink(t *testing.T) {
 	fake := &fakeProposals{}
 	r.proposals = fake
 	k := wire(r)
-	if len(k.Middleware) != 10 {
-		t.Fatalf("the proposal site is one link: %d", len(k.Middleware))
+	if len(k.Middleware()) != 10 {
+		t.Fatalf("the proposal site is one link: %d", len(k.Middleware()))
 	}
 	var exec core.ToolExec = func(ctx context.Context, call core.ToolCall) (string, error) {
 		return "ran", nil
 	}
-	for _, mw := range k.Middleware {
+	for _, mw := range k.Middleware() {
 		exec = mw.Wrap(exec)
 	}
 	got, err := exec(context.Background(), core.ToolCall{ID: "c1", Name: "bash", Args: json.RawMessage(`{"command":"ls"}`)})
@@ -107,7 +107,7 @@ func TestANoToolsRunExecutesNothingNotEvenPlugins(t *testing.T) {
 	var exec core.ToolExec = func(ctx context.Context, call core.ToolCall) (string, error) {
 		return "ran", nil
 	}
-	for _, mw := range k.Middleware {
+	for _, mw := range k.Middleware() {
 		exec = mw.Wrap(exec)
 	}
 	if _, err := exec(context.Background(), core.ToolCall{ID: "c1", Name: "bash", Args: json.RawMessage(`{"command":"ls"}`)}); err == nil {
@@ -126,7 +126,7 @@ func TestAnAllowedRunKeepsThePluginDoorOpen(t *testing.T) {
 	var exec core.ToolExec = func(ctx context.Context, call core.ToolCall) (string, error) {
 		return "ran", nil
 	}
-	for _, mw := range k.Middleware {
+	for _, mw := range k.Middleware() {
 		exec = mw.Wrap(exec)
 	}
 	out, err := exec(context.Background(), core.ToolCall{ID: "c2", Name: "myplug", Args: nil})
@@ -141,7 +141,7 @@ func TestWithNoProposerNothingProposes(t *testing.T) {
 	var exec core.ToolExec = func(ctx context.Context, call core.ToolCall) (string, error) {
 		return "ran", nil
 	}
-	for _, mw := range k.Middleware {
+	for _, mw := range k.Middleware() {
 		exec = mw.Wrap(exec)
 	}
 	if _, err := exec(context.Background(), core.ToolCall{ID: "c1", Name: "bash", Args: json.RawMessage(`{"command":"ls"}`)}); err != nil {

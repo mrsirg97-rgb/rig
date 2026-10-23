@@ -123,7 +123,7 @@ func TestDispatchByPrefixLoopNeverSeesCommand(t *testing.T) {
 		t.Fatalf("the models command's fake must have recorded the call, got %d", modelsCalls)
 	}
 	var userMsgs []string
-	for _, m := range k.Session.Messages {
+	for _, m := range k.Session().Messages {
 		if m.Role == core.RoleUser {
 			userMsgs = append(userMsgs, m.Content)
 		}

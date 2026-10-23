@@ -443,30 +443,30 @@ func (t *tui) trackStatusLocked(st core.SwarmStatus) {
 }
 
 func (t *tui) jobLocked(st machineroom.JobStatus) {
-	switch st.State {
+	switch st.State() {
 	case machineroom.JobRunning:
-		t.bandWorksLocked("job/"+st.Job, "job "+st.Job, st.Workers, st.Started)
-		if st.Call == "" {
+		t.bandWorksLocked("job/"+st.Job(), "job "+st.Job(), st.Workers(), st.Started())
+		if st.Call() == "" {
 			text := "scheduled job"
-			if st.Workers > 0 {
-				text += " · " + strconv.Itoa(st.Workers) + " " + wordFor(st.Workers)
+			if st.Workers() > 0 {
+				text += " · " + strconv.Itoa(st.Workers()) + " " + wordFor(st.Workers())
 			}
 			t.bandQueueLocked(bandEvent(SlotText, text))
 			return
 		}
-		t.bandWorkerCallLocked("job/"+st.Job, st.Job+" #1 ", st.Call, st.CallAt)
+		t.bandWorkerCallLocked("job/"+st.Job(), st.Job()+" #1 ", st.Call(), st.CallAt())
 	case machineroom.JobDone:
-		t.bandWorksLocked("job/"+st.Job, "", -1, time.Time{})
-		text := "job " + st.Job + " done · " + swarmAge(st.Ended.Sub(st.Started))
-		if st.Summary != "" {
-			text += " · " + st.Summary
+		t.bandWorksLocked("job/"+st.Job(), "", -1, time.Time{})
+		text := "job " + st.Job() + " done · " + swarmAge(st.Ended().Sub(st.Started()))
+		if st.Summary() != "" {
+			text += " · " + st.Summary()
 		}
 		t.bandQueueLocked(bandEvent(SlotSuccess, text))
 	case machineroom.JobFailed:
-		t.bandWorksLocked("job/"+st.Job, "", -1, time.Time{})
-		text := "job " + st.Job + " failed"
-		if st.Reason != "" {
-			text += " · " + st.Reason
+		t.bandWorksLocked("job/"+st.Job(), "", -1, time.Time{})
+		text := "job " + st.Job() + " failed"
+		if st.Reason() != "" {
+			text += " · " + st.Reason()
 		}
 		t.bandQueueLocked(bandEvent(SlotError, text))
 	}

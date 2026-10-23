@@ -16,7 +16,7 @@ const (
 
 var pluginNameRe = regexp.MustCompile(`^[a-z][a-z0-9_]{0,63}$`)
 
-func (s *Server) router() http.Handler {
+func (s *server) router() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		path := r.URL.Path
 		allowed, ok := s.allowed(path)
@@ -33,7 +33,7 @@ func (s *Server) router() http.Handler {
 	})
 }
 
-func (s *Server) allowed(path string) (map[string]bool, bool) {
+func (s *server) allowed(path string) (map[string]bool, bool) {
 	switch {
 	case path == "/":
 		return setOf("GET"), true
@@ -87,7 +87,7 @@ func (s *Server) allowed(path string) (map[string]bool, bool) {
 	return nil, false
 }
 
-func (s *Server) dispatch(w http.ResponseWriter, r *http.Request, path string) {
+func (s *server) dispatch(w http.ResponseWriter, r *http.Request, path string) {
 	switch {
 	case path == "/":
 		s.serveStatic(w, "index.html", "text/html; charset=utf-8")

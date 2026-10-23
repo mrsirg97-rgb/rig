@@ -68,7 +68,7 @@ func TestBearerSent(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	p := NewWithConfig(Config{BaseURL: srv.URL, Model: "m", APIKey: "sk-secret"})
+	p := New(srv.URL, "m", WithAPIKey("sk-secret"))
 	if _, err := hostedDrain(t, context.Background(), p, userReq()); err != nil {
 		t.Fatalf("stream: %v", err)
 	}
@@ -85,7 +85,7 @@ func TestNoAuthHeaderWithoutKey(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	p := NewWithConfig(Config{BaseURL: srv.URL, Model: "m"})
+	p := New(srv.URL, "m")
 	if _, err := hostedDrain(t, context.Background(), p, userReq()); err != nil {
 		t.Fatalf("stream: %v", err)
 	}
@@ -107,10 +107,7 @@ func TestRetries429WithBackoff(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	p := NewWithConfig(Config{
-		BaseURL: srv.URL, Model: "m",
-		Retries: 3, RetryBase: 10 * time.Millisecond, Jitter: func() float64 { return 0 },
-	})
+	p := New(srv.URL, "m", WithRetries(3), WithRetryBase(10*time.Millisecond), WithJitter(func() float64 { return 0 }))
 	started := time.Now()
 	events, err := hostedDrain(t, context.Background(), p, userReq())
 	elapsed := time.Since(started)
@@ -140,10 +137,7 @@ func TestRetries5xxWithBackoff(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	p := NewWithConfig(Config{
-		BaseURL: srv.URL, Model: "m",
-		Retries: 3, RetryBase: 5 * time.Millisecond, Jitter: func() float64 { return 0 },
-	})
+	p := New(srv.URL, "m", WithRetries(3), WithRetryBase(5*time.Millisecond), WithJitter(func() float64 { return 0 }))
 	if _, err := hostedDrain(t, context.Background(), p, userReq()); err != nil {
 		t.Fatalf("stream: %v", err)
 	}
@@ -161,10 +155,7 @@ func TestRetryBoundExhaustsWithFault(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	p := NewWithConfig(Config{
-		BaseURL: srv.URL, Model: "m",
-		Retries: 2, RetryBase: 5 * time.Millisecond, Jitter: func() float64 { return 0 },
-	})
+	p := New(srv.URL, "m", WithRetries(2), WithRetryBase(5*time.Millisecond), WithJitter(func() float64 { return 0 }))
 	events, err := hostedDrain(t, context.Background(), p, userReq())
 	if err != nil {
 		t.Fatalf("stream: %v", err)
@@ -184,7 +175,7 @@ func TestCostParsedFromUsage(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	p := NewWithConfig(Config{BaseURL: srv.URL, Model: "m"})
+	p := New(srv.URL, "m")
 	events, err := hostedDrain(t, context.Background(), p, userReq())
 	if err != nil {
 		t.Fatalf("stream: %v", err)
@@ -198,7 +189,7 @@ func TestCostParsedFromUsage(t *testing.T) {
 	}
 }
 
-func openRouterReqBody(t *testing.T, msgs []core.Message, cfg Config) map[string]any {
+func openRouterReqBody(t *testing.T, msgs []core.Message, model string, opts ...Option) map[string]any {
 	t.Helper()
 	var body []byte
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -206,8 +197,7 @@ func openRouterReqBody(t *testing.T, msgs []core.Message, cfg Config) map[string
 		io.WriteString(w, "data: {\"choices\":[{\"delta\":{},\"finish_reason\":\"stop\"}]}\ndata: [DONE]\n")
 	}))
 	defer srv.Close()
-	cfg.BaseURL = srv.URL
-	p := NewWithConfig(cfg)
+	p := New(srv.URL, model, opts...)
 	req := core.Request{Messages: msgs, ReasoningEffort: "high"}
 	if _, err := hostedDrain(t, context.Background(), p, req); err != nil {
 		t.Fatalf("stream: %v", err)
@@ -225,7 +215,7 @@ func TestOpenRouterReasoningEchoedUnderItsFieldNames(t *testing.T) {
 		{Role: core.RoleUser, Content: "go"},
 		{Role: core.RoleAssistant, Content: "answer", Reasoning: "thinking", ReasoningDetails: details},
 	}
-	m := openRouterReqBody(t, msgs, Config{Model: "m", Reasoning: "reasoning"})
+	m := openRouterReqBody(t, msgs, "m", WithReasoning("reasoning"))
 	wire, ok := m["messages"].([]any)
 	if !ok || len(wire) != 2 {
 		t.Fatalf("messages: %v", m["messages"])
@@ -247,7 +237,7 @@ func TestDefaultReasoningContentStays(t *testing.T) {
 		{Role: core.RoleUser, Content: "go"},
 		{Role: core.RoleAssistant, Content: "answer", Reasoning: "thinking"},
 	}
-	m := openRouterReqBody(t, msgs, Config{Model: "m"})
+	m := openRouterReqBody(t, msgs, "m")
 	wire := m["messages"].([]any)
 	asst := wire[1].(map[string]any)
 	if asst["reasoning_content"] != "thinking" {
@@ -271,7 +261,7 @@ func TestOpenRouterStreamReasoningAndDetails(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	p := NewWithConfig(Config{BaseURL: srv.URL, Model: "m", Reasoning: "reasoning"})
+	p := New(srv.URL, "m", WithReasoning("reasoning"))
 	events, err := hostedDrain(t, context.Background(), p, userReq())
 	if err != nil {
 		t.Fatalf("stream: %v", err)
@@ -295,7 +285,7 @@ func TestOpenRouterStreamReasoningAndDetails(t *testing.T) {
 }
 
 func TestRemoteOmitsChatTemplateKwargs(t *testing.T) {
-	m := openRouterReqBody(t, []core.Message{{Role: core.RoleUser, Content: "go"}}, Config{Model: "m", Remote: true})
+	m := openRouterReqBody(t, []core.Message{{Role: core.RoleUser, Content: "go"}}, "m", WithRemote(true))
 	if _, ok := m["chat_template_kwargs"]; ok {
 		t.Fatalf("a remote row must omit chat_template_kwargs: %v", m)
 	}
@@ -305,9 +295,7 @@ func TestRemoteOmitsChatTemplateKwargs(t *testing.T) {
 }
 
 func TestOpenRouterPinAndCacheControl(t *testing.T) {
-	m := openRouterReqBody(t, []core.Message{{Role: core.RoleUser, Content: "go"}}, Config{
-		Model: "m", ProviderPin: []string{"Together"}, CacheControl: true,
-	})
+	m := openRouterReqBody(t, []core.Message{{Role: core.RoleUser, Content: "go"}}, "m", WithProviderPin([]string{"Together"}...), WithCacheControl(true))
 	provider, ok := m["provider"].(map[string]any)
 	if !ok {
 		t.Fatalf("provider: %v", m["provider"])
@@ -322,7 +310,7 @@ func TestOpenRouterPinAndCacheControl(t *testing.T) {
 }
 
 func TestLocalRowStillSendsChatTemplateKwargs(t *testing.T) {
-	m := openRouterReqBody(t, []core.Message{{Role: core.RoleUser, Content: "go"}}, Config{Model: "m"})
+	m := openRouterReqBody(t, []core.Message{{Role: core.RoleUser, Content: "go"}}, "m")
 	if _, ok := m["chat_template_kwargs"]; !ok {
 		t.Fatalf("a local row must keep chat_template_kwargs: %v", m)
 	}
@@ -335,7 +323,7 @@ func TestHostedFaultsAreLoudAndBounded(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	p := NewWithConfig(Config{BaseURL: srv.URL, Model: "m", Retries: 3, RetryBase: time.Millisecond, Jitter: func() float64 { return 0 }})
+	p := New(srv.URL, "m", WithRetries(3), WithRetryBase(time.Millisecond), WithJitter(func() float64 { return 0 }))
 	events, err := hostedDrain(t, context.Background(), p, userReq())
 	if err != nil {
 		t.Fatalf("stream: %v", err)
@@ -358,7 +346,7 @@ func TestReasoningDetailsArrivePerChunk(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	p := NewWithConfig(Config{BaseURL: srv.URL, Model: "m", Reasoning: "reasoning"})
+	p := New(srv.URL, "m", WithReasoning("reasoning"))
 	events, err := hostedDrain(t, context.Background(), p, userReq())
 	if err != nil {
 		t.Fatalf("stream: %v", err)

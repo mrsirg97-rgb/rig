@@ -337,7 +337,7 @@ func TestAStallingServerBoundsTheWaitForHeaders(t *testing.T) {
 		srv.Close()
 	}()
 
-	p := openai.NewWithConfig(openai.Config{BaseURL: srv.URL, Model: "local", HeaderTimeout: 50 * time.Millisecond})
+	p := openai.New(srv.URL, "local", openai.WithHeaderTimeout(50*time.Millisecond))
 	start := time.Now()
 	events, err := drain(t, context.Background(), p, userReq())
 	if err != nil {
@@ -371,7 +371,7 @@ func TestALocalRowKeepsWaitingForHeadersPastTheOldBound(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	tight := openai.NewWithConfig(openai.Config{BaseURL: srv.URL, Model: "local", HeaderTimeout: 50 * time.Millisecond})
+	tight := openai.New(srv.URL, "local", openai.WithHeaderTimeout(50*time.Millisecond))
 	events, err := drain(t, context.Background(), tight, userReq())
 	if err != nil {
 		t.Fatalf("stream: %v", err)
@@ -385,11 +385,7 @@ func TestALocalRowKeepsWaitingForHeadersPastTheOldBound(t *testing.T) {
 	}
 
 	close(held)
-	loose := openai.NewWithConfig(openai.Config{
-		BaseURL:       srv.URL,
-		Model:         "local",
-		HeaderTimeout: openaiwire.HeaderTimeoutOff,
-	})
+	loose := openai.New(srv.URL, "local", openai.WithHeaderTimeout(openaiwire.HeaderTimeoutOff))
 	events, err = drain(t, context.Background(), loose, userReq())
 	if err != nil {
 		t.Fatalf("the local row must wait out the old bound: %v", err)

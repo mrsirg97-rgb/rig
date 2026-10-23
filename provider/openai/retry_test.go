@@ -25,10 +25,7 @@ func TestLocalRowRetriesEmpty502(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	p := NewWithConfig(Config{
-		BaseURL: srv.URL, Model: "m",
-		RetryBase: 5 * time.Millisecond, Jitter: func() float64 { return 0 },
-	})
+	p := New(srv.URL, "m", WithRetryBase(5*time.Millisecond), WithJitter(func() float64 { return 0 }))
 	started := time.Now()
 	events, err := hostedDrain(t, context.Background(), p, userReq())
 	elapsed := time.Since(started)
@@ -59,10 +56,7 @@ func TestEmpty502RetryBoundExhaustsWithFault(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	p := NewWithConfig(Config{
-		BaseURL: srv.URL, Model: "m",
-		RetryBase: 5 * time.Millisecond, Jitter: func() float64 { return 0 },
-	})
+	p := New(srv.URL, "m", WithRetryBase(5*time.Millisecond), WithJitter(func() float64 { return 0 }))
 	events, err := hostedDrain(t, context.Background(), p, userReq())
 	if err != nil {
 		t.Fatalf("stream: %v", err)
@@ -85,10 +79,7 @@ func TestLocalRow502WithBodyFaults(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	p := NewWithConfig(Config{
-		BaseURL: srv.URL, Model: "m",
-		RetryBase: 5 * time.Millisecond, Jitter: func() float64 { return 0 },
-	})
+	p := New(srv.URL, "m", WithRetryBase(5*time.Millisecond), WithJitter(func() float64 { return 0 }))
 	events, err := hostedDrain(t, context.Background(), p, userReq())
 	if err != nil {
 		t.Fatalf("stream: %v", err)
@@ -122,10 +113,7 @@ func TestNoRetryAfterFirstToken(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	p := NewWithConfig(Config{
-		BaseURL: srv.URL, Model: "m",
-		Retries: 3, RetryBase: 5 * time.Millisecond, Jitter: func() float64 { return 0 },
-	})
+	p := New(srv.URL, "m", WithRetries(3), WithRetryBase(5*time.Millisecond), WithJitter(func() float64 { return 0 }))
 	events, err := hostedDrain(t, context.Background(), p, userReq())
 	if err != nil {
 		t.Fatalf("stream: %v", err)

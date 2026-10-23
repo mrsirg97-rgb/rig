@@ -89,7 +89,7 @@ type GoldSet struct {
 func GoldRows(settled []GoldRow) (GoldSet, error) {
 	out := GoldSet{Rows: make([]LayaRow, 0, len(settled))}
 	for _, r := range settled {
-		if r.Question.ID == "" {
+		if r.Question.ID() == "" {
 			return GoldSet{}, fmt.Errorf("decision: gold row %d carries no question id", r.ID)
 		}
 		row, ok, err := goldRow(r)
@@ -106,7 +106,7 @@ func GoldRows(settled []GoldRow) (GoldSet, error) {
 }
 
 func goldRow(r GoldRow) (LayaRow, bool, error) {
-	switch r.Question.Kind {
+	switch r.Question.Kind() {
 	case KindScore:
 		return LayaRow{}, false, nil
 	case KindChoice, KindBinary:
@@ -124,9 +124,9 @@ func goldRow(r GoldRow) (LayaRow, bool, error) {
 		}
 		gold = label
 	}
-	q := LayaQuestion{Instructions: r.Question.Prompt}
+	q := LayaQuestion{Instructions: r.Question.Prompt()}
 	expected := any(gold)
-	switch r.Question.Kind {
+	switch r.Question.Kind() {
 	case KindBinary:
 		if gold != "yes" && gold != "no" {
 			return LayaRow{}, false, nil
@@ -135,7 +135,7 @@ func goldRow(r GoldRow) (LayaRow, bool, error) {
 		expected = gold == "yes"
 	case KindChoice:
 		known := false
-		for _, c := range r.Question.Choices {
+		for _, c := range r.Question.Choices() {
 			if c == gold {
 				known = true
 				break
@@ -150,8 +150,8 @@ func goldRow(r GoldRow) (LayaRow, bool, error) {
 	return LayaRow{
 		ID:        r.ID,
 		State:     r.State,
-		Questions: map[string]LayaQuestion{r.Question.ID: q},
-		Expected:  map[string]any{r.Question.ID: expected},
+		Questions: map[string]LayaQuestion{r.Question.ID(): q},
+		Expected:  map[string]any{r.Question.ID(): expected},
 	}, true, nil
 }
 

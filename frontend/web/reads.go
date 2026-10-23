@@ -16,13 +16,13 @@ import (
 	"time"
 )
 
-func (s *Server) handleCwds(w http.ResponseWriter, r *http.Request) {
+func (s *server) handleCwds(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := s.readCtx(r)
 	defer cancel()
 	writeJSON(w, http.StatusOK, map[string]any{"cwds": s.workspaces(ctx)})
 }
 
-func (s *Server) workspaces(ctx context.Context) []string {
+func (s *server) workspaces(ctx context.Context) []string {
 	seen := map[string]bool{}
 	var others []string
 	add := func(cwd string) {
@@ -67,7 +67,7 @@ func (s *Server) workspaces(ctx context.Context) []string {
 	return out
 }
 
-func (s *Server) handleSessions(w http.ResponseWriter, r *http.Request) {
+func (s *server) handleSessions(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := s.readCtx(r)
 	defer cancel()
 	cwd := r.URL.Query().Get("cwd")
@@ -101,7 +101,7 @@ func (s *Server) handleSessions(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"cwd": cwd, "sessions": out})
 }
 
-func (s *Server) handleTranscript(w http.ResponseWriter, r *http.Request, id string) {
+func (s *server) handleTranscript(w http.ResponseWriter, r *http.Request, id string) {
 	ctx, cancel := s.readCtx(r)
 	defer cancel()
 	cwd := r.URL.Query().Get("cwd")
@@ -160,7 +160,7 @@ func (s *Server) handleTranscript(w http.ResponseWriter, r *http.Request, id str
 	})
 }
 
-func (s *Server) handleTodoRead(w http.ResponseWriter, r *http.Request) {
+func (s *server) handleTodoRead(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := s.readCtx(r)
 	defer cancel()
 	cwd := r.URL.Query().Get("cwd")
@@ -189,7 +189,7 @@ func (s *Server) handleTodoRead(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"cwd": cwd, "text": text})
 }
 
-func (s *Server) handleScheduler(w http.ResponseWriter, r *http.Request) {
+func (s *server) handleScheduler(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := s.readCtx(r)
 	defer cancel()
 	cwd := r.URL.Query().Get("cwd")
@@ -214,7 +214,7 @@ func (s *Server) handleScheduler(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, body)
 }
 
-func (s *Server) handleModels(w http.ResponseWriter, r *http.Request) {
+func (s *server) handleModels(w http.ResponseWriter, r *http.Request) {
 	ids := s.models.Known()
 	rows := make([]modelJSON, 0, len(ids))
 	for _, id := range ids {
@@ -245,7 +245,7 @@ func (s *Server) handleModels(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"models": rows})
 }
 
-func (s *Server) handlePlugins(w http.ResponseWriter, r *http.Request) {
+func (s *server) handlePlugins(w http.ResponseWriter, r *http.Request) {
 	loaded, pending, disabled, err := listPlugins(s.home)
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, err.Error())

@@ -30,14 +30,7 @@ func scriptedStreamServer(t *testing.T, handle func(w http.ResponseWriter, r *ht
 }
 
 func retryProvider(url string, retries int) core.Provider {
-	return anthropic.New(anthropic.Config{
-		BaseURL:   url,
-		Model:     "claude-fake",
-		MaxTokens: 1024,
-		Retries:   retries,
-		RetryBase: time.Millisecond,
-		Jitter:    func() float64 { return 0 },
-	})
+	return anthropic.New("claude-fake", anthropic.WithBaseURL(url), anthropic.WithMaxTokens(1024), anthropic.WithRetries(retries), anthropic.WithRetryBase(time.Millisecond), anthropic.WithJitter(func() float64 { return 0 }))
 }
 
 func Test429HonorsRetryAfter(t *testing.T) {
@@ -50,14 +43,7 @@ func Test429HonorsRetryAfter(t *testing.T) {
 		}
 		return false
 	})
-	p := anthropic.New(anthropic.Config{
-		BaseURL:   srv.URL,
-		Model:     "claude-fake",
-		MaxTokens: 1024,
-		Retries:   3,
-		RetryBase: time.Hour,
-		Jitter:    func() float64 { return 0 },
-	})
+	p := anthropic.New("claude-fake", anthropic.WithBaseURL(srv.URL), anthropic.WithMaxTokens(1024), anthropic.WithRetries(3), anthropic.WithRetryBase(time.Hour), anthropic.WithJitter(func() float64 { return 0 }))
 	start := time.Now()
 	events, err := drain(t, context.Background(), p, userReq())
 	if err != nil {

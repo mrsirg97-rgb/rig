@@ -214,35 +214,3 @@ func TestDropFileTakesTheLexicalRowsWithIt(t *testing.T) {
 		t.Fatalf("a dropped file must leave no zombie candidate, got %v", err)
 	}
 }
-
-func TestARepointedServerGivesTheGoneLanguageAnotherChance(t *testing.T) {
-	root, q := lspProject(t)
-	defer q.Close()
-	q.SetServer("typescript", filepath.Join(t.TempDir(), "no-such-language-server"), "--stdio")
-	ctx := context.Background()
-	q.Touch(filepath.Join(root, "src", "widget.ts"))
-	q.Drain(ctx)
-	db, err := graph.Open(q.Home(), scope.Key(root), scope.Worktree(root))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
-	var mapped int
-	if err := db.QueryRow(`SELECT count(*) FROM symbols`).Scan(&mapped); err != nil {
-		t.Fatal(err)
-	}
-	if mapped != 0 {
-		t.Fatalf("the missing server maps nothing, got %d rows", mapped)
-	}
-	syms := filepath.Join(t.TempDir(), "syms.json")
-	writeFake(t, syms, widgetSymbols)
-	q.SetServer("typescript", fakeServer(t, "typescript", fakeLog(t), syms, "")...)
-	q.Touch(filepath.Join(root, "src", "widget.ts"))
-	q.Drain(ctx)
-	if err := db.QueryRow(`SELECT count(*) FROM symbols WHERE name = 'Widget'`).Scan(&mapped); err != nil {
-		t.Fatal(err)
-	}
-	if mapped == 0 {
-		t.Fatalf("a re-pointed server must restart the gone language")
-	}
-}

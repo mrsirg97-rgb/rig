@@ -55,10 +55,10 @@ type PruneInput struct {
 type adapter struct {
 	tool.Definition
 	db    store.DB
-	graph *graph.Queue
+	graph graph.Queue
 }
 
-func New(db store.DB, g *graph.Queue) Rem {
+func New(db store.DB, g graph.Queue) Rem {
 	return adapter{Definition: tool.Def("rem"), db: db, graph: g}
 }
 

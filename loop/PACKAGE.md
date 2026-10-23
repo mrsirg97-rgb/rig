@@ -23,8 +23,10 @@ the session at the boundary, clean.
 
 ## What it includes
 
-- `Run(ctx, k *rig.Kernel)`: wires the tools and the chain, posts the
-  first prompt, and blocks in the engine until a handler stops it (EOF,
+- `Run(ctx, k rig.Kernel)`: wires the tools and the chain, posts the
+  first prompt, reads the provider, policy, session and frontend through
+  the kernel's seat at every use (so a `/models` or `/new` swap lands on
+  the next read), and blocks in the engine until a handler stops it (EOF,
   a dead run context at a boundary, the provider-closed fault). A
   concrete function by design: making the loop pluggable would make
   ordering emergent and undebuggable.

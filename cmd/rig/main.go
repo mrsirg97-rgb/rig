@@ -54,7 +54,7 @@ import (
 	webtool "github.com/mrsirg97-rgb/rig/v3/tool/web"
 )
 
-const Version = "3.4.0"
+const Version = "3.4.1"
 
 func claimPriority(prompt string, served bool) (int, error) {
 	if v := os.Getenv("RIG_PRIORITY"); v != "" {
@@ -412,11 +412,12 @@ func rigMain() int {
 	if v, ok := os.LookupEnv("RIG_TRAFILATURA"); ok {
 		traf = &v
 	}
-	webTool := webtool.New(webtool.Config{
-		Search:     webtool.SearchConfig{BaseURL: envOr("RIG_SEARXNG_URL", cfg.Settings.SearXNG)},
-		Fetch:      webtool.FetchConfig{Proxy: proxy, Trafilatura: traf},
-		Background: del,
-	})
+	webTool := webtool.New(
+		webtool.WithSearchURL(envOr("RIG_SEARXNG_URL", cfg.Settings.SearXNG)),
+		webtool.WithProxy(proxy),
+		webtool.WithTrafilatura(traf),
+		webtool.WithBackground(del),
+	)
 
 	pluginsDir := filepath.Join(cfgDir, "plugins")
 	if err := os.MkdirAll(filepath.Join(pluginsDir, "pending"), 0o755); err != nil {
@@ -577,12 +578,13 @@ func rigMain() int {
 	})
 
 	menus := newTrainerMenu(cfgDir, cwd)
-	env := r.commandEnv()
-	env.DecisionTrain = decisionTrainEnqueue(scdb, cfgDir, self, cwd, sched.RealCrontab(""), menus.stall)
-	env.Trainers = menus.names
+	env := r.commandEnv(commandEnvInput{
+		decisionTrain: decisionTrainEnqueue(scdb, cfgDir, self, cwd, sched.RealCrontab(""), menus.stall),
+		trainers:      menus.names,
+	})
 
 	var fe core.Frontend
-	var webSrv *web.Server
+	var webSrv web.Server
 	closeFrontend := func() {}
 	if serveAddr != "" {
 		var door machineroom.Door
@@ -605,14 +607,14 @@ func rigMain() int {
 				}
 			}
 		}
-		srv, werr := web.New(web.Options{
-			Home: cfgDir, CWD: cwd, Models: cfg.Models,
-			Machine: machine, Door: door, Tailnet: tailnet, Version: Version,
-			Ready:   func(ctx context.Context, m models.Model) error { return kids.ready(ctx, machine, m) },
-			Crontab: sched.RealCrontab(""), RunnerCmd: self + " run-job", Natives: nativeToolNames,
-			Commands: command.All(), Env: env, Status: webStatus(r, sdb),
-			StopWorkers: stopWorkers,
-		})
+		srv, werr := web.New(cfgDir,
+			web.WithCWD(cwd), web.WithModels(cfg.Models),
+			web.WithMachine(machine), web.WithDoor(door), web.WithTailnet(tailnet), web.WithVersion(Version),
+			web.WithReady(func(ctx context.Context, m models.Model) error { return kids.ready(ctx, machine, m) }),
+			web.WithCrontab(sched.RealCrontab("")), web.WithRunnerCmd(self+" run-job"), web.WithNatives(nativeToolNames...),
+			web.WithCommands(command.All()...), web.WithEnv(env), web.WithStatus(webStatus(r, sdb)),
+			web.WithStopWorkers(stopWorkers),
+		)
 		if werr != nil {
 			fmt.Fprintln(os.Stderr, "rig serve:", werr)
 			return 1
@@ -660,16 +662,12 @@ func rigMain() int {
 
 	var packScorer graph.Scorer
 	if decisionURL != "" {
-		dec, derr := decision.NewHTTP(decision.HTTPOptions{URL: decisionURL})
+		dec, derr := decision.NewHTTP(decisionURL)
 		if derr != nil {
 			fmt.Fprintln(os.Stderr, "rig: decision:", derr)
 			return 1
 		}
-		dtool, derr := decision.NewDecide(decision.DecideOptions{
-			Decider:  dec,
-			Recorder: r.drec,
-			Parallel: rig.DefaultParallel,
-		})
+		dtool, derr := decision.NewDecide(dec, rig.DefaultParallel, decision.WithRecorder(r.drec))
 		if derr != nil {
 			fmt.Fprintln(os.Stderr, "rig: decision:", derr)
 			return 1

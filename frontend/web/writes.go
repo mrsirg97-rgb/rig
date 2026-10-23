@@ -13,7 +13,7 @@ import (
 	"time"
 )
 
-func (s *Server) handleTodoCreate(w http.ResponseWriter, r *http.Request) {
+func (s *server) handleTodoCreate(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := s.readCtx(r)
 	defer cancel()
 	cwd := r.URL.Query().Get("cwd")
@@ -52,7 +52,7 @@ func (s *Server) handleTodoCreate(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"cwd": cwd, "reply": reply})
 }
 
-func (s *Server) handleSchedulerCreate(w http.ResponseWriter, r *http.Request) {
+func (s *server) handleSchedulerCreate(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := s.readCtx(r)
 	defer cancel()
 	cwd := r.URL.Query().Get("cwd")
@@ -89,7 +89,7 @@ func (s *Server) handleSchedulerCreate(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"cwd": cwd, "reply": reply})
 }
 
-func (s *Server) handlePluginsCreate(w http.ResponseWriter, r *http.Request) {
+func (s *server) handlePluginsCreate(w http.ResponseWriter, r *http.Request) {
 	_, cancel := s.readCtx(r)
 	defer cancel()
 	if !s.originOK(r) {

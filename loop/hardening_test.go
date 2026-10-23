@@ -53,8 +53,8 @@ func TestToolEventBracketOrderAndContent(t *testing.T) {
 		rig.WithFrontend(f),
 		rig.WithPolicy(&transcriptPolicy{}),
 		rig.WithTools(bash),
+		rig.WithSession(session),
 	)
-	k.Session = session
 
 	f.inputs <- "what is the answer?"
 	close(f.inputs)
@@ -121,8 +121,8 @@ func TestToolResultCarriesTheGuardedRefusal(t *testing.T) {
 			perm.Allowlist("bash"),
 			guard.Bound(1),
 		),
+		rig.WithSession(session),
 	)
-	k.Session = session
 
 	f.inputs <- "go"
 	close(f.inputs)
@@ -160,8 +160,8 @@ func TestTurnEndClosesEveryTurnWithTheRightReason(t *testing.T) {
 		rig.WithProvider(p),
 		rig.WithFrontend(f),
 		rig.WithPolicy(&transcriptPolicy{}),
+		rig.WithSession(session),
 	)
-	k.Session = session
 
 	f.inputs <- "a"
 	f.inputs <- "b"
@@ -207,8 +207,8 @@ func TestTurnEndAbsentOnRunContextEnd(t *testing.T) {
 		rig.WithProvider(p),
 		rig.WithFrontend(f),
 		rig.WithPolicy(&transcriptPolicy{}),
+		rig.WithSession(session),
 	)
-	k.Session = session
 
 	ctx, cancel := context.WithCancel(context.Background())
 	f.inputs <- "speak"
@@ -233,8 +233,8 @@ func TestReasoningAccumulatesInBothBranches(t *testing.T) {
 		rig.WithProvider(p),
 		rig.WithFrontend(f),
 		rig.WithPolicy(&transcriptPolicy{}),
+		rig.WithSession(session),
 	)
-	k.Session = session
 
 	f.inputs <- "hi"
 	close(f.inputs)
@@ -275,8 +275,8 @@ func TestReasoningAccumulatesInBothBranches(t *testing.T) {
 		rig.WithFrontend(f2),
 		rig.WithPolicy(&transcriptPolicy{}),
 		rig.WithTools(bash),
+		rig.WithSession(session2),
 	)
-	k2.Session = session2
 
 	f2.inputs <- "run it"
 	close(f2.inputs)
@@ -350,8 +350,8 @@ func TestSteeringCancelsTheLiveTurnAndDeliversOnReentry(t *testing.T) {
 		rig.WithProvider(p),
 		rig.WithFrontend(f),
 		rig.WithPolicy(&transcriptPolicy{}),
+		rig.WithSession(session),
 	)
-	k.Session = session
 
 	if err := loop.Run(context.Background(), k); err != nil {
 		t.Fatalf("steering must not end the run, got %v", err)
@@ -402,8 +402,8 @@ func TestSteeringAtThePromptReentersWithoutFault(t *testing.T) {
 		rig.WithProvider(p),
 		rig.WithFrontend(f),
 		rig.WithPolicy(&transcriptPolicy{}),
+		rig.WithSession(session),
 	)
-	k.Session = session
 
 	if err := loop.Run(context.Background(), k); err != nil {
 		t.Fatalf("an interrupt at the prompt must not end the run, got %v", err)
@@ -464,7 +464,6 @@ func TestPreStreamAssembleFailureOnADeadTurnIsAnInterrupt(t *testing.T) {
 		rig.WithFrontend(f),
 		rig.WithPolicy(&ctxCheckingPolicy{transcriptPolicy: &transcriptPolicy{}}),
 	)
-	k.Session = core.NewSession()
 
 	f.inputs <- "first"
 	f.inputs <- "second"
@@ -494,7 +493,6 @@ func TestPreStreamCallFailureOnADeadTurnIsAnInterrupt(t *testing.T) {
 		rig.WithFrontend(f),
 		rig.WithPolicy(&transcriptPolicy{}),
 	)
-	k.Session = core.NewSession()
 
 	f.inputs <- "first"
 	f.inputs <- "second"
@@ -539,8 +537,8 @@ func TestTurnStartFansOutOncePerTurn(t *testing.T) {
 		rig.WithPolicy(&transcriptPolicy{}),
 		rig.WithTools(bash),
 		rig.WithMiddleware(obs),
+		rig.WithSession(session),
 	)
-	k.Session = session
 
 	f.inputs <- "one"
 	f.inputs <- "two"
@@ -563,8 +561,8 @@ func TestTestEventForwardsUntouched(t *testing.T) {
 		rig.WithProvider(p),
 		rig.WithFrontend(f),
 		rig.WithPolicy(&transcriptPolicy{}),
+		rig.WithSession(session),
 	)
-	k.Session = session
 
 	f.inputs <- "hi"
 	close(f.inputs)

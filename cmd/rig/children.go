@@ -72,31 +72,31 @@ func (c *children) Next(op broadcast.Operation) error {
 			return nil
 		}
 		c.engine.Add(evt.Func(func(context.Context) {
-			if !c.starting(act.Model, act.Port, act.Command, act.Env, act.Log) {
-				c.note(act.Model, fmt.Sprintf("the child's port %d never answered", act.Port))
+			if !c.starting(act.Model(), act.Port(), act.Command(), act.Env(), act.Log()) {
+				c.note(act.Model(), fmt.Sprintf("the child's port %d never answered", act.Port()))
 			}
 		}), room.PriorityChild)
 	case room.StopChild:
 		if op.Origin() != c.self {
 			return nil
 		}
-		c.engine.Add(evt.Func(func(context.Context) { c.stopping(act.Model, act.Grace) }), room.PriorityChild)
+		c.engine.Add(evt.Func(func(context.Context) { c.stopping(act.Model(), act.Grace()) }), room.PriorityChild)
 	case room.SwapChild:
 		if op.Origin() != c.self {
 			return nil
 		}
 		c.engine.Add(evt.Func(func(context.Context) {
-			c.stopping(act.Out, act.Grace)
-			if act.Model == "" {
+			c.stopping(act.Out(), act.Grace())
+			if act.Model() == "" {
 				return
 			}
-			if !c.starting(act.Model, act.Port, act.Command, act.Env, act.Log) {
-				c.note(act.Model, fmt.Sprintf("the child's port %d never answered", act.Port))
+			if !c.starting(act.Model(), act.Port(), act.Command(), act.Env(), act.Log()) {
+				c.note(act.Model(), fmt.Sprintf("the child's port %d never answered", act.Port()))
 			}
 		}), room.PriorityChild)
 	case room.TableChange:
 		var row models.Model
-		if err := json.Unmarshal(act.Row, &row); err != nil {
+		if err := json.Unmarshal(act.Row(), &row); err != nil {
 			return err
 		}
 		if known, ok := c.rows.Get(row.ID); ok {
@@ -139,7 +139,7 @@ func (c *children) Next(op broadcast.Operation) error {
 }
 
 func (c *children) jobStatus(st room.JobStatus, from int64) {
-	switch st.State {
+	switch st.State() {
 	case room.JobRunning:
 		if c.jobs == nil {
 			c.jobs = map[int64]map[string]room.JobStatus{}
@@ -147,10 +147,10 @@ func (c *children) jobStatus(st room.JobStatus, from int64) {
 		if c.jobs[from] == nil {
 			c.jobs[from] = map[string]room.JobStatus{}
 		}
-		c.jobs[from][st.Job] = st
+		c.jobs[from][st.Job()] = st
 	case room.JobDone, room.JobFailed:
 		if set := c.jobs[from]; set != nil {
-			delete(set, st.Job)
+			delete(set, st.Job())
 		}
 	}
 	c.sayJob(st)
@@ -187,9 +187,7 @@ func (c *children) endJobs(live map[int64]bool) {
 			continue
 		}
 		for _, st := range set {
-			st.State = room.JobFailed
-			st.Reason = "runner left"
-			st.Ended = time.Now().UTC()
+			st = jobEnded(st, room.JobFailed, "runner left", time.Now().UTC())
 			ended = append(ended, st)
 		}
 		delete(c.jobs, origin)
@@ -243,19 +241,17 @@ func (c *children) ready(ctx context.Context, machine room.Member, row models.Mo
 				out = append(out, other)
 			}
 		}
-		in := room.SwapChild{Model: row.ID, Port: row.Port, Command: row.Command, Env: row.Env}
 		for i, other := range out {
-			act := room.SwapChild{Out: other.ID, Grace: other.StopGrace}
+			act := room.NewSwapChild(room.SwapChildInput{Out: other.ID, Grace: other.StopGrace})
 			if i == len(out)-1 {
-				act = in
-				act.Out, act.Grace = other.ID, other.StopGrace
+				act = room.NewSwapChild(room.SwapChildInput{Model: row.ID, Out: other.ID, Port: row.Port, Command: row.Command, Env: row.Env, Grace: other.StopGrace})
 			}
 			if err := c.act(ctx, machine, act, room.KeyOf(other.ID)); err != nil {
 				return err
 			}
 		}
 		if len(out) == 0 {
-			start := room.StartChild{Model: row.ID, Port: row.Port, Command: row.Command, Env: row.Env}
+			start := room.NewStartChild(row.ID, row.Port, row.Command, row.Env, "")
 			if err := c.act(ctx, machine, start, room.KeyOf(row.ID)); err != nil {
 				return err
 			}
@@ -531,4 +527,12 @@ func alive(pid int) bool {
 		return false
 	}
 	return proc.Signal(syscall.Signal(0)) == nil
+}
+
+func jobEnded(st room.JobStatus, state, reason string, ended time.Time) room.JobStatus {
+	return room.NewJobStatus(room.JobStatusInput{
+		Job: st.Job(), Prompt: st.Prompt(), State: state, Started: st.Started(),
+		Ended: ended, Reason: reason, Summary: st.Summary(), Workers: st.Workers(),
+		Call: st.Call(), CallAt: st.CallAt(),
+	})
 }

@@ -53,12 +53,13 @@ func TestTheClientSpeaksLayasWire(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(layaChoiceReply))
 	}))
-	dec, err := decision.NewHTTP(decision.HTTPOptions{URL: srv.URL, Client: testClient(), Decider: "laya"})
+	dec, err := decision.NewHTTP(srv.URL, decision.WithHTTPClient(testClient()), decision.WithHTTPName("laya"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	risk := decision.Choice("risk", "What risk does this bash call carry?", "safe", "changes", "dangerous")
-	risk.Description = riskCriteria
+	risk := decision.NewQuestion(
+		decision.QuestionInput{ID: "risk", Kind: decision.KindChoice, Prompt: "What risk does this bash call carry?"},
+		decision.WithChoices("safe", "changes", "dangerous"), decision.WithDescription(riskCriteria))
 	answers, err := dec.Decide(context.Background(), `{"command":"ls"}`, []decision.Question{risk})
 	if err != nil {
 		t.Fatal(err)
@@ -93,7 +94,7 @@ func TestAnAnswerConfidenceBesideTheProbabilitiesIsNotRead(t *testing.T) {
 			"probabilities": {"safe": 0.71, "changes": 0.2, "dangerous": 0.09},
 			"answer_confidence": 0.99}}}`))
 	}))
-	dec, err := decision.NewHTTP(decision.HTTPOptions{URL: srv.URL, Client: testClient(), Decider: "laya"})
+	dec, err := decision.NewHTTP(srv.URL, decision.WithHTTPClient(testClient()), decision.WithHTTPName("laya"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -113,7 +114,7 @@ func TestAChoiceWithoutItsMassIsNoAnswer(t *testing.T) {
 		_, _ = w.Write([]byte(`{"answers": {"risk": {"type": "choice", "choice": "safe",
 			"probabilities": {"changes": 0.2, "dangerous": 0.09}}}}`))
 	}))
-	dec, err := decision.NewHTTP(decision.HTTPOptions{URL: srv.URL, Client: testClient(), Decider: "laya"})
+	dec, err := decision.NewHTTP(srv.URL, decision.WithHTTPClient(testClient()), decision.WithHTTPName("laya"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -142,7 +143,7 @@ func TestAYesNoQuestionIsNoul(t *testing.T) {
 		}
 		_, _ = w.Write([]byte(`{"answers": {"ok": {"type": "noul", "noul": 0.87, "confidence": 0.87}}, "usage": {}}`))
 	}))
-	dec, err := decision.NewHTTP(decision.HTTPOptions{URL: srv.URL, Client: testClient(), Decider: "laya"})
+	dec, err := decision.NewHTTP(srv.URL, decision.WithHTTPClient(testClient()), decision.WithHTTPName("laya"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -166,7 +167,7 @@ func TestANoulBelowHalfIsNo(t *testing.T) {
 	srv := testenv.Server(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte(`{"answers": {"ok": {"type": "noul", "noul": 0.4}}}`))
 	}))
-	dec, err := decision.NewHTTP(decision.HTTPOptions{URL: srv.URL, Client: testClient(), Decider: "laya"})
+	dec, err := decision.NewHTTP(srv.URL, decision.WithHTTPClient(testClient()), decision.WithHTTPName("laya"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -193,7 +194,7 @@ func TestAScoreQuestionTakesACriteriaList(t *testing.T) {
 		}
 		_, _ = w.Write([]byte(`{"answers": {"urgency": {"type": "score", "score": 1.7, "legend": {"1": "firm", "2": "angry"}, "probabilities": {"1": 0.5, "2": 0.3}}}}`))
 	}))
-	dec, err := decision.NewHTTP(decision.HTTPOptions{URL: srv.URL, Client: testClient(), Decider: "laya"})
+	dec, err := decision.NewHTTP(srv.URL, decision.WithHTTPClient(testClient()), decision.WithHTTPName("laya"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -219,7 +220,7 @@ func TestAnUnknownAnswerTypeIsNoAnswer(t *testing.T) {
 	srv := testenv.Server(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte(`{"answers": {"risk": {"type": "essay", "choice": "safe", "answer_confidence": 0.9}}}`))
 	}))
-	dec, err := decision.NewHTTP(decision.HTTPOptions{URL: srv.URL, Client: testClient(), Decider: "laya"})
+	dec, err := decision.NewHTTP(srv.URL, decision.WithHTTPClient(testClient()), decision.WithHTTPName("laya"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -240,7 +241,7 @@ func TestAnOutOfRangeConfidenceIsDropped(t *testing.T) {
 			"risk": {"type": "choice", "choice": "safe", "probabilities": {"safe": 1.5}},
 			"other": {"type": "choice", "choice": "changes", "probabilities": {"changes": 0.4}}}}`))
 	}))
-	dec, err := decision.NewHTTP(decision.HTTPOptions{URL: srv.URL, Client: testClient(), Decider: "laya"})
+	dec, err := decision.NewHTTP(srv.URL, decision.WithHTTPClient(testClient()), decision.WithHTTPName("laya"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -257,7 +258,7 @@ func TestTheDeciderDefaultsToTheHost(t *testing.T) {
 	srv := testenv.Server(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte(`{"answers": {"ok": {"type": "noul", "noul": 0.9, "answer_confidence": 0.9}}}`))
 	}))
-	dec, err := decision.NewHTTP(decision.HTTPOptions{URL: srv.URL, Client: testClient()})
+	dec, err := decision.NewHTTP(srv.URL, decision.WithHTTPClient(testClient()))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -271,7 +272,7 @@ func TestTheDeciderDefaultsToTheHost(t *testing.T) {
 }
 
 func TestAnUnreachableServerIsAnError(t *testing.T) {
-	dec, err := decision.NewHTTP(decision.HTTPOptions{URL: "http://127.0.0.1:1", Client: testClient(), Decider: "laya"})
+	dec, err := decision.NewHTTP("http://127.0.0.1:1", decision.WithHTTPClient(testClient()), decision.WithHTTPName("laya"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -289,7 +290,7 @@ func TestTheReplyAnswersComeBackInRowOrder(t *testing.T) {
 			`"echo":{"type":"noul","noul":0.7},` +
 			`"bravo":{"type":"noul","noul":0.6}}}`))
 	}))
-	dec, err := decision.NewHTTP(decision.HTTPOptions{URL: srv.URL, Client: testClient()})
+	dec, err := decision.NewHTTP(srv.URL, decision.WithHTTPClient(testClient()))
 	if err != nil {
 		t.Fatal(err)
 	}

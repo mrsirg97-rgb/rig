@@ -28,12 +28,12 @@ func frameOf(t *testing.T, enc broadcast.Encoder, payload evt.Signal, origin int
 
 func paddedRow(t *testing.T, enc broadcast.Encoder, target int) TableChange {
 	t.Helper()
-	empty := TableChange{Row: json.RawMessage(`{"id":"local","command":""}`)}
+	empty := NewTableChange(json.RawMessage(`{"id":"local","command":""}`))
 	base := len(frameOf(t, enc, empty, testOrigin))
 	if base > target {
 		t.Fatalf("the envelope alone passes the target: %d", base)
 	}
-	return TableChange{Row: json.RawMessage(`{"id":"local","command":"` + strings.Repeat("a", target-base) + `"}`)}
+	return NewTableChange(json.RawMessage(`{"id":"local","command":"` + strings.Repeat("a", target-base) + `"}`))
 }
 
 func throughPipe(t *testing.T, enc broadcast.Encoder, payload evt.Signal) (broadcast.Message, error) {
@@ -72,8 +72,8 @@ func throughPipe(t *testing.T, enc broadcast.Encoder, payload evt.Signal) (broad
 
 func TestTableChangeFrameFitsThePipeLine(t *testing.T) {
 	enc := Codec()
-	minimal := len(frameOf(t, enc, TableChange{Row: json.RawMessage(`{"id":"local","command":""}`)}, testOrigin))
-	swapMinimal := len(frameOf(t, enc, SwapChild{Model: "local"}, testOrigin))
+	minimal := len(frameOf(t, enc, NewTableChange(json.RawMessage(`{"id":"local","command":""}`)), testOrigin))
+	swapMinimal := len(frameOf(t, enc, NewSwapChild(SwapChildInput{Model: "local"}), testOrigin))
 
 	fitting := paddedRow(t, enc, pipeLineWall)
 	m, err := throughPipe(t, enc, fitting)
@@ -84,8 +84,8 @@ func TestTableChangeFrameFitsThePipeLine(t *testing.T) {
 	if !ok {
 		t.Fatalf("the frame arrives as %T", m.Signal())
 	}
-	if len(change.Row) != len(fitting.Row) {
-		t.Fatalf("the row arrived as %d bytes, left as %d", len(change.Row), len(fitting.Row))
+	if len(change.Row()) != len(fitting.Row()) {
+		t.Fatalf("the row arrived as %d bytes, left as %d", len(change.Row()), len(fitting.Row()))
 	}
 
 	over := paddedRow(t, enc, pipeLineWall+1)

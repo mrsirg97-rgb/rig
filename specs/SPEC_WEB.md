@@ -92,10 +92,9 @@ One `core.Tool`, the engines behind it:
 // the core/tool.go house shape
 const DefaultSearXNG = "http://127.0.0.1:8888" // pane's PI_SEARXNG_URL default
 const DefaultProxy   = "http://127.0.0.1:8889" // pane's PI_WEB_FETCH_PROXY default
-type Config struct {
-    Search SearchConfig   // BaseURL (pane appends /search), Do seam
-    Fetch  FetchConfig    // Proxy, Trafilatura, Lookup, Do, MaxBytes
-}
+type Option func(*config) // WithSearchURL, WithSearchDo, WithProxy,
+                           // WithTrafilatura, WithLookup, WithFetchDo,
+                           // WithMaxBytes, WithBackground
 type Web interface {
     tool.Definition
     Exec(ctx context.Context, args json.RawMessage) (string, error)
@@ -103,8 +102,7 @@ type Web interface {
     Fetch(ctx context.Context, url string, maxChars, timeoutMs int) (string, error)
 }
 type web struct{ tool.Definition; search *search; fetch *fetch }
-func New(cfg Config) Web           // the injection seam (pane's Deps)
-func NewDefault() Web              // the defaults: SearXNG default, proxy on
+func New(opts ...Option) Web      // the one constructor; defaults in one place
     // Name, Description and Schema ride the embedded tool.Definition:
     // the words are tool/registry.json bytes (2.8.1), not methods here
 func (w *web) Exec(ctx context.Context, args json.RawMessage) (string, error)
@@ -112,8 +110,8 @@ func (w *web) Exec(ctx context.Context, args json.RawMessage) (string, error)
     // dispatch to w.search.exec or w.fetch.exec
 
 // search.go: the engine, pane's functions verbatim
-type SearchConfig struct{ BaseURL string; Do func(*http.Request) (*http.Response, error) }
-func newSearch(cfg SearchConfig) *search
+type searchConfig struct{ BaseURL string; Do func(*http.Request) (*http.Response, error) }
+func newSearch(cfg searchConfig) *search
 func (s *search) exec(ctx, query string, maxResults int) (string, error)
 
 // fetch.go: the engine
@@ -123,7 +121,7 @@ const (
     defaultTimeoutMs = 30_000                  // pane's DEFAULT_TIMEOUT_MS
     maxHops          = 5                       // pane's MAX_HOPS
 )
-type FetchConfig struct {
+type fetchConfig struct {
     Proxy       string        // egress proxy; "" = direct
     Trafilatura *string       // pane's string|null|undefined: nil = default resolution, &"" = off, &s = that binary
     Lookup      func(context.Context, string) ([]string, error) // DNS seam; nil = system resolver; the request ctx (amended 0.24.6)
@@ -132,7 +130,7 @@ type FetchConfig struct {
 }
 type Fetched struct{ FinalURL string; Status int; ContentType string; Body string; BodyTruncated bool } // pane's Fetched
 type fetch struct{ /* config, resolved trafilatura */ }
-func newFetch(cfg FetchConfig) *fetch
+func newFetch(cfg fetchConfig) *fetch
 func (f *fetch) Guarded(ctx context.Context, raw string) (Fetched, error) // pane's fetchGuarded
 func (f *fetch) exec(ctx, raw string, maxC, timeoutMs int) (string, error)
 

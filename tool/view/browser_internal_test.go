@@ -142,7 +142,7 @@ func TestCDPDeathFailsEveryPendingCall(t *testing.T) {
 
 func TestAKilledBrowserIsNamedOnTheNextCallAndOnlyOnce(t *testing.T) {
 	bin := browserBinary(t)
-	tl := NewWith(Config{Blobs: t.TempDir(), Browser: bin, Cwd: t.TempDir(), RigHome: t.TempDir()}).(*toolView)
+	tl := New(t.TempDir(), WithBrowser(bin), WithCwd(t.TempDir()), WithRigHome(t.TempDir())).(*toolView)
 	defer tl.Close()
 
 	if _, err := tl.Exec(context.Background(), []byte(`{"action":"browser","step":"open","url":"about:blank"}`)); err != nil {
@@ -182,7 +182,7 @@ func TestAKilledBrowserIsNamedOnTheNextCallAndOnlyOnce(t *testing.T) {
 
 func TestClosingTheToolKillsTheBrowserWithoutADeathNote(t *testing.T) {
 	bin := browserBinary(t)
-	tl := NewWith(Config{Blobs: t.TempDir(), Browser: bin, Cwd: t.TempDir(), RigHome: t.TempDir()}).(*toolView)
+	tl := New(t.TempDir(), WithBrowser(bin), WithCwd(t.TempDir()), WithRigHome(t.TempDir())).(*toolView)
 	if _, err := tl.Exec(context.Background(), []byte(`{"action":"browser","step":"open","url":"about:blank"}`)); err != nil {
 		t.Fatalf("open: %v", err)
 	}
@@ -258,7 +258,7 @@ func TestBrowserParentHelper(t *testing.T) {
 	if os.Getenv("RIG_BROWSER_HELPER") != "1" {
 		t.Skip("the parent-death helper")
 	}
-	tl := NewWith(Config{Blobs: t.TempDir(), Browser: os.Getenv("RIG_BROWSER"), Cwd: t.TempDir(), RigHome: t.TempDir()}).(*toolView)
+	tl := New(t.TempDir(), WithBrowser(os.Getenv("RIG_BROWSER")), WithCwd(t.TempDir()), WithRigHome(t.TempDir())).(*toolView)
 	if _, err := tl.Exec(context.Background(), []byte(`{"action":"browser","step":"shot"}`)); err != nil {
 		t.Fatalf("the helper's browser: %v", err)
 	}
@@ -268,7 +268,7 @@ func TestBrowserParentHelper(t *testing.T) {
 }
 
 func TestTheBrowserReachesTheNetworkOnlyThroughItsEgress(t *testing.T) {
-	args := strings.Join((&browser{cfg: Config{Proxy: "http://127.0.0.1:8889"}}).argv("profile", "http://127.0.0.1:4321"), " ")
+	args := strings.Join((&browser{cfg: config{Proxy: "http://127.0.0.1:8889"}}).argv("profile", "http://127.0.0.1:4321"), " ")
 	for _, want := range []string{
 		"--proxy-server=http://127.0.0.1:4321",
 		"--proxy-bypass-list=<-loopback>",
@@ -293,7 +293,7 @@ func TestTheEgressDialsThePinAndKeepsTheName(t *testing.T) {
 	_, port, _ := net.SplitHostPort(srv.Listener.Addr().String())
 	var dialed string
 	var refused []string
-	e, err := newEgress(Config{
+	e, err := newEgress(config{
 		Lookup: func(ctx context.Context, h string) ([]string, error) {
 			if h == "inside.test" {
 				return []string{"10.0.0.7"}, nil
@@ -338,7 +338,7 @@ func TestTheEgressTunnelsThroughTheUpstreamByThePin(t *testing.T) {
 		w.WriteHeader(http.StatusForbidden)
 	}))
 	defer upstream.Close()
-	e, err := newEgress(Config{
+	e, err := newEgress(config{
 		Proxy:  upstream.URL,
 		Lookup: func(ctx context.Context, h string) ([]string, error) { return []string{"93.184.216.34"}, nil },
 	}, func(string, string) {})

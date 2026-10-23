@@ -51,6 +51,14 @@ plus one registration line, and the loop never names a concrete type.
 
 ## how the code looks
 
+**Immutable at construction, no side effects.** A value is whole when its
+constructor returns, and reading it changes nothing. Then the argument
+for a piece of code is local: read the one call that built the value and
+you know what it holds, on every goroutine, for as long as it lives. What
+must change while rig runs is one named seam that changes in one place
+(the kernel's `Seat`, swapped by the root in one atomic store), never a
+field someone writes. The rules below are this one, applied.
+
 The reference is `~/Projects/lift/engine` (read `core/path.go`,
 `core/scribe.go`, and `visit` in `core/agent.go`), `~/Projects/evt` from
 0.5.0 (read `broadcast/act.go` and `broadcast/mesh.go`: the shape below,
@@ -141,8 +149,8 @@ lot, and it is the bar.
   ```
 
   Not this: `cfg := MeshConfig{...}` and then `cfg.Voice = v`,
-  `cfg.Rounds = r` four lines later (`room/door.go` today, until rig
-  takes evt 0.5.0). The correctness reason: a struct filled in steps is
+  `cfg.Rounds = r` four lines later (`room/door.go` did, until 3.4.1
+  took evt 0.5.1). The correctness reason: a struct filled in steps is
   visible half-filled, a forgotten field is a silent zero, and anyone
   holding it can change it under the code that already read it. With
   options, every knob is named at the one call that builds it, defaults
@@ -233,8 +241,12 @@ lot, and it is the bar.
   by priority then arrival. The turn loop is its consumer: every step
   of a turn is a closure on the loop goroutine.
 - `kernel.go` (root package `rig`): the composition kernel: the
-  dependency bag the loop drives, assembled from options — the priority
-  table (a write is 60, a read is 50) and `WithPriority` live here.
+  read-only `Kernel` the loop drives, assembled from options — the priority
+  table (a write is 60, a read is 50) and `WithPriority` live here. The
+  provider, policy, session and frontend are its `Seat`: fixed from
+  `WithProvider`/`WithPolicy`/`WithSession`/`WithFrontend`, or the root's
+  live seat (`WithSeat`) that `/models`, `/role` and `/new` swap in one
+  atomic store.
 - `cmd/rig`: the binary and composition root: flag/env/file config
   resolution, the store wiring (the rem migration), plugin discovery.
   The only package that imports the whole tree.

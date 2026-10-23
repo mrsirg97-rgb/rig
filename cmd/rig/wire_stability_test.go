@@ -6,7 +6,7 @@ import (
 
 func TestWireHasNoNamedFilesystemTools(t *testing.T) {
 	k := wire(testRoot(nullFrontend{}))
-	for _, tool := range k.Tools {
+	for _, tool := range k.Tools() {
 		switch tool.Name() {
 		case "ls", "find", "grep":
 			t.Fatalf("the wire must not carry %q: bash ls/find/grep is the shell's, read is the observation path", tool.Name())

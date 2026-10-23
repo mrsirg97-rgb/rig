@@ -98,11 +98,11 @@ func TestARemoteRequestStartsTheColdChildAndSwapsTheResidentOut(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(homeDoor.Close)
-	srv, err := web.New(web.Options{
-		Home: home, CWD: t.TempDir(), Models: table, Crontab: newFakeCrontab(),
-		Natives: []string{"bash", "read"}, Root: home, Machine: m, Door: homeDoor, Version: Version,
-		Ready: func(ctx context.Context, row models.Model) error { return kids.ready(ctx, m, row) },
-	})
+	srv, err := web.New(home,
+		web.WithCWD(t.TempDir()), web.WithModels(table), web.WithCrontab(newFakeCrontab()),
+		web.WithNatives("bash", "read"), web.WithRoot(home), web.WithMachine(m), web.WithDoor(homeDoor), web.WithVersion(Version),
+		web.WithReady(func(ctx context.Context, row models.Model) error { return kids.ready(ctx, m, row) }),
+	)
 	if err != nil {
 		t.Fatal(err)
 	}

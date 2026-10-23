@@ -35,17 +35,17 @@ func TestTheRunnerTellsTheRoomStartAndEnd(t *testing.T) {
 	if len(told) != 2 {
 		t.Fatalf("a command job tells start and end, got %d: %+v", len(told), told)
 	}
-	if told[0].State != room.JobRunning || told[0].Workers != 0 || told[0].Call != "" {
+	if told[0].State() != room.JobRunning || told[0].Workers() != 0 || told[0].Call() != "" {
 		t.Fatalf("the start names a command job's zero workers: %+v", told[0])
 	}
-	if !told[0].Started.Equal(runnerNow) {
+	if !told[0].Started().Equal(runnerNow) {
 		t.Fatalf("the start carries the fire's start: %+v", told[0])
 	}
-	if told[1].State != room.JobDone || told[1].Ended.Before(told[0].Started) || told[1].Reason != "" {
+	if told[1].State() != room.JobDone || told[1].Ended().Before(told[0].Started()) || told[1].Reason() != "" {
 		t.Fatalf("the end is a clean done: %+v", told[1])
 	}
 	for _, st := range told {
-		if st.Job != "j1" {
+		if st.Job() != "j1" {
 			t.Fatalf("the act is keyed to the job: %+v", st)
 		}
 	}
@@ -73,7 +73,7 @@ func TestTheRunnerTellsAFailedEnd(t *testing.T) {
 	if len(told) != 2 {
 		t.Fatalf("a failed spawn tells start and failed, got %d: %+v", len(told), told)
 	}
-	if told[1].State != room.JobFailed || told[1].Reason != "the worker refused" {
+	if told[1].State() != room.JobFailed || told[1].Reason() != "the worker refused" {
 		t.Fatalf("the end names the failure: %+v", told[1])
 	}
 }
@@ -120,16 +120,16 @@ func TestTheRunnerTellsTheWorkersCall(t *testing.T) {
 	if len(told) != 3 {
 		t.Fatalf("a worker's fire tells start, call and end, got %d: %+v", len(told), told)
 	}
-	if told[0].Workers != 1 {
+	if told[0].Workers() != 1 {
 		t.Fatalf("a model job's start names its worker: %+v", told[0])
 	}
-	if told[1].Call != "bash ls" {
+	if told[1].Call() != "bash ls" {
 		t.Fatalf("the call act carries the worker's call: %+v", told[1])
 	}
-	if told[1].CallAt.IsZero() || told[1].CallAt.Before(told[0].Started) {
+	if told[1].CallAt().IsZero() || told[1].CallAt().Before(told[0].Started()) {
 		t.Fatalf("the call act is stamped when the frame arrived: %+v", told[1])
 	}
-	if told[2].State != room.JobDone {
+	if told[2].State() != room.JobDone {
 		t.Fatalf("the fire ends done: %+v", told[2])
 	}
 }
@@ -156,11 +156,11 @@ func TestTheRunnerPostsNothingWhenTheTellIsUnwired(t *testing.T) {
 func TestTheJobStatusActCrossesTheRegistry(t *testing.T) {
 	started := time.Date(2026, 8, 15, 12, 0, 0, 0, time.UTC)
 	enc := room.Codec()
-	frame, err := enc.Encode(broadcast.NewMessage(7, true, room.JobStatus{
+	frame, err := enc.Encode(broadcast.NewMessage(7, true, room.NewJobStatus(room.JobStatusInput{
 		Job: "j8", Prompt: "do the thing", State: room.JobRunning,
 		Started: started, Workers: 1,
 		Summary: "decision train laya · 569 gold · promoted",
-	}))
+	})))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -175,17 +175,17 @@ func TestTheJobStatusActCrossesTheRegistry(t *testing.T) {
 	if !ok {
 		t.Fatalf("the decode returns the act: %T", msg.Signal())
 	}
-	if st.Job != "j8" || st.State != room.JobRunning || st.Workers != 1 || !st.Started.Equal(started) {
+	if st.Job() != "j8" || st.State() != room.JobRunning || st.Workers() != 1 || !st.Started().Equal(started) {
 		t.Fatalf("the act survives the frame: %+v", st)
 	}
-	if st.Summary != "decision train laya · 569 gold · promoted" {
+	if st.Summary() != "decision train laya · 569 gold · promoted" {
 		t.Fatalf("the summary survives the frame: %+v", st)
 	}
 
-	old, err := enc.Encode(broadcast.NewMessage(7, true, room.JobStatus{
+	old, err := enc.Encode(broadcast.NewMessage(7, true, room.NewJobStatus(room.JobStatusInput{
 		Job: "j8", Prompt: "do the thing", State: room.JobRunning,
 		Started: started, Workers: 1,
-	}))
+	})))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -200,7 +200,7 @@ func TestTheJobStatusActCrossesTheRegistry(t *testing.T) {
 	if !ok {
 		t.Fatalf("the old payload decodes to the act: %T", oldMsg.Signal())
 	}
-	if oldSt.Job != "j8" || oldSt.Workers != 1 || oldSt.Summary != "" {
+	if oldSt.Job() != "j8" || oldSt.Workers() != 1 || oldSt.Summary() != "" {
 		t.Fatalf("a 3.3.1 peer's frame decodes with the summary empty: %+v", oldSt)
 	}
 	if msg.Origin() != 7 {
@@ -228,7 +228,7 @@ func TestTheEndStatusCarriesTheRunSummary(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if told[1].State != room.JobDone || told[1].Summary != "epoch 2 done" {
+	if told[1].State() != room.JobDone || told[1].Summary() != "epoch 2 done" {
 		t.Fatalf("the done status carries the run's last stdout line: %+v", told[1])
 	}
 
@@ -244,7 +244,7 @@ func TestTheEndStatusCarriesTheRunSummary(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if told[1].State != room.JobFailed || told[1].Summary != "the trainer died" {
+	if told[1].State() != room.JobFailed || told[1].Summary() != "the trainer died" {
 		t.Fatalf("a failed end carries stderr's last line over the runner's notes: %+v", told[1])
 	}
 
@@ -259,7 +259,7 @@ func TestTheEndStatusCarriesTheRunSummary(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if told[1].Summary != "progress" {
+	if told[1].Summary() != "progress" {
 		t.Fatalf("the runner's truncation note is not the run's result: %+v", told[1])
 	}
 }

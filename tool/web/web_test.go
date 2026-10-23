@@ -72,10 +72,10 @@ func has(t *testing.T, s string, sub string) {
 	}
 }
 
-func webTool(cfg Config) interface {
+func webTool(cfg config) interface {
 	Exec(context.Context, json.RawMessage) (string, error)
 } {
-	return New(cfg)
+	return newWeb(cfg)
 }
 
 func execArgs(t *testing.T, w interface {
@@ -142,7 +142,7 @@ func TestIPisPrivateRefusesUnnormalizedLoopbackSpellings(t *testing.T) {
 }
 
 func TestNonHTTPSchemesAreRefused(t *testing.T) {
-	f := newFetch(FetchConfig{Lookup: publicLookup})
+	f := newFetch(fetchConfig{Lookup: publicLookup})
 	for _, raw := range []string{"file:///etc/passwd", "ftp://x.example/",
 		"gopher://x.example/"} {
 		_, err := f.Guarded(context.Background(), raw)
@@ -154,7 +154,7 @@ func TestNonHTTPSchemesAreRefused(t *testing.T) {
 
 func TestPrivateHostsAreRefusedBeforeAnyConnection(t *testing.T) {
 	called := 0
-	f := newFetch(FetchConfig{
+	f := newFetch(fetchConfig{
 		Lookup: privateLookup,
 		Do: func(*http.Request) (*http.Response, error) {
 			called++
@@ -172,7 +172,7 @@ func TestPrivateHostsAreRefusedBeforeAnyConnection(t *testing.T) {
 
 func TestRedirectsAreFollowedAndEachHopReGuarded(t *testing.T) {
 	var hops []string
-	f := newFetch(FetchConfig{
+	f := newFetch(fetchConfig{
 		Lookup: publicLookup,
 		Do: func(req *http.Request) (*http.Response, error) {
 			hops = append(hops, req.URL.String())
@@ -202,7 +202,7 @@ func TestARedirectIntoPrivateSpaceIsRefused(t *testing.T) {
 		}
 		return []string{"169.254.169.254"}, nil
 	}
-	f := newFetch(FetchConfig{
+	f := newFetch(fetchConfig{
 		Lookup: lookup,
 		Do: func(req *http.Request) (*http.Response, error) {
 			if strings.Contains(req.URL.String(), "evil") {
@@ -218,7 +218,7 @@ func TestARedirectIntoPrivateSpaceIsRefused(t *testing.T) {
 }
 
 func TestRedirectLoopsStopAtTheHopCap(t *testing.T) {
-	f := newFetch(FetchConfig{
+	f := newFetch(fetchConfig{
 		Lookup: publicLookup,
 		Do: func(*http.Request) (*http.Response, error) {
 			return httpResp(302, map[string]string{"Location": "/again"}, ""), nil
@@ -231,7 +231,7 @@ func TestRedirectLoopsStopAtTheHopCap(t *testing.T) {
 }
 
 func TestAnOversizedContentLengthIsRefusedBeforeDownload(t *testing.T) {
-	f := newFetch(FetchConfig{
+	f := newFetch(fetchConfig{
 		Lookup: publicLookup,
 		Do: func(*http.Request) (*http.Response, error) {
 			return httpResp(200, map[string]string{
@@ -247,7 +247,7 @@ func TestAnOversizedContentLengthIsRefusedBeforeDownload(t *testing.T) {
 }
 
 func TestTheBodyStreamIsCappedEvenWhenHeadersLie(t *testing.T) {
-	f := newFetch(FetchConfig{
+	f := newFetch(fetchConfig{
 		Lookup:   publicLookup,
 		MaxBytes: 1024,
 		Do: func(*http.Request) (*http.Response, error) {
@@ -267,7 +267,7 @@ func TestTheBodyStreamIsCappedEvenWhenHeadersLie(t *testing.T) {
 }
 
 func TestBinaryContentTypesAreRefused(t *testing.T) {
-	f := newFetch(FetchConfig{
+	f := newFetch(fetchConfig{
 		Lookup: publicLookup,
 		Do: func(*http.Request) (*http.Response, error) {
 			return httpResp(200, map[string]string{"Content-Type": "image/png"}, "x"), nil
@@ -280,7 +280,7 @@ func TestBinaryContentTypesAreRefused(t *testing.T) {
 }
 
 func TestNon2XXStatusIsAnError(t *testing.T) {
-	f := newFetch(FetchConfig{
+	f := newFetch(fetchConfig{
 		Lookup: publicLookup,
 		Do: func(*http.Request) (*http.Response, error) {
 			return httpResp(404, map[string]string{"Content-Type": "text/html"}, "gone"), nil
@@ -352,7 +352,7 @@ func TestE2ERealServerThroughTheSeamHTMLExtracted(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	f := newFetch(FetchConfig{Lookup: publicLookup, Do: direct()})
+	f := newFetch(fetchConfig{Lookup: publicLookup, Do: direct()})
 	got, err := f.Guarded(context.Background(), srv.URL+"/hop")
 	if err != nil {
 		t.Fatal(err)
@@ -364,7 +364,7 @@ func TestE2ERealServerThroughTheSeamHTMLExtracted(t *testing.T) {
 		t.Fatalf("final URL = %q, want %q", got.FinalURL, want)
 	}
 
-	w := webTool(Config{Fetch: FetchConfig{Lookup: publicLookup, Do: direct()}})
+	w := webTool(config{fetch: fetchConfig{Lookup: publicLookup, Do: direct()}})
 	content, err := execArgs(t, w, `{"action":"fetch","target":`+`"`+srv.URL+"/hop"+`"}`)
 	if err != nil {
 		t.Fatal(err)
@@ -392,7 +392,7 @@ func TestTheDialIsPinnedToTheVettedAddressesAndNeverReResolves(t *testing.T) {
 		}
 		return []string{"127.0.0.1"}, nil
 	}
-	f := newFetch(FetchConfig{Lookup: lookup})
+	f := newFetch(fetchConfig{Lookup: lookup})
 	ctx, cancel := context.WithTimeout(context.Background(), 300*time.Millisecond)
 	defer cancel()
 	_, err := f.Guarded(ctx, srv.URL+"/")
@@ -415,7 +415,7 @@ func TestE2ETimeoutSurfacesAsAClearError(t *testing.T) {
 	defer srv.Close()
 	defer close(release)
 
-	w := webTool(Config{Fetch: FetchConfig{Lookup: publicLookup, Do: direct()}, Background: inlineBG{}})
+	w := webTool(config{fetch: fetchConfig{Lookup: publicLookup, Do: direct()}, background: inlineBG{}})
 	_, err := execArgs(t, w, `{"action":"fetch","target":"`+srv.URL+`/slow","timeoutMs":1000}`)
 	if err == nil || !regexp.MustCompile(`(?i)timed out`).MatchString(err.Error()) {
 		t.Fatalf("want a timeout error, got %v", err)
@@ -433,7 +433,7 @@ func (inlineBG) Submit(ctx context.Context, kind, name string, bound time.Durati
 }
 
 func TestExecuteReportsGuardRefusalsAsToolErrorsNotThrows(t *testing.T) {
-	w := webTool(Config{Fetch: FetchConfig{Lookup: privateLookup}})
+	w := webTool(config{fetch: fetchConfig{Lookup: privateLookup}})
 	_, err := execArgs(t, w, `{"action":"fetch","target":"http://internal.example/"}`)
 	if err == nil || !regexp.MustCompile(`(?i)private|refused`).MatchString(err.Error()) {
 		t.Fatalf("want the refusal as the tool error, got %v", err)
@@ -441,7 +441,7 @@ func TestExecuteReportsGuardRefusalsAsToolErrorsNotThrows(t *testing.T) {
 }
 
 func TestToolRegistrationOneWebToolWithActionAndTarget(t *testing.T) {
-	w := NewDefault()
+	w := New()
 	if w.Name() != "web" {
 		t.Fatalf("name = %q, want web", w.Name())
 	}
@@ -491,7 +491,7 @@ func TestJSONShapeNamesTypeKeysAndArrayRecords(t *testing.T) {
 
 func TestJSONFetchReplyIsShapeThenCompact(t *testing.T) {
 	body := "{\n\t\"count\": 2,\n\t\"results\": [\n\t\t{\"title\": \"a\"},\n\t\t{\"title\": \"b\"}\n\t]\n}"
-	w := webTool(Config{Fetch: FetchConfig{
+	w := webTool(config{fetch: fetchConfig{
 		Lookup: publicLookup,
 		Do: func(*http.Request) (*http.Response, error) {
 			return httpResp(200, map[string]string{"Content-Type": "application/json"}, body), nil
@@ -517,7 +517,7 @@ func TestJSONFetchReplyIsShapeThenCompact(t *testing.T) {
 }
 
 func TestJSONBodyWithoutJSONContentTypeIsShaped(t *testing.T) {
-	w := webTool(Config{Fetch: FetchConfig{
+	w := webTool(config{fetch: fetchConfig{
 		Lookup: publicLookup,
 		Do: func(*http.Request) (*http.Response, error) {
 			return httpResp(200, map[string]string{"Content-Type": "text/plain"}, `[1, 2, 3]`), nil
@@ -533,7 +533,7 @@ func TestJSONBodyWithoutJSONContentTypeIsShaped(t *testing.T) {
 }
 
 func TestNonJSONFetchBodyIsUnchanged(t *testing.T) {
-	w := webTool(Config{Fetch: FetchConfig{
+	w := webTool(config{fetch: fetchConfig{
 		Lookup: publicLookup,
 		Do: func(*http.Request) (*http.Response, error) {
 			return httpResp(200, map[string]string{"Content-Type": "text/plain"}, "plain body"), nil
@@ -560,7 +560,7 @@ func TestJSONReplyIsCappedUnderTheSameMarker(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	w := webTool(Config{Fetch: FetchConfig{
+	w := webTool(config{fetch: fetchConfig{
 		Lookup: publicLookup,
 		Do: func(*http.Request) (*http.Response, error) {
 			return httpResp(200, map[string]string{"Content-Type": "application/json"}, string(body)), nil
@@ -579,7 +579,7 @@ func TestJSONReplyIsCappedUnderTheSameMarker(t *testing.T) {
 }
 
 func TestSchemaRequiresActionAndTargetAndBoundsAllOptions(t *testing.T) {
-	s := getSchema(t, NewDefault())
+	s := getSchema(t, New())
 	if len(s.Required) != 2 || s.Required[0] != "action" || s.Required[1] != "target" {
 		t.Fatalf("required = %v, want [action target]", s.Required)
 	}
@@ -612,7 +612,7 @@ func TestSchemaRequiresActionAndTargetAndBoundsAllOptions(t *testing.T) {
 }
 
 func TestUnknownActionIsRefused(t *testing.T) {
-	w := webTool(Config{})
+	w := webTool(config{})
 	_, err := execArgs(t, w, `{"action":"both","target":"x"}`)
 	if err == nil || !regexp.MustCompile(`(?i)unknown action`).MatchString(err.Error()) {
 		t.Fatalf("want an unknown-action refusal, got %v", err)
@@ -620,7 +620,7 @@ func TestUnknownActionIsRefused(t *testing.T) {
 }
 
 func TestMissingActionOrTargetIsRefused(t *testing.T) {
-	w := webTool(Config{})
+	w := webTool(config{})
 	for _, args := range []string{`{"target":"x"}`, `{"action":"search"}`, `{"action":"fetch"}`, `{}`} {
 		_, err := execArgs(t, w, args)
 		if err == nil {
@@ -631,7 +631,7 @@ func TestMissingActionOrTargetIsRefused(t *testing.T) {
 
 func TestQueryIsEncodedAndSentToLocalSearXNGJSONAPI(t *testing.T) {
 	var seen *http.Request
-	w := webTool(Config{Search: SearchConfig{
+	w := webTool(config{search: searchConfig{
 		Do: func(req *http.Request) (*http.Response, error) {
 			seen = req
 			return httpResp(200, map[string]string{"Content-Type": "application/json"},
@@ -654,7 +654,7 @@ func TestQueryIsEncodedAndSentToLocalSearXNGJSONAPI(t *testing.T) {
 }
 
 func TestResultsMapToTitleURLSnippetWithTagsStrippedAndSnippetCapped(t *testing.T) {
-	w := webTool(Config{Search: SearchConfig{
+	w := webTool(config{search: searchConfig{
 		Do: func(*http.Request) (*http.Response, error) {
 			return httpResp(200, map[string]string{"Content-Type": "application/json"}, `{
 				"results": [
@@ -692,7 +692,7 @@ func TestMaxResultsSlicesDefaultIsFive(t *testing.T) {
 		many[i] = map[string]string{"title": fmt.Sprintf("t%d", i), "url": fmt.Sprintf("https://x.example/%d", i)}
 	}
 	body, _ := json.Marshal(map[string]any{"results": many})
-	w := webTool(Config{Search: SearchConfig{
+	w := webTool(config{search: searchConfig{
 		Do: func(*http.Request) (*http.Response, error) {
 			return httpResp(200, map[string]string{"Content-Type": "application/json"}, string(body)), nil
 		},
@@ -719,7 +719,7 @@ func TestMaxResultsSlicesDefaultIsFive(t *testing.T) {
 }
 
 func TestMissingFieldsDegradeToEmptyStringsEmptyResultsSaySo(t *testing.T) {
-	w := webTool(Config{Search: SearchConfig{
+	w := webTool(config{search: searchConfig{
 		Do: func(*http.Request) (*http.Response, error) {
 			return httpResp(200, map[string]string{"Content-Type": "application/json"},
 				`{"results":[{}]}`), nil
@@ -737,7 +737,7 @@ func TestMissingFieldsDegradeToEmptyStringsEmptyResultsSaySo(t *testing.T) {
 		t.Fatalf("missing fields must degrade to empty strings: %v", parsed[0])
 	}
 
-	empty := webTool(Config{Search: SearchConfig{
+	empty := webTool(config{search: searchConfig{
 		Do: func(*http.Request) (*http.Response, error) {
 			return httpResp(200, map[string]string{"Content-Type": "application/json"},
 				`{"results":[]}`), nil
@@ -753,7 +753,7 @@ func TestMissingFieldsDegradeToEmptyStringsEmptyResultsSaySo(t *testing.T) {
 }
 
 func TestSearXNGBeingDownSurfacesAsALoudError(t *testing.T) {
-	w := webTool(Config{Search: SearchConfig{
+	w := webTool(config{search: searchConfig{
 		Do: func(*http.Request) (*http.Response, error) {
 			return httpResp(502, map[string]string{"Content-Type": "application/json"}, `{}`), nil
 		},
@@ -769,7 +769,7 @@ func TestSearXNGBeingDownSurfacesAsALoudError(t *testing.T) {
 	}
 	port := l.Addr().(*net.TCPAddr).Port
 	l.Close()
-	down := webTool(Config{Search: SearchConfig{BaseURL: fmt.Sprintf("http://127.0.0.1:%d", port)}})
+	down := webTool(config{search: searchConfig{BaseURL: fmt.Sprintf("http://127.0.0.1:%d", port)}})
 	_, err = execArgs(t, down, `{"action":"search","target":"q"}`)
 	if err == nil || !regexp.MustCompile(`(?i)connection refused|ECONNREFUSED`).MatchString(err.Error()) {
 		t.Fatalf("want a refused-connection error, got %v", err)
@@ -800,7 +800,7 @@ func TestTheEgressProxyIsUsedWhenSet(t *testing.T) {
 	}))
 	defer proxy.Close()
 
-	w := webTool(Config{Fetch: FetchConfig{
+	w := webTool(config{fetch: fetchConfig{
 		Proxy: proxy.URL, Lookup: publicLookup, Trafilatura: off(),
 	}})
 	content, err := execArgs(t, w, `{"action":"fetch","target":"`+target.URL+`"}`)
@@ -821,7 +821,7 @@ func TestAnUnreachableProxyNamesItselfAndTheFix(t *testing.T) {
 	proxy := fmt.Sprintf("http://127.0.0.1:%d", l.Addr().(*net.TCPAddr).Port)
 	l.Close()
 
-	w := webTool(Config{Fetch: FetchConfig{Proxy: proxy, Lookup: publicLookup}})
+	w := webTool(config{fetch: fetchConfig{Proxy: proxy, Lookup: publicLookup}})
 	_, err = execArgs(t, w, `{"action":"fetch","target":"http://example.example/"}`)
 	if err == nil {
 		t.Fatal("want the unreachable-proxy error")
@@ -839,7 +839,7 @@ func TestTheTrafilaturaFallbackIsAnnouncedInTheContent(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	w := webTool(Config{Fetch: FetchConfig{Lookup: publicLookup, Trafilatura: off(), Do: direct()}})
+	w := webTool(config{fetch: fetchConfig{Lookup: publicLookup, Trafilatura: off(), Do: direct()}})
 	content, err := execArgs(t, w, `{"action":"fetch","target":"`+srv.URL+`"}`)
 	if err != nil {
 		t.Fatal(err)
@@ -852,7 +852,7 @@ func TestTheTrafilaturaFallbackIsAnnouncedInTheContent(t *testing.T) {
 	if DefaultTrafilatura() == "" {
 		t.Skip("no trafilatura on this box")
 	}
-	w2 := webTool(Config{Fetch: FetchConfig{Lookup: publicLookup, Do: direct()}})
+	w2 := webTool(config{fetch: fetchConfig{Lookup: publicLookup, Do: direct()}})
 	content, err = execArgs(t, w2, `{"action":"fetch","target":"`+srv.URL+`"}`)
 	if err != nil {
 		t.Fatal(err)
@@ -891,13 +891,13 @@ func TestTrafilaturaResolutionSharedVenvFirstThenPATHExplicitWins(t *testing.T) 
 		t.Fatalf("PATH must be the fallback: %q", got)
 	}
 
-	explicit := newFetch(FetchConfig{Trafilatura: ptr("/opt/traf")})
+	explicit := newFetch(fetchConfig{Trafilatura: ptr("/opt/traf")})
 	_ = explicit
 }
 
 func TestTheSearchBudgetBitesOnAHangingEndpoint(t *testing.T) {
 	start := time.Now()
-	w := webTool(Config{Search: SearchConfig{
+	w := webTool(config{search: searchConfig{
 
 		Do: func(req *http.Request) (*http.Response, error) {
 			select {
@@ -928,7 +928,7 @@ func TestLookupRidesTheRequestContext(t *testing.T) {
 			return []string{"93.184.216.34"}, nil
 		}
 	}
-	f := newFetch(FetchConfig{Lookup: lookup})
+	f := newFetch(fetchConfig{Lookup: lookup})
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 	defer cancel()
 	start := time.Now()
@@ -942,7 +942,7 @@ func TestLookupRidesTheRequestContext(t *testing.T) {
 }
 
 func TestOutOfRangeMaxResultsRefusesInsteadOfPanicking(t *testing.T) {
-	w := webTool(Config{Search: SearchConfig{
+	w := webTool(config{search: searchConfig{
 		Do: func(*http.Request) (*http.Response, error) {
 			return httpResp(200, map[string]string{"Content-Type": "application/json"}, `{"results":[]}`), nil
 		},
@@ -966,7 +966,7 @@ func TestOutOfRangeMaxCharsRefusesInsteadOfPanicking(t *testing.T) {
 		io.WriteString(w, "body")
 	}))
 	defer srv.Close()
-	w := webTool(Config{Fetch: FetchConfig{Lookup: publicLookup, Do: direct(), Trafilatura: off()}})
+	w := webTool(config{fetch: fetchConfig{Lookup: publicLookup, Do: direct(), Trafilatura: off()}})
 	for _, args := range []string{
 		`{"action":"fetch","target":"` + srv.URL + `","maxChars":-1}`,
 		`{"action":"fetch","target":"` + srv.URL + `","maxChars":0}`,
@@ -980,7 +980,7 @@ func TestOutOfRangeMaxCharsRefusesInsteadOfPanicking(t *testing.T) {
 }
 
 func TestOutOfRangeTimeoutMsRefusesInsteadOfRunning(t *testing.T) {
-	w := webTool(Config{Fetch: FetchConfig{
+	w := webTool(config{fetch: fetchConfig{
 		Lookup: publicLookup,
 		Do: func(*http.Request) (*http.Response, error) {
 			return httpResp(200, map[string]string{"Content-Type": "text/plain"}, "ok"), nil
@@ -996,7 +996,7 @@ func TestOutOfRangeTimeoutMsRefusesInsteadOfRunning(t *testing.T) {
 
 func TestSearchActionIgnoresFetchParamsAndViceVersa(t *testing.T) {
 	var seenURL string
-	w := webTool(Config{Search: SearchConfig{
+	w := webTool(config{search: searchConfig{
 		Do: func(req *http.Request) (*http.Response, error) {
 			seenURL = req.URL.String()
 			return httpResp(200, map[string]string{"Content-Type": "application/json"}, `{"results":[]}`), nil
@@ -1018,7 +1018,7 @@ func TestWebSearchFetchAndExecShareTheirChecks(t *testing.T) {
 	serve := func(req *http.Request) (*http.Response, error) {
 		return httpResp(200, map[string]string{"Content-Type": "application/json"}, `{"results":[]}`), nil
 	}
-	tool := New(Config{Search: SearchConfig{Do: serve}})
+	tool := newWeb(config{search: searchConfig{Do: serve}})
 	ctx := context.Background()
 
 	_, searchErr := tool.Search(ctx, "", 5)
@@ -1074,7 +1074,7 @@ func TestWebSearchFetchAndExecShareTheirChecks(t *testing.T) {
 }
 
 func TestWebRefusesAnUnknownField(t *testing.T) {
-	w := webTool(Config{Fetch: FetchConfig{Lookup: publicLookup, Do: direct()}})
+	w := webTool(config{fetch: fetchConfig{Lookup: publicLookup, Do: direct()}})
 	_, err := execArgs(t, w, `{"action":"fetch","target":"http://edge.test/one","bogus":1}`)
 	if err == nil || !strings.Contains(err.Error(), "unknown field") {
 		t.Fatalf("an unknown field must refuse: %v", err)

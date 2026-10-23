@@ -258,8 +258,8 @@ func RunJob(key string, opts RunOpts) error {
 		workers = 1
 	}
 	runStatus := func(call string, callAt time.Time) room.JobStatus {
-		return room.JobStatus{Job: id, Prompt: firstLine(job.Prompt), State: room.JobRunning,
-			Started: startedTime, Workers: workers, Call: call, CallAt: callAt}
+		return room.NewJobStatus(room.JobStatusInput{Job: id, Prompt: firstLine(job.Prompt), State: room.JobRunning,
+			Started: startedTime, Workers: workers, Call: call, CallAt: callAt})
 	}
 	pipe, err = nil, nil
 	if command == "" {
@@ -401,8 +401,8 @@ func RunJob(key string, opts RunOpts) error {
 		watch.stop()
 	}
 	if err != nil {
-		end := room.JobStatus{Job: id, Prompt: firstLine(job.Prompt), State: room.JobFailed,
-			Started: startedTime, Ended: opts.Now().UTC(), Reason: err.Error(), Workers: workers}
+		end := room.NewJobStatus(room.JobStatusInput{Job: id, Prompt: firstLine(job.Prompt), State: room.JobFailed,
+			Started: startedTime, Ended: opts.Now().UTC(), Reason: err.Error(), Workers: workers})
 		tell(end)
 		return fmt.Errorf("run-job: spawn: %w", err)
 	}
@@ -423,9 +423,9 @@ func RunJob(key string, opts RunOpts) error {
 	if res.Exit != 0 {
 		endState, endReason = room.JobFailed, fmt.Sprintf("exit %d", res.Exit)
 	}
-	tell(room.JobStatus{Job: id, Prompt: firstLine(job.Prompt), State: endState,
+	tell(room.NewJobStatus(room.JobStatusInput{Job: id, Prompt: firstLine(job.Prompt), State: endState,
 		Started: startedTime, Ended: endedAt, Reason: endReason, Workers: workers,
-		Summary: runSummary(res, endState == room.JobFailed)})
+		Summary: runSummary(res, endState == room.JobFailed)}))
 	content := fmt.Sprintf(
 		"# rig-scheduler run\nkey=%s\n%sstarted=%s\nexit=%d\nduration_ms=%d\n\n== stdout ==\n%s\n\n== stderr ==\n%s\n",
 		key, modelLine, started, res.Exit, durationMs, res.Stdout, res.Stderr)

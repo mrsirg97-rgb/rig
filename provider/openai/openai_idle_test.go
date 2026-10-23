@@ -28,7 +28,7 @@ func TestAStallingStreamFaultsAfterTheIdleBound(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	p := openai.NewWithTimeouts(srv.URL, "local", time.Minute, 50*time.Millisecond)
+	p := openai.New(srv.URL, "local", openai.WithHeaderTimeout(time.Minute), openai.WithIdleTimeout(50*time.Millisecond))
 	start := time.Now()
 	events, err := drain(t, ctx, p, userReq())
 	if err != nil {
@@ -59,7 +59,7 @@ func TestIdleBoundResetsOnEveryEvent(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	p := openai.NewWithTimeouts(srv.URL, "local", time.Minute, 150*time.Millisecond)
+	p := openai.New(srv.URL, "local", openai.WithHeaderTimeout(time.Minute), openai.WithIdleTimeout(150*time.Millisecond))
 	events, err := drain(t, ctx, p, userReq())
 	if err != nil {
 		t.Fatalf("stream: %v", err)

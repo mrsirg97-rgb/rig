@@ -18,10 +18,11 @@ its reference. The tool is registered only for a model row with `vision`
   `Close`. The path-required refusal, the blob-store gate, the caps and the
   decode live in the verb, so a Go caller and the model meet the same words
   and the same refusal; a cancelled ctx refuses before the filesystem is
-  touched. `New(blobsDir)` is the image-only shape; `NewWith(Config)`
-  carries the knobs (`FFmpeg`, `Browser`, `Proxy`, `Cwd`, `RigHome`, and
-  the lookup and dial seams for the SSRF guard and the egress). The struct
-  is unexported.
+  touched. `New(blobsDir, opts...)` is the one constructor; the blobs directory is
+  the part, the knobs are `WithFFmpeg`, `WithBrowser`, `WithProxy`,
+  `WithCwd`, `WithRigHome`, `WithLookup` and `WithDial` (the lookup and
+  dial seams for the SSRF guard and the egress). The config struct is
+  unexported and built whole before the tool exists.
 - `view.go`: the action door, the image path, and `publish` — resample to
   the 1568 bound, re-encode by the lossy/opaque rule, write the blob once,
   format the marker. Video frames and screenshots hand `publish` pixels;

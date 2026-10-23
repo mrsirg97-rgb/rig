@@ -9,21 +9,21 @@ import (
 )
 
 func TestHeaderTimeoutOffIsNoBoundAndZeroIsTheDefault(t *testing.T) {
-	off, ok := New(Config{BaseURL: "http://x", Model: "m", HeaderTimeout: wire.HeaderTimeoutOff}).(*provider)
+	off, ok := New("m", WithBaseURL("http://x"), WithHeaderTimeout(wire.HeaderTimeoutOff)).(*provider)
 	if !ok {
 		t.Fatal("the provider type is fixed")
 	}
 	if got := off.client.Transport.(*http.Transport).ResponseHeaderTimeout; got != 0 {
 		t.Fatalf("HeaderTimeoutOff must leave the transport unbounded, got %s", got)
 	}
-	def := New(Config{BaseURL: "http://x", Model: "m"}).(*provider)
+	def := New("m", WithBaseURL("http://x")).(*provider)
 	if got := def.client.Transport.(*http.Transport).ResponseHeaderTimeout; got != wire.DefaultHeaderTimeout {
 		t.Fatalf("a zero config must take the five-minute bound, got %s", got)
 	}
 }
 
 func TestDefaults(t *testing.T) {
-	p := New(Config{Model: "m"}).(*provider)
+	p := New("m").(*provider)
 	if p.baseURL != defaultBaseURL {
 		t.Fatalf("baseURL = %q, want the api default", p.baseURL)
 	}
@@ -39,7 +39,7 @@ func TestDefaults(t *testing.T) {
 }
 
 func TestBackoffCapsAHostileRetryAfterAtTheHeaderBound(t *testing.T) {
-	p := New(Config{Model: "m", RetryBase: time.Millisecond}).(*provider)
+	p := New("m", WithRetryBase(time.Millisecond)).(*provider)
 	h := http.Header{}
 	h.Set("Retry-After", "999999")
 	if wait := wire.Backoff(p.base, p.jitter, 1, h); wait != wire.DefaultHeaderTimeout {
@@ -52,7 +52,7 @@ func TestBackoffCapsAHostileRetryAfterAtTheHeaderBound(t *testing.T) {
 }
 
 func TestBackoffClampsAnOverflowingRetryAfterToTheHeaderBound(t *testing.T) {
-	p := New(Config{Model: "m", RetryBase: time.Millisecond}).(*provider)
+	p := New("m", WithRetryBase(time.Millisecond)).(*provider)
 	for _, v := range []string{"1e10", "infinity"} {
 		h := http.Header{}
 		h.Set("Retry-After", v)

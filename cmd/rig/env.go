@@ -138,8 +138,7 @@ func (r *root) switchModel(ctx context.Context, id string) (string, error) {
 	r.applyVision()
 	r.live.Swap(append(r.tableTools(), r.pluginTools...), r.pluginNames()...)
 	provider, pol := r.buildPair()
-	r.k.Provider = provider
-	r.k.Policy = pol
+	r.seat.turnTo(provider, pol)
 	return note, nil
 }
 
@@ -203,8 +202,7 @@ func (r *root) switchRole(ctx context.Context, name string) error {
 	r.role = name
 	r.fullSystem = r.buildSystem()
 	provider, pol := r.buildPair()
-	r.k.Provider = provider
-	r.k.Policy = pol
+	r.seat.turnTo(provider, pol)
 	return nil
 }
 
@@ -258,7 +256,12 @@ func (r *root) switchTheme(ctx context.Context, name string) error {
 	return nil
 }
 
-func (r *root) commandEnv() *command.Env {
+type commandEnvInput struct {
+	decisionTrain func(ctx context.Context, trainer string) (string, error)
+	trainers      func() []string
+}
+
+func (r *root) commandEnv(in commandEnvInput) *command.Env {
 	return &command.Env{
 		Swarm:         swarmAdapter{r.swarm, r.swarmWhy},
 		Session:       func() *core.Session { return r.session },
@@ -284,6 +287,8 @@ func (r *root) commandEnv() *command.Env {
 		Plugins:       func() []command.PluginInfo { return r.pluginInfos },
 		Reload:        r.reloadPlugins,
 		PluginsDir:    r.pluginsDir,
+		DecisionTrain: in.decisionTrain,
+		Trainers:      in.trainers,
 		RemList:       r.remList,
 		RemShow:       r.remShow,
 		RemForget:     r.remForget,

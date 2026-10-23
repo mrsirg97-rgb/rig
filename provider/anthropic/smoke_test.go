@@ -17,12 +17,7 @@ func TestLiveSmoke(t *testing.T) {
 	if model == "" || (base == "" && key == "") {
 		t.Skip("set RIG_SMOKE_ANTHROPIC_MODEL and either RIG_SMOKE_ANTHROPIC_KEY (a real key, the api default base) or RIG_SMOKE_ANTHROPIC_BASE_URL (a Messages-format server, keyless) to run the live smoke")
 	}
-	p := anthropic.New(anthropic.Config{
-		BaseURL:   base,
-		Model:     model,
-		APIKey:    key,
-		MaxTokens: 256,
-	})
+	p := anthropic.New(model, anthropic.WithBaseURL(base), anthropic.WithAPIKey(key), anthropic.WithMaxTokens(256))
 	events, err := drain(t, context.Background(), p, core.Request{
 		Messages:  []core.Message{{Role: core.RoleUser, Content: "say ok and nothing else"}},
 		MaxTokens: 256,

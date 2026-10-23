@@ -13,7 +13,7 @@ import (
 	"github.com/mrsirg97-rgb/rig/v3/plugins"
 )
 
-func (s *Server) pluginPath(name, zone string) (string, bool) {
+func (s *server) pluginPath(name, zone string) (string, bool) {
 	switch zone {
 	case "loaded":
 		return filepath.Join(s.home, "plugins", name+".py"), true
@@ -34,7 +34,7 @@ func pluginNameOK(w http.ResponseWriter, name string) bool {
 	return false
 }
 
-func (s *Server) handlePluginSource(w http.ResponseWriter, r *http.Request) {
+func (s *server) handlePluginSource(w http.ResponseWriter, r *http.Request) {
 	name := strings.TrimSpace(r.URL.Query().Get("name"))
 	zone := r.URL.Query().Get("zone")
 	if !pluginNameOK(w, name) {
@@ -57,7 +57,7 @@ func (s *Server) handlePluginSource(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"name": name, "zone": zone, "file": path, "source": string(data)})
 }
 
-func (s *Server) writeBody(w http.ResponseWriter, r *http.Request, into any) bool {
+func (s *server) writeBody(w http.ResponseWriter, r *http.Request, into any) bool {
 	if !s.originOK(r) {
 		writeErr(w, http.StatusForbidden, "origin mismatch (same-origin only)")
 		return false
@@ -75,7 +75,7 @@ func (s *Server) writeBody(w http.ResponseWriter, r *http.Request, into any) boo
 	return true
 }
 
-func (s *Server) handlePluginSave(w http.ResponseWriter, r *http.Request) {
+func (s *server) handlePluginSave(w http.ResponseWriter, r *http.Request) {
 	var in struct {
 		Name   string `json:"name"`
 		Source string `json:"source"`
@@ -97,7 +97,7 @@ func (s *Server) handlePluginSave(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"name": name, "file": path, "created": created, "reply": reply})
 }
 
-func (s *Server) handlePluginApprove(w http.ResponseWriter, r *http.Request) {
+func (s *server) handlePluginApprove(w http.ResponseWriter, r *http.Request) {
 	var in struct {
 		Name string `json:"name"`
 	}
@@ -136,15 +136,15 @@ func (s *Server) handlePluginApprove(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"name": name, "file": dst, "reply": reply})
 }
 
-func (s *Server) handlePluginDisable(w http.ResponseWriter, r *http.Request) {
+func (s *server) handlePluginDisable(w http.ResponseWriter, r *http.Request) {
 	s.handlePluginMove(w, r, "disable", "", "disabled")
 }
 
-func (s *Server) handlePluginEnable(w http.ResponseWriter, r *http.Request) {
+func (s *server) handlePluginEnable(w http.ResponseWriter, r *http.Request) {
 	s.handlePluginMove(w, r, "enable", "disabled", "")
 }
 
-func (s *Server) handlePluginMove(w http.ResponseWriter, r *http.Request, verb, from, to string) {
+func (s *server) handlePluginMove(w http.ResponseWriter, r *http.Request, verb, from, to string) {
 	var in struct {
 		Name string `json:"name"`
 	}

@@ -17,8 +17,10 @@ client, no new venv.
   maxResults)` and `Fetch(ctx, url, maxChars, timeoutMs)`. The no-query
   and no-url refusals and the `maxResults`/`maxChars`/`timeoutMs` bounds
   live in the verb they belong to, so a Go caller and the model hit the
-  same checks. `New(Config)` and `NewDefault()` return the interface; the
-  struct is unexported.
+  same checks. `New(opts...)` returns the interface, its config built whole from
+  `WithSearchURL`, `WithSearchDo`, `WithProxy`, `WithTrafilatura`,
+  `WithLookup`, `WithFetchDo`, `WithMaxBytes` and `WithBackground`; the
+  config and the web struct are unexported.
 - `GuardURL(ctx, raw, lookup)`: the same SSRF vetting as one exported
   door (3.4.0), so a second client — `tool/view`'s browser `open` — refuses
   exactly what fetch refuses, with the same words and the same lookup seam.

@@ -11,7 +11,7 @@ import (
 	"strings"
 )
 
-func (s *Server) readCtx(r *http.Request) (context.Context, context.CancelFunc) {
+func (s *server) readCtx(r *http.Request) (context.Context, context.CancelFunc) {
 	to := s.readTO
 	if to <= 0 {
 		to = defaultReadTO
@@ -19,12 +19,12 @@ func (s *Server) readCtx(r *http.Request) (context.Context, context.CancelFunc) 
 	return context.WithTimeout(r.Context(), to)
 }
 
-func (s *Server) stateFile(cwd string) bool {
+func (s *server) stateFile(cwd string) bool {
 	_, err := os.Stat(state.StorePath(s.home, cwd))
 	return err == nil
 }
 
-func (s *Server) originOK(r *http.Request) bool {
+func (s *server) originOK(r *http.Request) bool {
 	o := r.Header.Get("Origin")
 	if o == "" {
 		return false

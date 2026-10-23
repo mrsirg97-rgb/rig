@@ -260,7 +260,7 @@ is rewritten. Named, like 8's.
 
 `Run(ctx, args, env any)`: the dispatcher carries the env, the command
 package asserts it, and the env is a struct in `command/` built by the
-root; not `*rig.Kernel`.
+root; not `rig.Kernel`.
 
 What the commands need, and where each comes from: the live session
 (thread it onto the tool `Exec` ctx, as the loop does), the state store's
@@ -276,7 +276,7 @@ dependency. Three reasons for the separate struct:
   be a concrete type (the standing layout: interfaces in core, concrete
   types unexported at the leaves). The constraint holds literally: core
   gains `Command` and nothing else.
-- **The import direction.** A command that takes `*rig.Kernel` makes
+- **The import direction.** A command that takes `rig.Kernel` makes
   `command/` import the root package. The root imports `command/` (it
   registers `command.All()`), so one of the two edges goes away; the
   root stops importing the leaf, and "one file plus one registration
@@ -400,10 +400,11 @@ it completes:
    under it.
 3. `rec1.Retarget(s2.ID, s2)`; the in-flight `Input` lands the user row
    (and the files snapshot) under the new session, then retires.
-4. `k.Frontend = rec2`, `k.Session = s2`, and the pair
-   (decision 6's rebuild) on `(rec2, s2, the active row)`.
+4. the root's seat sits down with `(s2, rec2)` and the pair (decision
+   6's rebuild) on `(rec2, s2, the active row)`, in one store (3.4.1:
+   the kernel is read-only; the seat is the one swappable part).
 
-Same goroutine, no locks; the loop reads `k.Session` after `Input`
+Same goroutine; the loop reads `k.Session()` after `Input`
 returns, so the prompt it appends is already on the new session. Two
 small additions to the recorder, named in the layout: `Retarget` and
 the exported `Ensure`.
@@ -591,8 +592,8 @@ are the root's fields to write, and the loop borrows them per turn"):
 2. rebuild: a fresh inner `openai.New(baseURL, id)` (the model name
    rides the wire on every request, so the next request is the new
    model), a fresh `compact.New(inner, the current recorder, the current
-   session, the system prompt, the row)`, `k.Provider =
-   compact.Decorator(inner, pol)`, `k.Policy = pol`, and the active
+   session, the system prompt, the row)`, the seat turns
+   to `compact.Decorator(inner, pol)` and `pol` in one store, and the active
    model state; the root's one mutable string every closure reads;
 3. the transcript and the recorder are untouched: the switch is not a
    new session; the session row's `model` column follows the switch

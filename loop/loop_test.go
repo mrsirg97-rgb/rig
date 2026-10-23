@@ -210,8 +210,8 @@ func TestTextOnlyTurnOrdering(t *testing.T) {
 		rig.WithProvider(p),
 		rig.WithFrontend(f),
 		rig.WithPolicy(&transcriptPolicy{system: "be terse"}),
+		rig.WithSession(session),
 	)
-	k.Session = session
 
 	f.inputs <- "hi"
 	close(f.inputs)
@@ -255,8 +255,8 @@ func TestToolRoundTripOrdering(t *testing.T) {
 		rig.WithFrontend(f),
 		rig.WithPolicy(&transcriptPolicy{}),
 		rig.WithTools(bash),
+		rig.WithSession(session),
 	)
-	k.Session = session
 
 	f.inputs <- "what is the answer?"
 	close(f.inputs)
@@ -287,8 +287,7 @@ func TestLoopStampsContextTokens(t *testing.T) {
 		}}}
 		f := &recorderFrontend{inputs: make(chan string, 8)}
 		session := core.NewSession()
-		k := rig.New(rig.WithProvider(p), rig.WithFrontend(f), rig.WithPolicy(&transcriptPolicy{}))
-		k.Session = session
+		k := rig.New(rig.WithProvider(p), rig.WithFrontend(f), rig.WithPolicy(&transcriptPolicy{}), rig.WithSession(session))
 		f.inputs <- "hi"
 		close(f.inputs)
 		if err := loop.Run(context.Background(), k); err != nil {
@@ -308,8 +307,7 @@ func TestLoopStampsContextTokens(t *testing.T) {
 		}}
 		f := &recorderFrontend{inputs: make(chan string, 8)}
 		session := core.NewSession()
-		k := rig.New(rig.WithProvider(p), rig.WithFrontend(f), rig.WithPolicy(&transcriptPolicy{}), rig.WithTools(bash))
-		k.Session = session
+		k := rig.New(rig.WithProvider(p), rig.WithFrontend(f), rig.WithPolicy(&transcriptPolicy{}), rig.WithTools(bash), rig.WithSession(session))
 		f.inputs <- "go"
 		close(f.inputs)
 		if err := loop.Run(context.Background(), k); err != nil {
@@ -329,8 +327,7 @@ func TestLoopStampsContextTokens(t *testing.T) {
 		p := &scriptedProvider{turns: []scriptedTurn{{events: []evt.Signal{textEv("x"), doneEv()}}}}
 		f := &recorderFrontend{inputs: make(chan string, 8)}
 		session := core.NewSession()
-		k := rig.New(rig.WithProvider(p), rig.WithFrontend(f), rig.WithPolicy(&transcriptPolicy{}))
-		k.Session = session
+		k := rig.New(rig.WithProvider(p), rig.WithFrontend(f), rig.WithPolicy(&transcriptPolicy{}), rig.WithSession(session))
 		f.inputs <- "hi"
 		close(f.inputs)
 		if err := loop.Run(context.Background(), k); err != nil {
@@ -383,8 +380,8 @@ func TestFaultMidStreamPreservesSession(t *testing.T) {
 		rig.WithProvider(p),
 		rig.WithFrontend(f),
 		rig.WithPolicy(&transcriptPolicy{}),
+		rig.WithSession(session),
 	)
-	k.Session = session
 
 	f.inputs <- "first"
 	f.inputs <- "second"
@@ -423,8 +420,8 @@ func TestTransportErrorSurfacesAndContinues(t *testing.T) {
 		rig.WithProvider(p),
 		rig.WithFrontend(f),
 		rig.WithPolicy(&transcriptPolicy{}),
+		rig.WithSession(session),
 	)
-	k.Session = session
 
 	f.inputs <- "one"
 	f.inputs <- "two"
@@ -460,8 +457,8 @@ func TestClosedStreamWithoutDoneFailsLoud(t *testing.T) {
 		rig.WithProvider(p),
 		rig.WithFrontend(f),
 		rig.WithPolicy(&transcriptPolicy{}),
+		rig.WithSession(session),
 	)
-	k.Session = session
 
 	f.inputs <- "speak"
 	close(f.inputs)
@@ -483,8 +480,8 @@ func TestCancellationMidStream(t *testing.T) {
 		rig.WithProvider(p),
 		rig.WithFrontend(f),
 		rig.WithPolicy(&transcriptPolicy{}),
+		rig.WithSession(session),
 	)
-	k.Session = session
 
 	ctx, cancel := context.WithCancel(context.Background())
 	f.inputs <- "speak"
@@ -513,8 +510,8 @@ func TestCancellationBetweenToolCalls(t *testing.T) {
 		rig.WithFrontend(f),
 		rig.WithPolicy(&transcriptPolicy{}),
 		rig.WithTools(bash),
+		rig.WithSession(session),
 	)
-	k.Session = session
 
 	f.inputs <- "run it"
 	close(f.inputs)
@@ -543,8 +540,8 @@ func TestMalformedCallFedBackOnce(t *testing.T) {
 		rig.WithFrontend(f),
 		rig.WithPolicy(&transcriptPolicy{}),
 		rig.WithTools(bash),
+		rig.WithSession(session),
 	)
-	k.Session = session
 
 	f.inputs <- "go"
 	close(f.inputs)
@@ -581,8 +578,8 @@ func TestToolErrorIsAppendedOnItsOwnLine(t *testing.T) {
 		rig.WithFrontend(f),
 		rig.WithPolicy(&transcriptPolicy{}),
 		rig.WithTools(bash),
+		rig.WithSession(session),
 	)
-	k.Session = session
 
 	f.inputs <- "go"
 	close(f.inputs)
@@ -616,8 +613,8 @@ func TestRefusedCwdCarriesTheReasonExactlyOnce(t *testing.T) {
 		rig.WithFrontend(f),
 		rig.WithPolicy(&transcriptPolicy{}),
 		rig.WithTools(bash),
+		rig.WithSession(session),
 	)
-	k.Session = session
 
 	f.inputs <- "go"
 	close(f.inputs)
@@ -651,8 +648,8 @@ func TestRefusalAlreadyInContentIsNotAppended(t *testing.T) {
 		rig.WithFrontend(f),
 		rig.WithPolicy(&transcriptPolicy{}),
 		rig.WithTools(bash),
+		rig.WithSession(session),
 	)
-	k.Session = session
 
 	f.inputs <- "go"
 	close(f.inputs)
@@ -686,8 +683,8 @@ func TestOversizedToolResultStaysIntact(t *testing.T) {
 		rig.WithFrontend(f),
 		rig.WithPolicy(&transcriptPolicy{}),
 		rig.WithTools(bash),
+		rig.WithSession(session),
 	)
-	k.Session = session
 
 	f.inputs <- "go big"
 	close(f.inputs)
@@ -718,8 +715,8 @@ func TestAssembleErrorAbortsTurnAndRecovers(t *testing.T) {
 		rig.WithProvider(sp),
 		rig.WithFrontend(f),
 		rig.WithPolicy(p),
+		rig.WithSession(session),
 	)
-	k.Session = session
 
 	f.inputs <- "one"
 	f.inputs <- "two"
@@ -758,8 +755,8 @@ func TestUnknownToolNameFedBackOnce(t *testing.T) {
 		rig.WithProvider(p),
 		rig.WithFrontend(f),
 		rig.WithPolicy(&transcriptPolicy{}),
+		rig.WithSession(session),
 	)
-	k.Session = session
 
 	f.inputs <- "go"
 	close(f.inputs)
@@ -807,8 +804,8 @@ func TestAnEmptyCompletionStaysOutOfTheTranscript(t *testing.T) {
 		rig.WithProvider(p),
 		rig.WithFrontend(f),
 		rig.WithPolicy(&transcriptPolicy{}),
+		rig.WithSession(session),
 	)
-	k.Session = session
 
 	f.inputs <- "hi"
 	f.inputs <- "again"
@@ -842,8 +839,8 @@ func TestTruncatedCallRecoversInBand(t *testing.T) {
 		rig.WithPolicy(&transcriptPolicy{}),
 		rig.WithTools(bash),
 		rig.WithMiddleware(cutoff.Middleware()),
+		rig.WithSession(session),
 	)
-	k.Session = session
 
 	f.inputs <- "run it"
 	close(f.inputs)
@@ -880,8 +877,7 @@ func TestLoopAccumulatesReasoningDetailsIntoTheMessage(t *testing.T) {
 	}}}
 	f := &recorderFrontend{inputs: make(chan string, 8)}
 	session := core.NewSession()
-	k := rig.New(rig.WithProvider(p), rig.WithFrontend(f), rig.WithPolicy(&transcriptPolicy{}))
-	k.Session = session
+	k := rig.New(rig.WithProvider(p), rig.WithFrontend(f), rig.WithPolicy(&transcriptPolicy{}), rig.WithSession(session))
 	f.inputs <- "hi"
 	close(f.inputs)
 	if err := loop.Run(context.Background(), k); err != nil {
@@ -906,8 +902,7 @@ func TestReasoningDetailsThatAreNotAnArrayLandWholeInTheMessage(t *testing.T) {
 	}}}
 	f := &recorderFrontend{inputs: make(chan string, 8)}
 	session := core.NewSession()
-	k := rig.New(rig.WithProvider(p), rig.WithFrontend(f), rig.WithPolicy(&transcriptPolicy{}))
-	k.Session = session
+	k := rig.New(rig.WithProvider(p), rig.WithFrontend(f), rig.WithPolicy(&transcriptPolicy{}), rig.WithSession(session))
 	f.inputs <- "hi"
 	close(f.inputs)
 	if err := loop.Run(context.Background(), k); err != nil {
@@ -929,8 +924,7 @@ func TestReasoningDetailsThatAreNotJSONDropLoud(t *testing.T) {
 	}}}
 	f := &recorderFrontend{inputs: make(chan string, 8)}
 	session := core.NewSession()
-	k := rig.New(rig.WithProvider(p), rig.WithFrontend(f), rig.WithPolicy(&transcriptPolicy{}))
-	k.Session = session
+	k := rig.New(rig.WithProvider(p), rig.WithFrontend(f), rig.WithPolicy(&transcriptPolicy{}), rig.WithSession(session))
 	f.inputs <- "hi"
 	close(f.inputs)
 	if err := loop.Run(context.Background(), k); err != nil {
@@ -971,7 +965,6 @@ func TestTheKernelsEngineIsTheLoopsAndTheFleetRunsBelowTheTurn(t *testing.T) {
 		rig.WithPolicy(&transcriptPolicy{system: "be terse"}),
 		rig.WithEngine(engine),
 	)
-	k.Session = core.NewSession()
 	var order []string
 	engine.Add(evt.Func(func(context.Context) { order = append(order, "fleet") }), rig.PriorityFleet)
 	f.inputs <- "hi"
@@ -1014,7 +1007,6 @@ func TestAFrontendFaultEndsTheRun(t *testing.T) {
 		rig.WithFrontend(f),
 		rig.WithPolicy(&transcriptPolicy{}),
 	)
-	k.Session = core.NewSession()
 	err := loop.Run(context.Background(), k)
 	if !errors.Is(err, boom) {
 		t.Fatalf("run must stop with the frontend's fault, got %v", err)

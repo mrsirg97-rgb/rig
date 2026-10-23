@@ -2,7 +2,6 @@ package decision
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"time"
 
@@ -31,10 +30,11 @@ func Gold(ctx context.Context, db store.DB) ([]decision.GoldRow, error) {
 		if err := rows.Scan(&r.ID, &r.State, &qjson, &r.Answer, &r.Corrected, &r.Status); err != nil {
 			return nil, fmt.Errorf("decision: gold scan: %w", err)
 		}
-		if err := json.Unmarshal([]byte(qjson), &r.Question); err != nil {
+		q, err := decision.ParseQuestion([]byte(qjson))
+		if err != nil {
 			continue
 		}
-		r.Question.Kind = kindOf(r.Question.Kind)
+		r.Question = q
 		out = append(out, r)
 	}
 	if err := rows.Err(); err != nil {

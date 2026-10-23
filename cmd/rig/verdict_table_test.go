@@ -20,7 +20,7 @@ func TestAWorkerWithAFleetIsOfferedTheVerdictTool(t *testing.T) {
 	r.tools["verdict"] = verdict.New(quietWire{})
 	k := wire(r)
 	offered := false
-	for _, tl := range k.Tools {
+	for _, tl := range k.Tools() {
 		if tl.Name() == "verdict" {
 			offered = true
 		}
@@ -29,7 +29,7 @@ func TestAWorkerWithAFleetIsOfferedTheVerdictTool(t *testing.T) {
 		t.Fatal("the verdict tool is registered but not on the table the model reads")
 	}
 	plain := wire(testRoot(nullFrontend{}))
-	for _, tl := range plain.Tools {
+	for _, tl := range plain.Tools() {
 		if tl.Name() == "verdict" {
 			t.Fatal("a session without a fleet must not offer verdict")
 		}

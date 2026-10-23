@@ -170,11 +170,11 @@ func openDecisionStore(t *testing.T) store.DB {
 	return db
 }
 
-func taskModule(t *testing.T, answer func(item string) (map[string]any, bool), opts ...graph.Option) (string, *graph.Queue, core.Tool, *taskProbe, store.DB) {
+func taskModule(t *testing.T, answer func(item string) (map[string]any, bool), opts ...graph.Option) (string, graph.Queue, core.Tool, *taskProbe, store.DB) {
 	t.Helper()
 	probe := &taskProbe{}
 	db := openDecisionStore(t)
-	dec, err := decision.NewHTTP(decision.HTTPOptions{URL: taskServer(t, probe, answer).URL, Client: &http.Client{Transport: testenv.Transport()}})
+	dec, err := decision.NewHTTP(taskServer(t, probe, answer).URL, decision.WithHTTPClient(&http.Client{Transport: testenv.Transport()}))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -186,7 +186,7 @@ func taskModule(t *testing.T, answer func(item string) (map[string]any, bool), o
 	return root, q, tool, probe, db
 }
 
-func mapThePackFixture(t *testing.T, root string, q *graph.Queue) {
+func mapThePackFixture(t *testing.T, root string, q graph.Queue) {
 	t.Helper()
 	mapWithReads(t, root, q, filepath.Join(root, "alpha", "a.go"), filepath.Join(root, "beta", "b.go"))
 }

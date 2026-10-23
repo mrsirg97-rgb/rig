@@ -35,18 +35,18 @@ type Status struct {
 	Rows      []string `json:"rows"`
 }
 
-func (s *Server) Input(ctx context.Context) (string, error) { return s.chat.Input(ctx) }
-func (s *Server) Returns() (string, bool)                   { return s.chat.Returns() }
-func (s *Server) Notify(ev evt.Signal)                      { s.chat.Notify(ev) }
-func (s *Server) Ask(ctx context.Context, prompt string) bool {
+func (s *server) Input(ctx context.Context) (string, error) { return s.chat.Input(ctx) }
+func (s *server) Returns() (string, bool)                   { return s.chat.Returns() }
+func (s *server) Notify(ev evt.Signal)                      { s.chat.Notify(ev) }
+func (s *server) Ask(ctx context.Context, prompt string) bool {
 	return s.chat.Ask(ctx, prompt)
 }
-func (s *Server) Steer(text string) bool { return s.chat.Steer(text) }
-func (s *Server) Interrupt() bool        { return s.chat.Interrupt() }
-func (s *Server) ClearSlot()             { s.chat.ClearSlot() }
-func (s *Server) LiveTurn() bool         { return s.chat.LiveTurn() }
+func (s *server) Steer(text string) bool { return s.chat.Steer(text) }
+func (s *server) Interrupt() bool        { return s.chat.Interrupt() }
+func (s *server) ClearSlot()             { s.chat.ClearSlot() }
+func (s *server) LiveTurn() bool         { return s.chat.LiveTurn() }
 
-func (s *Server) handleChatEvents(w http.ResponseWriter, r *http.Request) {
+func (s *server) handleChatEvents(w http.ResponseWriter, r *http.Request) {
 	since, _ := strconv.ParseInt(r.URL.Query().Get("since"), 10, 64)
 	flusher, ok := w.(http.Flusher)
 	if !ok {
@@ -93,7 +93,7 @@ func (s *Server) handleChatEvents(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (s *Server) handleChatSend(w http.ResponseWriter, r *http.Request) {
+func (s *server) handleChatSend(w http.ResponseWriter, r *http.Request) {
 	if !s.originOK(r) {
 		writeErr(w, http.StatusForbidden, "origin refused")
 		return
@@ -129,7 +129,7 @@ func (s *Server) handleChatSend(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (s *Server) handleChatAnswer(w http.ResponseWriter, r *http.Request) {
+func (s *server) handleChatAnswer(w http.ResponseWriter, r *http.Request) {
 	if !s.originOK(r) {
 		writeErr(w, http.StatusForbidden, "origin refused")
 		return
@@ -149,7 +149,7 @@ func (s *Server) handleChatAnswer(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"id": in.ID, "yes": in.Yes})
 }
 
-func (s *Server) handleChatInterrupt(w http.ResponseWriter, r *http.Request) {
+func (s *server) handleChatInterrupt(w http.ResponseWriter, r *http.Request) {
 	if !s.originOK(r) {
 		writeErr(w, http.StatusForbidden, "origin refused")
 		return
@@ -157,7 +157,7 @@ func (s *Server) handleChatInterrupt(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"interrupted": s.chat.Interrupt()})
 }
 
-func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
+func (s *server) handleStatus(w http.ResponseWriter, r *http.Request) {
 	var st Status
 	if s.status != nil {
 		ctx, cancel := s.readCtx(r)
@@ -170,7 +170,7 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"status": st, "live": s.chat.LiveTurn(), "seq": s.chat.seqNow()})
 }
 
-func (s *Server) handleSwarm(w http.ResponseWriter, r *http.Request) {
+func (s *server) handleSwarm(w http.ResponseWriter, r *http.Request) {
 	s.chat.hub.Lock()
 	st := s.chat.swarm
 	del := s.chat.delegate

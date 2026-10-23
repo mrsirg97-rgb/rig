@@ -67,15 +67,15 @@ func TestTheWireToolPrefixGrowsByViewAndNothingElse(t *testing.T) {
 	text := wire(testRoot(nullFrontend{}))
 	vision := wire(visionRoot(t))
 
-	if len(vision.Tools) != len(text.Tools)+1 {
-		t.Fatalf("view must be the only difference: %d tools vs %d", len(vision.Tools), len(text.Tools))
+	if len(vision.Tools()) != len(text.Tools())+1 {
+		t.Fatalf("view must be the only difference: %d tools vs %d", len(vision.Tools()), len(text.Tools()))
 	}
 	textNames := map[string]bool{}
-	for _, tool := range text.Tools {
+	for _, tool := range text.Tools() {
 		textNames[tool.Name()] = true
 	}
 	grew := 0
-	for _, tool := range vision.Tools {
+	for _, tool := range vision.Tools() {
 		if !textNames[tool.Name()] {
 			grew++
 			if tool.Name() != "view" {

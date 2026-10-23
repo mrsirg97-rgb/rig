@@ -8,25 +8,24 @@ adapter's problem; the loop sees `evt.Signal` only.
 
 ## What it includes
 
-- `New(baseURL, model)`: builds the `core.Provider`. `baseURL` may carry
-  a path prefix such as `/v1`; it joins `/chat/completions`.
-- `NewWithConfig(Config)`: the hosted-mode constructor (SPEC_HOSTED):
-  `APIKey` (sent as `Authorization: Bearer <key>`, never in a fault or a
-  wire test), `Remote` (omits `chat_template_kwargs`), `Reasoning`
-  (`reasoning` = OpenRouter field names), `ProviderPin` (the
-  `provider.order` upstream pin), `CacheControl` (the top-level
-  `cache_control` switch), `Retries`/`RetryBase`/`Jitter` (the 429/5xx
-  backoff), `BlobsDir` (vision). The existing constructors delegate with
-  the local-row defaults (no key, no 429/5xx retry beyond the empty-5xx
-  case, `reasoning_content`).
-- `NewWithHeaderTimeout(baseURL, model, headerTimeout)`: the same with a
-  dialed time-to-headers bound; `New` applies the 5-minute default.
-  `Config.HeaderTimeout` carries the same knob: zero is the 5-minute
-  default and `HeaderTimeoutOff` (-1) removes the bound entirely — the
-  transport's `ResponseHeaderTimeout` lands at 0, so a queued request
-  waits as long as its server takes to answer and the request's context
-  is the only deadline. The root builds every non-remote row with the
-  off value and leaves remote rows on the default.
+- `New(baseURL, model, opts...)`: the one constructor; `baseURL` may
+  carry a path prefix such as `/v1`, it joins `/chat/completions`, and
+  the options are the knobs (SPEC_HOSTED): `WithAPIKey` (sent as
+  `Authorization: Bearer <key>`, never in a fault or a wire test),
+  `WithRemote` (omits `chat_template_kwargs`), `WithReasoning`
+  (`reasoning` = OpenRouter field names), `WithProviderPin` (the
+  `provider.order` upstream pin), `WithCacheControl` (the top-level
+  `cache_control` switch), `WithRetries`/`WithRetryBase`/`WithJitter`
+  (the 429/5xx backoff), `WithBlobsDir` (vision),
+  `WithHeaderTimeout` and `WithIdleTimeout`. The zero-value defaults
+  live in the constructor: no key, no 429/5xx retry beyond the
+  empty-5xx case, `reasoning_content`, the 5-minute header bound and
+  the 10-minute idle bound. `HeaderTimeoutOff` (-1) removes the header
+  bound entirely — the transport's `ResponseHeaderTimeout` lands at 0,
+  so a queued request waits as long as its server takes to answer and
+  the request's context is the only deadline. The root builds every
+  non-remote row with the off value and leaves remote rows on the
+  default.
 - `Stream(ctx, req)`: encodes the request, posts, streams SSE, and emits
   `evt.Signal`s.
 - The wire shapes (`wireRequest`, `wireMessage`, `wireTool`,
@@ -79,8 +78,8 @@ adapter's problem; the loop sees `evt.Signal` only.
   `base * 2^attempt * (1 + jitter)` inside the stream goroutine — the loop
   sees no event until the bound is exhausted, then the existing loud
   fault. A 4xx other than 429 faults immediately. The request body is
-  rebuilt per attempt (the reader is consumed); `Jitter` is a Config field
-  so tests are deterministic.
+  rebuilt per attempt (the reader is consumed); `Jitter` is a constructor
+  option so tests are deterministic.
 - **The empty 5xx before the first token**: a 5xx whose body is empty is
   the proxy's proof that nothing reached the model (llama-swap's
   keep-alive race with llama-server) — retried for every row, hosted and

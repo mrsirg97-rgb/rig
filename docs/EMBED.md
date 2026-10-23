@@ -30,7 +30,7 @@ them once (the command set rides the frontend dispatchers, and
 
 | option | what it is | root wiring |
 |---|---|---|
-| `WithProvider` | one turn, streamed | the row's wire: `openai.New(...)` / `openai.NewWithConfig(...)`, `anthropic.New(...)` on an anthropic row |
+| `WithProvider` | one turn, streamed | the row's wire: `openai.New(baseURL, model, opts...)`, `anthropic.New(model, opts...)` on an anthropic row |
 | `WithTools` | the tool table | the map of `tool/*` adapters, plus `pluginTools` |
 | `WithFrontend` | input pull, event notify | `tui.New`, `cli.New`, or `oneshot.New` |
 | `WithPolicy` | message assembly | `compact.New` (the per-model trigger) |

@@ -41,7 +41,7 @@ const (
 
 type LookupFn func(ctx context.Context, host string) ([]string, error)
 
-type Config struct {
+type config struct {
 	Blobs   string
 	FFmpeg  string
 	Browser string
@@ -92,18 +92,30 @@ type View interface {
 
 type toolView struct {
 	tool.Definition
-	cfg Config
+	cfg config
 
 	mu sync.Mutex
 	b  *browser
 }
 
-func New(blobsDir string) View {
-	return NewWith(Config{Blobs: blobsDir})
-}
+type Option func(*config)
 
-func NewWith(cfg Config) View {
-	return &toolView{Definition: tool.Def("view"), cfg: cfg}
+func WithFFmpeg(path string) Option  { return func(c *config) { c.FFmpeg = path } }
+func WithBrowser(path string) Option { return func(c *config) { c.Browser = path } }
+func WithProxy(proxy string) Option  { return func(c *config) { c.Proxy = proxy } }
+func WithCwd(cwd string) Option      { return func(c *config) { c.Cwd = cwd } }
+func WithRigHome(home string) Option { return func(c *config) { c.RigHome = home } }
+func WithLookup(lookup LookupFn) Option {
+	return func(c *config) { c.Lookup = lookup }
+}
+func WithDial(dial DialFn) Option { return func(c *config) { c.Dial = dial } }
+
+func New(blobsDir string, opts ...Option) View {
+	c := config{Blobs: blobsDir}
+	for _, opt := range opts {
+		opt(&c)
+	}
+	return &toolView{Definition: tool.Def("view"), cfg: c}
 }
 
 func (v *toolView) Close() {

@@ -29,7 +29,7 @@ import "example.com/m/alpha"
 func Call() int { return alpha.Target() }
 `
 
-func packModule(t *testing.T, opts ...graph.Option) (string, *graph.Queue, core.Tool) {
+func packModule(t *testing.T, opts ...graph.Option) (string, graph.Queue, core.Tool) {
 	t.Helper()
 	root := t.TempDir()
 	if err := os.WriteFile(filepath.Join(root, "go.mod"), []byte("module example.com/m\n"), 0o644); err != nil {
@@ -59,7 +59,7 @@ func packModule(t *testing.T, opts ...graph.Option) (string, *graph.Queue, core.
 	return root, q, remapi.New(newDB(t), q)
 }
 
-func graphModule(t *testing.T) (string, *graph.Queue, core.Tool) {
+func graphModule(t *testing.T) (string, graph.Queue, core.Tool) {
 	t.Helper()
 	root := t.TempDir()
 	if err := os.WriteFile(filepath.Join(root, "go.mod"), []byte("module example.com/m\n"), 0o644); err != nil {
@@ -83,7 +83,7 @@ func graphModule(t *testing.T) (string, *graph.Queue, core.Tool) {
 	return root, q, remapi.New(newDB(t), q)
 }
 
-func mapWithReads(t *testing.T, root string, q *graph.Queue, paths ...string) {
+func mapWithReads(t *testing.T, root string, q graph.Queue, paths ...string) {
 	t.Helper()
 	read := index.Middleware(q).Wrap(func(ctx context.Context, call core.ToolCall) (string, error) {
 		return file.NewRead().Exec(ctx, call.Args)

@@ -24,7 +24,7 @@ var (
 	searchWS  = regexp.MustCompile(`\s+`)
 )
 
-type SearchConfig struct {
+type searchConfig struct {
 	BaseURL string
 	Do      func(*http.Request) (*http.Response, error)
 }
@@ -34,7 +34,7 @@ type search struct {
 	do        func(*http.Request) (*http.Response, error)
 }
 
-func newSearch(cfg SearchConfig) *search {
+func newSearch(cfg searchConfig) *search {
 	base := cfg.BaseURL
 	if base == "" {
 		base = DefaultSearXNG

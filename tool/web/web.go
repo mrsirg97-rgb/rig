@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
 	"strings"
 	"time"
 
@@ -19,11 +20,13 @@ const DefaultSearXNG = "http://127.0.0.1:8888"
 
 const DefaultProxy = "http://127.0.0.1:8889"
 
-type Config struct {
-	Search     SearchConfig
-	Fetch      FetchConfig
-	Background background
+type config struct {
+	search     searchConfig
+	fetch      fetchConfig
+	background background
 }
+
+type Option func(*config)
 
 type background interface {
 	Submit(ctx context.Context, kind, name string, bound time.Duration, work func(ctx context.Context) (string, int)) (string, error)
@@ -44,12 +47,31 @@ type web struct {
 	bg     background
 }
 
-func New(cfg Config) Web {
-	return &web{Definition: tool.Def("web"), search: newSearch(cfg.Search), fetch: newFetch(cfg.Fetch), bg: cfg.Background}
+func WithSearchURL(url string) Option { return func(c *config) { c.search.BaseURL = url } }
+func WithSearchDo(do func(*http.Request) (*http.Response, error)) Option {
+	return func(c *config) { c.search.Do = do }
+}
+func WithProxy(proxy string) Option { return func(c *config) { c.fetch.Proxy = proxy } }
+func WithTrafilatura(bin *string) Option {
+	return func(c *config) { c.fetch.Trafilatura = bin }
+}
+func WithLookup(lookup LookupFn) Option { return func(c *config) { c.fetch.Lookup = lookup } }
+func WithFetchDo(do func(*http.Request) (*http.Response, error)) Option {
+	return func(c *config) { c.fetch.Do = do }
+}
+func WithMaxBytes(n int) Option           { return func(c *config) { c.fetch.MaxBytes = n } }
+func WithBackground(bg background) Option { return func(c *config) { c.background = bg } }
+
+func New(opts ...Option) Web {
+	c := config{}
+	for _, opt := range opts {
+		opt(&c)
+	}
+	return newWeb(c)
 }
 
-func NewDefault() Web {
-	return New(Config{Fetch: FetchConfig{Proxy: DefaultProxy}})
+func newWeb(c config) Web {
+	return &web{Definition: tool.Def("web"), search: newSearch(c.search), fetch: newFetch(c.fetch), bg: c.background}
 }
 
 func (w *web) Exec(ctx context.Context, args json.RawMessage) (string, error) {

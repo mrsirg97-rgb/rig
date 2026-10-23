@@ -30,7 +30,7 @@ func (f fakeDecider) Decide(ctx context.Context, state string, questions []decis
 
 func wiredDecide(t *testing.T, rec decision.Recorder, reply func(state string) decision.Answer) decision.Decide {
 	t.Helper()
-	d, err := decision.NewDecide(decision.DecideOptions{Decider: fakeDecider{reply: reply}, Recorder: rec, Parallel: 1})
+	d, err := decision.NewDecide(fakeDecider{reply: reply}, 1, decision.WithRecorder(rec))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -56,7 +56,7 @@ func decideArgs(items ...string) json.RawMessage {
 func TestWithNoDecisionUrlNothingMoves(t *testing.T) {
 	r := testRoot(nullFrontend{})
 	k := wire(r)
-	for _, tool := range k.Tools {
+	for _, tool := range k.Tools() {
 		if tool.Name() == "decide" {
 			t.Fatal("without decisionUrl the tool menu does not carry decide")
 		}
@@ -80,7 +80,7 @@ func TestADecideToolJoinsTheTable(t *testing.T) {
 		t.Fatal("decide is a built-in entry, not a plugin")
 	}
 	found := false
-	for _, tool := range k.Tools {
+	for _, tool := range k.Tools() {
 		if tool.Name() == "decide" {
 			found = true
 		}
@@ -103,8 +103,8 @@ func TestAWiredDecideBringsThePackGuideline(t *testing.T) {
 	if !strings.Contains(r.fullSystem, "pack the task before reading files for it") {
 		t.Fatalf("the pack guideline joins the system prompt:\n%s", r.fullSystem)
 	}
-	if len(k.Middleware) != 10 {
-		t.Fatalf("the guideline is one link: %d", len(k.Middleware))
+	if len(k.Middleware()) != 10 {
+		t.Fatalf("the guideline is one link: %d", len(k.Middleware()))
 	}
 }
 
@@ -123,7 +123,7 @@ func TestADecideCallSortsAndRecords(t *testing.T) {
 	var exec core.ToolExec = func(ctx context.Context, call core.ToolCall) (string, error) {
 		return "ran", nil
 	}
-	for _, mw := range k.Middleware {
+	for _, mw := range k.Middleware() {
 		exec = mw.Wrap(exec)
 	}
 	ctx := core.WithSession(context.Background(), &core.Session{ID: "sess-3"})
@@ -188,7 +188,7 @@ func (o *overlapDecider) Decide(ctx context.Context, state string, questions []d
 
 func TestTheFanOutStaysBoundedAtOne(t *testing.T) {
 	o := &overlapDecider{}
-	d, err := decision.NewDecide(decision.DecideOptions{Decider: o, Parallel: 1})
+	d, err := decision.NewDecide(o, 1)
 	if err != nil {
 		t.Fatal(err)
 	}

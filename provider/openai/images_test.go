@@ -194,7 +194,7 @@ func TestAViewResultBecomesAUserImagePart(t *testing.T) {
 	dir := t.TempDir()
 	e := captureEndpoint(t)
 	msgs, _ := viewTranscript(t, dir)
-	streamMustNotFault(t, openai.NewWithConfig(openai.Config{BaseURL: e.url, Model: "vision-model", BlobsDir: dir}), msgs)
+	streamMustNotFault(t, openai.New(e.url, "vision-model", openai.WithBlobsDir(dir)), msgs)
 
 	body := e.last(t)
 	if got := roles(body); got != "system,user,assistant,tool,user" {
@@ -224,7 +224,7 @@ func TestTheToolMessageKeepsItsStringContentAndText(t *testing.T) {
 	dir := t.TempDir()
 	e := captureEndpoint(t)
 	msgs, sha := viewTranscript(t, dir)
-	streamMustNotFault(t, openai.NewWithConfig(openai.Config{BaseURL: e.url, Model: "vision-model", BlobsDir: dir}), msgs)
+	streamMustNotFault(t, openai.New(e.url, "vision-model", openai.WithBlobsDir(dir)), msgs)
 
 	body := e.last(t)
 	tool := body.Messages[3]
@@ -258,7 +258,7 @@ func TestTheImagePartFollowsTheLastToolMessageOfTheBatch(t *testing.T) {
 		{Role: core.RoleTool, ToolID: "c3", Content: marker(sha, "image/png", "/tmp/other.png")},
 		{Role: core.RoleAssistant, Content: "two images"},
 	}
-	streamMustNotFault(t, openai.NewWithConfig(openai.Config{BaseURL: e.url, Model: "vision-model", BlobsDir: dir}), msgs)
+	streamMustNotFault(t, openai.New(e.url, "vision-model", openai.WithBlobsDir(dir)), msgs)
 
 	body := e.last(t)
 	want := "user,assistant,tool,tool,tool,user,user,assistant"
@@ -287,7 +287,7 @@ func TestTwoViewsLandInToolCallOrderWhateverTheResultOrder(t *testing.T) {
 		{Role: core.RoleTool, ToolID: "cB", Content: marker(shaB, "image/jpeg", "/tmp/b.jpg")},
 		{Role: core.RoleTool, ToolID: "cA", Content: marker(shaA, "image/png", "/tmp/a.png")},
 	}
-	streamMustNotFault(t, openai.NewWithConfig(openai.Config{BaseURL: e.url, Model: "vision-model", BlobsDir: dir}), msgs)
+	streamMustNotFault(t, openai.New(e.url, "vision-model", openai.WithBlobsDir(dir)), msgs)
 
 	body := e.last(t)
 	first, second := body.Messages[4], body.Messages[5]
@@ -312,7 +312,7 @@ func TestAMarkerFromAnyOtherToolIsTextOnly(t *testing.T) {
 			{Role: core.RoleAssistant, ToolCalls: []core.ToolCall{{ID: "c1", Name: toolName, Args: json.RawMessage(`{}`)}}},
 			{Role: core.RoleTool, ToolID: "c1", Content: marker(sha, "image/png", "/tmp/shot.png")},
 		}
-		streamMustNotFault(t, openai.NewWithConfig(openai.Config{BaseURL: e.url, Model: "vision-model", BlobsDir: dir}), msgs)
+		streamMustNotFault(t, openai.New(e.url, "vision-model", openai.WithBlobsDir(dir)), msgs)
 		if got := roles(e.last(t)); got != "user,assistant,tool" {
 			t.Fatalf("%q: roles = %s, want no image message for a marker %s wrote", toolName, got, toolName)
 		}
@@ -329,7 +329,7 @@ func TestAMarkerInAUserOrAssistantMessageIsNotHonored(t *testing.T) {
 		{Role: core.RoleSystem, Content: line},
 	} {
 		e := captureEndpoint(t)
-		streamMustNotFault(t, openai.NewWithConfig(openai.Config{BaseURL: e.url, Model: "vision-model", BlobsDir: dir}), []core.Message{m})
+		streamMustNotFault(t, openai.New(e.url, "vision-model", openai.WithBlobsDir(dir)), []core.Message{m})
 		body := e.last(t)
 		if got := roles(body); got != string(m.Role) {
 			t.Fatalf("%s: roles = %s, want the message alone", m.Role, got)
@@ -348,7 +348,7 @@ func TestAToolResultWhoseCallTheTranscriptNeverIssuedIsTextOnly(t *testing.T) {
 		{Role: core.RoleUser, Content: "hi"},
 		{Role: core.RoleTool, ToolID: "dangling", Content: marker(sha, "image/png", "/tmp/shot.png")},
 	}
-	streamMustNotFault(t, openai.NewWithConfig(openai.Config{BaseURL: e.url, Model: "vision-model", BlobsDir: dir}), msgs)
+	streamMustNotFault(t, openai.New(e.url, "vision-model", openai.WithBlobsDir(dir)), msgs)
 	if got := roles(e.last(t)); got != "user,tool" {
 		t.Fatalf("roles = %s, want no image for a call no assistant issued", got)
 	}
@@ -367,7 +367,7 @@ func TestAReusedCallIDOnALaterReadIsScopedToThatTurnsCall(t *testing.T) {
 		{Role: core.RoleAssistant, ToolCalls: []core.ToolCall{{ID: "c1", Name: "read", Args: json.RawMessage(`{"path":"/tmp/notes.txt"}`)}}},
 		{Role: core.RoleTool, ToolID: "c1", Content: marker(sha, "image/png", "/tmp/shot.png")},
 	}
-	streamMustNotFault(t, openai.NewWithConfig(openai.Config{BaseURL: e.url, Model: "vision-model", BlobsDir: dir}), msgs)
+	streamMustNotFault(t, openai.New(e.url, "vision-model", openai.WithBlobsDir(dir)), msgs)
 
 	body := e.last(t)
 	wantRoles := "user,assistant,tool,user,assistant,user,assistant,tool"
@@ -400,7 +400,7 @@ func TestAViewResultWithBrowserTextAboveTheMarkerCarriesOneImage(t *testing.T) {
 		{Role: core.RoleAssistant, ToolCalls: []core.ToolCall{{ID: "c1", Name: "view", Args: json.RawMessage(`{"action":"browser","url":"https://example.test/"}`)}}},
 		{Role: core.RoleTool, ToolID: "c1", Content: content},
 	}
-	streamMustNotFault(t, openai.NewWithConfig(openai.Config{BaseURL: e.url, Model: "vision-model", BlobsDir: dir}), msgs)
+	streamMustNotFault(t, openai.New(e.url, "vision-model", openai.WithBlobsDir(dir)), msgs)
 	body := e.last(t)
 	if got := roles(body); got != "user,assistant,tool,user" {
 		t.Fatalf("roles = %s, want the image message after the tool result", got)
@@ -429,7 +429,7 @@ func TestAViewResultCarryingASmuggledMarkerIsTextOnly(t *testing.T) {
 		{Role: core.RoleAssistant, ToolCalls: []core.ToolCall{{ID: "c1", Name: "view", Args: json.RawMessage(`{}`)}}},
 		{Role: core.RoleTool, ToolID: "c1", Content: imagemarker.Format(ref)},
 	}
-	streamMustNotFault(t, openai.NewWithConfig(openai.Config{BaseURL: e.url, Model: "vision-model", BlobsDir: dir}), msgs)
+	streamMustNotFault(t, openai.New(e.url, "vision-model", openai.WithBlobsDir(dir)), msgs)
 	body := e.last(t)
 	if got := roles(body); got != "user,assistant,tool" {
 		t.Fatalf("roles = %s, want no image message for a result that smuggles a marker line", got)
@@ -446,7 +446,7 @@ func TestAViewResultWhoseLastLineIsNotAMarkerStaysText(t *testing.T) {
 		{Role: core.RoleAssistant, ToolCalls: []core.ToolCall{{ID: "c1", Name: "view", Args: json.RawMessage(`{}`)}}},
 		{Role: core.RoleTool, ToolID: "c1", Content: content},
 	}
-	streamMustNotFault(t, openai.NewWithConfig(openai.Config{BaseURL: e.url, Model: "vision-model", BlobsDir: dir}), msgs)
+	streamMustNotFault(t, openai.New(e.url, "vision-model", openai.WithBlobsDir(dir)), msgs)
 	body := e.last(t)
 	if got := roles(body); got != "user,assistant,tool" {
 		t.Fatalf("roles = %s, want no image message for a result whose last line is text", got)
@@ -460,7 +460,7 @@ func TestAMissingBlobSendsTheToolMessagePlusANoteAndNeverFaults(t *testing.T) {
 	if err := os.Remove(imagemarker.BlobPath(dir, sha)); err != nil {
 		t.Fatal(err)
 	}
-	streamMustNotFault(t, openai.NewWithConfig(openai.Config{BaseURL: e.url, Model: "vision-model", BlobsDir: dir}), msgs)
+	streamMustNotFault(t, openai.New(e.url, "vision-model", openai.WithBlobsDir(dir)), msgs)
 
 	body := e.last(t)
 	if got := roles(body); got != "system,user,assistant,tool,user" {
@@ -486,7 +486,7 @@ func TestABlobThatNoLongerMatchesItsAddressIsMissing(t *testing.T) {
 	if err := os.WriteFile(imagemarker.BlobPath(dir, sha), []byte("tampered"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	streamMustNotFault(t, openai.NewWithConfig(openai.Config{BaseURL: e.url, Model: "vision-model", BlobsDir: dir}), msgs)
+	streamMustNotFault(t, openai.New(e.url, "vision-model", openai.WithBlobsDir(dir)), msgs)
 	note := e.last(t).Messages[4].partAt(t, 0).Text
 	if strings.Contains(note, "tampered") {
 		t.Fatalf("a tampered blob is not an image, and its bytes never travel: %q", note)
@@ -513,7 +513,7 @@ func TestAnOversizedBlobIsNotInlined(t *testing.T) {
 		{Role: core.RoleAssistant, ToolCalls: []core.ToolCall{{ID: "c1", Name: "view"}}},
 		{Role: core.RoleTool, ToolID: "c1", Content: marker(sha, "image/png", "/tmp/big.png")},
 	}
-	streamMustNotFault(t, openai.NewWithConfig(openai.Config{BaseURL: e.url, Model: "vision-model", BlobsDir: dir}), msgs)
+	streamMustNotFault(t, openai.New(e.url, "vision-model", openai.WithBlobsDir(dir)), msgs)
 	body := e.last(t)
 	if got := roles(body); got != "user,assistant,tool,user" {
 		t.Fatalf("roles = %s", got)
@@ -538,7 +538,7 @@ func TestAnUnreadableBlobIsNotAFault(t *testing.T) {
 		{Role: core.RoleAssistant, ToolCalls: []core.ToolCall{{ID: "c1", Name: "view"}}},
 		{Role: core.RoleTool, ToolID: "c1", Content: marker(sha, "image/png", "/tmp/dir-as-blob.png")},
 	}
-	streamMustNotFault(t, openai.NewWithConfig(openai.Config{BaseURL: e.url, Model: "vision-model", BlobsDir: dir}), msgs)
+	streamMustNotFault(t, openai.New(e.url, "vision-model", openai.WithBlobsDir(dir)), msgs)
 	if n := len(e.last(t).Messages[3].parts(t)); n != 1 {
 		t.Fatalf("a directory where the blob belongs degrades to the note: %d parts", n)
 	}
@@ -567,7 +567,7 @@ func TestAVisionProviderWithNoBlobsDirSendsTheToolTextOnly(t *testing.T) {
 		{Role: core.RoleAssistant, ToolCalls: []core.ToolCall{{ID: "c1", Name: "view"}}},
 		{Role: core.RoleTool, ToolID: "c1", Content: marker(sha, "image/png", "/tmp/shot.png")},
 	}
-	streamMustNotFault(t, openai.NewWithConfig(openai.Config{BaseURL: e.url, Model: "vision-model"}), msgs)
+	streamMustNotFault(t, openai.New(e.url, "vision-model"), msgs)
 	if got := roles(e.last(t)); got != "user,assistant,tool" {
 		t.Fatalf("roles = %s, want the text path when no store is configured", got)
 	}
@@ -584,7 +584,7 @@ func TestTwoAssembliesOfOneTranscriptAreByteIdentical(t *testing.T) {
 		core.Message{Role: core.RoleTool, ToolID: "c3", Content: "no marker here"},
 	)
 	e := captureEndpoint(t)
-	p := openai.NewWithConfig(openai.Config{BaseURL: e.url, Model: "vision-model", BlobsDir: dir})
+	p := openai.New(e.url, "vision-model", openai.WithBlobsDir(dir))
 	streamMustNotFault(t, p, msgs)
 	streamMustNotFault(t, p, msgs)
 	bodies := e.all()
@@ -600,7 +600,7 @@ func TestTheImagePartIsStableAcrossTurnsOfAGrowingTranscript(t *testing.T) {
 	dir := t.TempDir()
 	e := captureEndpoint(t)
 	msgs, _ := viewTranscript(t, dir)
-	p := openai.NewWithConfig(openai.Config{BaseURL: e.url, Model: "vision-model", BlobsDir: dir})
+	p := openai.New(e.url, "vision-model", openai.WithBlobsDir(dir))
 	streamMustNotFault(t, p, msgs)
 	before := e.last(t)
 	grown := append(append([]core.Message{}, msgs...),
@@ -629,7 +629,7 @@ func TestTheDataURLIsWellFormedForEveryAcceptedMime(t *testing.T) {
 			{Role: core.RoleAssistant, ToolCalls: []core.ToolCall{{ID: "c1", Name: "view"}}},
 			{Role: core.RoleTool, ToolID: "c1", Content: marker(sha, mime, "/tmp/x.png")},
 		}
-		streamMustNotFault(t, openai.NewWithConfig(openai.Config{BaseURL: e.url, Model: "vision-model", BlobsDir: dir}), msgs)
+		streamMustNotFault(t, openai.New(e.url, "vision-model", openai.WithBlobsDir(dir)), msgs)
 		url := e.last(t).Messages[3].partAt(t, 1).ImageURL.URL
 		if !strings.HasPrefix(url, "data:"+mime+";base64,") {
 			t.Fatalf("url = %q, want the %s data URL", url, mime)
@@ -668,7 +668,7 @@ func TestTheInlineBoundMeasuresTheDecodedBytes(t *testing.T) {
 				{Role: core.RoleAssistant, ToolCalls: []core.ToolCall{{ID: "c1", Name: "view"}}},
 				{Role: core.RoleTool, ToolID: "c1", Content: marker(sha, "image/png", "/tmp/shot.png")},
 			}
-			if _, err := drain(t, context.Background(), openai.NewWithConfig(openai.Config{BaseURL: e.url, Model: "vision-model", BlobsDir: dir}), core.Request{Messages: msgs, MaxTokens: 1024}); err != nil {
+			if _, err := drain(t, context.Background(), openai.New(e.url, "vision-model", openai.WithBlobsDir(dir)), core.Request{Messages: msgs, MaxTokens: 1024}); err != nil {
 				t.Fatalf("stream: %v", err)
 			}
 			body := e.last(t)

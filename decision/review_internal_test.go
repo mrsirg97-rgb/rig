@@ -18,7 +18,7 @@ func (haltedReviews) Settled(context.Context, string, Question, string) (string,
 }
 
 func (haltedReviews) Pending(context.Context) ([]ReviewRow, error) {
-	return []ReviewRow{{ID: 1, Scope: "proj", Site: "s", State: "st", Question: Question{Prompt: "q"}}}, nil
+	return []ReviewRow{{ID: 1, Scope: "proj", Site: "s", State: "st", Question: NewQuestion(QuestionInput{Prompt: "q"})}}, nil
 }
 
 func (haltedReviews) Settle(context.Context, int64, bool, string, string) error { return nil }

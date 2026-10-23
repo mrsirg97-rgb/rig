@@ -118,11 +118,11 @@ func TestAJobStatusCrossesTheMachineRoom(t *testing.T) {
 				t.Fatalf("the instance role exited with %d statuses", len(states))
 			}
 			if after, found := strings.CutPrefix(line, "STATUS "); found {
-				var st machineroom.JobStatus
-				if err := json.Unmarshal([]byte(after), &st); err != nil {
+				st, err := machineroom.ParseJobStatus([]byte(after))
+				if err != nil {
 					t.Fatalf("the role's line is not a status: %q (%v)", line, err)
 				}
-				states = append(states, st.State)
+				states = append(states, st.State())
 			}
 		case <-time.After(10 * time.Second):
 			t.Fatalf("the instance role received %v, want running then done", states)
@@ -174,8 +174,8 @@ func TestTheEndJobsDrainRidesTheRoomSMemberLeftSignal(t *testing.T) {
 		t.Fatal("the members must see each other before the runner leaves")
 	}
 
-	b.Act(machineroom.JobStatus{Job: "j1", State: machineroom.JobRunning,
-		Started: time.Date(2026, 8, 15, 12, 0, 0, 0, time.UTC), Workers: 1},
+	b.Act(machineroom.NewJobStatus(machineroom.JobStatusInput{Job: "j1", State: machineroom.JobRunning,
+		Started: time.Date(2026, 8, 15, 12, 0, 0, 0, time.UTC), Workers: 1}),
 		machineroom.KeyOf("job/j1"), machineroom.PriorityFleet, func(bool) {})
 	deadline = time.Now().Add(10 * time.Second)
 	for time.Now().Before(deadline) {
@@ -188,7 +188,7 @@ func TestTheEndJobsDrainRidesTheRoomSMemberLeftSignal(t *testing.T) {
 		time.Sleep(25 * time.Millisecond)
 	}
 	mu.Lock()
-	if len(ended) != 1 || ended[0].State != machineroom.JobRunning {
+	if len(ended) != 1 || ended[0].State() != machineroom.JobRunning {
 		mu.Unlock()
 		t.Fatalf("the survivor's row breathes the running act: %v", ended)
 	}
@@ -210,7 +210,7 @@ func TestTheEndJobsDrainRidesTheRoomSMemberLeftSignal(t *testing.T) {
 	if len(ended) != 2 {
 		t.Fatalf("the room's member-left signal must end the runner's job: %v", ended)
 	}
-	if ended[1].State != machineroom.JobFailed || ended[1].Reason != "runner left" {
+	if ended[1].State() != machineroom.JobFailed || ended[1].Reason() != "runner left" {
 		t.Fatalf("the end is failed, runner left: %+v", ended[1])
 	}
 }

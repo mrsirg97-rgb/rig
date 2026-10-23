@@ -18,10 +18,11 @@ const httpTimeout = 2 * time.Minute
 
 const replyCap = 1 << 20
 
-type HTTPOptions struct {
-	URL     string
-	Client  *http.Client
-	Decider string
+type HTTPOption func(*httpConfig)
+
+type httpConfig struct {
+	client *http.Client
+	name   string
 }
 
 type httpDecider struct {
@@ -30,27 +31,39 @@ type httpDecider struct {
 	name     string
 }
 
-func NewHTTP(o HTTPOptions) (Decider, error) {
-	if strings.TrimSpace(o.URL) == "" {
+func WithHTTPClient(client *http.Client) HTTPOption {
+	return func(c *httpConfig) { c.client = client }
+}
+
+func WithHTTPName(name string) HTTPOption {
+	return func(c *httpConfig) { c.name = name }
+}
+
+func NewHTTP(target string, opts ...HTTPOption) (Decider, error) {
+	if strings.TrimSpace(target) == "" {
 		return nil, fmt.Errorf("decision: no url")
 	}
-	u, err := url.Parse(o.URL)
+	u, err := url.Parse(target)
 	if err != nil {
-		return nil, fmt.Errorf("decision: url %q: %w", o.URL, err)
+		return nil, fmt.Errorf("decision: url %q: %w", target, err)
 	}
 	if u.Scheme != "http" && u.Scheme != "https" {
-		return nil, fmt.Errorf("decision: url %q: the scheme must be http or https", o.URL)
+		return nil, fmt.Errorf("decision: url %q: the scheme must be http or https", target)
 	}
-	client := o.Client
+	cfg := &httpConfig{}
+	for _, opt := range opts {
+		opt(cfg)
+	}
+	client := cfg.client
 	if client == nil {
 		client = &http.Client{Timeout: httpTimeout}
 	}
-	name := o.Decider
+	name := cfg.name
 	if name == "" {
 		name = u.Host
 	}
 	return &httpDecider{
-		endpoint: strings.TrimSuffix(o.URL, "/") + "/v1/systemone",
+		endpoint: strings.TrimSuffix(target, "/") + "/v1/systemone",
 		client:   client,
 		name:     name,
 	}, nil
@@ -82,7 +95,7 @@ func (d *httpDecider) Decide(ctx context.Context, state string, questions []Ques
 		if err != nil {
 			return nil, fmt.Errorf("decision: %s: %w", d.name, err)
 		}
-		req.Questions[q.ID] = raw
+		req.Questions[q.ID()] = raw
 	}
 	body, err := json.Marshal(req)
 	if err != nil {
@@ -143,20 +156,21 @@ type wireNoulQuestion struct {
 }
 
 func marshalQuestion(q Question) (json.RawMessage, error) {
-	switch q.Kind {
+	switch q.Kind() {
 	case KindChoice:
-		return json.Marshal(wireChoiceQuestion{KindChoice, q.Prompt, described(q)})
+		return json.Marshal(wireChoiceQuestion{KindChoice, q.Prompt(), described(q)})
 	case KindScore:
-		return json.Marshal(wireScoreQuestion{KindScore, q.Prompt, q.Criteria})
+		return json.Marshal(wireScoreQuestion{KindScore, q.Prompt(), q.Criteria()})
 	case KindBinary:
-		return json.Marshal(wireNoulQuestion{wireNoul, q.Prompt})
+		return json.Marshal(wireNoulQuestion{wireNoul, q.Prompt()})
 	}
-	return nil, fmt.Errorf("question %q: kind %q has no wire shape", q.ID, q.Kind)
+	return nil, fmt.Errorf("question %q: kind %q has no wire shape", q.ID(), q.Kind())
 }
 
 func described(q Question) map[string]string {
-	out := make(map[string]string, len(q.Description))
-	for label, meaning := range q.Description {
+	description := q.Description()
+	out := make(map[string]string, len(description))
+	for label, meaning := range description {
 		if meaning != "" {
 			out[label] = meaning
 		}

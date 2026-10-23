@@ -66,7 +66,6 @@ func TestWaveStartsArriveWhileTheWaveRuns(t *testing.T) {
 		rig.WithTools(tool),
 		rig.WithPriority(func(core.ToolCall) int { return rig.PriorityRead }),
 	)
-	k.Session = core.NewSession()
 
 	f.inputs <- "go"
 	close(f.inputs)

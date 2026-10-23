@@ -112,14 +112,15 @@ type root struct {
 	pluginInfos []command.PluginInfo
 
 	fullSystem string
-	k          *rig.Kernel
+	k          rig.Kernel
+	seat       *seat
 
 	compactFn func(ctx context.Context) (core.Compacted, bool, error)
 }
 
 const defaultResultCap = 64 * 1024
 
-func wire(r *root) *rig.Kernel {
+func wire(r *root) rig.Kernel {
 	r.applyVision()
 	if r.askDoor == nil {
 		r.approve = approve.Auto
@@ -153,11 +154,9 @@ func wire(r *root) *rig.Kernel {
 
 	r.fullSystem = r.buildSystem()
 	provider, pol := r.buildPair()
-	fe := r.frontend()
+	r.seat = newSeat(provider, r.frontend(), pol, r.session)
 	k := rig.New(
-		rig.WithProvider(provider),
-		rig.WithFrontend(fe),
-		rig.WithPolicy(pol),
+		rig.WithSeat(r.seat),
 		rig.WithTools(append(
 			r.tableTools(),
 			r.pluginTools...,
@@ -171,7 +170,6 @@ func wire(r *root) *rig.Kernel {
 		}),
 		rig.WithEngine(r.engine),
 	)
-	k.Session = r.session
 	r.k = k
 	return k
 }
@@ -307,21 +305,17 @@ func (r *root) buildProvider() core.Provider {
 		headerTimeout = 0
 	}
 	if r.row.Provider == "anthropic" {
-		return anthropic.New(anthropic.Config{
-			BaseURL:         r.row.BaseURL,
-			Model:           r.activeID,
-			APIKey:          r.row.APIKey,
-			MaxTokens:       r.row.MaxTokens,
-			Thinking:        anthropic.Thinking{Budget: r.row.ThinkingBudget},
-			CacheControl:    r.row.CacheControl,
-			Retries:         r.row.Retries,
-			BlobsDir:        r.blobsDir(),
-			HeaderTimeout:   headerTimeout,
-			InputPrice:      r.row.InputPrice,
-			OutputPrice:     r.row.OutputPrice,
-			CacheReadPrice:  r.row.CacheReadPrice,
-			CacheWritePrice: r.row.CacheWritePrice,
-		})
+		return anthropic.New(r.activeID,
+			anthropic.WithBaseURL(r.row.BaseURL),
+			anthropic.WithAPIKey(r.row.APIKey),
+			anthropic.WithMaxTokens(r.row.MaxTokens),
+			anthropic.WithThinking(r.row.ThinkingBudget),
+			anthropic.WithCacheControl(r.row.CacheControl),
+			anthropic.WithRetries(r.row.Retries),
+			anthropic.WithBlobsDir(r.blobsDir()),
+			anthropic.WithHeaderTimeout(headerTimeout),
+			anthropic.WithPrices(r.row.InputPrice, r.row.OutputPrice, r.row.CacheReadPrice, r.row.CacheWritePrice),
+		)
 	}
 	baseURL := r.baseURL
 	if r.row.Port > 0 {
@@ -330,28 +324,22 @@ func (r *root) buildProvider() core.Provider {
 		baseURL = r.row.BaseURL
 	}
 	if !r.row.Remote && r.row.APIKey == "" {
-		cfg := openai.Config{
-			BaseURL:       baseURL,
-			Model:         r.activeID,
-			HeaderTimeout: headerTimeout,
-		}
+		opts := []openai.Option{openai.WithHeaderTimeout(headerTimeout)}
 		if r.row.Vision {
-			cfg.BlobsDir = r.blobsDir()
+			opts = append(opts, openai.WithBlobsDir(r.blobsDir()))
 		}
-		return openai.NewWithConfig(cfg)
+		return openai.New(baseURL, r.activeID, opts...)
 	}
-	return openai.NewWithConfig(openai.Config{
-		BaseURL:       baseURL,
-		Model:         r.activeID,
-		APIKey:        r.row.APIKey,
-		Remote:        r.row.Remote,
-		Reasoning:     r.row.Reasoning,
-		ProviderPin:   r.row.ProviderPin,
-		CacheControl:  r.row.CacheControl,
-		Retries:       r.row.Retries,
-		BlobsDir:      r.blobsDir(),
-		HeaderTimeout: headerTimeout,
-	})
+	return openai.New(baseURL, r.activeID,
+		openai.WithAPIKey(r.row.APIKey),
+		openai.WithRemote(r.row.Remote),
+		openai.WithReasoning(r.row.Reasoning),
+		openai.WithProviderPin(r.row.ProviderPin...),
+		openai.WithCacheControl(r.row.CacheControl),
+		openai.WithRetries(r.row.Retries),
+		openai.WithBlobsDir(r.blobsDir()),
+		openai.WithHeaderTimeout(headerTimeout),
+	)
 }
 
 func (r *root) applyVision() {
@@ -360,10 +348,13 @@ func (r *root) applyVision() {
 			r.tools = map[string]core.Tool{}
 		}
 		if _, ok := r.tools["view"]; !ok {
-			r.tools["view"] = viewtool.NewWith(viewtool.Config{
-				Blobs: r.blobsDir(), FFmpeg: r.ffmpeg, Browser: r.browser, Proxy: r.proxy,
-				Cwd: r.cwd, RigHome: r.rigHome,
-			})
+			r.tools["view"] = viewtool.New(r.blobsDir(),
+				viewtool.WithFFmpeg(r.ffmpeg),
+				viewtool.WithBrowser(r.browser),
+				viewtool.WithProxy(r.proxy),
+				viewtool.WithCwd(r.cwd),
+				viewtool.WithRigHome(r.rigHome),
+			)
 		}
 		return
 	}
@@ -401,13 +392,9 @@ func (r *root) swapIn(s *core.Session, rec2 *state.Recorder) {
 	r.rec.Retarget(s.ID, s)
 	r.rec = rec2
 	r.session = s
-	r.k.Frontend = r.frontend()
-	r.k.Session = s
-
 	r.fullSystem = r.buildSystem()
 	provider, pol := r.buildPair()
-	r.k.Provider = provider
-	r.k.Policy = pol
+	r.seat.sitDown(s, r.frontend(), provider, pol)
 }
 
 func newFleet() (evt.Engine, broadcast.Room) {

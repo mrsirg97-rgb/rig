@@ -29,7 +29,7 @@ type egress struct {
 	refused  func(raw, why string)
 }
 
-func newEgress(cfg Config, refused func(raw, why string)) (*egress, error) {
+func newEgress(cfg config, refused func(raw, why string)) (*egress, error) {
 	var upstream *url.URL
 	if cfg.Proxy != "" {
 		u, err := url.Parse(cfg.Proxy)

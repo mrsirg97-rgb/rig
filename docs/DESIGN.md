@@ -55,8 +55,9 @@ boundary (the guard clears its counts there), and `Guidelines` lets it
 contribute system-prompt prose (the root collects it before building the
 policy). One mechanism, not a second.
 
-The loop names none of the concrete types. `loop.Run(ctx, k *rig.Kernel)`
-takes the kernel and resolves seams at runtime, so swapping any
+The loop names none of the concrete types. `loop.Run(ctx, k rig.Kernel)`
+takes the kernel and resolves seams at runtime (the provider, policy,
+session and frontend through its `Seat`, read at every use), so swapping any
 dependency is a change at the composition root and nowhere else.
 
 ### the turn, and the queue it runs on

@@ -140,15 +140,15 @@ func jobTeller(machine machineroom.Member, voice broadcast.Member) func(machiner
 			return
 		}
 		posted := make(chan struct{})
-		machine.Act(status, machineroom.KeyOf("job/"+status.Job), machineroom.PriorityFleet, func(bool) { close(posted) })
-		if status.State == machineroom.JobRunning {
+		machine.Act(status, machineroom.KeyOf("job/"+status.Job()), machineroom.PriorityFleet, func(bool) { close(posted) })
+		if status.State() == machineroom.JobRunning {
 			return
 		}
 		select {
 		case <-posted:
 		case <-time.After(machineroom.JobStatusPostWait):
 			broadcast.Say(voice, "room", fmt.Sprintf("job %s: the %s status went unacknowledged after %s; the runner proceeds and the status may be lost",
-				status.Job, status.State, machineroom.JobStatusPostWait), evt.LevelError)
+				status.Job(), status.State(), machineroom.JobStatusPostWait), evt.LevelError)
 		}
 	}
 }

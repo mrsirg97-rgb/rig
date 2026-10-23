@@ -62,7 +62,16 @@ the five signals the instances exchange beside the protocol's own.
   job's last non-empty stdout line, stderr's when the run failed,
   omitted from the wire when empty so a 3.2.0 peer decodes the frame
   unchanged), with `Codec` and `Registry`
-  declaring rig's six kinds beside `broadcast.Protocol()`'s. `New` takes
+  declaring rig's six kinds beside `broadcast.Protocol()`'s. Each is a
+  read-only interface of getters over an unexported struct, built whole
+  by its constructor (`NewStartChild`, `NewStopChild`, `NewSwapChild`
+  over `SwapChildInput`, `NewTableChange`, `NewUpdate`, `NewJobStatus`
+  over `JobStatusInput`); encoding goes through a private wire struct,
+  so the JSON is byte for byte the shape 3.4.0 sent, and decoding comes
+  back through the same constructor (`ParseJobStatus` is the exported
+  door for a job status). The getter sets overlap, so each interface
+  carries its own unexported marker: a type switch on the signal names
+  exactly one case, never the narrower neighbour. `New` takes
   the member's version and writes it to `<room dir>/<id>.version` beside
   the socket (`Close` removes it); `Admits(version)` reads every live
   peer's sidecar and answers whether the room's slowest member still
@@ -82,10 +91,13 @@ the five signals the instances exchange beside the protocol's own.
   one mesh member beside the unix room, constructed only when
   settings.json's `mesh` is set. The mesh member's id is the machine's
   (`broadcast.MemberOf` over the door address), not the unix room
-  member's process id. The config carries
-  `broadcast.NewTickClock(period, window, the fleet priority)` — the
+  member's process id. The config is built by `broadcast.NewMeshConfig`
+  over `broadcast.NewTickClock(period, window, the fleet priority)` — the
   machine's time counted in periods, no proof, nothing computed between
-  ticks — and the mesh's order is advisory: the key's home machine is its
+  ticks — with the peers and the window as options; the door adds its
+  voice, rounds, timeout, idle bound and told callback as options too, so
+  the built config is read-only and no caller can move it under the
+  mesh. The mesh's order is advisory: the key's home machine is its
   authority. The door mirrors the two orders: a fold hold on a key whose
   row names another machine's front posts into the mesh, and a foreign
   claim past the freshness horizon (the window) reposts into the unix
