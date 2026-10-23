@@ -651,7 +651,7 @@ func TestTheSchemaIsTheActionDoorAndKeepsPathNamed(t *testing.T) {
 	if _, ok := schema.Properties["action"]; !ok {
 		t.Fatalf("the door names its sources: %v", schema.Properties)
 	}
-	for _, name := range []string{"at", "frames"} {
+	for _, name := range []string{"at", "frames", "step", "url", "ref", "text", "amount", "shot"} {
 		if _, ok := schema.Properties[name]; !ok {
 			t.Fatalf("the schema is missing %q: %v", name, schema.Properties)
 		}

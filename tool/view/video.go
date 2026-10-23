@@ -78,7 +78,11 @@ func (v *toolView) Video(ctx context.Context, clip Clip) (string, error) {
 		if err != nil {
 			return "", err
 		}
-		return v.publish(ctx, img, lossy, path)
+		out, err := v.publish(ctx, img, lossy, path)
+		if err != nil {
+			return "", fmt.Errorf("view: %s: %v", path, err)
+		}
+		return out, nil
 	}
 
 	n := clip.Frames
@@ -124,7 +128,11 @@ func (v *toolView) Video(ctx context.Context, clip Clip) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("view: %s: %v", path, err)
 	}
-	return v.publish(ctx, sheet, lossy, path)
+	out, err := v.publish(ctx, sheet, lossy, path)
+	if err != nil {
+		return "", fmt.Errorf("view: %s: %v", path, err)
+	}
+	return out, nil
 }
 
 func (v *toolView) ffmpeg() (string, error) {

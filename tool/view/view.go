@@ -17,6 +17,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"sync"
 
 	"github.com/mrsirg97-rgb/rig/v3/imagemarker"
 	"github.com/mrsirg97-rgb/rig/v3/tool"
@@ -38,9 +39,16 @@ const (
 	still = "png"
 )
 
+type LookupFn func(ctx context.Context, host string) ([]string, error)
+
 type Config struct {
-	Blobs  string
-	FFmpeg string
+	Blobs   string
+	FFmpeg  string
+	Browser string
+	Proxy   string
+	Cwd     string
+	RigHome string
+	Lookup  LookupFn
 }
 
 type Clip struct {
@@ -49,11 +57,26 @@ type Clip struct {
 	Frames int
 }
 
+type Step struct {
+	Action string
+	URL    string
+	Ref    int
+	Text   string
+	Amount int
+	Shot   bool
+}
+
 type given struct {
-	Action string `json:"action"`
-	Path   string `json:"path"`
-	At     string `json:"at"`
-	Frames *int   `json:"frames"`
+	Action string  `json:"action"`
+	Step   string  `json:"step"`
+	Path   string  `json:"path"`
+	At     string  `json:"at"`
+	Frames *int    `json:"frames"`
+	URL    string  `json:"url"`
+	Ref    *int    `json:"ref"`
+	Text   *string `json:"text"`
+	Amount *int    `json:"amount"`
+	Shot   bool    `json:"shot"`
 }
 
 type View interface {
@@ -62,11 +85,16 @@ type View interface {
 
 	Image(ctx context.Context, path string) (string, error)
 	Video(ctx context.Context, clip Clip) (string, error)
+	Browser(ctx context.Context, step Step) (string, error)
+	Close()
 }
 
 type toolView struct {
 	tool.Definition
 	cfg Config
+
+	mu sync.Mutex
+	b  *browser
 }
 
 func New(blobsDir string) View {
@@ -75,6 +103,16 @@ func New(blobsDir string) View {
 
 func NewWith(cfg Config) View {
 	return &toolView{Definition: tool.Def("view"), cfg: cfg}
+}
+
+func (v *toolView) Close() {
+	v.mu.Lock()
+	b := v.b
+	v.b = nil
+	v.mu.Unlock()
+	if b != nil {
+		b.close()
+	}
 }
 
 func (v *toolView) Exec(ctx context.Context, data json.RawMessage) (string, error) {
@@ -95,9 +133,19 @@ func (v *toolView) Exec(ctx context.Context, data json.RawMessage) (string, erro
 		}
 		return v.Video(ctx, clip)
 	case "browser":
-		return "", errors.New("view: the browser source is not in this build")
+		step := Step{Action: a.Step, URL: a.URL, Shot: a.Shot}
+		if a.Ref != nil {
+			step.Ref = *a.Ref
+		}
+		if a.Text != nil {
+			step.Text = *a.Text
+		}
+		if a.Amount != nil {
+			step.Amount = *a.Amount
+		}
+		return v.Browser(ctx, step)
 	default:
-		return "", fmt.Errorf("view: unknown action %q; the actions are image (or omit it), video", a.Action)
+		return "", fmt.Errorf("view: unknown action %q; the actions are image (or omit it), video, browser", a.Action)
 	}
 }
 
@@ -160,7 +208,11 @@ func (v *toolView) Image(ctx context.Context, path string) (string, error) {
 	if b := img.Bounds(); b.Dx() > 0 && b.Dy() > 0 && int64(b.Dx())*int64(b.Dy()) > maxPixels {
 		return "", fmt.Errorf("view: %s decoded to %dx%d, over the %d-pixel cap", path, b.Dx(), b.Dy(), maxPixels)
 	}
-	return v.publish(ctx, img, format, path)
+	out, err := v.publish(ctx, img, format, path)
+	if err != nil {
+		return "", fmt.Errorf("view: %s: %v", path, err)
+	}
+	return out, nil
 }
 
 func (v *toolView) publish(ctx context.Context, img image.Image, format, src string) (string, error) {

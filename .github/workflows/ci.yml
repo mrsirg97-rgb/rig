@@ -29,9 +29,18 @@ jobs:
         run: |
           python3 -m venv "$HOME/.pi/agent/kernel-venv"
           "$HOME/.pi/agent/kernel-venv/bin/pip" install --quiet ipython numpy pandas
-      # view's video cases skip by name without ffmpeg; it is a fixture here.
-      - name: the video fixture
-        run: sudo apt-get -y install ffmpeg >/dev/null
+      # view's video and browser cases skip by name without their binaries,
+      # the way the jail skips without bubblewrap: both are fixtures here.
+      # chrome-headless-shell is pinned so the wire cannot float under the
+      # suite; RIG_BROWSER is the knob the tool reads.
+      - name: the video and browser fixtures
+        run: |
+          sudo apt-get -y install ffmpeg >/dev/null
+          mkdir -p "$RUNNER_TEMP/cft" && cd "$RUNNER_TEMP/cft"
+          curl -fsSL -o shell.zip \
+            https://storage.googleapis.com/chrome-for-testing-public/156.0.8078.47/linux64/chrome-headless-shell-linux64.zip
+          unzip -q shell.zip
+          echo "RIG_BROWSER=$PWD/chrome-headless-shell-linux64/chrome-headless-shell" >> "$GITHUB_ENV"
       - name: test
         run: go vet ./... && go test -race -p 2 ./...
       - name: fmt-check

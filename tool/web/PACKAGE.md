@@ -19,6 +19,9 @@ client, no new venv.
   live in the verb they belong to, so a Go caller and the model hit the
   same checks. `New(Config)` and `NewDefault()` return the interface; the
   struct is unexported.
+- `GuardURL(ctx, raw, lookup)`: the same SSRF vetting as one exported
+  door (3.4.0), so a second client — `tool/view`'s browser `open` — refuses
+  exactly what fetch refuses, with the same words and the same lookup seam.
 - The engines behind it: the SearXNG `/search` JSON call, and the
   guarded reader — resolves the host, refuses private addresses (SSRF
   guard), follows redirects with re-checks and a hop cap, extracts via

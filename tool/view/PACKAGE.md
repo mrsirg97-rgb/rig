@@ -2,28 +2,29 @@
 
 ## What it is
 
-`view`: look at pixels. Since 3.4.0 it is an action door with two sources
-— `image` (the default; 3.3.5's one verb) and `video` — and one reply
-shape: one `[[rig:image …]]` line, with the bytes in the
+`view`: look at pixels. Since 3.4.0 it is an action door with three sources
+— `image` (the default; 3.3.5's one verb), `video`, `browser` — and one
+reply shape: one `[[rig:image …]]` line, with the bytes in the
 content-addressed store and the provider carrying them to the model as a
-real image part. The transcript keeps only the line, so a picture costs
+real image part. The transcript keeps only the line, so a screenshot costs
 its reference. The tool is registered only for a model row with `vision`
 (SPEC_VIEW).
 
 ## What it includes
 
 - `View`: the tool as its interface: `tool.Definition` (the words), `Exec`
-  as the one JSON door — decode and route, nothing else — and the two
-  verbs `Image(ctx, path)` and `Video(ctx, Clip)`. The path-required
-  refusal, the blob-store gate, the caps and the decode live in the verb,
-  so a Go caller and the model meet the same words and the same refusal; a
-  cancelled ctx refuses before the filesystem is touched. `New(blobsDir)`
-  is the image-only shape; `NewWith(Config)` carries `FFmpeg`. The struct
-  is unexported.
+  as the one JSON door — decode and route, nothing else — and the three
+  verbs `Image(ctx, path)`, `Video(ctx, Clip)`, `Browser(ctx, Step)`, plus
+  `Close`. The path-required refusal, the blob-store gate, the caps and the
+  decode live in the verb, so a Go caller and the model meet the same words
+  and the same refusal; a cancelled ctx refuses before the filesystem is
+  touched. `New(blobsDir)` is the image-only shape; `NewWith(Config)`
+  carries the knobs (`FFmpeg`, `Browser`, `Proxy`, `Cwd`, `RigHome`, and a
+  lookup seam for the SSRF guard). The struct is unexported.
 - `view.go`: the action door, the image path, and `publish` — resample to
   the 1568 bound, re-encode by the lossy/opaque rule, write the blob once,
-  format the marker. Video frames hand `publish` pixels; they do not copy
-  the image path.
+  format the marker. Video frames and screenshots hand `publish` pixels;
+  they do not copy the image path.
 - `video.go`: ffmpeg's probe and frame extraction, the three caps (source
   bytes, clip seconds, frame count), the timestamp parser. One frame per
   `-ss`, PNG on stdout, decoded in Go so the blob never depends on ffmpeg's
@@ -32,16 +33,31 @@ its reference. The tool is registered only for a model row with `vision`
   stand, the 4 px gutter, the timestamp labels (`basicfont.Face7x13`), the
   dark backing. Deterministic: the same clip and arguments give the same
   blob.
+- `browser.go`: one headless page per session, started lazily and kept; the
+  serial queue; the steps open/click/type/scroll/shot/close; the death note.
+- `browserpage.go`: the page's side of the pipe — target handshake, navigate,
+  the ready polls, the element snapshot, the screenshot, the exit words.
+- `browserguard.go`: the URL walls (web's SSRF guard, pathguard for
+  `file://`), the binary resolution, and the flags.
+- `browserreply.go`: the reply's lines — the page line, the capped element
+  list, and the sanitiser that strips control characters and `[[rig:`.
+- `cdp.go`: the DevTools client on `--remote-debugging-pipe` — NUL-delimited
+  JSON on fds 3/4, replies routed by id, stdlib only.
+- `page.js`: the one page script: visible interactive elements with role and
+  accessible name, and the refs the steps click and type by.
 
 ## How it is consumed
 
 - Registered at the root beside the other read-only natives: concurrent,
-  never mutating (`defaultAction` is `image` and no action mutates), in the
-  embedded allow by default.
+  never mutating by default (`defaultAction` is `image`), in the embedded
+  allow by default. The registry's `mutates:["browser"]` marks the actions
+  that can submit a form; the browser's own queue serializes them.
 - `provider/openai` and `provider/anthropic` read the blob the line names;
   `frontend/tui` prints the row from it. Neither trusts the other's copy of
-  the format: both call `imagemarker`.
-- `cmd/rig` constructs it with the resolved `RIG_FFMPEG`.
+  the format: both call `imagemarker`, and both take the marker from the
+  reply's *last* line.
+- `cmd/rig` constructs it with the resolved `RIG_FFMPEG`/`RIG_BROWSER` and
+  calls `Close` at session end and when the row loses vision.
 
 ## Gotchas
 
@@ -49,8 +65,8 @@ its reference. The tool is registered only for a model row with `vision`
   before the read; 1<<24 pixels of header, refused before the allocation.
   Both refusals name the cap and the way around it. Video adds 512 MiB of
   source, 3600 s of clip, and 1..12 frames, each with the same manner.
-- The path may not carry a control character. The reply is a marker line,
-  and a filename with a newline would split it. The refusal
+- The path may not carry a control character. The reply is a marker line (or
+  ends in one), and a filename with a newline would split it. The refusal
   comes before the stat, and the marker's own parser refuses such a `src`
   too, so neither writer nor reader can be smuggled.
 - The format is the bytes: `image.DecodeConfig` sniffs the magic, so a
@@ -65,12 +81,21 @@ its reference. The tool is registered only for a model row with `vision`
   same file always yields the same blob. The re-encode quality is 90: high
   enough that screenshot text survives legibly, low enough that the blob
   stays a fraction of the source's bytes.
-- The resampler polls the context every 32 output rows; the contact sheet
-  rides the same filter and the same 1568 bound.
-- ffmpeg is named by `RIG_FFMPEG`/`settings.ffmpeg`, falling back to PATH. An
-  unconfigured binary refuses naming the knobs. A jailed worker gets it on
-  its env and a read-only bind of its directory.
+- The resampler polls the context every 32 output rows; the contact sheet and
+  the screenshot ride the same filter and the same 1568 bound.
+- ffmpeg is named by `RIG_FFMPEG`/`settings.ffmpeg`, falling back to PATH;
+  the browser only by `RIG_BROWSER`/`settings.browser`. An unconfigured
+  binary refuses naming its knob. A jailed worker gets both on its env and a
+  read-only bind of each binary's directory.
+- The browser is started with `--no-sandbox` on purpose: the session already
+  has `bash`, and under bwrap Chromium's nested sandbox cannot start; the
+  jail is the worker's boundary. `--disable-background-networking` keeps an
+  idle browser off the network.
+- The page is untrusted: names and titles are stripped of control characters
+  and `[[rig:` before they enter the reply, and the marker is written last,
+  so the only marker the provider honors is `view`'s own.
 - `view` never records anything in the session's file state: what the model
   saw was a downscale, which is not a license to `edit` the file.
 - The lossless webp decoder and the label face come from
-  `golang.org/x/image`; the resampler and the sheet are local and stdlib.
+  `golang.org/x/image`; the resampler, the CDP client and the sheet are
+  local and stdlib.

@@ -205,6 +205,7 @@ func TestMutatesAnswersTheTableByNameAndAction(t *testing.T) {
 		{"view", "", false},
 		{"view", "image", false},
 		{"view", "video", false},
+		{"view", "browser", true},
 		{"web", "search", false},
 		{"web", "fetch", false},
 		{"decide", "", false},

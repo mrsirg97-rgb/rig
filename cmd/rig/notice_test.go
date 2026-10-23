@@ -86,7 +86,7 @@ func TestTheReviewFireNamesNoModelAndFallsBackToTheSessionsOwn(t *testing.T) {
 	}
 	fleet(r)
 	voice := r.room.Mint()
-	fire := r.reviewFire(t.TempDir(), store.DB{}, "http://127.0.0.1:1", "rig", t.TempDir(), "", nil, "", del)
+	fire := r.reviewFire(t.TempDir(), store.DB{}, "http://127.0.0.1:1", "rig", t.TempDir(), "", nil, "", "", "", del)
 	model, err := fire(context.Background(), "review these", voice)
 	if err != nil {
 		t.Fatal(err)

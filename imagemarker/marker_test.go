@@ -177,6 +177,26 @@ func TestFindTakesTheFirstMarkerOfSeveral(t *testing.T) {
 	}
 }
 
+func TestParseLastTakesOnlyTheFinalLine(t *testing.T) {
+	second := goodRef()
+	second.SHA256 = strings.Repeat("f", 64)
+	second.Src = "/tmp/second.png"
+	content := "[1] button \"Sign in\"\nthe page said\n" + imagemarker.Format(goodRef()) + "\n" + imagemarker.Format(second) + "\n"
+	got, ok := imagemarker.ParseLast(content)
+	if !ok || got.Src != "/tmp/second.png" {
+		t.Fatalf("ParseLast = %+v, %v, want the last marker line", got, ok)
+	}
+	if got, ok := imagemarker.ParseLast("[1] button \"Sign in\"\n" + imagemarker.Format(goodRef()) + "\ntrailing words"); ok {
+		t.Fatalf("ParseLast must refuse a reply whose last line is not the marker: %+v", got)
+	}
+	if _, ok := imagemarker.ParseLast("no image here"); ok {
+		t.Fatal("ParseLast must refuse text with no marker")
+	}
+	if _, ok := imagemarker.ParseLast("  \n\t\n"); ok {
+		t.Fatal("ParseLast must refuse blank text")
+	}
+}
+
 func TestBlobPathIsTheAddressUnderTheDir(t *testing.T) {
 	got := imagemarker.BlobPath("/home/ng/.rig/blobs", goodSHA)
 	if !strings.HasSuffix(got, goodSHA) || strings.Contains(strings.TrimSuffix(got, goodSHA), goodSHA) {

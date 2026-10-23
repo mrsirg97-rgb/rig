@@ -40,7 +40,7 @@ func wireMessagesStyled(msgs []core.Message, imgs *imageStore, style wireStyle) 
 		if imgs == nil || owner.nameOf(m.ToolID) != viewToolName {
 			continue
 		}
-		ref, ok := imagemarker.Parse(m.Content)
+		ref, ok := imagemarker.ParseLast(m.Content)
 		if !ok {
 			continue
 		}

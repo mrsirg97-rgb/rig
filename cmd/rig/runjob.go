@@ -56,6 +56,14 @@ func runJob(args []string) int {
 	if v := os.Getenv("RIG_PYTHON"); v != "" {
 		python = v
 	}
+	ffmpeg := cfg.Settings.FFmpeg
+	if v := os.Getenv("RIG_FFMPEG"); v != "" {
+		ffmpeg = v
+	}
+	browser := cfg.Settings.Browser
+	if v := os.Getenv("RIG_BROWSER"); v != "" {
+		browser = v
+	}
 	model := cfg.Settings.Model
 	if v := os.Getenv("RIG_MODEL"); v != "" {
 		model = v
@@ -110,6 +118,8 @@ func runJob(args []string) int {
 		Sandbox:      cfg.Settings.Sandbox,
 		SandboxBinds: cfg.Settings.SandboxBinds,
 		Python:       python,
+		FFmpeg:       ffmpeg,
+		Browser:      browser,
 		RigHome:      cfgDir,
 		StateDir:     filepath.Join(cfgDir, "sessions"),
 		Models:       func() models.Table { return cfg.Models },

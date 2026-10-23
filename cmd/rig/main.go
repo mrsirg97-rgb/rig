@@ -381,10 +381,12 @@ func rigMain() int {
 
 	rt := runtimeTable(cfg.Models, modelID, row)
 	python := envOr("RIG_PYTHON", cfg.Settings.Python)
+	ffmpeg := envOr("RIG_FFMPEG", cfg.Settings.FFmpeg)
+	browser := envOr("RIG_BROWSER", cfg.Settings.Browser)
 	wiring := workerWiring{
 		DB: scdb, Home: schedHome, RigHome: cfgDir, StateDir: filepath.Join(cfgDir, "sessions"),
 		SwapURL: swapURL, WorkerCmd: []string{self}, DefaultModel: modelID,
-		Sandbox: cfg.Settings.Sandbox, SandboxBinds: cfg.Settings.SandboxBinds, Python: python, Allow: allowList,
+		Sandbox: cfg.Settings.Sandbox, SandboxBinds: cfg.Settings.SandboxBinds, Python: python, FFmpeg: ffmpeg, Browser: browser, Allow: allowList,
 		Fetch: sched.RealFetch(0), Spawn: sched.RealSpawn, Models: func() models.Table { return rt }, Room: fleetroom,
 	}
 	piped := *prompt != ""
@@ -393,7 +395,7 @@ func rigMain() int {
 		Ctx: ctx, Await: piped,
 		DB: wiring.DB, Home: wiring.Home, RigHome: wiring.RigHome, StateDir: wiring.StateDir,
 		SwapURL: wiring.SwapURL, WorkerCmd: wiring.WorkerCmd, DefaultModel: wiring.DefaultModel,
-		Sandbox: wiring.Sandbox, SandboxBinds: wiring.SandboxBinds, Python: wiring.Python, Allow: wiring.Allow,
+		Sandbox: wiring.Sandbox, SandboxBinds: wiring.SandboxBinds, Python: wiring.Python, FFmpeg: wiring.FFmpeg, Browser: wiring.Browser, Allow: wiring.Allow,
 		Fetch: wiring.Fetch, Spawn: wiring.Spawn, Models: wiring.Models, Room: wiring.Room,
 		Cap: handoff,
 	})
@@ -518,6 +520,9 @@ func rigMain() int {
 		theme:          themeName(cfg.Settings.Theme, cfg.Theme),
 		themeDoc:       cfg.Theme,
 		themeTrueColor: tuiTrueColor(),
+		ffmpeg:         ffmpeg,
+		browser:        browser,
+		proxy:          proxy,
 		tools: map[string]core.Tool{
 			"read": file.NewRead(), "write": file.NewWrite(), "edit": file.NewEdit(),
 			"sessions": sessionstool.New(cfgDir, cwd),
@@ -530,6 +535,7 @@ func rigMain() int {
 		priority:    prio,
 	}
 
+	defer r.closeView()
 	r.tools["scheduler"] = schedapi.New(scdb, sched.RealCrontab(""), self+" run-job", modelID, cfgDir)
 	if verdictOn {
 		r.tools["verdict"] = verdicttool.New(fleet)
@@ -552,7 +558,7 @@ func rigMain() int {
 			},
 			Cwd:       cwd,
 			WorkerCmd: wiring.WorkerCmd, Fetch: wiring.Fetch, Spawn: wiring.Spawn, SwapURL: wiring.SwapURL,
-			Sandbox: wiring.Sandbox, SandboxBinds: wiring.SandboxBinds, Python: wiring.Python, RigHome: wiring.RigHome, StateDir: wiring.StateDir,
+			Sandbox: wiring.Sandbox, SandboxBinds: wiring.SandboxBinds, Python: wiring.Python, FFmpeg: wiring.FFmpeg, Browser: wiring.Browser, RigHome: wiring.RigHome, StateDir: wiring.StateDir,
 			Allow: wiring.Allow, DefaultModel: wiring.DefaultModel,
 			Models: func() models.Table { return r.runtime },
 			Engine: r.engine, Room: r.room, Cap: handoff,
@@ -677,7 +683,7 @@ func rigMain() int {
 			r.decQ = decision.NewQueue(dec, sink, reviews, drec, nil, voice)
 		} else {
 			rev := decision.NewReviewer(ctx, r.engine, reviews,
-				r.reviewFire(schedHome, scdb, swapURL, self, cfgDir, cfg.Settings.Sandbox, cfg.Settings.SandboxBinds, python, sched.Delegate),
+				r.reviewFire(schedHome, scdb, swapURL, self, cfgDir, cfg.Settings.Sandbox, cfg.Settings.SandboxBinds, python, ffmpeg, browser, sched.Delegate),
 				cfg.Settings.ReviewBatchOrDefault(), row, fleetroom, scope.Key(cwd))
 			r.decRev = rev
 			r.decQ = decision.NewQueue(dec, sink, reviews, drec, rev.Land, voice)
