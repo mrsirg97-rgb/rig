@@ -11,7 +11,10 @@ fails a call.
 
 Stdlib-only leaf beside `pathguard`, imported by the gate packages.
 
-- `Question` is typed: `choice` (with `Choices`), `score`, `binary`.
+- `Question` is a read-only interface of getters over an unexported
+  struct, typed (`choice`, `score`, `binary`) and built by `NewQuestion`/
+  `Choice`/`Score`/`Binary`; the decoder `ParseQuestion` normalizes the
+  legacy `yesno` kind and the wire is a private struct.
 - `Answer` carries `Value`, `Confidence` (the probability, 0..1) and
   `Decider` (who produced it).
 - `Decider` is the seam a decision server implements:

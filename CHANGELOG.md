@@ -1,4 +1,42 @@
 # Changelog
+## [3.4.1]: the constructors build whole — options at the seams, read-only values on the wire
+
+`github.com/mrsirg97-rgb/evt` moved to 0.5.1, whose config is read-only:
+`room` reads through the getters (`Window()`, `Addr()`, `Machine()`, …)
+and rebuilds its mesh through `broadcast.NewMeshConfig` with
+`WithPeers`/`WithWindow`/`WithVoice`/`WithRounds`/`WithTimeout`/`WithIdle`/
+`WithTold` instead of assigning the config's fields. `broadcast.NewAct`
+replaces the `broadcast.Act` literal in the door's tests.
+
+Every other seam followed the same rule, one package at a time. The
+room's fleet signals (`StartChild`, `StopChild`, `SwapChild`,
+`TableChange`, `Update`, `JobStatus`) are read-only interfaces over
+unexported structs, each with a distinct marker method so the loop's
+type switch cannot take a `swapChild` for a `StartChild`; the wire is a
+private struct per signal and `ParseJobStatus` is the one decode door.
+`decision.Question` is a read-only interface built by `NewQuestion`/
+`Choice`/`Score`/`Binary`, encoded through a private wire that keeps the
+decisions table byte-identical, and `ParseQuestion` normalizes the
+legacy `yesno` kind on the way back; `NewHTTP` and `NewDecide` take
+their required parts positionally and their knobs as options.
+`store/graph.Queue` is an interface of its verbs, its struct
+unexported, and `WithServer` names a language at construction instead
+of `SetServer` mutating a live queue. The providers and the view, web
+and dashboard frontends each have one constructor: the required part
+positionally, every other knob a `With*` option, defaults in one place,
+config structs unexported. The small wiring follows: `tui.StatusIn` is
+built whole in `statusNow`, the command env's decision-train and
+trainer seams are parts of `commandEnvInput`, and the openai config
+step-fill is gone.
+
+The kernel stays the composition root's live wiring: the loop is
+running while `/models` switches the provider and the session, so the
+kernel must be a stable reference the loop reads. Its fields are
+unexported and only the root assigns them; that is the one documented
+mutable composition bag in this release. No user-facing behavior
+changed; all wire bytes in the room, the decisions store and the
+providers' tests are pinned.
+
 ## [3.4.0]: view grows sources — a video becomes a sheet, a browser becomes a page of refs
 
 `view` was one verb: a path in, one image out. It is an action door now

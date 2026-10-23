@@ -79,15 +79,17 @@ notice (2.4.0) — no field on the row, no default, no column.
 
 ### 2. The provider's hosted behavior
 
-`provider/openai` gains `NewWithConfig(Config)`; the existing
-constructors delegate with defaults and local-row behavior unchanged
-(no key, no 429/5xx retry beyond the empty-5xx case,
+`provider/openai`'s one constructor is `New(baseURL, model, opts...)`;
+the hosted knobs are `WithAPIKey`, `WithRemote`, `WithReasoning`,
+`WithProviderPin`, `WithCacheControl`, `WithRetries`, `WithRetryBase`,
+`WithJitter` and `WithBlobsDir`, and the defaults preserve local-row
+behavior (no key, no 429/5xx retry beyond the empty-5xx case,
 `reasoning_content`).
 
-- **Auth**: when `Config.APIKey` is set, the request carries
+- **Auth**: when `WithAPIKey` is set, the request carries
   `Authorization: Bearer <key>`. The key is never part of a fault
   message, a stream line, or a wire test golden.
-- **Retry**: a 429 or 5xx response is retried up to `Config.Retries`
+- **Retry**: a 429 or 5xx response is retried up to `WithRetries`
   with backoff `base * 2^attempt * (1 + jitter)`; `RetryBase` and
   `Jitter` are Config fields so a test is deterministic and fast. The
   retry re-posts the identical request body inside the same stream
