@@ -30,47 +30,85 @@ const (
 	jpegQuality    = 90
 
 	ctxRowStride = 32
+
+	defaultFrames = 6
+	maxFrames     = 12
+
+	lossy = "jpeg"
+	still = "png"
 )
 
-type viewArgs struct {
-	Path string `json:"path"`
+type Config struct {
+	Blobs  string
+	FFmpeg string
+}
+
+type Clip struct {
+	Path   string
+	At     string
+	Frames int
+}
+
+type given struct {
+	Action string `json:"action"`
+	Path   string `json:"path"`
+	At     string `json:"at"`
+	Frames *int   `json:"frames"`
 }
 
 type View interface {
 	tool.Definition
 	Exec(ctx context.Context, args json.RawMessage) (string, error)
 
-	View(ctx context.Context, path string) (string, error)
+	Image(ctx context.Context, path string) (string, error)
+	Video(ctx context.Context, clip Clip) (string, error)
 }
 
 type toolView struct {
 	tool.Definition
-	blobs string
+	cfg Config
 }
 
 func New(blobsDir string) View {
-	return &toolView{Definition: tool.Def("view"), blobs: blobsDir}
+	return NewWith(Config{Blobs: blobsDir})
+}
+
+func NewWith(cfg Config) View {
+	return &toolView{Definition: tool.Def("view"), cfg: cfg}
 }
 
 func (v *toolView) Exec(ctx context.Context, data json.RawMessage) (string, error) {
 	if len(bytes.TrimSpace(data)) == 0 {
 		data = json.RawMessage(`{}`)
 	}
-	var a viewArgs
+	var a given
 	if err := tool.StrictDecode(data, &a); err != nil {
 		return "", fmt.Errorf("view: %v", err)
 	}
-	return v.View(ctx, a.Path)
+	switch a.Action {
+	case "", "image":
+		return v.Image(ctx, a.Path)
+	case "video":
+		clip := Clip{Path: a.Path, At: a.At}
+		if a.Frames != nil {
+			clip.Frames = *a.Frames
+		}
+		return v.Video(ctx, clip)
+	case "browser":
+		return "", errors.New("view: the browser source is not in this build")
+	default:
+		return "", fmt.Errorf("view: unknown action %q; the actions are image (or omit it), video", a.Action)
+	}
 }
 
-func (v *toolView) View(ctx context.Context, path string) (string, error) {
+func (v *toolView) Image(ctx context.Context, path string) (string, error) {
 	if err := ctx.Err(); err != nil {
 		return "", err
 	}
 	if path == "" {
 		return "", errors.New("view: path required (the image file to look at)")
 	}
-	if v.blobs == "" {
+	if v.cfg.Blobs == "" {
 		return "", errors.New("view: no blob store is configured, so an image has nowhere to be kept")
 	}
 	path, err := filepath.Abs(path)
@@ -122,18 +160,27 @@ func (v *toolView) View(ctx context.Context, path string) (string, error) {
 	if b := img.Bounds(); b.Dx() > 0 && b.Dy() > 0 && int64(b.Dx())*int64(b.Dy()) > maxPixels {
 		return "", fmt.Errorf("view: %s decoded to %dx%d, over the %d-pixel cap", path, b.Dx(), b.Dy(), maxPixels)
 	}
+	return v.publish(ctx, img, format, path)
+}
 
+func (v *toolView) publish(ctx context.Context, img image.Image, format, src string) (string, error) {
+	if v.cfg.Blobs == "" {
+		return "", errors.New("view: no blob store is configured, so an image has nowhere to be kept")
+	}
+	if imagemarker.HasControl(src) {
+		return "", fmt.Errorf("view: %q: the source carries a control character, so the marker line could be broken", src)
+	}
 	scaled, opaque, err := resample(ctx, img)
 	if err != nil {
-		return "", fmt.Errorf("view: %s: %v", path, err)
+		return "", err
 	}
 	enc, mime, err := encode(format, opaque, scaled)
 	if err != nil {
-		return "", fmt.Errorf("view: %s: %v", path, err)
+		return "", err
 	}
 	sum := sha256.Sum256(enc)
-	if err := writeBlob(v.blobs, sum, enc); err != nil {
-		return "", fmt.Errorf("view: %s: %v", path, err)
+	if err := writeBlob(v.cfg.Blobs, sum, enc); err != nil {
+		return "", err
 	}
 	return imagemarker.Format(imagemarker.Ref{
 		SHA256: hex.EncodeToString(sum[:]),
@@ -143,14 +190,19 @@ func (v *toolView) View(ctx context.Context, path string) (string, error) {
 		OrigW:  img.Bounds().Dx(),
 		OrigH:  img.Bounds().Dy(),
 		Bytes:  len(enc),
-		Src:    path,
+		Src:    src,
 	}), nil
 }
 
 func resample(ctx context.Context, src image.Image) (*image.NRGBA, bool, error) {
 	b := src.Bounds()
+	dw, dh := targetSize(b.Dx(), b.Dy())
+	return resampleTo(ctx, src, dw, dh)
+}
+
+func resampleTo(ctx context.Context, src image.Image, dw, dh int) (*image.NRGBA, bool, error) {
+	b := src.Bounds()
 	sw, sh := b.Dx(), b.Dy()
-	dw, dh := targetSize(sw, sh)
 	dst := image.NewNRGBA(image.Rect(0, 0, dw, dh))
 	opaque := true
 	for y := 0; y < dh; y++ {

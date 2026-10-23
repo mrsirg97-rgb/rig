@@ -22,6 +22,8 @@ type JailProfile struct {
 	SockPath  string
 	Binds     []string
 	Python    string
+	FFmpeg    string
+	Browser   string
 	StateDir  string
 	Allow     string
 	Env       []string
@@ -74,6 +76,13 @@ func JailArgv(p JailProfile) ([]string, error) {
 	}
 	if root := venvRoot(p.Python); root != "" && !visibleUnder(root, visible) {
 		argv = append(argv, "--ro-bind", root, root)
+		visible = append(visible, root)
+	}
+	for _, bin := range []string{p.FFmpeg, p.Browser} {
+		if root := binRoot(bin); root != "" && !visibleUnder(root, visible) {
+			argv = append(argv, "--ro-bind", root, root)
+			visible = append(visible, root)
+		}
 	}
 	argv = append(argv,
 		"--chdir", p.Cwd,
@@ -103,6 +112,13 @@ func venvRoot(python string) string {
 		return ""
 	}
 	return root
+}
+
+func binRoot(bin string) string {
+	if bin == "" || !filepath.IsAbs(bin) {
+		return ""
+	}
+	return filepath.Dir(bin)
 }
 
 func visibleUnder(root string, roots []string) bool {
@@ -220,6 +236,12 @@ func jailSpawn(opts RunOpts, cwd, sockID string, workerCmd []string, model, effo
 	if opts.Python != "" {
 		env = append(env, "RIG_PYTHON="+opts.Python)
 	}
+	if opts.FFmpeg != "" {
+		env = append(env, "RIG_FFMPEG="+opts.FFmpeg)
+	}
+	if opts.Browser != "" {
+		env = append(env, "RIG_BROWSER="+opts.Browser)
+	}
 	if fleet != nil {
 		env = append(env, fleetEnv(fleet)...)
 	}
@@ -236,6 +258,8 @@ func jailSpawn(opts RunOpts, cwd, sockID string, workerCmd []string, model, effo
 		SockPath:  sock,
 		Binds:     opts.SandboxBinds,
 		Python:    opts.Python,
+		FFmpeg:    opts.FFmpeg,
+		Browser:   opts.Browser,
 		StateDir:  opts.StateDir,
 		Allow:     allow,
 		Env:       env,

@@ -18,6 +18,8 @@ type workerWiring struct {
 	Sandbox      string
 	SandboxBinds []string
 	Python       string
+	FFmpeg       string
+	Browser      string
 	Allow        []string
 	Fetch        sched.Fetch
 	Spawn        sched.Spawn

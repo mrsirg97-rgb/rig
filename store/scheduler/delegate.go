@@ -37,6 +37,8 @@ type DelegateInput struct {
 	Sandbox       string
 	SandboxBinds  []string
 	Python        string
+	FFmpeg        string
+	Browser       string
 	RigHome       string
 	StateDir      string
 	Allow         []string
@@ -425,6 +427,8 @@ func (in DelegateInput) toRunOpts() RunOpts {
 		Sandbox:      in.Sandbox,
 		SandboxBinds: in.SandboxBinds,
 		Python:       in.Python,
+		FFmpeg:       in.FFmpeg,
+		Browser:      in.Browser,
 		StateDir:     in.StateDir,
 		LandlockABI:  in.LandlockABI,
 		SwapURL:      in.SwapURL,

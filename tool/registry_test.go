@@ -203,6 +203,8 @@ func TestMutatesAnswersTheTableByNameAndAction(t *testing.T) {
 		{"rem", "pack", false},
 		{"read", "", false},
 		{"view", "", false},
+		{"view", "image", false},
+		{"view", "video", false},
 		{"web", "search", false},
 		{"web", "fetch", false},
 		{"decide", "", false},

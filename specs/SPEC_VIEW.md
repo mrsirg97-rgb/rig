@@ -1,20 +1,25 @@
-# tool/view: an image the model can look at
+# tool/view: pixels the model can look at
 
 A vision model reads an image only if the harness puts the bytes on the wire.
-`view` is that tool: a path in, one line of text out, and the image itself
-carried beside that line by the provider that knows how. Named
-`view` rather than `read` so the text tool stays the text tool and each
-keeps a schema a local model reaches for.
+`view` is that tool. Since 3.4.0 it is an action door with two sources —
+`image` (the default, and 3.3.5's one verb) and `video` — and both produce the
+same one thing: one line of text, `[[rig:image …]]`, with the image itself
+carried beside that line by the provider that knows how. Named `view` rather
+than `read` so the text tool stays the text tool and each keeps a schema a
+local model reaches for.
 
 ## goals
 
-- `view {path}`: decode png, jpeg, webp, or the first frame of a gif;
-  downscale so the longest side is at most 1568 px; re-encode; hand back one
-  line naming what was stored.
+- `view {path}` (image, the default): decode png, jpeg, webp, or the first
+  frame of a gif; downscale so the longest side is at most 1568 px; re-encode;
+  hand back one line naming what was stored.
+- `view {action:"video", path}`: sample a clip with ffmpeg and reply one
+  contact sheet, or `at` for one frame. Frames ride the image path; nothing
+  downstream learns what a video is.
 - The image travels as content-addressed bytes under the rig home, so the
   same input always produces the same bytes and the same wire prefix.
-- The provider turns that line into the OpenAI-format image part, placed
-  where the format allows it.
+- The provider turns that line into the OpenAI/Anthropic image part, placed
+  where its format allows it.
 - `vision` on a model row decides whether the tool exists at all.
 
 ## non-goals
@@ -22,11 +27,14 @@ keeps a schema a local model reaches for.
 - No inline image rendering: the TUI prints a row, not pixels.
 - No image writing, cropping, annotating, or multi-frame gif handling.
 - No blob garbage collection; named, and left to a later sweep.
-- No second provider wire: `provider/openai` is the only adapter that knows
-  about image parts.
+- No second provider wire: `provider/openai` and `provider/anthropic` are the
+  only adapters that know about image parts, and neither learns a new source.
 - No change to `core/`, `loop/`, `core.ToolExec`, or the sessions schema: the
   marker is ordinary tool-result text, so the transcript, the recorder,
   compaction, and resume all carry it untouched.
+- Video is frames, not playback; audio is irrelevant.
+- `ffmpeg` is named by the operator (`RIG_FFMPEG` or settings); `view`
+  installs neither.
 
 ## the contract, stated once
 
@@ -42,37 +50,38 @@ one line, fixed key order, the tolerant value last. `imagemarker.Format`
 writes it, `imagemarker.Parse` reads exactly one marker line, and
 `imagemarker.BlobPath(dir, sum)` is `<dir>/<hex>` with no extension: the mime
 is in the marker, and a second name for the same bytes is how a content
-address becomes a path. The tool replies with the line and nothing else,
-and the line stays one line: `src` may carry spaces, `]]`, and key
-lookalikes, but no control character — a newline there would split the
-reply, and the second line could be a marker the tool never wrote, so
-`tool/view` refuses such a path before the stat and `Parse` refuses such a
-`src` outright.
+address becomes a path. `src` may carry spaces, `]]`, and key lookalikes, but
+no control character — a newline there would split the reply, and the second
+line could be a marker the tool never wrote, so `tool/view` refuses such a
+path before the stat and `Parse` refuses such a `src` outright.
 
-`orig` is the named addition to the line the deliverable asked for. The TUI
-row is specified as `shot.png · 2560x1440 -> 1568x882 · 412 KB`, and the tool
-result is the only channel from tool to frontend, so the pre-scale dimensions
-have to travel in it. It sits before `bytes` and `src` so every pinned field
-keeps its order and `src`, the one value that may contain a space, stays
-right where the line ends. Additive: a reader that ignores it still reads the
-line, and the bytes stay a function of the decoded pixels.
+`orig` is the pre-scale dimensions: the decoded source for an image, the
+composed sheet for a video.
 
 ## layout
 
 ```
 imagemarker/                     the shared contract, stdlib only
   marker.go                      Ref, Format, Parse, BlobPath, BlobsDir,
-                                 HasControl, Find, IsAddress
+                                 HasControl, Find
   marker_test.go
 tool/view/                       the tool
-  view.go                        the schema, the caps, the scale, the blob
-  view_test.go
+  view.go                        Config, the action door, the image path,
+                                 publish (resample, encode, blob, marker)
+  video.go                       ffmpeg probe/extract, caps, the sheet's frames
+  sheet.go                       the contact-sheet grid and its labels
+  view_test.go, video_test.go
 provider/openai/                 image parts on the wire
-  images.go                      the content shape, the honor rule, the blob read
+  images.go, messages.go         the content shape, the honor rule, the blob read
+provider/anthropic/              the same, as tool_result content
 frontend/tui/                    the row
   commit.go                      view's detail: path, dimensions, size
 models/ Model.Vision             config: the `vision` key
-cmd/rig/                         registration, the concurrency set, the allow default
+config/                          settings.ffmpeg
+cmd/rig/                         registration, the concurrency set, the allow
+                                 default
+store/scheduler/jail.go          RIG_FFMPEG on the jail env and a read-only
+                                 bind of the binary's directory
 ```
 
 ## decisions
@@ -99,10 +108,13 @@ cmd/rig/                         registration, the concurrency set, the allow de
   same module — the filter is not the reason for the dependency, and saying
   so is the point. `golang.org/x/image v0.45.0` is the one module added,
   pinned below v0.46 so `golang.org/x/sys` does not move with it; only
-  `webp` is imported, and the Go stdlib alone cannot read webp.
+  `webp` and the label face (`font/basicfont`, for the sheet's timestamps)
+  are imported, and the Go stdlib alone cannot read webp or draw text.
 - **Re-encode rule**: `image/jpeg` at quality 90 for an opaque image whose
   source was a lossy still (`jpeg`, `webp`); `image/png` otherwise, which is
-  every transparent source and every lossless one. Deterministic either way;
+  every transparent source and every lossless one. Video frames and the
+  contact sheet are lossy and opaque, so they leave as JPEG. Deterministic
+  either way;
   `mime=` is the mime of the bytes sent, the blob's own bytes, not the
   source's.
 - **Written once, atomically, never by path.** `<RIG_HOME>/blobs/<sha256>`:
@@ -113,16 +125,13 @@ cmd/rig/                         registration, the concurrency set, the allow de
   never the source path: a changed file gets a new address, and history
   cannot be re-pointed at new bytes.
 - **The provider honors a marker only when the tool that wrote it was
-  `view`.** `tool_call_id` back to the assistant message that owns the
-  current tool batch — the batch runs from that assistant message until the
-  next message that is not a tool result — never through the transcript as
-  a whole, so a call id reused on a later `read` is looked up in the turn
-  that issued it and the marker stays text. The result must be exactly the
-  marker line and nothing else, which is what `view` replies; a result that
-  carries a smuggled line is text too. A marker inside a `read`
-  line, or a `web` fetch body is text, and a marker in a user or assistant
-  message is text too. The rule is at the encoder, so nothing else can grant
-  it.
+  `view`**, and only the reply's last line. `tool_call_id` back to the
+  assistant message that owns the current tool batch — the batch runs from
+  that assistant message until the next message that is not a tool result —
+  never through the transcript as a whole, so a call id reused on a later
+  `read` is looked up in the turn that issued it and the marker stays text.
+  A marker inside a `read` line, a `web` fetch body, or a user or assistant
+  message is text. The rule is at the encoder, so nothing else can grant it.
 - **Placement is the format's**: every tool message of one assistant turn is
   contiguous, so the synthetic user message goes after the *last* tool
   message of the batch, one per view, in tool-call order. Encoding is pure —
@@ -134,27 +143,57 @@ cmd/rig/                         registration, the concurrency set, the allow de
   The digest is recomputed from what is read, so a blob whose bytes no longer
   match its address is treated as missing, not as an image.
 - **The menu pays for nothing it does not use.** For a text row the tool
-  table is byte-identical to 1.2.16 — the wire golden does not move;
-  a vision row's menu carries `view`'s 457 extra characters over the same
-  shape, well inside the menu bound SPEC_CORE pins.
+  table is byte-identical to 3.3.5 — the wire golden does not move; a vision
+  row's menu carries `view`'s entry, which grew from 469 to 1,089 characters
+  with the door and video.
 - **Gating is registration, not a runtime check.** `view` joins the native
   tool table only when the active row has vision, and the provider carries
   the same fact, so a non-vision model never sees the schema and never gets a
   base64 part it cannot read. The session can switch either way mid
-  transcript: the switch rebuilds the provider and the tool table, images
-  already in the transcript simply stop being attached, and the marker line
-  keeps the history readable.
+  transcript: the switch rebuilds the provider and the tool table.
 - **The row's flag, the operator's call.** `vision` defaults to false and the
   embedded table sets it for nobody: rig cannot know what a local server
   actually serves.
-- **`src` is the absolute path**, after the `~` boundary, the same reading
-  `read`'s replies use; the TUI row prints it.
-- **No drift license.** `view` does not touch `Session.Files`: what the model
-  saw was a downscale, and that is not a license to `edit` the file.
+- **`src` is the absolute path** for an image or a video, after the `~`
+  boundary, the same reading `read`'s replies use; the TUI row prints it.
+- **The door defaults to `image`.** `tool.Mutates("view","")` reads the
+  registry's `defaultAction`, so every 3.3.5 call shape stays a read that
+  runs beside its admitted neighbours.
+
+## video
+
+- **The binary is a knob**: `RIG_FFMPEG` over `settings.ffmpeg`, and `ffmpeg`
+  on `PATH` when neither names one. A missing or non-executable binary
+  refuses naming both knobs; a jailed worker gets the same env and a
+  read-only bind of the binary's directory (`store/scheduler/jail.go`),
+  the `RIG_PYTHON` way.
+- **The caps sit beside the image caps**: 512 MiB of source (a stat, before
+  ffmpeg runs), 3600 s of clip for a sheet (ffmpeg's own duration line, read
+  once), and 1..12 frames (default 6). Each refusal names the cap and the way
+  around it: trim, or take one frame with `at`.
+- **A single `at`** parses seconds or `[hh:]mm:ss`, seeks before the input
+  (fast and accurate when re-encoding), pulls one frame as PNG on stdout,
+  decodes it, and publishes it like any image: the 1568 bound, the re-encode
+  rule, the content address. `at` is not bounded by the clip cap: one frame
+  of a long recording is exactly the way around it.
+- **The sheet** extracts `frames` frames at the middle of each equal slice of
+  the duration, in one ffmpeg call per frame (`-ss <t> -i <path> -frames:v 1
+  -f image2pipe -c:v png -`), decodes each, and tiles them: the grid picks
+  the column count that lets the tallest tiles stand (scale capped at 1, so
+  a small clip is never upscaled), ties broken by the grid closest to square.
+  Each tile is labelled with its timestamp (`m:ss.t`) drawn with
+  `basicfont.Face7x13` on a dark strip; the sheet's own size is the tiles
+  plus a 4 px gutter, under 1568 on both sides. Frames are re-sampled by the
+  one box filter, so the sheet is a function of the clip and the arguments —
+  the same file and `at`/`frames` give the same blob.
+- **A 20 s probe and a 20 s extraction, each ctx-bound**, so a hung ffmpeg
+  cannot hold the turn; ffmpeg's stderr tail (8 KiB) rides every refusal.
+- **No new dependency**: ffmpeg is an external binary the operator names, and
+  the label face is already inside `golang.org/x/image`.
 
 ## testing
 
-Named cases, the real filesystem in `t.TempDir()`, the real encoder:
+Named cases, the real filesystem in `t.TempDir()`, the real encoders:
 
 - `imagemarker`: format and parse round-trip; a src with spaces and with
   `]]` in it; a src carrying a control character is refused; a src carrying
@@ -167,44 +206,50 @@ Named cases, the real filesystem in `t.TempDir()`, the real encoder:
   smuggled-marker path included; an empty directory created on demand;
   identical input bytes giving a byte-identical blob and marker; a replay
   that keeps the blob it already wrote; the ctx bound.
-- `provider/openai`: the image part lands after the last tool message of the
-  batch, and nowhere else; a marker from another tool is not honored; a
-  marker in a user or assistant message is not honored; a reused call id on
-  a later `read` is not honored as `view` (exactly one image on the wire);
-  a view result carrying a smuggled marker line is text; two views in
-  tool-call order; a missing blob giving the note and no fault; a non-vision
-  provider sending the tool text alone; two assemblies of one transcript
-  byte-identical; one over `httptest` with the whole loop proving the image
-  part reaches the wire body.
+- `view` video, from a generated `ffmpeg lavfi testsrc` clip in `t.TempDir()`:
+  the default sheet is one marker line whose grid is the layout's own size,
+  labels drawn, the same clip and arguments giving the same blob; large
+  frames stay under 1568; one `at` is that frame alone at the bound, two
+  timestamps differ, the same timestamp repeats; the frame-count, source-size
+  and duration caps refuse naming themselves and the way around; an absent
+  ffmpeg (and a configured-but-missing one) names the knob; bad stamps and a
+  missing path refuse.
+- The ffmpeg cases skip with the binary's name when it is absent; CI
+  installs it as a fixture (the python venv's shape), so they run there.
+- `provider/openai` and `provider/anthropic`: the image part lands after the
+  last tool message of the batch, and nowhere else; a marker from another
+  tool is not honored; a marker in a user or assistant message is not
+  honored; a reused call id on a later `read` is not honored as `view`;
+  two views in tool-call order; a missing blob giving the
+  note and no fault; a non-vision provider sending the tool text alone; two
+  assemblies of one transcript byte-identical; one over `httptest` with the
+  whole loop proving the image part reaches the wire body.
 - `models` and `config`: the flag defaults false; the file sets it; the merge
-  overlays it; a non-boolean refuses by name; the unknown-key list names it.
+  overlays it; a non-boolean refuses by name; the unknown-key list names it;
+  `ffmpeg` parses, merges, and defaults empty.
 - `cmd/rig`: `view` registered for a vision row and absent otherwise; a model
-  switch taking effect on the next turn's table; the concurrency set carrying
-  it, the mutating set not; the embedded allow growing by one; the wire golden
-  unchanged for a non-vision row.
+  switch taking effect on the next turn's table; the default action keeping
+  it out of the mutating set; the embedded allow growing by one; the wire
+  golden unchanged for a non-vision row.
+- `store/scheduler`: `RIG_FFMPEG` on the jail env when set, and a read-only
+  bind of the binary's directory outside the standard roots.
 - `frontend/tui`: the row prints path, both dimensions, and the size, and
   prints no marker line and no image.
 
 ## scope
 
-New: `imagemarker/` (one file plus its tests), `tool/view/` (one file plus its
-tests), `provider/openai/images.go`, this spec, and the package docs.
-Changed: `models` (`Model.Vision`), `config` (the `vision` key, its row
-table), `cmd/rig` (one import, one name in `nativeToolNames`, one
-registry row answering it a read, the gated registration, the provider
-options, the embedded `allow`), `provider/openai` (`wireMessage.Content`'s type,
-`wireMessages`' signature), `frontend/tui` (one detail function and one
-preview skip), the freeze allowlist, and the docs.
+New: `tool/view/video.go`, `tool/view/sheet.go`, this spec, and the package
+docs.
+Changed: `tool/view/view.go` (the door, `publish`, the interface), `config`
+(`ffmpeg`), `cmd/rig` (the knob through the worker wiring and the root's
+construction), `store/scheduler` (the jail env and bind), `tool/delegate`/
+`swarm` (the same knob), and the docs.
 
 `core/` and `loop/` are byte-identical; `core.ToolExec` keeps its
 `(string, error)`; the sessions schema is untouched — the marker rides as
 tool-result text.
 
-**The frozen boundary.** No frozen path moves. Two pure paths join the
-freeze allowlist: `imagemarker/` (a leaf with no imports of rig at all, the
-neighbour `pathguard/` already occupies) and `tool/view/` (a tool, which is
-what `tool/` holds). Nothing under `core/`, `loop/`, `policy/`,
-`middleware/`, `store/`, `frontend/tui/` beyond the one detail function, or
-`cmd/rig/`'s loop is touched by this change; the tool table, the model row,
-the provider constructor and the ctx are the seams it rides, each already
-there for that job.
+**The frozen boundary.** No frozen path moves. `tool/view/` already sits in
+the freeze allowlist and the new files are under it; `config/`, `models/`,
+`cmd/rig/`, `store/` and `docs/`/`specs/` are allowlisted. Nothing under
+`core/`, `loop/`, `policy/`, or `middleware/` is touched.

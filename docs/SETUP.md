@@ -154,6 +154,7 @@ creating session's.
 | resume        | `--resume <id>`|  |  | fresh session (refuses with `-p`; one-shot stays one-shot) |
 | terminal      | `--tui` (auto/true/false) |  |  | `auto`: the terminal frontend when stdout is a terminal, the piped CLI otherwise (one-shot `-p` is never a TUI) |
 | python kernel |                | `RIG_PYTHON`           | `python`        | the default interpreter |
+| ffmpeg        |                | `RIG_FFMPEG`           | `ffmpeg`        | `ffmpeg` on `PATH`; `view`'s video frames need it, and a jailed worker gets it on the jail env with a read-only bind of its directory |
 | web search    |                | `RIG_SEARXNG_URL`      | `searxngUrl`    | `http://127.0.0.1:8888` (the web-tools compose) |
 | web fetch     |                | `RIG_WEB_FETCH_PROXY`  | `webFetchProxy` | `http://127.0.0.1:8889`; **presence key**: set empty = direct |
 | extraction    |                | `RIG_TRAFILATURA`      | `trafilatura`   | none (auto); **presence key**: set empty = the stdlib text pass |

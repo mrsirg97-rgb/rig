@@ -103,6 +103,9 @@ func TestEmbeddedDefaultsAreTheV020Values(t *testing.T) {
 	if s.Python != "" {
 		t.Fatalf("python = %q, want empty (0.2.0: no default)", s.Python)
 	}
+	if s.FFmpeg != "" || s.Browser != "" {
+		t.Fatalf("ffmpeg = %q, browser = %q, want both empty (PATH and an explicit RIG_BROWSER)", s.FFmpeg, s.Browser)
+	}
 	if s.SwapURL != "http://127.0.0.1:8090" {
 		t.Fatalf("swapUrl = %q, want the 0.2.0 runner default", s.SwapURL)
 	}
@@ -125,7 +128,7 @@ func TestSettingsMalformedNamesFileAndField(t *testing.T) {
 		{"retries negative", `{"retries": -3}`, `retries: expected a non-negative number, got -3`},
 		{"retries overflow", `{"retries": 1e300}`, `retries: expected an integer within the platform range, got 1e+300`},
 		{"rounds overflow", `{"rounds": 1e300}`, `rounds: expected an integer within the platform range, got 1e+300`},
-		{"unknown key", `{"allowd": ["bash"]}`, `unknown key "allowd" (known: allow, approve, baseUrl, decisionUnit, decisionUrl, defaultJobModel, maxWorkers, mesh, model, plugins, python, reviewBatch, resultCap, retries, rounds, sandbox, sandboxBinds, searxngUrl, swapUrl, system, theme, trafilatura, trainPython, updateKey, webFetchProxy, workerWindow, workers)`},
+		{"unknown key", `{"allowd": ["bash"]}`, `unknown key "allowd" (known: allow, approve, baseUrl, browser, decisionUnit, decisionUrl, defaultJobModel, ffmpeg, maxWorkers, mesh, model, plugins, python, reviewBatch, resultCap, retries, rounds, sandbox, sandboxBinds, searxngUrl, swapUrl, system, theme, trafilatura, trainPython, updateKey, webFetchProxy, workerWindow, workers)`},
 		{"not an object", `[1]`, `expected a JSON object: json: cannot unmarshal array into Go value of type map[string]json.RawMessage`},
 		{"allow element", `{"allow": ["bash", "read", 5]}`, `allow[2]: expected a string, got 5`},
 		{"sandbox value", `{"sandbox": "maybe"}`, `sandbox: expected "jailed", "landlock", or "off", got "maybe"`},
@@ -380,6 +383,22 @@ func TestReviewBatchRefusesByName(t *testing.T) {
 				t.Fatalf("the voice = %q, want %q", err, "config: "+p+": "+c.want)
 			}
 		})
+	}
+}
+
+func TestSettingsCarryTheBinaryKnobs(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, "settings.json", `{"ffmpeg": "/opt/ffmpeg/bin/ffmpeg", "browser": "/opt/chrome/chrome-headless-shell"}`)
+	cfg := load(t, dir)
+	if cfg.Settings.FFmpeg != "/opt/ffmpeg/bin/ffmpeg" {
+		t.Fatalf("ffmpeg = %q, want the binary", cfg.Settings.FFmpeg)
+	}
+	if cfg.Settings.Browser != "/opt/chrome/chrome-headless-shell" {
+		t.Fatalf("browser = %q, want the binary", cfg.Settings.Browser)
+	}
+	fresh := load(t, t.TempDir())
+	if fresh.Settings.FFmpeg != "" || fresh.Settings.Browser != "" {
+		t.Fatalf("both default empty, got %q and %q", fresh.Settings.FFmpeg, fresh.Settings.Browser)
 	}
 }
 

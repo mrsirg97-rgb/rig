@@ -15,7 +15,6 @@ import (
 	"image/png"
 	"os"
 	"path/filepath"
-	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -634,7 +633,7 @@ func TestViewRecordsNoFileState(t *testing.T) {
 	}
 }
 
-func TestViewSchemaNamesOneRequiredPath(t *testing.T) {
+func TestTheSchemaIsTheActionDoorAndKeepsPathNamed(t *testing.T) {
 	var schema struct {
 		Type       string                    `json:"type"`
 		Properties map[string]map[string]any `json:"properties"`
@@ -646,14 +645,19 @@ func TestViewSchemaNamesOneRequiredPath(t *testing.T) {
 	if schema.Type != "object" {
 		t.Fatalf("schema type = %q", schema.Type)
 	}
-	if len(schema.Properties) != 1 {
-		t.Fatalf("the schema is one field: %v", schema.Properties)
-	}
 	if _, ok := schema.Properties["path"]; !ok {
 		t.Fatalf("the argument is named path so the ~ boundary and the walls apply (SPEC_FS): %v", schema.Properties)
 	}
-	if !reflect.DeepEqual(schema.Required, []string{"path"}) {
-		t.Fatalf("required = %v, want [path]", schema.Required)
+	if _, ok := schema.Properties["action"]; !ok {
+		t.Fatalf("the door names its sources: %v", schema.Properties)
+	}
+	for _, name := range []string{"at", "frames"} {
+		if _, ok := schema.Properties[name]; !ok {
+			t.Fatalf("the schema is missing %q: %v", name, schema.Properties)
+		}
+	}
+	if len(schema.Required) != 0 {
+		t.Fatalf("no field is required: the action picks the fields (required = %v)", schema.Required)
 	}
 }
 
@@ -701,7 +705,7 @@ func TestViewViewAndExecShareTheirChecks(t *testing.T) {
 	tool := view.New(blobs)
 	ctx := context.Background()
 
-	_, lookErr := tool.View(ctx, "")
+	_, lookErr := tool.Image(ctx, "")
 	_, execErr := tool.Exec(ctx, jsonArgs(t, ""))
 	if lookErr == nil || execErr == nil {
 		t.Fatalf("an absent path refuses on both doors, view=%v exec=%v", lookErr, execErr)
@@ -711,13 +715,13 @@ func TestViewViewAndExecShareTheirChecks(t *testing.T) {
 	}
 
 	missing := filepath.Join(dir, "gone.png")
-	_, lookErr = tool.View(ctx, missing)
+	_, lookErr = tool.Image(ctx, missing)
 	_, execErr = tool.Exec(ctx, jsonArgs(t, missing))
 	if lookErr == nil || execErr == nil || lookErr.Error() != execErr.Error() {
 		t.Fatalf("an image that is not there refuses the same way on either door: view=%v exec=%v", lookErr, execErr)
 	}
 
-	got, err := tool.View(ctx, src)
+	got, err := tool.Image(ctx, src)
 	if err != nil {
 		t.Fatalf("view: %v", err)
 	}

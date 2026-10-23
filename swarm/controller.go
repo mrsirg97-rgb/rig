@@ -61,6 +61,8 @@ type Opts struct {
 	Sandbox      string
 	SandboxBinds []string
 	Python       string
+	FFmpeg       string
+	Browser      string
 	RigHome      string
 	StateDir     string
 	Allow        []string

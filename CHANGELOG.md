@@ -1,4 +1,30 @@
 # Changelog
+## [3.4.0]: view grows a video source — a clip becomes one labelled contact sheet
+
+`view` was one verb: a path in, one image out. It is an action door now,
+and `video` is its second source. `image` stays the default, so every
+3.3.5 call shape and the golden wire keep working; the registry's
+`defaultAction` is why the tool stays a read that runs beside its admitted
+neighbours.
+
+`view {action:"video", path}` samples a clip with ffmpeg and replies one
+contact sheet: `frames` frames (6 by default, 12 at most) evenly spaced,
+tiled into a grid under the same 1568 bound, each labelled with its
+timestamp. `at: "90"` or `at: "1:30"` replies that one frame alone at the
+bound. The frames are decoded in Go and ride the image path's resampler,
+re-encode and blob store, so the same file and arguments give the same
+blob. Three caps sit beside the image caps — 512 MiB of source, 3600 s of
+clip, 1..12 frames — and each refusal names the cap and the way around it.
+ffmpeg is `RIG_FFMPEG` over `settings.ffmpeg`, falling back to PATH;
+absent, the refusal names both knobs. A jailed worker gets the env and a
+read-only bind of the binary's directory, the `RIG_PYTHON` way.
+
+The tool menu's golden row is a text row, so its 16,174 characters and
+byte-identical wire do not move; `view`'s own entry grew from 469 to 1,089
+characters for the vision rows that carry it. CI installs ffmpeg as a
+fixture, the way it installs bubblewrap and the kernel venv, and the video
+cases skip by name where it is absent.
+
 ## [3.3.5]: the site is a manual now, and every number on it is computed
 
 The GitHub Pages site was one page that undersold the machine. It is

@@ -245,7 +245,7 @@ The 2.1.x consolidation rethought the system prompt and the toolset and kept the
 
 **A few thousand bytes of preamble.** The system prompt and the tool schemas are lean, byte-stable, and carefully chosen, and the tests say so: `TestSystemPromptIsByteStableAcrossBuilds`, `TestWireMarshalingIsDeterministic`, `TestWireMessagesAreAppendOnly`. A stray timestamp cannot quietly kill the cache.
 
-**448 lines is the loop** — `loop.go` plus `batch.go`, stdlib only. **682 lines is the whole swarm** — claim, spawn, complete, verdict, reap, and the status throttle. **51,229 lines of Go, 87,050 of tests.** The one store dependency is pure-Go SQLite.
+**448 lines is the loop** — `loop.go` plus `batch.go`, stdlib only. **686 lines is the whole swarm** — claim, spawn, complete, verdict, reap, and the status throttle. **51,748 lines of Go, 87,411 of tests.** The one store dependency is pure-Go SQLite.
 
 <!-- measured:end -->
 
@@ -283,7 +283,7 @@ live read of what it has loaded). Restrict them with `--allow`:
 |------|--------------|
 | `bash` | run shell commands; output bounded |
 | `read` / `write` / `edit` | files; read is the observation path (drift-checked), edits are exact-match, provenance-checked |
-| `view` | look at an image: downscaled, content-addressed, sent to a vision model (off unless your model row has `"vision": true`) |
+| `view` | look at pixels: an image (downscaled, content-addressed) or a video's frames as one labelled contact sheet — sent to a vision model (off unless your model row has `"vision": true`) |
 | `python` | a persistent IPython kernel; variables and imports survive |
 | `web` | search a local SearXNG, or fetch a URL as readable text; private addresses refused |
 | `todo` | the task queue, scoped to the project (a repo's worktrees share one); tasks link with `requires`/`blocks` |

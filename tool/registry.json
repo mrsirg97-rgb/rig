@@ -129,21 +129,36 @@
   {
     "name": "view",
     "enabled": true,
-    "what": "handles image files: png, jpeg, webp, or the first frame of a gif.",
-    "guidelines": "for pixels only; for text, code or a log use read; for a crop or a resize use bash. anything over 20 MiB, over 16 megapixels, or not an image refuses.",
+    "what": "looks at pixels: an image, or a video's frames.",
+    "guidelines": "image (the default) takes path: png, jpeg, webp, or a gif's first frame. video takes path and replies one contact sheet of `frames` (default 6) evenly spaced, or the single frame at `at` (seconds or hh:mm:ss). for text or code use read. every cap and unconfigured binary names itself.",
     "reply": "one line naming the stored image's mime, dimensions, size and source.",
+    "defaultAction": "image",
     "mutates": [],
     "schema": {
       "type": "object",
       "properties": {
+        "action": {
+          "type": "string",
+          "enum": [
+            "image",
+            "video"
+          ],
+          "description": "image (default) a picture; video samples a clip"
+        },
         "path": {
           "type": "string",
-          "description": "the image file to look at (png, jpeg, webp, gif; a leading ~ expands)"
+          "description": "the image or video file (a leading ~ expands)"
+        },
+        "at": {
+          "type": "string",
+          "description": "video: one timestamp, seconds or hh:mm:ss"
+        },
+        "frames": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "video: frames the sheet tiles (default 6)"
         }
-      },
-      "required": [
-        "path"
-      ]
+      }
     }
   },
   {

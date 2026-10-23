@@ -20,6 +20,8 @@ type Settings struct {
 	Rounds        int
 	ResultCap     int
 	Python        string
+	FFmpeg        string
+	Browser       string
 	SearXNG       string
 	WebFetchProxy *string
 	Trafilatura   *string
@@ -55,7 +57,7 @@ type Mesh struct {
 	Window int64
 }
 
-var knownSettings = []string{"allow", "approve", "baseUrl", "decisionUnit", "decisionUrl", "defaultJobModel", "maxWorkers", "mesh", "model", "plugins", "python", "reviewBatch", "resultCap", "retries", "rounds", "sandbox", "sandboxBinds", "searxngUrl", "swapUrl", "system", "theme", "trafilatura", "trainPython", "updateKey", "webFetchProxy", "workerWindow", "workers"}
+var knownSettings = []string{"allow", "approve", "baseUrl", "browser", "decisionUnit", "decisionUrl", "defaultJobModel", "ffmpeg", "maxWorkers", "mesh", "model", "plugins", "python", "reviewBatch", "resultCap", "retries", "rounds", "sandbox", "sandboxBinds", "searxngUrl", "swapUrl", "system", "theme", "trafilatura", "trainPython", "updateKey", "webFetchProxy", "workerWindow", "workers"}
 
 var knownSettingsSet = func() map[string]bool {
 	m := make(map[string]bool, len(knownSettings))
@@ -123,6 +125,12 @@ func mergeSettings(base, file Settings) Settings {
 	}
 	if file.Python != "" {
 		out.Python = file.Python
+	}
+	if file.FFmpeg != "" {
+		out.FFmpeg = file.FFmpeg
+	}
+	if file.Browser != "" {
+		out.Browser = file.Browser
 	}
 	if file.SearXNG != "" {
 		out.SearXNG = file.SearXNG
