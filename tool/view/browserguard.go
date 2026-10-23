@@ -15,16 +15,18 @@ import (
 )
 
 func (b *browser) guard(ctx context.Context, raw string) (string, error) {
+	if raw == "about:blank" {
+		return raw, nil
+	}
+	return b.guardRequest(ctx, raw)
+}
+
+func (b *browser) guardRequest(ctx context.Context, raw string) (string, error) {
 	u, err := url.Parse(strings.TrimSpace(raw))
 	if err != nil || u.Scheme == "" {
 		return "", fmt.Errorf("view: %q is not a URL", raw)
 	}
 	switch strings.ToLower(u.Scheme) {
-	case "about":
-		if raw == "about:blank" {
-			return raw, nil
-		}
-		return "", fmt.Errorf("view: only about:blank is allowed, got %s", raw)
 	case "http", "https":
 		guarded, err := webtool.GuardURL(ctx, raw, webtool.LookupFn(b.cfg.Lookup))
 		if err != nil {
@@ -50,8 +52,10 @@ func (b *browser) guard(ctx context.Context, raw string) (string, error) {
 			return "", fmt.Errorf("view: %q is outside the session's workspace (%s) and the rig home (%s)", resolved, b.cfg.Cwd, b.cfg.RigHome)
 		}
 		return "file://" + resolved, nil
+	case "data", "blob":
+		return raw, nil
 	default:
-		return "", fmt.Errorf("view: %q: only http(s), file:// inside the workspace, or about:blank is openable", raw)
+		return "", fmt.Errorf("view: %q: only http(s), file:// inside the workspace, data:, or blob: is openable", raw)
 	}
 }
 
@@ -87,7 +91,7 @@ func (b *browser) argv(profile string) []string {
 		fmt.Sprintf("--window-size=%d,%d", viewportW, viewportH),
 	}
 	if b.cfg.Proxy != "" {
-		args = append(args, "--proxy-server="+b.cfg.Proxy)
+		args = append(args, "--proxy-server="+b.cfg.Proxy, "--proxy-bypass-list=<-loopback>")
 	}
 	args = append(args, "--no-sandbox")
 	return args

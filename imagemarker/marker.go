@@ -111,10 +111,14 @@ func ParseLast(content string) (Ref, bool) {
 	if trimmed == "" {
 		return Ref{}, false
 	}
+	line := trimmed
 	if i := strings.LastIndexByte(trimmed, '\n'); i >= 0 {
-		trimmed = trimmed[i+1:]
+		if strings.Contains(trimmed[:i], prefix) {
+			return Ref{}, false
+		}
+		line = trimmed[i+1:]
 	}
-	return Parse(trimmed)
+	return Parse(line)
 }
 
 func BlobPath(dir, sha string) string {

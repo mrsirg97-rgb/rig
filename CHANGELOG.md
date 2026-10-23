@@ -18,7 +18,9 @@ blob. Three caps sit beside the image caps — 512 MiB of source, 3600 s of
 clip, 1..12 frames — and each refusal names the cap and the way around it.
 ffmpeg is `RIG_FFMPEG` over `settings.ffmpeg`, falling back to PATH; absent,
 the refusal names both knobs. A jailed worker gets the env and a read-only
-bind of the binary's directory, the `RIG_PYTHON` way.
+bind of the binary's directory, the `RIG_PYTHON` way. The input is
+`file:<abs path>` with `-protocol_whitelist file,pipe`, so a playlist or a
+`concat:`-style name cannot make ffmpeg dial or read past the file.
 
 `view {action:"browser", step:…}` drives one headless Chromium per session
 over `--remote-debugging-pipe` — NUL-delimited JSON on fds 3/4, stdlib
@@ -30,19 +32,28 @@ the python kernel's words. The steps are `open`, `click`, `type`, `scroll`,
 a numbered list (`[2] button "Sign in"`), and `open`/`shot` — or `shot:true`
 on any step — also attach a screenshot. The model acts by ref, never by
 pixel. The binary is `RIG_BROWSER` over `settings.browser`; absent, the
-refusal names both. An `http(s)` open passes `tool/web`'s SSRF guard and
-requests ride `webFetchProxy` when set; `file://` resolves and passes
-pathguard; every other scheme refuses. The page's text is untrusted: names
-and titles lose their control characters and `[[rig:` prefixes, and the
-marker is written last.
+refusal names both. Every request is guarded, not only the one the model
+asked to open: the CDP `Fetch` domain pauses each one and it goes through
+`tool/web`'s SSRF door — a redirect hop, a link, an image or a `fetch()` to
+a private address is failed and named in the step's reply — while `file://`
+resolves through pathguard and `data:`/`blob:` continue. A configured
+`webFetchProxy` rides `--proxy-server` with
+`--proxy-bypass-list=<-loopback>`, because Chromium's default bypass list
+would otherwise skip the proxy for loopback. A parent-death signal takes
+the browser down with a SIGKILLed rig; the python kernel had the same gap
+and gets the same one. The page's text is untrusted: names and titles lose
+their control characters and `[[rig:` prefixes, and the marker is written
+last.
 
 That last fact moved the provider's rule: a `view` result is an image when
 its last line is a marker (`imagemarker.ParseLast`), not only when the
-whole result is one line. Text above the marker stays text, and the marker
-the provider honors is still only the one `view` wrote.
+whole result is one line. Text above the marker stays text, and a text
+that carries the marker prefix above the final line refuses the whole
+reply, so a newline in `src` cannot smuggle a second marker. The marker the
+provider honors is still only the one `view` wrote.
 
 The tool menu's golden row is a text row, so its 16,174 characters and
-byte-identical wire do not move; `view`'s own entry grew from 469 to 1,731
+byte-identical wire do not move; `view`'s own entry grew from 469 to 1,363
 characters for the vision rows that carry it. CI installs ffmpeg and
 chrome-headless-shell as fixtures, the way it installs bubblewrap and the
 kernel venv, and the video and browser cases skip by name where they are

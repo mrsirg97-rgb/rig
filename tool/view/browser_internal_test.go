@@ -8,8 +8,10 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"testing"
 	"time"
 )
@@ -206,4 +208,71 @@ func (b *browser) current() *bProc {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	return b.p
+}
+
+func TestTheBrowserDiesWithItsParent(t *testing.T) {
+	bin := browserBinary(t)
+	helper := exec.Command(os.Args[0], "-test.run", "^TestBrowserParentHelper$")
+	helper.Env = append(os.Environ(), "RIG_BROWSER="+bin, "RIG_BROWSER_HELPER=1")
+	stdout, err := helper.StdoutPipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := helper.Start(); err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		if helper.Process != nil {
+			helper.Process.Kill()
+		}
+	}()
+	line, err := bufio.NewReader(stdout).ReadString('\n')
+	if err != nil {
+		t.Fatalf("the helper printed no browser pid: %v", err)
+	}
+	pid, err := strconv.Atoi(strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(line), "pid ")))
+	if err != nil || pid <= 0 {
+		t.Fatalf("the helper's line = %q, want \"pid <n>\"", line)
+	}
+	if err := helper.Process.Kill(); err != nil {
+		t.Fatal(err)
+	}
+	helper.Wait()
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		if err := syscall.Kill(pid, 0); err == syscall.ESRCH {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("the browser (pid %d) outlived the rig process that started it", pid)
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+}
+
+func TestBrowserParentHelper(t *testing.T) {
+	if os.Getenv("RIG_BROWSER_HELPER") != "1" {
+		t.Skip("the parent-death helper")
+	}
+	tl := NewWith(Config{Blobs: t.TempDir(), Browser: os.Getenv("RIG_BROWSER"), Cwd: t.TempDir(), RigHome: t.TempDir()}).(*toolView)
+	if _, err := tl.Exec(context.Background(), []byte(`{"action":"browser","step":"shot"}`)); err != nil {
+		t.Fatalf("the helper's browser: %v", err)
+	}
+	p := tl.browserFor().current()
+	fmt.Printf("pid %d\n", p.cmd.Process.Pid)
+	time.Sleep(60 * time.Second)
+}
+
+func TestTheProxyIsToldNotToBypassLoopback(t *testing.T) {
+	with := strings.Join((&browser{cfg: Config{Proxy: "http://127.0.0.1:8889"}}).argv("profile"), " ")
+	if !strings.Contains(with, "--proxy-server=http://127.0.0.1:8889") {
+		t.Fatalf("a configured proxy must ride the flags: %s", with)
+	}
+	if !strings.Contains(with, "--proxy-bypass-list=<-loopback>") {
+		t.Fatalf("loopback must go through the proxy, not around it: %s", with)
+	}
+	without := strings.Join((&browser{cfg: Config{}}).argv("profile"), " ")
+	if strings.Contains(without, "--proxy") {
+		t.Fatalf("no proxy is configured, so no proxy flag: %s", without)
+	}
 }

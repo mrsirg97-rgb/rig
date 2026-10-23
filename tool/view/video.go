@@ -158,7 +158,7 @@ func (v *toolView) ffmpeg() (string, error) {
 func probe(ctx context.Context, bin, path string) (float64, float64, error) {
 	cctx, cancel := context.WithTimeout(ctx, probeTimeout)
 	defer cancel()
-	cmd := exec.CommandContext(cctx, bin, "-hide_banner", "-nostdin", "-i", path)
+	cmd := exec.CommandContext(cctx, bin, "-hide_banner", "-nostdin", "-protocol_whitelist", "file,pipe", "-i", "file:"+path)
 	var tail tailBuffer
 	cmd.Stdout = &tail
 	cmd.Stderr = &tail
@@ -189,8 +189,9 @@ func extract(ctx context.Context, bin, path string, at float64) (image.Image, er
 	defer cancel()
 	cmd := exec.CommandContext(cctx, bin,
 		"-hide_banner", "-nostdin",
+		"-protocol_whitelist", "file,pipe",
 		"-ss", strconv.FormatFloat(at, 'f', 3, 64),
-		"-i", path,
+		"-i", "file:"+path,
 		"-frames:v", "1",
 		"-f", "image2pipe", "-c:v", "png", "-",
 	)

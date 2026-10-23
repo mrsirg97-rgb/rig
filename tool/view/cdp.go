@@ -10,7 +10,10 @@ import (
 	"sync"
 )
 
-const maxCDPMessage = 32 << 20
+const (
+	maxCDPMessage = 32 << 20
+	eventBuf      = 256
+)
 
 var errPipeClosed = errors.New("the browser closed its pipe")
 
@@ -44,6 +47,7 @@ type cdpConn struct {
 	mu      sync.Mutex
 	seq     int64
 	pending map[int64]chan cdpMessage
+	events  chan cdpMessage
 	dead    chan struct{}
 	once    sync.Once
 	err     error
@@ -54,6 +58,7 @@ func newCDP(in io.WriteCloser, out io.Reader) *cdpConn {
 		in:      in,
 		out:     out,
 		pending: map[int64]chan cdpMessage{},
+		events:  make(chan cdpMessage, eventBuf),
 		dead:    make(chan struct{}),
 	}
 	go c.read()
@@ -73,6 +78,10 @@ func (c *cdpConn) read() {
 			continue
 		}
 		if m.ID == 0 {
+			select {
+			case c.events <- m:
+			case <-c.dead:
+			}
 			continue
 		}
 		c.mu.Lock()

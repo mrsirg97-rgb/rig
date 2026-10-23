@@ -12,6 +12,8 @@ import (
 	"sync"
 	"syscall"
 	"time"
+
+	"github.com/mrsirg97-rgb/rig/v3/tool/execwrap"
 )
 
 const (
@@ -28,6 +30,9 @@ const (
 	maxElements = 40
 	maxName     = 80
 	maxURLLen   = 300
+
+	maxRefusals  = 20
+	guardTimeout = 10 * time.Second
 )
 
 type element struct {
@@ -48,6 +53,12 @@ type browser struct {
 	mu        sync.Mutex
 	p         *bProc
 	lastDeath *deathNote
+	refusals  []refusal
+}
+
+type refusal struct {
+	url string
+	why string
 }
 
 type deathNote struct {
@@ -76,14 +87,86 @@ func (b *browser) step(ctx context.Context, s Step) (outcome, error) {
 	if err != nil {
 		return outcome{}, err
 	}
-	out, err := b.run(ctx, p, s)
-	if err != nil {
-		return outcome{}, err
+	out, runErr := b.run(ctx, p, s)
+	refused := b.drainRefusals()
+	if runErr != nil {
+		if refused != "" {
+			return outcome{}, fmt.Errorf("%v\n%s", runErr, refused)
+		}
+		return outcome{}, runErr
+	}
+	if refused != "" {
+		out.text += "\n" + refused
 	}
 	if note != "" {
 		out.text = note + "\n" + out.text
 	}
 	return out, nil
+}
+
+func (b *browser) noteRefusal(raw, why string) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if len(b.refusals) >= maxRefusals {
+		return
+	}
+	b.refusals = append(b.refusals, refusal{url: plain(raw, maxURLLen), why: plain(why, maxURLLen)})
+}
+
+func (b *browser) drainRefusals() string {
+	b.mu.Lock()
+	refs := b.refusals
+	b.refusals = nil
+	b.mu.Unlock()
+	var text strings.Builder
+	for _, r := range refs {
+		if text.Len() > 0 {
+			text.WriteByte('\n')
+		}
+		fmt.Fprintf(&text, "refused %s: %s", r.url, r.why)
+	}
+	return text.String()
+}
+
+func (b *browser) watchFetch(p *bProc) {
+	for {
+		select {
+		case <-p.conn.dead:
+			return
+		case m := <-p.conn.events:
+			if m.Method == "Fetch.requestPaused" {
+				b.paused(p, m)
+			}
+		}
+	}
+}
+
+func (b *browser) paused(p *bProc, m cdpMessage) {
+	var event struct {
+		RequestID string `json:"requestId"`
+		Request   struct {
+			URL string `json:"url"`
+		} `json:"request"`
+	}
+	if json.Unmarshal(m.Params, &event) != nil || event.RequestID == "" {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), guardTimeout)
+	defer cancel()
+	target, err := b.guardRequest(ctx, event.Request.URL)
+	if err != nil {
+		b.noteRefusal(event.Request.URL, err.Error())
+		p.conn.call(ctx, "Fetch.failRequest", map[string]any{
+			"requestId":   event.RequestID,
+			"errorReason": "BlockedByClient",
+		}, p.session)
+		return
+	}
+	params := map[string]any{"requestId": event.RequestID}
+	if target != event.Request.URL {
+		params["url"] = target
+	}
+	p.conn.call(ctx, "Fetch.continueRequest", params, p.session)
 }
 
 func (b *browser) proc(ctx context.Context) (*bProc, string, error) {
@@ -278,7 +361,9 @@ func (b *browser) start(ctx context.Context) (*bProc, error) {
 	}
 	cmd := exec.Command(bin, b.argv(profile)...)
 	cmd.Dir = b.cfg.Cwd
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	attr := &syscall.SysProcAttr{Setpgid: true}
+	execwrap.ParentDeathAttr(attr)
+	cmd.SysProcAttr = attr
 	cmd.ExtraFiles = []*os.File{cmdR, resW}
 	tail := &tailBuffer{}
 	cmd.Stderr = tail
@@ -306,6 +391,15 @@ func (b *browser) start(ctx context.Context) (*bProc, error) {
 	if err := p.handshake(ctx); err != nil {
 		b.teardown(p)
 		return nil, fmt.Errorf("view: the browser %q did not answer: %v%s", bin, err, tailNote(tail))
+	}
+	go b.watchFetch(p)
+	cctx, cancel := context.WithTimeout(ctx, startTimeout)
+	defer cancel()
+	if _, err := p.conn.call(cctx, "Fetch.enable", map[string]any{
+		"patterns": []map[string]any{{"urlPattern": "*", "requestStage": "Request"}},
+	}, p.session); err != nil {
+		b.teardown(p)
+		return nil, fmt.Errorf("view: the browser %q cannot guard its requests: %v", bin, err)
 	}
 	return p, nil
 }

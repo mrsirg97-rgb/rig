@@ -1,6 +1,7 @@
 package python
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -10,8 +11,10 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"testing"
 	"time"
 )
@@ -723,4 +726,57 @@ func TestARunStreamsAChildProcessOutput(t *testing.T) {
 	if !strings.Contains(joined, "child-2") {
 		t.Fatalf("a child process's output streams to the caller: %q", joined)
 	}
+}
+
+func TestTheKernelDiesWithItsParent(t *testing.T) {
+	py := requireKernel(t)
+	helper := exec.Command(os.Args[0], "-test.run", "^TestKernelParentHelper$")
+	helper.Env = append(os.Environ(), "RIG_KERNEL_HELPER=1", "RIG_KERNEL_PY="+py)
+	stdout, err := helper.StdoutPipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := helper.Start(); err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		if helper.Process != nil {
+			helper.Process.Kill()
+		}
+	}()
+	line, err := bufio.NewReader(stdout).ReadString('\n')
+	if err != nil {
+		t.Fatalf("the helper printed no kernel pid: %v", err)
+	}
+	pid, err := strconv.Atoi(strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(line), "pid ")))
+	if err != nil || pid <= 0 {
+		t.Fatalf("the helper's line = %q, want \"pid <n>\"", line)
+	}
+	if err := helper.Process.Kill(); err != nil {
+		t.Fatal(err)
+	}
+	helper.Wait()
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		if err := syscall.Kill(pid, 0); err == syscall.ESRCH {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("the kernel (pid %d) outlived the rig process that started it", pid)
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+}
+
+func TestKernelParentHelper(t *testing.T) {
+	if os.Getenv("RIG_KERNEL_HELPER") != "1" {
+		t.Skip("the parent-death helper")
+	}
+	kt := NewWith(os.Getenv("RIG_KERNEL_PY"), DefaultHost(), inlineBG{})
+	if _, err := kt.Code(context.Background(), "1 + 1", 20000); err != nil {
+		t.Fatalf("the helper's kernel: %v", err)
+	}
+	p := kt.(*pyTool).k.proc
+	fmt.Printf("pid %d\n", p.cmd.Process.Pid)
+	time.Sleep(60 * time.Second)
 }

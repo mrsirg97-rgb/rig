@@ -4,10 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"image"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/mrsirg97-rgb/rig/v3/imagemarker"
@@ -210,6 +213,27 @@ func TestTheDurationCapRefusesTheSheetAndOffersOneFrame(t *testing.T) {
 	_, err := view.New(blobs).Exec(context.Background(), videoArgs(t, map[string]any{"path": long}))
 	if err == nil || !strings.Contains(err.Error(), "clip cap") || !strings.Contains(err.Error(), "at") {
 		t.Fatalf("the duration cap must name itself and the way around it: %v", err)
+	}
+}
+
+func TestAVideoFilePathCannotMakeFFmpegDial(t *testing.T) {
+	dir, blobs := realTemp(t), realTemp(t)
+	requireFFmpeg(t)
+	var hits atomic.Int64
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hits.Add(1)
+	}))
+	defer srv.Close()
+	playlist := filepath.Join(dir, "evil.m3u8")
+	body := "#EXTM3U\n#EXT-X-TARGETDURATION:10\n#EXT-X-VERSION:3\n#EXTINF:10,\n" + srv.URL + "/segment.ts\n#EXT-X-ENDLIST\n"
+	if err := os.WriteFile(playlist, []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := view.New(blobs).Exec(context.Background(), videoArgs(t, map[string]any{"path": playlist})); err == nil {
+		t.Fatal("a playlist must not be sampled: only a local file is a video")
+	}
+	if got := hits.Load(); got != 0 {
+		t.Fatalf("ffmpeg dialed the playlist's segment %d times; the protocol whitelist must keep it on the file", got)
 	}
 }
 

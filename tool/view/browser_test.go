@@ -9,8 +9,10 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 
 	"github.com/mrsirg97-rgb/rig/v3/imagemarker"
@@ -36,6 +38,9 @@ func requireBrowser(t *testing.T) string {
 }
 
 func loopbackLookup(ctx context.Context, host string) ([]string, error) {
+	if host == "localhost" {
+		return []string{"127.0.0.1"}, nil
+	}
 	return []string{"93.184.216.34"}, nil
 }
 
@@ -212,6 +217,65 @@ func TestABrowserKeepsItsPageAndRefsAcrossCalls(t *testing.T) {
 	}
 }
 
+func TestEveryBrowserRequestPassesTheGuardNotOnlyTheOpenURL(t *testing.T) {
+	tl := browserTool(t, realTemp(t))
+	defer tl.Close()
+
+	var hits atomic.Int64
+	leak := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hits.Add(1)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer leak.Close()
+	port := leak.URL[strings.LastIndex(leak.URL, ":")+1:]
+	leakBase := "http://localhost:" + port
+
+	page := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/":
+			fmt.Fprintf(w, `<!doctype html><html><head><title>home</title></head><body>
+<a href="%s/click">steal</a>
+<img src="%s/img.png">
+<script>fetch(%q).catch(() => {})</script>
+</body></html>`, leakBase, leakBase, leakBase+"/fetch")
+		case "/redirect":
+			http.Redirect(w, r, leakBase+"/redir", http.StatusFound)
+		default:
+			fmt.Fprint(w, `<!doctype html><title>home</title><p>ok</p>`)
+		}
+	}))
+	defer page.Close()
+
+	if _, err := tl.Exec(context.Background(), stepArgs(t, map[string]any{"step": "open", "url": page.URL + "/redirect"})); err == nil ||
+		!strings.Contains(err.Error(), "refused") || !strings.Contains(err.Error(), leakBase+"/redir") {
+		t.Fatalf("the redirect hop must be refused and named in the step's reply: %v", err)
+	}
+
+	open := execStep(t, tl, map[string]any{"step": "open", "url": page.URL})
+	ref := 0
+	for _, line := range strings.Split(open, "\n") {
+		if strings.Contains(line, "link") && strings.Contains(line, "steal") {
+			fields := strings.Fields(line)
+			ref, _ = strconv.Atoi(strings.Trim(fields[0], "[]"))
+		}
+	}
+	if ref == 0 {
+		t.Fatalf("the page list names no link ref:\n%s", open)
+	}
+	clicked := execStep(t, tl, map[string]any{"step": "click", "ref": ref})
+	shot := execStep(t, tl, map[string]any{"step": "shot"})
+
+	all := open + "\n" + clicked + "\n" + shot
+	for _, path := range []string{"/click", "/img.png", "/fetch"} {
+		if !strings.Contains(all, leakBase+path) {
+			t.Fatalf("the refused %s must be named in a step's reply:\n%s", path, all)
+		}
+	}
+	if got := hits.Load(); got != 0 {
+		t.Fatalf("the guard let %d request(s) through to the loopback server", got)
+	}
+}
+
 func TestABrowserStepRefusesAStaleRef(t *testing.T) {
 	srv := newPageServer(t)
 	tl := browserTool(t, realTemp(t))
@@ -236,11 +300,18 @@ func TestTheBrowserGuardsEverythingWebGuards(t *testing.T) {
 			t.Fatalf("%s must be refused as private: %v", raw, err)
 		}
 	}
-	for _, raw := range []string{"javascript:alert(1)", "data:text/html,hi", "about:config", "ftp://example.test/"} {
+	for _, raw := range []string{"javascript:alert(1)", "about:config", "ftp://example.test/"} {
 		_, err := tl.Exec(context.Background(), stepArgs(t, map[string]any{"step": "open", "url": raw}))
 		if err == nil {
 			t.Fatalf("%s must be refused", raw)
 		}
+	}
+	inline, err := tl.Exec(context.Background(), stepArgs(t, map[string]any{"step": "open", "url": "data:text/html,<title>inline</title><button>Go</button>"}))
+	if err != nil {
+		t.Fatalf("data: is a document, not a network request: %v", err)
+	}
+	if !strings.Contains(inline, `button "Go"`) {
+		t.Fatalf("the inline document lists its elements:\n%s", inline)
 	}
 }
 

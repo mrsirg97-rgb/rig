@@ -167,7 +167,7 @@ store/scheduler/jail.go          RIG_FFMPEG/RIG_BROWSER on the jail env and a
   match its address is treated as missing, not as an image.
 - **The menu pays for nothing it does not use.** For a text row the tool
   table is byte-identical to 3.3.5 — the wire golden does not move; a vision
-  row's menu carries `view`'s entry, which grew from 469 to 1,731 characters
+  row's menu carries `view`'s entry, which grew from 469 to 1,363 characters
   with the door, video and browser.
 - **Gating is registration, not a runtime check.** `view` joins the native
   tool table only when the active row has vision, and the provider carries
@@ -225,17 +225,20 @@ store/scheduler/jail.go          RIG_FFMPEG/RIG_BROWSER on the jail env and a
   row stops having vision; a death between calls is announced once, on the
   next call, in the python kernel's words: `note: fresh browser; the previous
   browser exited (code N)` plus the stderr tail. A deliberate close is not a
-  death and leaves no note.
+  death and leaves no note. A parent-death signal (`Pdeathsig`, from the one
+  `execwrap.ParentDeathAttr` helper the python kernel uses too) takes the
+  browser down with a SIGKILLed rig instead of orphaning it with its profile.
 - **The binary is a knob**: `RIG_BROWSER` over `settings.browser`; no PATH
   fallback, because a browser is a choice, not an assumption. A missing knob
   refuses naming both. A jailed worker gets the env and a read-only bind of
   the binary's directory.
 - **The protocol is the pipe**: `--remote-debugging-pipe` puts commands on
   the child's fd 3 and replies on fd 4; the client writes NUL-terminated
-  JSON, routes replies by id, ignores events, and fails every pending call
-  when the pipe closes. Stdlib only — no websocket, no dependency.
+  JSON, routes replies by id, hands `Fetch.requestPaused` events to the
+  guard, and fails every pending call when the pipe closes. Stdlib only — no websocket, no dependency.
   `Target.createTarget` → `Target.attachToTarget {flatten:true}` →
-  `Page.enable`/`Runtime.enable`; the session id rides every page command.
+  `Page.enable`/`Runtime.enable`/`Fetch.enable`; the session id rides every
+  page command.
 - **The flags are the sandbox's**: `--no-sandbox` is passed deliberately. The
   session already runs `bash`, so the browser carries no privilege the
   session does not have, and under bwrap Chromium's nested sandbox cannot
@@ -255,13 +258,15 @@ store/scheduler/jail.go          RIG_FFMPEG/RIG_BROWSER on the jail env and a
 - **Actions are serial within a session**: one queue in front of the
   process, so two steps in one batch cannot interleave commands on the pipe.
   The registry marks them mutating, because a click can submit a form.
-- **The walls are web's**: an `http(s)` `open` passes `tool/web`'s SSRF
-  guard (`GuardURL`: name resolution, private/loopback/link-local refused)
-  and every request then rides `webFetchProxy` when configured; `file://`
-  must resolve, and must sit under the session's workspace or the rig home
-  (pathguard); `about:blank` and nothing else of `about:`; every other
-  scheme refuses. The guard vets the URL the model asked for; subresources,
-  redirects and later clicks inside the page are the proxy's job.
+- **The walls are web's, and they are every request's**: `Fetch.enable`
+  pauses every request (`*`, Request stage) and each paused one goes through
+  the same guard as `open` — `http(s)` through `web.GuardURL` (a redirect hop
+  arrives as its own paused request, so every hop is vetted), `file://`
+  through the resolve-and-pathguard check, `data:` and `blob:` continued,
+  everything else failed with `BlockedByClient` and named in the step's
+  reply. `--proxy-server` carries `webFetchProxy` when configured, and
+  `--proxy-bypass-list=<-loopback>` keeps loopback inside it: Chromium's
+  default bypass list does not.
 - **The page is untrusted text**: the title and the accessible names are
   sanitised (no control characters, no `[[rig:` prefix, 80 runes), and the
   reply's marker is written last, so the only marker the provider can honor
@@ -274,8 +279,9 @@ Named cases, the real filesystem in `t.TempDir()`, the real encoders:
 - `imagemarker`: format and parse round-trip; a src with spaces and with
   `]]` in it; a src carrying a control character is refused; a src carrying
   a whole marker line is refused; a line that is not a marker; two markers;
-  a truncated one; the blob path rule; `ParseLast` takes the final line and
-  refuses a reply that ends in text.
+  a truncated one; the blob path rule; `ParseLast` takes the final line,
+  refuses a reply that ends in text, and refuses text above it that carries
+  the marker prefix.
 - `view`: the downscale bound (2560x1440 to 1568x882) and no resample inside
   it; the re-encode rule per source format, transparency included; the format
   refusal by magic, not extension; the 20 MiB cap; the pixel cap; a missing
@@ -300,6 +306,10 @@ Named cases, the real filesystem in `t.TempDir()`, the real encoders:
   leaving no note; the SSRF guard refusing loopback and link-local, the
   scheme refusal, `file://` passing pathguard, and the absent-binary
   refusal; an unknown step; eight concurrent steps serialized.
+- An `httptest` page whose redirect, link, image and `fetch()` point at a
+  second server named `localhost` (private to the guard): every one is
+  refused, each is named in a step's reply, and the second server sees zero
+  requests; the proxy flags carry the loopback bypass.
 - The browser cases and the ffmpeg cases skip with the binary's name when it
   is absent; CI installs both as fixtures (the python venv's shape), so they
   run there.

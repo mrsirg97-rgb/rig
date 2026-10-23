@@ -37,8 +37,11 @@ its reference. The tool is registered only for a model row with `vision`
   serial queue; the steps open/click/type/scroll/shot/close; the death note.
 - `browserpage.go`: the page's side of the pipe — target handshake, navigate,
   the ready polls, the element snapshot, the screenshot, the exit words.
-- `browserguard.go`: the URL walls (web's SSRF guard, pathguard for
-  `file://`), the binary resolution, and the flags.
+- `browserguard.go`: the one guard (web's SSRF guard for `http(s)`,
+  pathguard for `file://`, `data:`/`blob:` allowed), the binary resolution,
+  and the flags (`--proxy-bypass-list=<-loopback>` with a proxy, so loopback
+  rides it too). The CDP `Fetch` domain pauses every request, not only
+  `open`'s, and hands each one to this guard.
 - `browserreply.go`: the reply's lines — the page line, the capped element
   list, and the sanitiser that strips control characters and `[[rig:`.
 - `cdp.go`: the DevTools client on `--remote-debugging-pipe` — NUL-delimited
@@ -93,7 +96,15 @@ its reference. The tool is registered only for a model row with `vision`
   idle browser off the network.
 - The page is untrusted: names and titles are stripped of control characters
   and `[[rig:` before they enter the reply, and the marker is written last,
-  so the only marker the provider honors is `view`'s own.
+  so the only marker the provider honors is `view`'s own. The reader refuses
+  a reply whose text above the marker carries the marker prefix, so a
+  newline in a `src` cannot smuggle a second one.
+- Every request is vetted at the paused stage: a redirect hop, a link, an
+  image or a `fetch()` to a private address is failed with
+  `BlockedByClient`, named in the step's reply, and the refused URL is capped
+  like the rest of the text.
+- The browser carries a parent-death signal (the same `execwrap` helper as
+  the python kernel) so a SIGKILLed rig cannot orphan it or its profile.
 - `view` never records anything in the session's file state: what the model
   saw was a downscale, which is not a license to `edit` the file.
 - The lossless webp decoder and the label face come from
