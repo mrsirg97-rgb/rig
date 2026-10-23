@@ -62,6 +62,24 @@ type harness struct {
 	sessCwd string
 }
 
+func ageEvents(t *testing.T, db sched.DB, n int) {
+	t.Helper()
+	ts := nowFixed.Format(time.RFC3339)
+	_, tx, err := db.Tx(context.Background())
+	if err != nil {
+		t.Fatalf("tx: %v", err)
+	}
+	defer tx.Rollback()
+	for i := 0; i < n; i++ {
+		if _, err := tx.Exec(`INSERT INTO events (seq, ts, op, args, session) VALUES (?, ?, 'noop', '{}', NULL)`, 2+i, ts); err != nil {
+			t.Fatalf("exec: %v", err)
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		t.Fatalf("commit: %v", err)
+	}
+}
+
 func newHarness(t *testing.T, sessionCwd string) *harness {
 	return newHarnessRigHome(t, sessionCwd, "")
 }

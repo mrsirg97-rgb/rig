@@ -1,6 +1,7 @@
 package testenv
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -58,6 +59,10 @@ func isolate() error {
 	if err != nil {
 		return err
 	}
+	if err := SeedKernel(home); err != nil {
+		os.RemoveAll(home)
+		return err
+	}
 	testHome = home
 	os.Setenv("HOME", testHome)
 	os.Setenv("XDG_CONFIG_HOME", filepath.Join(testHome, ".config"))
@@ -80,6 +85,25 @@ func mkTestHome(dir string) (string, error) {
 		return "", fmt.Errorf("build the test home: %v", err)
 	}
 	return home, nil
+}
+
+func SeedKernel(home string) error {
+	venv := filepath.Join(OperatorHome, ".pi", "agent", "kernel-venv")
+	_, err := os.Stat(venv)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("seed the kernel venv: %v", err)
+	}
+	agent := filepath.Join(home, ".pi", "agent")
+	if err := os.MkdirAll(agent, 0o755); err != nil {
+		return fmt.Errorf("seed the kernel venv: mkdir %s: %v", agent, err)
+	}
+	if err := os.Symlink(venv, filepath.Join(agent, "kernel-venv")); err != nil {
+		return fmt.Errorf("seed the kernel venv: %v", err)
+	}
+	return nil
 }
 
 func wallCrontab(home string) error {

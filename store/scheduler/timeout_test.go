@@ -135,13 +135,7 @@ func TestTimeoutSurvivesCompactionFoldAndRewrite(t *testing.T) {
 		Model: "qwen3.8-workers", Timeout: 60,
 	})
 	mustOK(t, err)
-	for i := 0; i < 1000; i++ {
-		if _, err := h.db.DB.Exec(
-			`INSERT INTO events (seq, ts, op, args, session) VALUES (?, ?, 'noop', '{}', NULL)`,
-			2+i, nowFixed.Format(time.RFC3339)); err != nil {
-			t.Fatal(err)
-		}
-	}
+	ageEvents(t, h.db, sched.COMPACT_THRESHOLD_EVENTS)
 	if _, err := h.update(sched.UpdateInput{ID: "j1", Name: "kept2"}); err != nil {
 		t.Fatal(err)
 	}

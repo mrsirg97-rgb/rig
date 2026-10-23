@@ -29,6 +29,12 @@ package that dials the swap rides `Transport`.
   fail-closed wiring whatever the host runs; the test helpers in
   `cmd/rig` (`rigEnv`, `pluginEnv`) scrub and re-pin it so a test's own
   fixture always wins. The throwaway home is removed after the run.
+- `SeedKernel(home)`: links the operator's kernel venv into `home` as
+  `.pi/agent/kernel-venv` so the python door resolves an interpreter
+  instead of bootstrapping one from PyPI. `Main` seeds its own home;
+  `cmd/rig`'s scratch homes (`shortTemp`, the `HOME` of every spawned
+  binary) seed theirs. A machine without the venv seeds nothing and the
+  first kernel start bootstraps as before.
 - `Server`: the only way a test's httptest server gets dialed. It
   registers the server's host with `Transport` and unregisters it on
   cleanup.

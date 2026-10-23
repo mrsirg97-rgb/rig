@@ -404,13 +404,7 @@ func rigMain() int {
 	defer py.Close()
 	fmt.Fprintf(os.Stderr, "rig: python kernel host: %s\n", py.Host())
 
-	proxy := ""
-	if cfg.Settings.WebFetchProxy != nil {
-		proxy = *cfg.Settings.WebFetchProxy
-	}
-	if v, ok := os.LookupEnv("RIG_WEB_FETCH_PROXY"); ok {
-		proxy = v
-	}
+	proxy := webProxy(cfg.Settings.WebFetchProxy)
 	traf := cfg.Settings.Trafilatura
 	if v, ok := os.LookupEnv("RIG_TRAFILATURA"); ok {
 		traf = &v

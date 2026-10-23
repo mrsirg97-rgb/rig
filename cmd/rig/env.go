@@ -340,3 +340,14 @@ func (r *root) remForget(ctx context.Context, id int64) error {
 func (r *root) remLabel(ctx context.Context, project string) (string, error) {
 	return scope.Label(paths.Expand(project)), nil
 }
+
+func webProxy(settings *string) string {
+	proxy := ""
+	if settings != nil {
+		proxy = *settings
+	}
+	if v, ok := os.LookupEnv("RIG_WEB_FETCH_PROXY"); ok {
+		proxy = v
+	}
+	return proxy
+}

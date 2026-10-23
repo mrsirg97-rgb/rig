@@ -232,31 +232,38 @@ func (m *member) Act(payload evt.Signal, key int64, priority int, posted func(ad
 }
 
 func (m *member) Holders(key int64) []broadcast.Operation {
-	return ask(m, func() []broadcast.Operation { return m.claim.Holders(key) })
+	out, _ := ask(m, func() []broadcast.Operation { return m.claim.Holders(key) })
+	return out
 }
 
 func (m *member) Waiting(key int64) []broadcast.Operation {
-	return ask(m, func() []broadcast.Operation { return m.claim.Waiting(key) })
+	out, _ := ask(m, func() []broadcast.Operation { return m.claim.Waiting(key) })
+	return out
 }
 
 func (m *member) Live() []int64 {
-	return ask(m, func() []int64 { return m.claim.Live() })
+	out, _ := ask(m, func() []int64 { return m.claim.Live() })
+	return out
 }
 
-func ask[T any](m *member, f func() T) T {
-	var out T
-	if !m.Ask(func() { out = f() }) {
-		return out
+func ask[T any](m *member, f func() T) (T, bool) {
+	done := make(chan T, 1)
+	m.engine.Add(evt.Func(func(context.Context) { done <- f() }), PriorityFleet)
+	select {
+	case out := <-done:
+		return out, true
+	case <-m.gone:
+		var zero T
+		return zero, false
 	}
-	return out
 }
 
 func (m *member) Admits(version string) bool {
 	if version == "" {
 		return false
 	}
-	var peers []int64
-	if !m.Ask(func() { peers = m.claim.Live() }) {
+	peers, ok := ask(m, func() []int64 { return m.claim.Live() })
+	if !ok {
 		return false
 	}
 	for _, peer := range peers {

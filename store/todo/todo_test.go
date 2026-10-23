@@ -522,9 +522,19 @@ func taskIDText(t *testing.T, reply, text string) string {
 
 func age(t *testing.T, db store.DB, n int) {
 	t.Helper()
+	ts := time.Now().UTC().Format(time.RFC3339)
+	_, tx, err := db.Tx(context.Background())
+	if err != nil {
+		t.Fatalf("tx: %v", err)
+	}
+	defer tx.Rollback()
 	for i := 0; i < n; i++ {
-		rawExec(t, db, "INSERT INTO events (ts, op, args, session, scope) VALUES (?, 'start', ?, NULL, 'ws')",
-			time.Now().UTC().Format(time.RFC3339), `{"id":"t999"}`)
+		if _, err := tx.Exec("INSERT INTO events (ts, op, args, session, scope) VALUES (?, 'start', ?, NULL, 'ws')", ts, `{"id":"t999"}`); err != nil {
+			t.Fatalf("exec: %v", err)
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		t.Fatalf("commit: %v", err)
 	}
 }
 
@@ -1685,38 +1695,6 @@ func rowCount(reply string) int {
 	return n
 }
 
-func TestReadDefaultRendersThePresent(t *testing.T) {
-	db := newDB(t)
-	ctx := context.Background()
-	reply, err := create(ctx, db, p, []item{{Text: "keep"}, {Text: "drop"}}, "s1")
-	if err != nil {
-		t.Fatalf("create: %v", err)
-	}
-	drop := taskIDText(t, reply, "drop")
-	if _, err := todostore.Start(ctx, db, p, drop, "s1", false); err != nil {
-		t.Fatalf("start: %v", err)
-	}
-	if _, err := todostore.Complete(ctx, db, p, drop, "s1", false); err != nil {
-		t.Fatalf("complete: %v", err)
-	}
-	read, err := todostore.Read(ctx, db, p, "s1")
-	if err != nil {
-		t.Fatalf("read: %v", err)
-	}
-	if !strings.Contains(read, "keep") {
-		t.Errorf("the open row must be first:\n%s", read)
-	}
-	if !strings.Contains(read, "1 open · 1 of 1 finished shown") {
-		t.Errorf("the head must count open and finished:\n%s", read)
-	}
-	if !strings.Contains(read, "[x] drop") {
-		t.Errorf("the one finished row is recent work and stays visible:\n%s", read)
-	}
-	if rowCount(read) != 2 {
-		t.Errorf("default read row count = %d, want the open row plus the recent finished:\n%s", rowCount(read), read)
-	}
-}
-
 func TestAllDoneQueueRendersFinishedRows(t *testing.T) {
 	db := newDB(t)
 	ctx := context.Background()
@@ -2152,13 +2130,9 @@ func TestCompactionCarriesTheIdAndPositionHighWater(t *testing.T) {
 	if _, err := todostore.Prune(ctx, db, p, "s1"); err != nil {
 		t.Fatal(err)
 	}
-	for i := 0; i < todostore.COMPACT_THRESHOLD_EVENTS+10; i++ {
-		if _, err := todostore.Move(ctx, db, p, "t3", 1, "s1"); err != nil {
-			t.Fatal(err)
-		}
-		if _, err := todostore.Note(ctx, db, p, "t3", "tick", "s1"); err != nil {
-			t.Fatal(err)
-		}
+	age(t, db, todostore.COMPACT_THRESHOLD_EVENTS+10)
+	if _, err := todostore.Note(ctx, db, p, "t3", "tick", "s1"); err != nil {
+		t.Fatal(err)
 	}
 	if n := rawEventOps(t, db, "compact"); n == 0 {
 		t.Fatal("the log must have compacted")

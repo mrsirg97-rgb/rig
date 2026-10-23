@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 
 	sched "github.com/mrsirg97-rgb/rig/v3/store/scheduler"
@@ -88,17 +89,56 @@ func parseMenu(b []byte) (int, error) {
 	return n, err
 }
 
+var bins struct {
+	sync.Mutex
+	dir   string
+	built map[string]string
+}
+
 func buildBinAt(t *testing.T, binDir, root string) string {
 	t.Helper()
 	abs, err := filepath.Abs(root)
 	if err != nil {
 		t.Fatal(err)
 	}
+	bins.Lock()
+	src, ok := bins.built[abs]
+	if !ok {
+		if bins.dir == "" {
+			home, herr := os.UserHomeDir()
+			if herr != nil {
+				bins.Unlock()
+				t.Fatal(herr)
+			}
+			dir, err := os.MkdirTemp(home, "rigbin")
+			if err != nil {
+				bins.Unlock()
+				t.Fatal(err)
+			}
+			bins.dir = dir
+		}
+		src = filepath.Join(bins.dir, fmt.Sprintf("rig-%d", len(bins.built)))
+		cmd := exec.Command("go", "build", "-o", src, "./cmd/rig")
+		cmd.Dir = abs
+		if out, err := cmd.CombinedOutput(); err != nil {
+			bins.Unlock()
+			t.Fatalf("build: %v\n%s", err, out)
+		}
+		if bins.built == nil {
+			bins.built = map[string]string{}
+		}
+		bins.built[abs] = src
+	}
+	bins.Unlock()
 	bin := filepath.Join(binDir, "rig")
-	cmd := exec.Command("go", "build", "-o", bin, "./cmd/rig")
-	cmd.Dir = abs
-	if out, err := cmd.CombinedOutput(); err != nil {
-		t.Fatalf("build: %v\n%s", err, out)
+	if err := os.Link(src, bin); err != nil {
+		body, rerr := os.ReadFile(src)
+		if rerr != nil {
+			t.Fatal(rerr)
+		}
+		if werr := os.WriteFile(bin, body, 0o755); werr != nil {
+			t.Fatal(werr)
+		}
 	}
 	return bin
 }

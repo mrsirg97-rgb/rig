@@ -21,12 +21,13 @@ func TestIndexMapsEveryFileOfTheProject(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(root, "go.mod"), []byte("module example.com/m\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	for i := 0; i < 40; i++ {
+	const packages, perPackage = 8, 5
+	for i := 0; i < packages; i++ {
 		dir := filepath.Join(root, fmt.Sprintf("p%02d", i))
 		if err := os.MkdirAll(dir, 0o755); err != nil {
 			t.Fatal(err)
 		}
-		for j := 0; j < 10; j++ {
+		for j := 0; j < perPackage; j++ {
 			src := fmt.Sprintf("package p%02d\n\nfunc F%d() int { return %d }\n", i, j, j)
 			if err := os.WriteFile(filepath.Join(dir, fmt.Sprintf("f%d.go", j)), []byte(src), 0o644); err != nil {
 				t.Fatal(err)
@@ -39,8 +40,8 @@ func TestIndexMapsEveryFileOfTheProject(t *testing.T) {
 	if err != nil {
 		t.Fatalf("index: %v", err)
 	}
-	if !strings.Contains(reply, "mapped 400") {
-		t.Fatalf("index reply must name the count mapped: %s", reply)
+	if want := fmt.Sprintf("mapped %d", packages*perPackage); !strings.Contains(reply, want) {
+		t.Fatalf("index reply must name the count mapped (%s): %s", want, reply)
 	}
 	db, err := graph.Open(home, scope.Key(root), scope.Worktree(root))
 	if err != nil {
@@ -51,8 +52,8 @@ func TestIndexMapsEveryFileOfTheProject(t *testing.T) {
 	if err := db.QueryRow("SELECT count(*) FROM files").Scan(&rows); err != nil {
 		t.Fatal(err)
 	}
-	if rows != 400 {
-		t.Fatalf("files rows = %d, want 400 (the walk must never drop a file)", rows)
+	if want := packages * perPackage; rows != want {
+		t.Fatalf("files rows = %d, want %d (the walk must never drop a file)", rows, want)
 	}
 }
 

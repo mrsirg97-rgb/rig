@@ -220,7 +220,6 @@ func TestTheSnapshotCarriesEachWorkersLastCall(t *testing.T) {
 	h := newHarness(t, "/ws/sess")
 	room, fe := newFleetRoom(t)
 	var settled atomic.Bool
-	defer settled.Store(true)
 	spawn := &callSpawn{started: make(chan struct{}), until: settled.Load}
 	tool := h.newToolRoom(t, context.Background(), false, room, fakeFetch(""), spawn.spawn)
 	if _, err := tool.Exec(context.Background(), runArgs("read the file")); err != nil {
@@ -252,6 +251,10 @@ func TestTheSnapshotCarriesEachWorkersLastCall(t *testing.T) {
 		st := fe.statuses()
 		w := st[len(st)-1].Workers
 		return len(w) == 1 && w[0].Tool == "bash go test ./..."
+	})
+	t.Cleanup(func() {
+		settled.Store(true)
+		waitForReturn(t, fe, 1)
 	})
 }
 
