@@ -161,14 +161,14 @@ func TestSwitchThemeWithTheFileOnDiskReadsTheDial(t *testing.T) {
 	if err := r.switchTheme(context.Background(), "cool"); err != nil {
 		t.Fatalf("switchTheme(cool): %v", err)
 	}
-	if env := r.commandEnv(); env.Theme() != "cool" {
+	if env := r.commandEnv(commandEnvInput{}); env.Theme() != "cool" {
 		t.Fatalf("the bare read = %q, want cool (the dial beats the file)", env.Theme())
 	}
 }
 
 func TestCommandEnvCarriesTheThemeSeam(t *testing.T) {
 	r := themeRoot(t, &themeRepaintFrontend{})
-	env := r.commandEnv()
+	env := r.commandEnv(commandEnvInput{})
 	if env.Theme == nil || env.SetTheme == nil {
 		t.Fatal("the env must carry the theme read and write seams")
 	}

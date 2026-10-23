@@ -25,17 +25,19 @@ func (r *root) statusNow(ctx context.Context, db store.DB) (tui.StatusIn, error)
 	if eff == "" {
 		eff = r.row.Effort
 	}
-	b := tui.StatusIn{Model: r.activeID, Effort: eff, Window: r.row.Window, Role: r.role, Approve: r.approve, Workers: "resident"}
+	base := tui.StatusIn{Model: r.activeID, Effort: eff, Window: r.row.Window, Role: r.role, Approve: r.approve, Workers: "resident"}
 	if r.session == nil {
-		return b, nil
+		return base, nil
 	}
-	b.Session = r.session.ID
 	totals, err := state.UsageTotalsFor(ctx, db, r.session.ID)
 	if err != nil {
-		return b, err
+		return base, err
 	}
-	b.Up, b.Down, b.CacheRead, b.Cost = totals.Prompt, totals.Completion, totals.CacheRead, totals.Cost
-	return b, nil
+	return tui.StatusIn{
+		Model: r.activeID, Effort: eff, Window: r.row.Window, Role: r.role, Approve: r.approve,
+		Workers: "resident", Session: r.session.ID,
+		Up: totals.Prompt, Down: totals.Completion, CacheRead: totals.CacheRead, Cost: totals.Cost,
+	}, nil
 }
 
 func (r *root) statusSnapshot(ctx context.Context, db store.DB) (tui.StatusIn, bool) {

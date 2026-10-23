@@ -578,9 +578,10 @@ func rigMain() int {
 	})
 
 	menus := newTrainerMenu(cfgDir, cwd)
-	env := r.commandEnv()
-	env.DecisionTrain = decisionTrainEnqueue(scdb, cfgDir, self, cwd, sched.RealCrontab(""), menus.stall)
-	env.Trainers = menus.names
+	env := r.commandEnv(commandEnvInput{
+		decisionTrain: decisionTrainEnqueue(scdb, cfgDir, self, cwd, sched.RealCrontab(""), menus.stall),
+		trainers:      menus.names,
+	})
 
 	var fe core.Frontend
 	var webSrv *web.Server
