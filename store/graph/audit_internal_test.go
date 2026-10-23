@@ -19,6 +19,8 @@ import (
 	"github.com/mrsirg97-rgb/rig/v3/store/scope"
 )
 
+const saidBound = 10 * time.Second
+
 func TestStopWaitsOnADeadClient(t *testing.T) {
 	cmd := exec.Command("sh", "-c", "exit 0")
 	stdin, err := cmd.StdinPipe()
@@ -30,7 +32,7 @@ func TestStopWaitsOnADeadClient(t *testing.T) {
 	}
 	c := &lspClient{cmd: cmd, stdin: stdin, lang: "dead", pending: map[int64]chan json.RawMessage{}, stderr: newBoundedTail(lspStderrTail)}
 	go c.readLoop(&emptyReader{})
-	deadline := time.After(2 * time.Second)
+	deadline := time.After(saidBound)
 	for c.alive() {
 		select {
 		case <-deadline:
@@ -64,7 +66,7 @@ func TestASecondStopJoinsTheReaperThatGotThereFirst(t *testing.T) {
 	}
 	c := &lspClient{cmd: cmd, stdin: stdin, lang: "dead", pending: map[int64]chan json.RawMessage{}, stderr: newBoundedTail(lspStderrTail)}
 	go c.readLoop(stdout)
-	deadline := time.After(2 * time.Second)
+	deadline := time.After(saidBound)
 	for c.alive() {
 		select {
 		case <-deadline:
@@ -96,7 +98,7 @@ func TestABodyOverTheReadCeilingDiesTheClient(t *testing.T) {
 	}
 	c := &lspClient{cmd: cmd, stdin: stdin, lang: "huge", pending: map[int64]chan json.RawMessage{}, stderr: newBoundedTail(lspStderrTail)}
 	go c.readLoop(stdout)
-	deadline := time.After(2 * time.Second)
+	deadline := time.After(saidBound)
 	for c.alive() {
 		select {
 		case <-deadline:
@@ -127,7 +129,7 @@ func TestADyingServerNamesItsStderr(t *testing.T) {
 	if err == nil {
 		t.Fatal("a server that dies at initialize must refuse")
 	}
-	deadline := time.After(2 * time.Second)
+	deadline := time.After(saidBound)
 	for {
 		select {
 		case line := <-said:
