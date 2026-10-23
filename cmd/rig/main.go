@@ -660,16 +660,12 @@ func rigMain() int {
 
 	var packScorer graph.Scorer
 	if decisionURL != "" {
-		dec, derr := decision.NewHTTP(decision.HTTPOptions{URL: decisionURL})
+		dec, derr := decision.NewHTTP(decisionURL)
 		if derr != nil {
 			fmt.Fprintln(os.Stderr, "rig: decision:", derr)
 			return 1
 		}
-		dtool, derr := decision.NewDecide(decision.DecideOptions{
-			Decider:  dec,
-			Recorder: r.drec,
-			Parallel: rig.DefaultParallel,
-		})
+		dtool, derr := decision.NewDecide(dec, rig.DefaultParallel, decision.WithRecorder(r.drec))
 		if derr != nil {
 			fmt.Fprintln(os.Stderr, "rig: decision:", derr)
 			return 1

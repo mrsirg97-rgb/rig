@@ -175,7 +175,7 @@ func TestAProposalIsPending(t *testing.T) {
 	if row.Confidence == nil || *row.Confidence != 0.71 {
 		t.Fatalf("the confidence rides the row: %+v", row.Confidence)
 	}
-	if row.Question.Kind != decision.KindChoice || len(row.Question.Choices) != 3 {
+	if row.Question.Kind() != decision.KindChoice || len(row.Question.Choices()) != 3 {
 		t.Fatalf("the typed question round-trips: %+v", row.Question)
 	}
 }
@@ -460,8 +460,8 @@ func TestAStoredYesnoRowReadsAsABinary(t *testing.T) {
 	if err != nil || len(rows) != 1 {
 		t.Fatalf("one pending row: %d %v", len(rows), err)
 	}
-	if rows[0].Question.Kind != decision.KindBinary {
-		t.Fatalf("a row written as yesno reads as %q, want binary", rows[0].Question.Kind)
+	if rows[0].Question.Kind() != decision.KindBinary {
+		t.Fatalf("a row written as yesno reads as %q, want binary", rows[0].Question.Kind())
 	}
 }
 

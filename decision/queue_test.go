@@ -156,7 +156,7 @@ func TestAReplyWithProbabilitiesStoresTheMassOnTheRow(t *testing.T) {
 		_, _ = w.Write([]byte(`{"answers": {"risk": {"type": "choice", "choice": "safe",
 			"probabilities": {"safe": 0.71, "changes": 0.2, "dangerous": 0.09}}}}`))
 	}))
-	dec, err := decision.NewHTTP(decision.HTTPOptions{URL: srv.URL, Client: testClient(), Decider: "laya"})
+	dec, err := decision.NewHTTP(srv.URL, decision.WithHTTPClient(testClient()), decision.WithHTTPName("laya"))
 	if err != nil {
 		t.Fatal(err)
 	}

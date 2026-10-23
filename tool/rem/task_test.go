@@ -174,7 +174,7 @@ func taskModule(t *testing.T, answer func(item string) (map[string]any, bool), o
 	t.Helper()
 	probe := &taskProbe{}
 	db := openDecisionStore(t)
-	dec, err := decision.NewHTTP(decision.HTTPOptions{URL: taskServer(t, probe, answer).URL, Client: &http.Client{Transport: testenv.Transport()}})
+	dec, err := decision.NewHTTP(taskServer(t, probe, answer).URL, decision.WithHTTPClient(&http.Client{Transport: testenv.Transport()}))
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -13,11 +13,7 @@ import (
 
 const packQuestionID = "matter"
 
-var packQuestion = Question{
-	ID:     packQuestionID,
-	Kind:   KindBinary,
-	Prompt: "Does this symbol matter for the task?",
-}
+var packQuestion = Binary(packQuestionID, "Does this symbol matter for the task?")
 
 type packState struct {
 	Task string `json:"task"`
@@ -66,7 +62,7 @@ func (s *PackScorer) Score(ctx context.Context, task string, items []string) ([]
 	}
 	out := make([]PackVerdict, len(items))
 	for i, a := range answers {
-		if a.Question != packQuestion.ID {
+		if a.Question != packQuestion.ID() {
 			continue
 		}
 		out[i] = PackVerdict{

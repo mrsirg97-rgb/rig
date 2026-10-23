@@ -13,12 +13,20 @@ it). Stdlib-only leaf; no imports of the stores; its one leaf import is
 
 ## What it includes
 
-- `decision.go`: the types (Question, Answer, Final), the two interfaces,
-  the kind/status/site vocabulary as constants, and the question
-  constructors (`Choice`, `Score`, `Binary`). A choice carries a
-  description per label (`Description`), a score carries its ordered
-  criteria list (`Criteria`).
-- `http.go`: the HTTP `Decider` (settings `decisionUrl`), speaking
+- `decision.go`: `Question` is a read-only interface of getters over an
+  unexported struct, built whole by `NewQuestion` (parts in
+  `QuestionInput`, knobs as `QuestionOption`s) or by the `Choice`,
+  `Score` and `Binary` constructors; a choice carries a description per
+  label, a score its ordered criteria list, and the getters hand back
+  copies. The wire is a private struct (`id`, `kind`, `prompt`,
+  `choices`, `description`, `criteria`, the same tags 3.4.0 wrote), so
+  `json.Marshal` keeps the bytes; `ParseQuestion` decodes through the
+  same constructor and normalizes the legacy `yesno` kind. Beside it
+  the `Answer` and `Final` values, the two interfaces (Decider,
+  Recorder), and the kind/status/site vocabulary as constants.
+- `http.go`: `NewHTTP(url, opts...)` builds the HTTP `Decider` (the URL
+  is the required part; `WithHTTPClient` and `WithHTTPName` the knobs),
+  speaking
   Laya's wire: POST `<decisionUrl>/v1/systemone` with the state and the
   questions keyed by id (`type`, `instructions`, `criteria` — the map of
   label to meaning for a choice, the ordered list for a score, nothing

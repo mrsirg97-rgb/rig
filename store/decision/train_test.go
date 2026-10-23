@@ -53,7 +53,7 @@ func TestGoldReadsTheSettledRows(t *testing.T) {
 	if rows[1].Status != decision.StatusDenied || rows[1].Corrected == nil || *rows[1].Corrected != "the label is dangerous" {
 		t.Fatalf("a denied row carries its correction: %+v", rows[1])
 	}
-	if rows[0].Question.Kind != decision.KindChoice || rows[0].Question.ID != "risk" {
+	if rows[0].Question.Kind() != decision.KindChoice || rows[0].Question.ID() != "risk" {
 		t.Fatalf("the question rides the row: %+v", rows[0].Question)
 	}
 }
@@ -70,7 +70,7 @@ func TestGoldReadsTheLegacyYesnoKindAsBinary(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(rows) != 1 || rows[0].Question.Kind != decision.KindBinary {
+	if len(rows) != 1 || rows[0].Question.Kind() != decision.KindBinary {
 		t.Fatalf("the legacy kind reads as binary: %+v", rows)
 	}
 }

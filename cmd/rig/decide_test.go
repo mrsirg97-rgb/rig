@@ -30,7 +30,7 @@ func (f fakeDecider) Decide(ctx context.Context, state string, questions []decis
 
 func wiredDecide(t *testing.T, rec decision.Recorder, reply func(state string) decision.Answer) decision.Decide {
 	t.Helper()
-	d, err := decision.NewDecide(decision.DecideOptions{Decider: fakeDecider{reply: reply}, Recorder: rec, Parallel: 1})
+	d, err := decision.NewDecide(fakeDecider{reply: reply}, 1, decision.WithRecorder(rec))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -188,7 +188,7 @@ func (o *overlapDecider) Decide(ctx context.Context, state string, questions []d
 
 func TestTheFanOutStaysBoundedAtOne(t *testing.T) {
 	o := &overlapDecider{}
-	d, err := decision.NewDecide(decision.DecideOptions{Decider: o, Parallel: 1})
+	d, err := decision.NewDecide(o, 1)
 	if err != nil {
 		t.Fatal(err)
 	}

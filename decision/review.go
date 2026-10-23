@@ -382,9 +382,9 @@ func reviewPrompt(rows []ReviewRow) string {
 func rowBlock(row ReviewRow) string {
 	var b strings.Builder
 	b.WriteString("\n== " + strconv.FormatInt(row.ID, 10) + " · " + row.Site + "\n")
-	b.WriteString("question: " + row.Question.Prompt)
-	if row.Question.Kind == KindChoice && len(row.Question.Choices) > 0 {
-		b.WriteString(" (choice: " + strings.Join(row.Question.Choices, ", ") + ")")
+	b.WriteString("question: " + row.Question.Prompt())
+	if row.Question.Kind() == KindChoice && len(row.Question.Choices()) > 0 {
+		b.WriteString(" (choice: " + strings.Join(row.Question.Choices(), ", ") + ")")
 	}
 	b.WriteString("\n")
 	conf := ""

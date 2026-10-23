@@ -89,11 +89,11 @@ func kernelInterpreter(t *testing.T) string {
 	return py
 }
 
-var testRiskQuestion = decision.Question{
-	ID: "risk", Kind: decision.KindChoice, Prompt: "What risk does this bash call carry?",
-	Choices:     []string{"safe", "changes", "dangerous"},
-	Description: map[string]string{"safe": "reads", "changes": "writes", "dangerous": "reaches"},
-}
+var testRiskQuestion = decision.NewQuestion(
+	decision.QuestionInput{ID: "risk", Kind: decision.KindChoice, Prompt: "What risk does this bash call carry?"},
+	decision.WithChoices("safe", "changes", "dangerous"),
+	decision.WithDescription(map[string]string{"safe": "reads", "changes": "writes", "dangerous": "reaches"}),
+)
 
 func seedGoldRows(t *testing.T, home string) {
 	t.Helper()

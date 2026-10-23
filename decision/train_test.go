@@ -24,11 +24,11 @@ func TestParseReviewerLabelReadsEveryLiveRationale(t *testing.T) {
 func goldChoice(id int64, answer string, corrected *string, status string) decision.GoldRow {
 	return decision.GoldRow{
 		ID: id, State: `{"command":"ls"}`,
-		Question: decision.Question{
-			ID: "risk", Kind: decision.KindChoice, Prompt: "What risk does this bash call carry?",
-			Choices:     []string{"safe", "changes", "dangerous"},
-			Description: map[string]string{"safe": "reads", "changes": "writes", "dangerous": "reaches"},
-		},
+		Question: decision.NewQuestion(
+			decision.QuestionInput{ID: "risk", Kind: decision.KindChoice, Prompt: "What risk does this bash call carry?"},
+			decision.WithChoices("safe", "changes", "dangerous"),
+			decision.WithDescription(map[string]string{"safe": "reads", "changes": "writes", "dangerous": "reaches"}),
+		),
 		Answer: answer, Corrected: corrected, Status: status,
 	}
 }
@@ -84,7 +84,7 @@ func TestGoldRowsTakesTheApprovedAnswerAndTheDeniedCorrection(t *testing.T) {
 }
 
 func TestGoldRowsRefusesARowWithNoQuestionID(t *testing.T) {
-	_, err := decision.GoldRows([]decision.GoldRow{{ID: 1, State: "{}", Question: decision.Question{}, Answer: "safe", Status: decision.StatusApproved}})
+	_, err := decision.GoldRows([]decision.GoldRow{{ID: 1, State: "{}", Question: decision.NewQuestion(decision.QuestionInput{}), Answer: "safe", Status: decision.StatusApproved}})
 	if err == nil || !strings.Contains(err.Error(), "no question id") {
 		t.Fatalf("a row with no question id is a store bug and refuses loudly, got %v", err)
 	}

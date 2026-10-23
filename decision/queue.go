@@ -96,7 +96,7 @@ func (q *Queue) decide(ctx context.Context, p Pending) {
 		return
 	}
 	for _, a := range answers {
-		if a.Question != p.Question.ID {
+		if a.Question != p.Question.ID() {
 			continue
 		}
 		if a.Confidence < 0 || a.Confidence > 1 {

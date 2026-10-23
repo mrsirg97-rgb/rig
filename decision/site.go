@@ -14,17 +14,15 @@ import (
 
 const siteStateCap = 4096
 
-var riskQuestion = Question{
-	ID:      "risk",
-	Kind:    KindChoice,
-	Prompt:  "What risk does this bash call carry?",
-	Choices: []string{"safe", "changes", "dangerous"},
-	Description: map[string]string{
+var riskQuestion = NewQuestion(
+	QuestionInput{ID: "risk", Kind: KindChoice, Prompt: "What risk does this bash call carry?"},
+	WithChoices("safe", "changes", "dangerous"),
+	WithDescription(map[string]string{
 		"safe":      "reads or lists; nothing on disk changes",
 		"changes":   "writes only inside the workspace it named",
 		"dangerous": "reaches outside the workspace, deletes, or can destroy state",
-	},
-}
+	}),
+)
 
 type siteLink struct {
 	proposer Proposer

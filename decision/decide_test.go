@@ -122,7 +122,7 @@ func decideServer(t *testing.T, p *probe, reply func(state string) (string, bool
 
 func httpDecider(t *testing.T, url string) decision.Decider {
 	t.Helper()
-	dec, err := decision.NewHTTP(decision.HTTPOptions{URL: url, Client: &http.Client{Transport: testenv.Transport()}})
+	dec, err := decision.NewHTTP(url, decision.WithHTTPClient(&http.Client{Transport: testenv.Transport()}))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -131,7 +131,7 @@ func httpDecider(t *testing.T, url string) decision.Decider {
 
 func testDecide(t *testing.T, dec decision.Decider, rec decision.Recorder, parallel int) decision.Decide {
 	t.Helper()
-	d, err := decision.NewDecide(decision.DecideOptions{Decider: dec, Recorder: rec, Parallel: parallel})
+	d, err := decision.NewDecide(dec, parallel, decision.WithRecorder(rec))
 	if err != nil {
 		t.Fatal(err)
 	}
