@@ -23,7 +23,7 @@ func TestAStallingServerBoundsTheWaitForHeaders(t *testing.T) {
 		srv.Close()
 	}()
 
-	p := anthropic.New(anthropic.Config{BaseURL: srv.URL, Model: "m", MaxTokens: 1024, HeaderTimeout: 50 * time.Millisecond})
+	p := anthropic.New("m", anthropic.WithBaseURL(srv.URL), anthropic.WithMaxTokens(1024), anthropic.WithHeaderTimeout(50*time.Millisecond))
 	start := time.Now()
 	events, err := drain(t, context.Background(), p, userReq())
 	if err != nil {
@@ -60,7 +60,7 @@ func TestAStallingStreamFaultsAfterTheIdleBound(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	p := anthropic.New(anthropic.Config{BaseURL: srv.URL, Model: "m", MaxTokens: 1024, HeaderTimeout: time.Minute, IdleTimeout: 50 * time.Millisecond})
+	p := anthropic.New("m", anthropic.WithBaseURL(srv.URL), anthropic.WithMaxTokens(1024), anthropic.WithHeaderTimeout(time.Minute), anthropic.WithIdleTimeout(50*time.Millisecond))
 	start := time.Now()
 	events, err := drain(t, ctx, p, userReq())
 	if err != nil {
@@ -93,7 +93,7 @@ func TestIdleBoundResetsOnEveryEvent(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	p := anthropic.New(anthropic.Config{BaseURL: srv.URL, Model: "m", MaxTokens: 1024, HeaderTimeout: time.Minute, IdleTimeout: 150 * time.Millisecond})
+	p := anthropic.New("m", anthropic.WithBaseURL(srv.URL), anthropic.WithMaxTokens(1024), anthropic.WithHeaderTimeout(time.Minute), anthropic.WithIdleTimeout(150*time.Millisecond))
 	events, err := drain(t, ctx, p, userReq())
 	if err != nil {
 		t.Fatalf("stream: %v", err)

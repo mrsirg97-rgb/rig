@@ -9,22 +9,24 @@ the wire dialect is this package's problem.
 
 ## What it includes
 
-- `New(Config) core.Provider`: the one constructor. `BaseURL` (default
+- `New(model, opts...) core.Provider`: the one constructor; the model
+  is the required part, the rest are options: `WithBaseURL` (default
   `https://api.anthropic.com`; the request posts `{BaseURL}/v1/messages`
-  with `stream: true`), `Model`, `APIKey` (the `x-api-key`
+  with `stream: true`), `WithAPIKey` (the `x-api-key`
   header; never in a fault, a notice, a log or a wire fixture),
-  `Version` (the `anthropic-version` header; default `2023-06-01`),
-  `MaxTokens` (the fallback when a request carries none — the API
-  requires the field, and a request without one and a Config without
-  one is a loud `Stream` error), `Thinking{Budget}` (the row's
+  `WithVersion` (the `anthropic-version` header; default `2023-06-01`),
+  `WithMaxTokens` (the fallback when a request carries none — the API
+  requires the field, and a request without one and no `WithMaxTokens`
+  is a loud `Stream` error), `WithThinking(budget)` (the row's
   thinking budget; 0 = off, and off sends no thinking blocks in either
-  direction), `CacheControl` (the three breakpoints, below), `Retries`
-  (429 and 5xx), `RetryBase`/`Jitter` (the backoff's test seams),
-  `HeaderTimeout` (zero is the 5-minute default, `HeaderTimeoutOff`
-  removes the bound), `IdleTimeout` (zero is the 10-minute default),
-  `BlobsDir` (vision), and the four per-million prices `InputPrice`,
-  `OutputPrice`, `CacheReadPrice`, `CacheWritePrice` (the cost column:
-  zero when absent, no price table in Go). `Thinking{Budget}` is the
+  direction), `WithCacheControl` (the three breakpoints, below),
+  `WithRetries` (429 and 5xx), `WithRetryBase`/`WithJitter` (the
+  backoff's test seams), `WithHeaderTimeout` (zero is the 5-minute
+  default, `HeaderTimeoutOff` removes the bound), `WithIdleTimeout`
+  (zero is the 10-minute default), `WithBlobsDir` (vision), and the
+  four per-million prices `WithPrices(InputPrice, OutputPrice,
+  CacheReadPrice, CacheWritePrice)` (the cost column:
+  zero when absent, no price table in Go). `WithThinking(budget)` is the
   row's thinking budget; 0 = off, and off sends no thinking blocks in
   either direction. A request whose `max_tokens` leaves no room under
   the budget — the compact clamp lowers it, the summary call sets it —
@@ -88,7 +90,7 @@ the wire dialect is this package's problem.
 ## Gotchas
 
 - An empty message list is a loud `Stream` error, and so is a request
-  and a Config that together carry no `max_tokens`.
+  and no `WithMaxTokens` that together carry no `max_tokens`.
 - A thinking budget needs room to answer: `models.Check` refuses a
   budget at or past the row's `maxTokens`, and one under the API's own
   1,024 floor. A request whose `max_tokens` is lowered under the

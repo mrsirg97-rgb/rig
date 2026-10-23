@@ -307,21 +307,17 @@ func (r *root) buildProvider() core.Provider {
 		headerTimeout = 0
 	}
 	if r.row.Provider == "anthropic" {
-		return anthropic.New(anthropic.Config{
-			BaseURL:         r.row.BaseURL,
-			Model:           r.activeID,
-			APIKey:          r.row.APIKey,
-			MaxTokens:       r.row.MaxTokens,
-			Thinking:        anthropic.Thinking{Budget: r.row.ThinkingBudget},
-			CacheControl:    r.row.CacheControl,
-			Retries:         r.row.Retries,
-			BlobsDir:        r.blobsDir(),
-			HeaderTimeout:   headerTimeout,
-			InputPrice:      r.row.InputPrice,
-			OutputPrice:     r.row.OutputPrice,
-			CacheReadPrice:  r.row.CacheReadPrice,
-			CacheWritePrice: r.row.CacheWritePrice,
-		})
+		return anthropic.New(r.activeID,
+			anthropic.WithBaseURL(r.row.BaseURL),
+			anthropic.WithAPIKey(r.row.APIKey),
+			anthropic.WithMaxTokens(r.row.MaxTokens),
+			anthropic.WithThinking(r.row.ThinkingBudget),
+			anthropic.WithCacheControl(r.row.CacheControl),
+			anthropic.WithRetries(r.row.Retries),
+			anthropic.WithBlobsDir(r.blobsDir()),
+			anthropic.WithHeaderTimeout(headerTimeout),
+			anthropic.WithPrices(r.row.InputPrice, r.row.OutputPrice, r.row.CacheReadPrice, r.row.CacheWritePrice),
+		)
 	}
 	baseURL := r.baseURL
 	if r.row.Port > 0 {
@@ -330,28 +326,22 @@ func (r *root) buildProvider() core.Provider {
 		baseURL = r.row.BaseURL
 	}
 	if !r.row.Remote && r.row.APIKey == "" {
-		cfg := openai.Config{
-			BaseURL:       baseURL,
-			Model:         r.activeID,
-			HeaderTimeout: headerTimeout,
-		}
+		opts := []openai.Option{openai.WithHeaderTimeout(headerTimeout)}
 		if r.row.Vision {
-			cfg.BlobsDir = r.blobsDir()
+			opts = append(opts, openai.WithBlobsDir(r.blobsDir()))
 		}
-		return openai.NewWithConfig(cfg)
+		return openai.New(baseURL, r.activeID, opts...)
 	}
-	return openai.NewWithConfig(openai.Config{
-		BaseURL:       baseURL,
-		Model:         r.activeID,
-		APIKey:        r.row.APIKey,
-		Remote:        r.row.Remote,
-		Reasoning:     r.row.Reasoning,
-		ProviderPin:   r.row.ProviderPin,
-		CacheControl:  r.row.CacheControl,
-		Retries:       r.row.Retries,
-		BlobsDir:      r.blobsDir(),
-		HeaderTimeout: headerTimeout,
-	})
+	return openai.New(baseURL, r.activeID,
+		openai.WithAPIKey(r.row.APIKey),
+		openai.WithRemote(r.row.Remote),
+		openai.WithReasoning(r.row.Reasoning),
+		openai.WithProviderPin(r.row.ProviderPin...),
+		openai.WithCacheControl(r.row.CacheControl),
+		openai.WithRetries(r.row.Retries),
+		openai.WithBlobsDir(r.blobsDir()),
+		openai.WithHeaderTimeout(headerTimeout),
+	)
 }
 
 func (r *root) applyVision() {

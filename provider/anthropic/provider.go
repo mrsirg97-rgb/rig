@@ -34,28 +34,47 @@ type prices struct {
 	write  float64
 }
 
-type Thinking struct {
-	Budget int
+type Option func(*options)
+
+type options struct {
+	baseURL         string
+	apiKey          string
+	version         string
+	maxTokens       int
+	thinking        int
+	cacheControl    bool
+	retries         int
+	retryBase       time.Duration
+	jitter          func() float64
+	headerTimeout   time.Duration
+	idleTimeout     time.Duration
+	blobsDir        string
+	inputPrice      float64
+	outputPrice     float64
+	cacheReadPrice  float64
+	cacheWritePrice float64
 }
 
-type Config struct {
-	BaseURL         string
-	Model           string
-	APIKey          string
-	Version         string
-	MaxTokens       int
-	Thinking        Thinking
-	CacheControl    bool
-	Retries         int
-	RetryBase       time.Duration
-	Jitter          func() float64
-	HeaderTimeout   time.Duration
-	IdleTimeout     time.Duration
-	BlobsDir        string
-	InputPrice      float64
-	OutputPrice     float64
-	CacheReadPrice  float64
-	CacheWritePrice float64
+func WithBaseURL(baseURL string) Option       { return func(o *options) { o.baseURL = baseURL } }
+func WithAPIKey(key string) Option            { return func(o *options) { o.apiKey = key } }
+func WithVersion(version string) Option       { return func(o *options) { o.version = version } }
+func WithMaxTokens(tokens int) Option         { return func(o *options) { o.maxTokens = tokens } }
+func WithThinking(budget int) Option          { return func(o *options) { o.thinking = budget } }
+func WithCacheControl(cache bool) Option      { return func(o *options) { o.cacheControl = cache } }
+func WithRetries(retries int) Option          { return func(o *options) { o.retries = retries } }
+func WithRetryBase(base time.Duration) Option { return func(o *options) { o.retryBase = base } }
+func WithJitter(jitter func() float64) Option { return func(o *options) { o.jitter = jitter } }
+func WithHeaderTimeout(timeout time.Duration) Option {
+	return func(o *options) { o.headerTimeout = timeout }
+}
+func WithIdleTimeout(timeout time.Duration) Option {
+	return func(o *options) { o.idleTimeout = timeout }
+}
+func WithBlobsDir(dir string) Option { return func(o *options) { o.blobsDir = dir } }
+func WithPrices(input, output, read, write float64) Option {
+	return func(o *options) {
+		o.inputPrice, o.outputPrice, o.cacheReadPrice, o.cacheWritePrice = input, output, read, write
+	}
 }
 
 const (
@@ -66,58 +85,62 @@ const (
 	defaultRetryBase     = 500 * time.Millisecond
 )
 
-func New(cfg Config) core.Provider {
-	headerTimeout := cfg.HeaderTimeout
+func New(model string, opts ...Option) core.Provider {
+	o := &options{}
+	for _, opt := range opts {
+		opt(o)
+	}
+	headerTimeout := o.headerTimeout
 	if headerTimeout == 0 {
 		headerTimeout = defaultHeaderTimeout
 	}
 	if headerTimeout < 0 {
 		headerTimeout = 0
 	}
-	idleTimeout := cfg.IdleTimeout
+	idleTimeout := o.idleTimeout
 	if idleTimeout <= 0 {
 		idleTimeout = defaultIdleTimeout
 	}
-	baseURL := cfg.BaseURL
+	baseURL := o.baseURL
 	if baseURL == "" {
 		baseURL = defaultBaseURL
 	}
-	version := cfg.Version
+	version := o.version
 	if version == "" {
 		version = defaultVersion
 	}
-	base := cfg.RetryBase
+	base := o.retryBase
 	if base <= 0 {
 		base = defaultRetryBase
 	}
-	jitter := cfg.Jitter
+	jitter := o.jitter
 	if jitter == nil {
 		jitter = rand.Float64
 	}
 	var blobs *blobStore
-	if cfg.BlobsDir != "" {
-		blobs = &blobStore{dir: cfg.BlobsDir}
+	if o.blobsDir != "" {
+		blobs = &blobStore{dir: o.blobsDir}
 	}
 	transport := http.DefaultTransport.(*http.Transport).Clone()
 	transport.ResponseHeaderTimeout = headerTimeout
 	return &provider{
 		baseURL:   strings.TrimRight(baseURL, "/"),
-		model:     cfg.Model,
+		model:     model,
 		client:    &http.Client{Transport: transport},
 		idle:      idleTimeout,
-		apiKey:    cfg.APIKey,
+		apiKey:    o.apiKey,
 		version:   version,
-		maxTokens: cfg.MaxTokens,
-		budget:    cfg.Thinking.Budget,
-		cache:     cfg.CacheControl,
-		retries:   cfg.Retries,
+		maxTokens: o.maxTokens,
+		budget:    o.thinking,
+		cache:     o.cacheControl,
+		retries:   o.retries,
 		base:      base,
 		jitter:    jitter,
 		prices: prices{
-			input:  cfg.InputPrice,
-			output: cfg.OutputPrice,
-			read:   cfg.CacheReadPrice,
-			write:  cfg.CacheWritePrice,
+			input:  o.inputPrice,
+			output: o.outputPrice,
+			read:   o.cacheReadPrice,
+			write:  o.cacheWritePrice,
 		},
 		blobs: blobs,
 	}

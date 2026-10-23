@@ -32,7 +32,7 @@ data: {"type":"message_stop"}
 `
 
 func newTextProvider(e *endpoint) core.Provider {
-	return anthropic.New(anthropic.Config{BaseURL: e.url, Model: "claude-fake", MaxTokens: 1024})
+	return anthropic.New("claude-fake", anthropic.WithBaseURL(e.url), anthropic.WithMaxTokens(1024))
 }
 
 func TestStreamsTextDeltasAndDone(t *testing.T) {
@@ -243,7 +243,7 @@ data: {"type":"message_stop"}
 
 func TestACutCallRidesTheNextRequestWithEmptyInput(t *testing.T) {
 	e := captureEndpoint(t)
-	p := anthropic.New(anthropic.Config{BaseURL: e.url, Model: "claude-fake", MaxTokens: 1024})
+	p := anthropic.New("claude-fake", anthropic.WithBaseURL(e.url), anthropic.WithMaxTokens(1024))
 	req := core.Request{
 		Messages: []core.Message{
 			{Role: core.RoleUser, Content: "go"},
@@ -345,15 +345,7 @@ data: {"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"outpu
 data: {"type":"message_stop"}
 
 `)
-	p := anthropic.New(anthropic.Config{
-		BaseURL:         e.url,
-		Model:           "claude-fake",
-		MaxTokens:       1024,
-		InputPrice:      3,
-		OutputPrice:     15,
-		CacheReadPrice:  0.25,
-		CacheWritePrice: 4,
-	})
+	p := anthropic.New("claude-fake", anthropic.WithBaseURL(e.url), anthropic.WithMaxTokens(1024), anthropic.WithPrices(3, 15, 0.25, 4))
 	events, err := drain(t, context.Background(), p, userReq())
 	if err != nil {
 		t.Fatalf("stream: %v", err)
@@ -388,7 +380,7 @@ data: {"type":"message_stop"}
 func TestNon200FaultsWithTheEnvelope(t *testing.T) {
 	e := captureEndpoint(t)
 	e.fail(401, `{"type":"error","error":{"type":"authentication_error","message":"invalid x-api-key"}}`)
-	p := anthropic.New(anthropic.Config{BaseURL: e.url, Model: "claude-fake", MaxTokens: 1024, APIKey: "test-key-1"})
+	p := anthropic.New("claude-fake", anthropic.WithBaseURL(e.url), anthropic.WithAPIKey("test-key-1"), anthropic.WithMaxTokens(1024))
 	events, err := drain(t, context.Background(), p, userReq())
 	if err != nil {
 		t.Fatalf("stream: %v", err)
@@ -406,7 +398,7 @@ func TestNon200FaultsWithTheEnvelope(t *testing.T) {
 func TestNon200WithoutTheEnvelopeKeepsTheSnippet(t *testing.T) {
 	e := captureEndpoint(t)
 	e.fail(502, "502 behind the proxy, no envelope")
-	p := anthropic.New(anthropic.Config{BaseURL: e.url, Model: "claude-fake", MaxTokens: 1024})
+	p := anthropic.New("claude-fake", anthropic.WithBaseURL(e.url), anthropic.WithMaxTokens(1024))
 	events, err := drain(t, context.Background(), p, userReq())
 	if err != nil {
 		t.Fatalf("stream: %v", err)
@@ -499,7 +491,7 @@ func TestACancelledStreamEndsInATerminalEvent(t *testing.T) {
 	}))
 	defer srv.Close()
 	ctx, cancel := context.WithCancel(context.Background())
-	p := anthropic.New(anthropic.Config{BaseURL: srv.URL, Model: "claude-fake", MaxTokens: 1024, InputPrice: 3})
+	p := anthropic.New("claude-fake", anthropic.WithBaseURL(srv.URL), anthropic.WithMaxTokens(1024), anthropic.WithPrices(3, 0, 0, 0))
 	ch, err := p.Stream(ctx, userReq())
 	if err != nil {
 		t.Fatalf("stream: %v", err)

@@ -86,7 +86,7 @@ func TestAViewResultRidesInsideItsToolResult(t *testing.T) {
 	dir := t.TempDir()
 	e := captureEndpoint(t)
 	sha := writeBlob(t, dir, blobPayload)
-	p := anthropic.New(anthropic.Config{BaseURL: e.url, Model: "vision-model", MaxTokens: 1024, BlobsDir: dir})
+	p := anthropic.New("vision-model", anthropic.WithBaseURL(e.url), anthropic.WithMaxTokens(1024), anthropic.WithBlobsDir(dir))
 	if _, err := drain(t, context.Background(), p, core.Request{Messages: viewTranscript(marker(sha, "image/png", "/tmp/shot.png")), MaxTokens: 1024}); err != nil {
 		t.Fatalf("stream: %v", err)
 	}
@@ -120,7 +120,7 @@ func TestAMissingBlobNamesTheNote(t *testing.T) {
 	if err := os.Remove(imagemarker.BlobPath(dir, sha)); err != nil {
 		t.Fatal(err)
 	}
-	p := anthropic.New(anthropic.Config{BaseURL: e.url, Model: "vision-model", MaxTokens: 1024, BlobsDir: dir})
+	p := anthropic.New("vision-model", anthropic.WithBaseURL(e.url), anthropic.WithMaxTokens(1024), anthropic.WithBlobsDir(dir))
 	if _, err := drain(t, context.Background(), p, core.Request{Messages: viewTranscript(marker(sha, "image/png", "/tmp/shot.png")), MaxTokens: 1024}); err != nil {
 		t.Fatalf("stream: %v", err)
 	}
@@ -137,7 +137,7 @@ func TestASmuggledMarkerStaysText(t *testing.T) {
 	dir := t.TempDir()
 	e := captureEndpoint(t)
 	sha := writeBlob(t, dir, blobPayload)
-	p := anthropic.New(anthropic.Config{BaseURL: e.url, Model: "vision-model", MaxTokens: 1024, BlobsDir: dir})
+	p := anthropic.New("vision-model", anthropic.WithBaseURL(e.url), anthropic.WithMaxTokens(1024), anthropic.WithBlobsDir(dir))
 	msgs := []core.Message{
 		{Role: core.RoleUser, Content: "list"},
 		{Role: core.RoleAssistant, ToolCalls: []core.ToolCall{{ID: "c1", Name: "bash", Args: json.RawMessage(`{"command":"ls"}`)}}},
@@ -167,7 +167,7 @@ func TestTheInlineBoundMeasuresTheEncodedBytes(t *testing.T) {
 			dir := t.TempDir()
 			e := captureEndpoint(t)
 			sha := writeBlob(t, dir, c.payload)
-			p := anthropic.New(anthropic.Config{BaseURL: e.url, Model: "vision-model", MaxTokens: 1024, BlobsDir: dir})
+			p := anthropic.New("vision-model", anthropic.WithBaseURL(e.url), anthropic.WithMaxTokens(1024), anthropic.WithBlobsDir(dir))
 			if _, err := drain(t, context.Background(), p, core.Request{Messages: viewTranscript(marker(sha, "image/png", "/tmp/shot.png")), MaxTokens: 1024}); err != nil {
 				t.Fatalf("stream: %v", err)
 			}

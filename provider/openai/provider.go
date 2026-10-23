@@ -29,20 +29,20 @@ type provider struct {
 	jitter  func() float64
 }
 
-type Config struct {
-	BaseURL       string
-	Model         string
-	APIKey        string
-	Remote        bool
-	Reasoning     string
-	ProviderPin   []string
-	CacheControl  bool
-	Retries       int
-	RetryBase     time.Duration
-	Jitter        func() float64
-	HeaderTimeout time.Duration
-	IdleTimeout   time.Duration
-	BlobsDir      string
+type Option func(*options)
+
+type options struct {
+	apiKey        string
+	remote        bool
+	reasoning     string
+	pin           []string
+	cache         bool
+	retries       int
+	retryBase     time.Duration
+	jitter        func() float64
+	headerTimeout time.Duration
+	idleTimeout   time.Duration
+	blobsDir      string
 }
 
 const (
@@ -52,32 +52,45 @@ const (
 	defaultEmptyRetries  = 3
 )
 
-func New(baseURL, model string) core.Provider {
-	return NewWithTimeouts(baseURL, model, defaultHeaderTimeout, defaultIdleTimeout)
+func WithAPIKey(key string) Option          { return func(o *options) { o.apiKey = key } }
+func WithRemote(remote bool) Option         { return func(o *options) { o.remote = remote } }
+func WithReasoning(reasoning string) Option { return func(o *options) { o.reasoning = reasoning } }
+func WithProviderPin(pin ...string) Option {
+	return func(o *options) { o.pin = append([]string(nil), pin...) }
 }
-
-func NewWithTimeouts(baseURL, model string, headerTimeout, idleTimeout time.Duration) core.Provider {
-	return newProvider(baseURL, model, headerTimeout, idleTimeout, nil, Config{})
+func WithCacheControl(cache bool) Option { return func(o *options) { o.cache = cache } }
+func WithRetries(retries int) Option     { return func(o *options) { o.retries = retries } }
+func WithRetryBase(base time.Duration) Option {
+	return func(o *options) { o.retryBase = base }
 }
+func WithJitter(jitter func() float64) Option { return func(o *options) { o.jitter = jitter } }
+func WithHeaderTimeout(timeout time.Duration) Option {
+	return func(o *options) { o.headerTimeout = timeout }
+}
+func WithIdleTimeout(timeout time.Duration) Option {
+	return func(o *options) { o.idleTimeout = timeout }
+}
+func WithBlobsDir(dir string) Option { return func(o *options) { o.blobsDir = dir } }
 
-func NewWithConfig(cfg Config) core.Provider {
-	idleTimeout := cfg.IdleTimeout
-	if idleTimeout <= 0 {
-		idleTimeout = defaultIdleTimeout
+func New(baseURL, model string, opts ...Option) core.Provider {
+	o := &options{headerTimeout: defaultHeaderTimeout, idleTimeout: defaultIdleTimeout}
+	for _, opt := range opts {
+		opt(o)
 	}
-	var imgs *imageStore
-	if cfg.BlobsDir != "" {
-		imgs = &imageStore{dir: cfg.BlobsDir}
-	}
-	return newProvider(cfg.BaseURL, cfg.Model, cfg.HeaderTimeout, idleTimeout, imgs, cfg)
-}
-
-func newProvider(baseURL, model string, headerTimeout, idleTimeout time.Duration, imgs *imageStore, cfg Config) core.Provider {
+	headerTimeout := o.headerTimeout
 	if headerTimeout == 0 {
 		headerTimeout = defaultHeaderTimeout
 	}
 	if headerTimeout < 0 {
 		headerTimeout = 0
+	}
+	idleTimeout := o.idleTimeout
+	if idleTimeout <= 0 {
+		idleTimeout = defaultIdleTimeout
+	}
+	var imgs *imageStore
+	if o.blobsDir != "" {
+		imgs = &imageStore{dir: o.blobsDir}
 	}
 	baseURL = strings.TrimRight(baseURL, "/")
 	transport := http.DefaultTransport.(*http.Transport).Clone()
@@ -88,13 +101,13 @@ func newProvider(baseURL, model string, headerTimeout, idleTimeout time.Duration
 		client:  &http.Client{Transport: transport},
 		idle:    idleTimeout,
 		images:  imgs,
-		apiKey:  cfg.APIKey,
-		remote:  cfg.Remote,
-		pin:     append([]string(nil), cfg.ProviderPin...),
-		cache:   cfg.CacheControl,
-		retries: cfg.Retries,
-		base:    cfg.RetryBase,
-		jitter:  cfg.Jitter,
+		apiKey:  o.apiKey,
+		remote:  o.remote,
+		pin:     append([]string(nil), o.pin...),
+		cache:   o.cache,
+		retries: o.retries,
+		base:    o.retryBase,
+		jitter:  o.jitter,
 	}
 	if p.base <= 0 {
 		p.base = defaultRetryBase
@@ -102,7 +115,7 @@ func newProvider(baseURL, model string, headerTimeout, idleTimeout time.Duration
 	if p.jitter == nil {
 		p.jitter = rand.Float64
 	}
-	p.style = styleFor(cfg.Reasoning)
+	p.style = styleFor(o.reasoning)
 	if strings.HasPrefix(baseURL, "unix:") {
 		sock := strings.TrimPrefix(baseURL, "unix:")
 		p.sock = sock
