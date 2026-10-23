@@ -27,8 +27,8 @@ func (m *muteMember) Act(payload evt.Signal, key int64, priority int, posted fun
 func TestTheTellerAsksTheRoomGateOnceNotPerPost(t *testing.T) {
 	stub := &muteMember{}
 	tell := jobTeller(stub, nil)
-	tell(machineroom.JobStatus{Job: "j1", State: machineroom.JobRunning})
-	tell(machineroom.JobStatus{Job: "j2", State: machineroom.JobRunning})
+	tell(machineroom.NewJobStatus(machineroom.JobStatusInput{Job: "j1", State: machineroom.JobRunning}))
+	tell(machineroom.NewJobStatus(machineroom.JobStatusInput{Job: "j2", State: machineroom.JobRunning}))
 	if stub.asks != 1 {
 		t.Fatalf("the room gate was asked %d times across two posts, want once at the teller's build", stub.asks)
 	}
@@ -62,7 +62,7 @@ func TestATerminalPostNeverAcknowledgedReturnsInsideTheBound(t *testing.T) {
 	tell := jobTeller(&muteMember{}, voice)
 	done := make(chan struct{})
 	go func() {
-		tell(machineroom.JobStatus{Job: "j1", State: machineroom.JobDone})
+		tell(machineroom.NewJobStatus(machineroom.JobStatusInput{Job: "j1", State: machineroom.JobDone}))
 		close(done)
 	}()
 	select {
@@ -75,7 +75,7 @@ func TestATerminalPostNeverAcknowledgedReturnsInsideTheBound(t *testing.T) {
 func TestAGivenUpTerminalPostIsSaidLoud(t *testing.T) {
 	f, voice := newTellFixture(t)
 	tell := jobTeller(&muteMember{}, voice)
-	go tell(machineroom.JobStatus{Job: "j1", State: machineroom.JobDone})
+	go tell(machineroom.NewJobStatus(machineroom.JobStatusInput{Job: "j1", State: machineroom.JobDone}))
 	select {
 	case n := <-f.notices:
 		if n.Level != evt.LevelError {

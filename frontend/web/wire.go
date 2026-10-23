@@ -283,7 +283,7 @@ func (s *Server) handleUnload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	pinned := make(chan bool, 1)
-	s.machine.Act(room.StopChild{Model: row.ID, Grace: row.StopGrace}, room.KeyOf(row.ID), room.PriorityChild, func(ok bool) { pinned <- ok })
+	s.machine.Act(room.NewStopChild(row.ID, row.StopGrace), room.KeyOf(row.ID), room.PriorityChild, func(ok bool) { pinned <- ok })
 	select {
 	case ok := <-pinned:
 		if !ok {

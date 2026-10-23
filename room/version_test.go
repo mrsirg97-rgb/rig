@@ -16,19 +16,19 @@ func registry3_1() (broadcast.Registry, error) {
 	if err != nil {
 		return nil, err
 	}
-	if reg, err = jsonDeclare[StartChild](reg, "room/start-child"); err != nil {
+	if reg, err = broadcast.Declare[*startChild](reg, "room/start-child", encodeStartChild, decodeStartChild); err != nil {
 		return nil, err
 	}
-	if reg, err = jsonDeclare[StopChild](reg, "room/stop-child"); err != nil {
+	if reg, err = broadcast.Declare[*stopChild](reg, "room/stop-child", encodeStopChild, decodeStopChild); err != nil {
 		return nil, err
 	}
-	if reg, err = jsonDeclare[SwapChild](reg, "room/swap-child"); err != nil {
+	if reg, err = broadcast.Declare[*swapChild](reg, "room/swap-child", encodeSwapChild, decodeSwapChild); err != nil {
 		return nil, err
 	}
-	if reg, err = jsonDeclare[TableChange](reg, "room/table-change"); err != nil {
+	if reg, err = broadcast.Declare[*tableChange](reg, "room/table-change", encodeTableChange, decodeTableChange); err != nil {
 		return nil, err
 	}
-	return jsonDeclare[Update](reg, "room/update")
+	return broadcast.Declare[*update](reg, "room/update", encodeUpdate, decodeUpdate)
 }
 
 func codec3_1() broadcast.Encoder {
@@ -83,7 +83,7 @@ func TestAnOldRegistryDropsTheLinkOnTheUndeclaredAct(t *testing.T) {
 		return len(a.Live()) == 1 && len(b.Live()) == 1
 	})
 
-	a.Act(JobStatus{Job: "j1", State: JobRunning}, KeyOf("job/j1"), PriorityFleet, func(bool) {})
+	a.Act(NewJobStatus(JobStatusInput{Job: "j1", State: JobRunning}), KeyOf("job/j1"), PriorityFleet, func(bool) {})
 	roomAwait(t, "the old member drops the link", func() bool { return len(b.Live()) == 0 })
 	roomAwait(t, "the old member names the leave", func() bool {
 		for _, n := range bTold {

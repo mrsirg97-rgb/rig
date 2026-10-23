@@ -148,21 +148,21 @@ func TestThePhoneMockupsRenderByteForByte(t *testing.T) {
 	wantFooter(footer("#1 edit frontend/tui/band.g…"))
 	bandAwaitPaint(t, s, th.Paint(SlotDim, "#1 edit frontend/tui/band.g…"))
 
-	s.fe.Notify(machineroom.JobStatus{Job: "j8", State: machineroom.JobRunning, Workers: 1, Started: bandNow()})
+	s.fe.Notify(machineroom.NewJobStatus(machineroom.JobStatusInput{Job: "j8", State: machineroom.JobRunning, Workers: 1, Started: bandNow()}))
 	bandAwait(t, s, "scheduled job · 1 worker")
 	wantFooter(footer("scheduled job · 1 worker"))
 	bandSettle(t, s)
 	bandAwait(t, s, "job j8 · 1 worker · 0s")
 
-	s.fe.Notify(machineroom.JobStatus{Job: "j8", State: machineroom.JobRunning, Workers: 1, Started: bandNow(),
-		Call: bandDelegateCall, CallAt: bandNow().Add(-2 * time.Second)})
+	s.fe.Notify(machineroom.NewJobStatus(machineroom.JobStatusInput{Job: "j8", State: machineroom.JobRunning, Workers: 1, Started: bandNow(),
+		Call: bandDelegateCall, CallAt: bandNow().Add(-2 * time.Second)}))
 	bandAwait(t, s, "j8 #1 edit frontend/tui/band.g…")
 	wantFooter(footer("j8 #1 edit frontend/tui/band.g…"))
 	bandSettle(t, s)
 	bandAwait(t, s, "job j8 · 1 worker · 0s")
 
-	s.fe.Notify(machineroom.JobStatus{Job: "j8", State: machineroom.JobDone,
-		Started: bandNow().Add(-8 * time.Minute), Ended: bandNow()})
+	s.fe.Notify(machineroom.NewJobStatus(machineroom.JobStatusInput{Job: "j8", State: machineroom.JobDone,
+		Started: bandNow().Add(-8 * time.Minute), Ended: bandNow()}))
 	bandAwait(t, s, "job j8 done · 8m")
 	wantFooter(footer("job j8 done · 8m"))
 	bandSettle(t, s)
@@ -179,8 +179,8 @@ func TestEightCallsInOneBreathLeaveOneQueuedAndTheLatestShows(t *testing.T) {
 			bandWorker(true, "read f"+strconv.Itoa(i), bandNow().Add(-time.Duration(9-i)*time.Second)),
 		}})
 	}
-	s.fe.Notify(machineroom.JobStatus{Job: "j8", State: machineroom.JobDone,
-		Started: bandNow().Add(-8 * time.Minute), Ended: bandNow()})
+	s.fe.Notify(machineroom.NewJobStatus(machineroom.JobStatusInput{Job: "j8", State: machineroom.JobDone,
+		Started: bandNow().Add(-8 * time.Minute), Ended: bandNow()}))
 	for i := 0; i < 3; i++ {
 		bandSettle(t, s)
 	}
@@ -212,12 +212,12 @@ func TestADelegatesAndAJobsItemsInterleaveInArrivalOrder(t *testing.T) {
 		th.BreathPaint(SlotSuccess, 11, "job j8 done · 8m"),
 	}
 	s.fe.Notify(core.SwarmStatus{Workers: []core.SwarmWorker{bandWorker(true, "", time.Time{})}})
-	s.fe.Notify(machineroom.JobStatus{Job: "j8", State: machineroom.JobRunning, Workers: 1, Started: bandNow()})
+	s.fe.Notify(machineroom.NewJobStatus(machineroom.JobStatusInput{Job: "j8", State: machineroom.JobRunning, Workers: 1, Started: bandNow()}))
 	s.fe.Notify(core.SwarmStatus{Workers: []core.SwarmWorker{bandWorker(true, call, bandNow().Add(-2*time.Second))}})
-	s.fe.Notify(machineroom.JobStatus{Job: "j8", State: machineroom.JobRunning, Workers: 1,
-		Call: call, CallAt: bandNow().Add(-2 * time.Second)})
-	s.fe.Notify(machineroom.JobStatus{Job: "j8", State: machineroom.JobDone,
-		Started: bandNow().Add(-8 * time.Minute), Ended: bandNow()})
+	s.fe.Notify(machineroom.NewJobStatus(machineroom.JobStatusInput{Job: "j8", State: machineroom.JobRunning, Workers: 1,
+		Call: call, CallAt: bandNow().Add(-2 * time.Second)}))
+	s.fe.Notify(machineroom.NewJobStatus(machineroom.JobStatusInput{Job: "j8", State: machineroom.JobDone,
+		Started: bandNow().Add(-8 * time.Minute), Ended: bandNow()}))
 	for i := 0; i < 5; i++ {
 		bandSettle(t, s)
 	}
@@ -350,14 +350,14 @@ func TestTheRestingRowCountsTheWorkInFlight(t *testing.T) {
 	breathe(t, s, 1)
 	bandAwait(t, s, "delegating · 1 worker · 1m")
 
-	s.fe.Notify(machineroom.JobStatus{Job: "j8", State: machineroom.JobRunning, Workers: 1, Started: bandNow().Add(80 * time.Second)})
+	s.fe.Notify(machineroom.NewJobStatus(machineroom.JobStatusInput{Job: "j8", State: machineroom.JobRunning, Workers: 1, Started: bandNow().Add(80 * time.Second)}))
 	bandSettle(t, s)
 	elapsed.Store(int64(110 * time.Second))
 	breathe(t, s, 1)
 	bandAwait(t, s, "job j8 · 1 worker · 30s")
 
-	s.fe.Notify(machineroom.JobStatus{Job: "j8", State: machineroom.JobDone,
-		Started: bandNow().Add(80 * time.Second), Ended: bandNow().Add(110 * time.Second)})
+	s.fe.Notify(machineroom.NewJobStatus(machineroom.JobStatusInput{Job: "j8", State: machineroom.JobDone,
+		Started: bandNow().Add(80 * time.Second), Ended: bandNow().Add(110 * time.Second)}))
 	bandSettle(t, s)
 	breathe(t, s, 1)
 	bandAwait(t, s, "delegating · 1 worker · 1m")
@@ -464,11 +464,11 @@ func TestANewNoticeRestartsTheRest(t *testing.T) {
 
 func TestTheDoneNoticeSaysTheResult(t *testing.T) {
 	s := bandSession(t, 52)
-	s.fe.Notify(machineroom.JobStatus{Job: "j8", State: machineroom.JobRunning, Workers: 1, Started: bandNow()})
+	s.fe.Notify(machineroom.NewJobStatus(machineroom.JobStatusInput{Job: "j8", State: machineroom.JobRunning, Workers: 1, Started: bandNow()}))
 	bandAwait(t, s, "scheduled job · 1 worker")
 	bandSettle(t, s)
-	s.fe.Notify(machineroom.JobStatus{Job: "j8", State: machineroom.JobDone,
+	s.fe.Notify(machineroom.NewJobStatus(machineroom.JobStatusInput{Job: "j8", State: machineroom.JobDone,
 		Started: bandNow().Add(-4 * time.Minute), Ended: bandNow(),
-		Summary: "promoted"})
+		Summary: "promoted"}))
 	bandAwait(t, s, "job j8 done · 4m · promoted")
 }

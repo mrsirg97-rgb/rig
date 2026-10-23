@@ -49,11 +49,7 @@ func TestAnActEffectRunsOnceOnItsOwner(t *testing.T) {
 	}
 	t.Cleanup(func() { a.Close(); b.Close(); ka.close(); kb.close() })
 	waitLive(t, a, b)
-	a.Act(machineroom.StartChild{
-		Model:   "fake",
-		Port:    port,
-		Command: "echo start >> " + marker + "; sleep 1; python3 -m http.server ${PORT}",
-	}, machineroom.KeyOf("fake"), machineroom.PriorityChild, func(bool) {})
+	a.Act(machineroom.NewStartChild("fake", port, "echo start >> "+marker+"; sleep 1; python3 -m http.server ${PORT}", nil, ""), machineroom.KeyOf("fake"), machineroom.PriorityChild, func(bool) {})
 	await(t, "the child's port to answer", 10*time.Second, func() bool { return machineroom.Answers(port) })
 	starts, err := os.ReadFile(marker)
 	if err != nil {
@@ -81,20 +77,16 @@ func TestTheRoomEngineStaysFreeWhileAChildStarts(t *testing.T) {
 	}
 	t.Cleanup(func() { a.Close(); b.Close(); ka.close(); kb.close() })
 	waitLive(t, a, b)
-	a.Act(machineroom.StartChild{
-		Model:   "fake",
-		Port:    port,
-		Command: "sleep 3; python3 -m http.server ${PORT}",
-	}, machineroom.KeyOf("fake"), machineroom.PriorityChild, func(bool) {})
+	a.Act(machineroom.NewStartChild("fake", port, "sleep 3; python3 -m http.server ${PORT}", nil, ""), machineroom.KeyOf("fake"), machineroom.PriorityChild, func(bool) {})
 	row := `{"id":"fake2","window":8192,"maxTokens":2048,"reserve":1024,"keepRecent":2048,"role":"worker","command":"python3 -m http.server 9","port":` + strconv.Itoa(port+1) + `,"places":1}`
-	a.Act(machineroom.TableChange{Row: json.RawMessage(row)}, machineroom.TableKey(), machineroom.PriorityChild, func(bool) {})
+	a.Act(machineroom.NewTableChange(json.RawMessage(row)), machineroom.TableKey(), machineroom.PriorityChild, func(bool) {})
 	await(t, "the room to fold a table change while the child's start still waits the port", 1500*time.Millisecond, func() bool {
 		ok := false
 		b.Ask(func() { _, ok = kb.rows.Get("fake2") })
 		return ok
 	})
 	await(t, "the child's port to answer", 10*time.Second, func() bool { return machineroom.Answers(port) })
-	a.Act(machineroom.StopChild{Model: "fake", Grace: 2}, machineroom.KeyOf("fake"), machineroom.PriorityChild, func(bool) {})
+	a.Act(machineroom.NewStopChild("fake", 2), machineroom.KeyOf("fake"), machineroom.PriorityChild, func(bool) {})
 	await(t, "the child's port to stop answering", 15*time.Second, func() bool { return !machineroom.Answers(port) })
 }
 
@@ -166,7 +158,7 @@ func TestAJoinerReadsTheWorld(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(home, "models.json"), table(rowOf("fake", port, 1), rowOf("other", port+7, 2)), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	a.Act(machineroom.TableChange{Row: json.RawMessage(rowOf("other", port+7, 2))}, machineroom.TableKey(), machineroom.PriorityChild, func(bool) {})
+	a.Act(machineroom.NewTableChange(json.RawMessage(rowOf("other", port+7, 2))), machineroom.TableKey(), machineroom.PriorityChild, func(bool) {})
 	await(t, "the first member's table to take the change", 5*time.Second, func() bool {
 		taken := false
 		a.Ask(func() {
@@ -175,11 +167,7 @@ func TestAJoinerReadsTheWorld(t *testing.T) {
 		})
 		return taken
 	})
-	a.Act(machineroom.StartChild{
-		Model:   "fake",
-		Port:    port,
-		Command: "echo start >> " + marker + "; python3 -m http.server ${PORT}",
-	}, machineroom.KeyOf("fake"), machineroom.PriorityChild, func(bool) {})
+	a.Act(machineroom.NewStartChild("fake", port, "echo start >> "+marker+"; python3 -m http.server ${PORT}", nil, ""), machineroom.KeyOf("fake"), machineroom.PriorityChild, func(bool) {})
 	await(t, "the child's port to answer", 10*time.Second, func() bool { return machineroom.Answers(port) })
 	await(t, "the pid file to be the world a later stop reads", 5*time.Second, func() bool {
 		_, err := os.Stat(filepath.Join(home, "logs", "fake.pid"))
@@ -216,7 +204,7 @@ func TestAJoinerReadsTheWorld(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(home, "logs", "fake.pid")); err != nil {
 		t.Fatalf("the pid file must be the world a later stop reads: %v", err)
 	}
-	a.Act(machineroom.StopChild{Model: "fake", Grace: 2}, machineroom.KeyOf("fake"), machineroom.PriorityChild, func(bool) {})
+	a.Act(machineroom.NewStopChild("fake", 2), machineroom.KeyOf("fake"), machineroom.PriorityChild, func(bool) {})
 	await(t, "the child's port to stop answering", 15*time.Second, func() bool { return !machineroom.Answers(port) })
 }
 
@@ -236,7 +224,7 @@ func TestTwoInstancesRaceToStartAModelAndOneChildRuns(t *testing.T) {
 	}
 	t.Cleanup(func() { a.Close(); b.Close(); ka.close(); kb.close() })
 	waitLive(t, a, b)
-	act := machineroom.StartChild{Model: "fake", Port: port, Command: "python3 -m http.server ${PORT}"}
+	act := machineroom.NewStartChild("fake", port, "python3 -m http.server ${PORT}", nil, "")
 	a.Act(act, machineroom.KeyOf("fake"), machineroom.PriorityChild, func(bool) {})
 	b.Act(act, machineroom.KeyOf("fake"), machineroom.PriorityChild, func(bool) {})
 	await(t, "the child's port to answer", 15*time.Second, func() bool { return machineroom.Answers(port) })
@@ -292,10 +280,10 @@ func TestASwapWaitsForTheHoldsAndThenSwaps(t *testing.T) {
 		t.Fatal("the claim must hold the model's key")
 	}
 	pinned := make(chan struct{})
-	a.Act(machineroom.SwapChild{
+	a.Act(machineroom.NewSwapChild(machineroom.SwapChildInput{
 		Model: "new", Out: "old", Port: newPort,
 		Command: "python3 -m http.server ${PORT}", Grace: 1,
-	}, key, machineroom.PriorityChild, func(bool) { close(pinned) })
+	}), key, machineroom.PriorityChild, func(bool) { close(pinned) })
 	select {
 	case <-pinned:
 		t.Fatal("the swap must wait behind the hold")
@@ -367,7 +355,7 @@ func TestTheUpdateDrainsTheRoom(t *testing.T) {
 	if len(a.Live()) != 1 {
 		t.Fatal("the members must see each other before the update")
 	}
-	a.Act(machineroom.Update{Version: "3.0.0"}, machineroom.TableKey(), machineroom.PriorityTurn, func(bool) {})
+	a.Act(machineroom.NewUpdate("3.0.0"), machineroom.TableKey(), machineroom.PriorityTurn, func(bool) {})
 	deadline = time.Now().Add(10 * time.Second)
 	for time.Now().Before(deadline) && len(a.Live()) != 0 {
 		time.Sleep(25 * time.Millisecond)
@@ -480,8 +468,8 @@ func TestARunnerLeavingEndsItsJobsAsRunnerLeft(t *testing.T) {
 		t.Fatal("the members must see each other before the runner leaves")
 	}
 
-	b.Act(machineroom.JobStatus{Job: "j1", State: machineroom.JobRunning,
-		Started: time.Date(2026, 8, 15, 12, 0, 0, 0, time.UTC), Workers: 1},
+	b.Act(machineroom.NewJobStatus(machineroom.JobStatusInput{Job: "j1", State: machineroom.JobRunning,
+		Started: time.Date(2026, 8, 15, 12, 0, 0, 0, time.UTC), Workers: 1}),
 		machineroom.KeyOf("job/j1"), machineroom.PriorityFleet, func(bool) {})
 	deadline = time.Now().Add(10 * time.Second)
 	for time.Now().Before(deadline) {
@@ -494,7 +482,7 @@ func TestARunnerLeavingEndsItsJobsAsRunnerLeft(t *testing.T) {
 		time.Sleep(25 * time.Millisecond)
 	}
 	mu.Lock()
-	if len(ended) != 1 || ended[0].State != machineroom.JobRunning {
+	if len(ended) != 1 || ended[0].State() != machineroom.JobRunning {
 		t.Fatalf("the survivor's row breathes the running act: %v", ended)
 	}
 	mu.Unlock()
@@ -515,10 +503,10 @@ func TestARunnerLeavingEndsItsJobsAsRunnerLeft(t *testing.T) {
 	if len(ended) != 2 {
 		t.Fatalf("the survivor ends the runner's job: %v", ended)
 	}
-	if ended[1].State != machineroom.JobFailed || ended[1].Reason != "runner left" {
+	if ended[1].State() != machineroom.JobFailed || ended[1].Reason() != "runner left" {
 		t.Fatalf("the end is failed, runner left: %+v", ended[1])
 	}
-	if !ended[1].Ended.After(time.Date(2026, 8, 15, 11, 0, 0, 0, time.UTC)) {
+	if !ended[1].Ended().After(time.Date(2026, 8, 15, 11, 0, 0, 0, time.UTC)) {
 		t.Fatalf("the end is stamped now: %+v", ended[1])
 	}
 }
@@ -564,7 +552,7 @@ func TestARunnerThatPostedItsEndLeavesWithoutAFailure(t *testing.T) {
 	}
 
 	started := time.Date(2026, 8, 15, 12, 0, 0, 0, time.UTC)
-	b.Act(machineroom.JobStatus{Job: "j1", State: machineroom.JobRunning, Started: started},
+	b.Act(machineroom.NewJobStatus(machineroom.JobStatusInput{Job: "j1", State: machineroom.JobRunning, Started: started}),
 		machineroom.KeyOf("job/j1"), machineroom.PriorityFleet, func(bool) {})
 	deadline = time.Now().Add(10 * time.Second)
 	for time.Now().Before(deadline) {
@@ -576,8 +564,8 @@ func TestARunnerThatPostedItsEndLeavesWithoutAFailure(t *testing.T) {
 		}
 		time.Sleep(25 * time.Millisecond)
 	}
-	jobTeller(b, voice)(machineroom.JobStatus{Job: "j1", State: machineroom.JobDone,
-		Started: started, Ended: started.Add(5 * time.Second)})
+	jobTeller(b, voice)(machineroom.NewJobStatus(machineroom.JobStatusInput{Job: "j1", State: machineroom.JobDone,
+		Started: started, Ended: started.Add(5 * time.Second)}))
 	b.Close()
 	deadline = time.Now().Add(10 * time.Second)
 	for time.Now().Before(deadline) {
@@ -592,7 +580,7 @@ func TestARunnerThatPostedItsEndLeavesWithoutAFailure(t *testing.T) {
 	time.Sleep(250 * time.Millisecond)
 	mu.Lock()
 	defer mu.Unlock()
-	if len(ended) != 2 || ended[0].State != machineroom.JobRunning || ended[1].State != machineroom.JobDone {
+	if len(ended) != 2 || ended[0].State() != machineroom.JobRunning || ended[1].State() != machineroom.JobDone {
 		t.Fatalf("a runner that closes right after its done leaves running then done, no failure: %v", ended)
 	}
 }

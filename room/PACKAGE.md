@@ -62,7 +62,16 @@ the five signals the instances exchange beside the protocol's own.
   job's last non-empty stdout line, stderr's when the run failed,
   omitted from the wire when empty so a 3.2.0 peer decodes the frame
   unchanged), with `Codec` and `Registry`
-  declaring rig's six kinds beside `broadcast.Protocol()`'s. `New` takes
+  declaring rig's six kinds beside `broadcast.Protocol()`'s. Each is a
+  read-only interface of getters over an unexported struct, built whole
+  by its constructor (`NewStartChild`, `NewStopChild`, `NewSwapChild`
+  over `SwapChildInput`, `NewTableChange`, `NewUpdate`, `NewJobStatus`
+  over `JobStatusInput`); encoding goes through a private wire struct,
+  so the JSON is byte for byte the shape 3.4.0 sent, and decoding comes
+  back through the same constructor (`ParseJobStatus` is the exported
+  door for a job status). The getter sets overlap, so each interface
+  carries its own unexported marker: a type switch on the signal names
+  exactly one case, never the narrower neighbour. `New` takes
   the member's version and writes it to `<room dir>/<id>.version` beside
   the socket (`Close` removes it); `Admits(version)` reads every live
   peer's sidecar and answers whether the room's slowest member still

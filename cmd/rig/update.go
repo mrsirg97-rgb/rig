@@ -154,7 +154,7 @@ func drainRoom(ctx context.Context, home, version string) error {
 		return err
 	}
 	defer machine.Close()
-	machine.Act(machineroom.Update{Version: version}, machineroom.TableKey(), machineroom.PriorityTurn, func(bool) {})
+	machine.Act(machineroom.NewUpdate(version), machineroom.TableKey(), machineroom.PriorityTurn, func(bool) {})
 	deadline := time.Now().Add(drainRoomBound)
 	for time.Now().Before(deadline) {
 		if len(machine.Live()) == 0 {
