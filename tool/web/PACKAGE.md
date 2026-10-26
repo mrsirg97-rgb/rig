@@ -59,9 +59,10 @@ client, no new venv.
   With a proxy the proxy resolves and dials; the proxy is not guarded.
   A proxy URL may carry credentials (the `rig webtools` bundle puts
   BasicAuth on the tinyproxy): the unreachable-proxy error prints the
-  proxy URL **without** its password (`proxyDisplay` keeps the user and
-  the host), because an error string reaches the tool result, the
-  context and the session log. Its fix-it names `rig webtools start`,
+  proxy URL **without** its password (`ProxyDisplay` keeps the user and
+  the host, and it is exported so the dashboard's web tools page says the
+  same words about the same URL), because an error string reaches the tool
+  result, the context and the session log. Its fix-it names `rig webtools start`,
   `rig webtools setup` and `webFetchProxy ""` (direct egress).
 - The DNS resolution rides the request ctx (the `LookupFn` seam takes
   it): a stalled resolver cannot outlive the fetch's own deadline, and a

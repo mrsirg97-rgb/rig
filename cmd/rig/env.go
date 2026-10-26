@@ -21,6 +21,7 @@ import (
 	"github.com/mrsirg97-rgb/rig/v3/store/state"
 	"github.com/mrsirg97-rgb/rig/v3/tool"
 	"github.com/mrsirg97-rgb/rig/v3/tool/file"
+	"github.com/mrsirg97-rgb/rig/v3/webtools"
 )
 
 func (r *root) compactNow(ctx context.Context) (core.Compacted, bool, error) {
@@ -259,6 +260,7 @@ func (r *root) switchTheme(ctx context.Context, name string) error {
 type commandEnvInput struct {
 	decisionTrain func(ctx context.Context, trainer string) (string, error)
 	trainers      func() []string
+	webTools      func() webtools.Tools
 }
 
 func (r *root) commandEnv(in commandEnvInput) *command.Env {
@@ -289,6 +291,7 @@ func (r *root) commandEnv(in commandEnvInput) *command.Env {
 		PluginsDir:    r.pluginsDir,
 		DecisionTrain: in.decisionTrain,
 		Trainers:      in.trainers,
+		WebTools:      in.webTools,
 		RemList:       r.remList,
 		RemShow:       r.remShow,
 		RemForget:     r.remForget,

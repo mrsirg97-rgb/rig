@@ -873,8 +873,8 @@ func TestProxyDisplayKeepsTheHostAndDropsThePassword(t *testing.T) {
 		{"://rig:" + proxySecret + "@127.0.0.1:8889", "127.0.0.1:8889"},
 	}
 	for _, c := range cases {
-		if got := proxyDisplay(c.raw); got != c.want {
-			t.Errorf("proxyDisplay(%q) = %q, want %q", c.raw, got, c.want)
+		if got := ProxyDisplay(c.raw); got != c.want {
+			t.Errorf("ProxyDisplay(%q) = %q, want %q", c.raw, got, c.want)
 		}
 	}
 }

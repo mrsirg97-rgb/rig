@@ -139,6 +139,19 @@ command is a loud line naming the known set, never silently a prompt.
   `theme` key of settings.json (persistent), and the TUI repaints
   immediately: new output in the new theme, committed scrollback keeps
   its bytes.
+- `/webtools`: the machine's web-tools bundle (3.5.0,
+  `specs/SPEC_WEBTOOLS.md`): bare shows what is on disk, what differs, and
+  what runs; `status`, `setup [password] [force]`, `start` and `stop` are its
+  verbs, and `rig webtools` and the dashboard's web tools page answer the same
+  four. `setup` writes the bundle's files into the rig home's `external/` — the
+  proxy password and the SearXNG secret key are generated once and reused by
+  every later setup — and points `webFetchProxy` at it, naming a file that
+  differs from what rig generates and waiting for `force`. `start` creates the
+  named volumes, runs the chown helper for the users the images run as, and
+  only then `docker compose up -d --build`; `stop` runs `compose stop` and
+  leaves the volumes' data alone. A machine with no `docker`, or a daemon that
+  does not answer, is a fact `status` reports and a refusal `start` names, in
+  docker's own words.
 
 **Hosted rows** (`specs/SPEC_HOSTED.md`): a row that runs on a remote
 endpoint speaks the OpenAI wire as-is and keeps its own keys, retries,

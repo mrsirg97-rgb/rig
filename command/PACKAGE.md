@@ -13,10 +13,10 @@ depends on core and models; the root depends on the leaf.
 
 - The prefix rule (`IsCommandLine`), the escape (`Unescape`), and the
   line splitter (`Parse`).
-- `All()`: the standard set of sixteen commands: `compact`, `new`,
+- `All()`: the standard set of seventeen commands: `compact`, `new`,
   `project`, `models`, `sessions`, `steer`, `todo`, `scheduler`,
   `plugins`, `decision`, `rem`, `effort`, `role`, `approve`, `swarm`,
-  `theme`.
+  `theme`, `webtools`.
 - `Env`: the command's world, built at the root: closures, not
   handles. `Env.Workers` carries the fleet (the model, the slots, the
   file, the configured fact) and is what a missing `scheduler` tool

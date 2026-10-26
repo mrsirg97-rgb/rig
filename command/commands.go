@@ -20,6 +20,7 @@ func All() []core.Command {
 		approveCmd{},
 		swarmCmd{},
 		themeCmd{},
+		webtoolsCmd{},
 	}
 }
 

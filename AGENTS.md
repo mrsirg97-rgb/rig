@@ -258,9 +258,9 @@ lot, and it is the bar.
 - `command`: the user-command leaf: the slash-command set (`compact`,
   `new`, `project`, `sessions`, `models`, `steer`, `todo`, `scheduler`,
   `plugins`, `decision`, `rem`, `effort`, `role`, `approve`, `swarm`,
-  `theme`), testable with fakes: no kernel, no stores, no provider;
-  `swarm` owns the vocabulary, the controller owns the goroutines
-  (SPEC_SWARM).
+  `theme`, `webtools`), testable with fakes: no kernel, no stores, no
+  provider; `swarm` owns the vocabulary, the controller owns the
+  goroutines (SPEC_SWARM).
 - `config`: the config-loading layer: four-layer resolution (flags >
   env > file > embedded defaults) and the models table out of code and
   into a file.
@@ -282,6 +282,12 @@ lot, and it is the bar.
   `statfs`, and `nvidia-smi` as CSV, one walk per read and no timers; a
   source the box lacks renders no row. The dashboard's room page is its
   only consumer.
+- `webtools`: the machine's web-tools bundle (SPEC_WEBTOOLS): the bytes the
+  binary carries for the `web` tool's egress — SearXNG, its valkey, and the
+  tinyproxy — and the four verbs that build and run them. One `Runner` seam
+  for docker's argv, one `Setting` seam for `config.ReadKey`/`SetKey`, the
+  password and the secret key generated once and reused, and a docker that is
+  missing or silent reported as a field, never as a fault.
 - `decision`: the decision seam (SPEC_DECISION): the typed question
   (choice, score, yes/no), the answer with its confidence and its
   decider, the `Decider` a decision server implements, the `Recorder`

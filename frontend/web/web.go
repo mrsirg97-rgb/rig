@@ -17,6 +17,7 @@ import (
 	"github.com/mrsirg97-rgb/rig/v3/room"
 	"github.com/mrsirg97-rgb/rig/v3/stats"
 	sched "github.com/mrsirg97-rgb/rig/v3/store/scheduler"
+	"github.com/mrsirg97-rgb/rig/v3/webtools"
 )
 
 const sessionName = "dashboard"
@@ -40,6 +41,7 @@ type options struct {
 	version     string
 	ready       func(ctx context.Context, m models.Model) error
 	stopWorkers func()
+	tools       webtools.Tools
 }
 
 func WithCWD(cwd string) Option                { return func(o *options) { o.cwd = cwd } }
@@ -104,6 +106,7 @@ type server struct {
 	version string
 	ready   func(ctx context.Context, m models.Model) error
 	vitals  *stats.Sampler
+	tools   webtools.Tools
 }
 
 func New(home string, opts ...Option) (Server, error) {
@@ -158,6 +161,7 @@ func build(home string, opts ...Option) (*server, error) {
 		stores:    newStoreCache(home, ct, runner),
 		static:    sub,
 		chat:      newChat(o.commands, o.env, o.stopWorkers),
+		tools:     o.tools,
 		status:    o.status,
 		machine:   o.machine,
 		door:      o.door,

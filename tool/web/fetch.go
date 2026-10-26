@@ -56,7 +56,7 @@ type fetch struct {
 	maxBytes int
 }
 
-func proxyDisplay(raw string) string {
+func ProxyDisplay(raw string) string {
 	if raw == "" {
 		return ""
 	}
@@ -76,7 +76,7 @@ func proxyDisplay(raw string) string {
 func newFetch(cfg fetchConfig) *fetch {
 	f := &fetch{
 		proxy:    cfg.Proxy,
-		display:  proxyDisplay(cfg.Proxy),
+		display:  ProxyDisplay(cfg.Proxy),
 		lookup:   systemLookup(cfg.Lookup),
 		maxBytes: cfg.MaxBytes,
 	}

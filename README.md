@@ -316,8 +316,8 @@ The contract, the zones, and the train zone: `docs/PLUGINS.md`.
 
 `rig serve` is rig with the page as its terminal: the live session
 streamed in the TUI's grammar, plus sessions, the queue, the jobs, the
-swarm, the models, and the plugin forge — loopback only, token-gated,
-installable to a phone home screen. `docs/SETUP.md` and
+swarm, the models, the plugin forge, and the web tools — loopback only,
+token-gated, installable to a phone home screen. `docs/SETUP.md` and
 `specs/SPEC_SERVE.md`.
 
 ## docs
@@ -367,7 +367,7 @@ cmd/rig        the binary and composition root; wires every seam once
 core           the seams, the wire types, the event vocabulary; types only
 kernel.go      the dependency bag the loop drives, assembled from options
 loop           the turn runtime: ordering, faults, cancellation
-command        the sixteen slash commands, dispatchable with fakes
+command        the seventeen slash commands, dispatchable with fakes
 provider       the model wires: openai-compatible SSE, anthropic Messages
 store          the SQLite stores: state, todo, rem, scheduler, graph, decision
 tool           the model's words (registry.json) and one leaf per tool
@@ -376,6 +376,8 @@ middleware/ policy/  the tool chain and the context/provider decorators,
 frontend       four frontends: tui, cli, oneshot (the -p worker), web
 room/ swarm/   the machine's room (SPEC_ROOM) and the drain controller
 stats/         the machine's vitals, read from /proc, /sys and nvidia-smi
+webtools/      the machine-local web-tools bundle: the bytes the binary
+             carries and the verbs that build and run it (SPEC_WEBTOOLS)
 decision/ plugins/  the decision seam (SPEC_DECISION) and the python zones
 config/ models/ pathguard/ imagemarker/  the four-layer knobs, the model
              table, and the two stdlib leaves the tools and the wires share

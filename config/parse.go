@@ -23,7 +23,7 @@ func parseSettings(data []byte, path string) (Settings, error) {
 	}
 	if len(unknown) > 0 {
 		sort.Strings(unknown)
-		return Settings{}, fmt.Errorf("config: %s: unknown key %q (known: %s)", path, unknown[0], strings.Join(knownSettings, ", "))
+		return Settings{}, fmt.Errorf("config: %s: unknown key %q (known: %s)", path, unknown[0], knownKeys)
 	}
 	var s Settings
 	str := func(key string) (string, bool, error) {
