@@ -47,7 +47,7 @@ func (f *fetch) Guarded(ctx context.Context, raw string) (Fetched, error) {
 			}
 			if f.proxy != "" && isConnRefused(err) {
 				return Fetched{}, fmt.Errorf(
-					"egress proxy %s is unreachable. Start it: cd ~/docker/web-tools && docker compose up -d", f.proxy)
+					`egress proxy %s is unreachable. Start it: rig webtools start, or rig webtools setup to build the bundle; webFetchProxy "" in settings.json fetches direct instead`, f.display)
 			}
 			return Fetched{}, err
 		}

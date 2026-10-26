@@ -8,6 +8,7 @@ import (
 	"net/netip"
 	"net/url"
 	"regexp"
+	"strings"
 	"time"
 )
 
@@ -48,15 +49,34 @@ type Fetched struct {
 
 type fetch struct {
 	proxy    string
+	display  string
 	traf     string
 	lookup   LookupFn
 	do       func(*http.Request) (*http.Response, error)
 	maxBytes int
 }
 
+func proxyDisplay(raw string) string {
+	if raw == "" {
+		return ""
+	}
+	u, err := url.Parse(raw)
+	if err != nil {
+		if at := strings.LastIndex(raw, "@"); at >= 0 {
+			return raw[at+1:]
+		}
+		return raw
+	}
+	if u.User != nil {
+		u.User = url.User(u.User.Username())
+	}
+	return u.String()
+}
+
 func newFetch(cfg fetchConfig) *fetch {
 	f := &fetch{
 		proxy:    cfg.Proxy,
+		display:  proxyDisplay(cfg.Proxy),
 		lookup:   systemLookup(cfg.Lookup),
 		maxBytes: cfg.MaxBytes,
 	}
