@@ -77,6 +77,9 @@ room/
 # the machine's vitals, read from the world (3.3.0, SPEC_ROOM's system stats)
 stats/
 
+# the machine-local web-tools bundle: the bytes the binary carries (SPEC_WEBTOOLS)
+webtools/
+
 # the frozen surface itself: open to pure addition only (SPEC_CORE)
 core/
 
