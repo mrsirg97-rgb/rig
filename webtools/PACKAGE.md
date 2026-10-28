@@ -28,10 +28,18 @@ fetch's own error say the same words about the same URL — and on nothing else.
   32 generated hex for the password, 40 for the secret (the `secret_key` is a
   hex key SearXNG expects; 40 is its own convention, not a floor I invented).
 - **Absence is a fact, not a fault.** `Status` never errors because docker is
-  missing, the daemon is silent or a file is absent — those are fields. Only a
-  missing home, a missing `Runner` or an unreadable settings file comes back as
-  an error, and `Status.Lines` prints every fact so the CLI and the page carry
-  the same words.
+  missing, the daemon is silent, a file is absent or `settings.json` cannot be
+  read — those are fields (the last in `Stack`). Only a missing home, a missing
+  `Runner` or a bundle file it cannot read comes back as an error, and
+  `Status.Lines` prints every fact so the CLI and the page carry the same words.
+- **On Linux the bundle carries its own egress firewall.** `WithGOOS` (default
+  `runtime.GOOS`) picks the file set: `linux/` adds `docker-compose.firewall.yml`
+  and `firewall/`, a host-network container with `NET_ADMIN` that writes the
+  drop rules into `DOCKER-USER`, and whose healthcheck tinyproxy and searxng
+  wait on; every compose call carries the override. Fetch pins the address only
+  when it dials direct: through the proxy, tinyproxy resolves the name again and
+  the deny-list matches strings, so only a rule on the connection's address
+  closes DNS rebinding.
 - **`setup` refuses before it touches anything.** A file that differs from what
   rig generates names itself and waits for `force`; a `webFetchProxy` that
   points at another host names itself and waits for `force`; credentials onto

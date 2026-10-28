@@ -37,6 +37,18 @@ The start order is fixed and named — the volumes, the chown helper for each
 bind-mounted path, then `compose up -d --build` — and no verb removes anything:
 `stop` stops, and the volumes keep the limiter's bans and the valkey dump.
 
+On Linux the bundle carries its own egress firewall. Fetch pins the address it
+checked only when it dials direct; through the proxy, tinyproxy resolves the name
+again and the deny-list matches strings, so a rebinding name could still reach
+the LAN. `firewall/` closes that the way the operator's hand-built bundle did, by
+the address a connection goes to: a host-network container with `NET_ADMIN`
+writes the drops into `DOCKER-USER` (the subnet's own traffic and established
+replies first), its healthcheck re-checks every rule, and tinyproxy and SearXNG
+wait for it, so the proxy never runs without them, and `restart: unless-stopped`
+brings them back after a reboot with no systemd unit and no sudo. A daemon with
+no such chain leaves the proxy down rather than open. Docker Desktop gets the
+seven common files and the deny-list's named limits.
+
 The tests came first, as usual: named cases over a fake `Runner`, no docker
 needed. `tool/web` grows one exported `ProxyDisplay`, so the dashboard's JSON
 and fetch's own unreachable-proxy error cannot disagree about what a redacted

@@ -37,6 +37,19 @@ setup keeps once they exist.
   what confines tunnels; and a first-label rule blocks every hostname that starts
   with that prefix (`10.9x.example.com` and `10.abc.example.com` are both
   refused), because the rule anchors on the prefix, not on an octet boundary.
+- **On Linux, setup also writes the egress firewall** (`firewall/` and
+  `docker-compose.firewall.yml`, which rig passes to every compose call). A
+  container on the host network with `NET_ADMIN` writes rules into Docker's
+  `DOCKER-USER` chain that drop traffic from `{{SUBNET}}` to private address
+  space (traffic inside the subnet and replies to established flows return
+  first), and tinyproxy and searxng start only once its healthcheck finds every
+  rule. That drops by the address a connection goes to, so it closes what the
+  deny-list cannot: rig checks a name before fetching, tinyproxy resolves it
+  again, and a rebinding name can answer differently the second time. By hand:
+  `docker compose -f docker-compose.yml -f docker-compose.firewall.yml up -d --build`.
+  A daemon with no `DOCKER-USER` chain leaves the firewall unhealthy and the proxy
+  down: closed, not open. Docker Desktop gets no firewall, and the limits above
+  stand.
 - `tinyproxy` is pinned to Alpine's `1.11.3-r0` — the only build Alpine 3.23
   ships. CVE-2026-54387, CVE-2026-54388 (request smuggling) and CVE-2026-55202
   reach through 1.11.3, with no patched Alpine build yet; here the smuggling pair

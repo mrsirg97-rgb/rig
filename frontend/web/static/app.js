@@ -1660,15 +1660,22 @@ async function renderWebTools() {
   main.appendChild(tb.el);
   const st = data.status || {};
   for (const l of st.lines || []) tb.body.appendChild(line('dim')).textContent = l;
+  const pw = textInput('blank generates 32 hex', false);
+  pw.type = 'password';
+  const force = el('select');
+  force.appendChild(new Option('keep files rig did not write', 'keep'));
+  force.appendChild(new Option('overwrite them', 'force'));
+  tb.body.appendChild(promptRow('password', pw, G.dot));
+  tb.body.appendChild(promptRow('files', force, G.dot));
   const act = line();
   const say = (text) => { tb.body.appendChild(line()).textContent = text; };
   const fail = (e) => { tb.body.appendChild(line('dim')).textContent = e.message; };
   act.appendChild(button('run rig webtools setup', 'rowact', async () => {
     act.textContent = 'generating…';
-    const pw = window.prompt('the proxy password? blank generates 32 hex') || '';
-    const force = window.confirm('overwrite files rig did not write?');
+    const body = { password: pw.value, force: force.value === 'force' };
+    pw.value = '';
     try {
-      const res = await api('/api/webtools/generate', { method: 'POST', body: JSON.stringify({ password: pw, force }) });
+      const res = await api('/api/webtools/generate', { method: 'POST', body: JSON.stringify(body) });
       say(res.out || 'done');
     } catch (e) { fail(e); }
   }));

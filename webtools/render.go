@@ -9,24 +9,29 @@ import (
 )
 
 const (
-	dirName       = "external"
-	searxPort     = "8888"
-	proxyPort     = "8889"
-	subnet        = "172.30.30.0/24"
-	gateway       = "172.30.30.1"
-	valkeyVolume  = "rig-valkey-data"
-	cacheVolume   = "rig-searxng-cache"
-	proxyUser     = "rig"
-	hexPassword   = 32
-	hexSecret     = 40
-	minPassword   = 16
-	maxPassword   = 128
-	searxUID      = "977:977"
-	valkeyUID     = "999:1000"
-	helperImage   = "alpine:3.23"
-	unreleased    = "unreleased"
-	valkeyPath    = "searxng/settings.yml"
-	proxyConfPath = "tinyproxy/tinyproxy.conf"
+	dirName             = "external"
+	searxPort           = "8888"
+	proxyPort           = "8889"
+	subnet              = "172.30.30.0/24"
+	gateway             = "172.30.30.1"
+	valkeyVolume        = "rig-valkey-data"
+	cacheVolume         = "rig-searxng-cache"
+	proxyUser           = "rig"
+	hexPassword         = 32
+	hexSecret           = 40
+	minPassword         = 16
+	maxPassword         = 128
+	searxUID            = "977:977"
+	valkeyUID           = "999:1000"
+	helperImage         = "alpine:3.23"
+	unreleased          = "unreleased"
+	searxSettingsPath   = "searxng/settings.yml"
+	proxyConfPath       = "tinyproxy/tinyproxy.conf"
+	composeFile         = "docker-compose.yml"
+	firewallComposeFile = "docker-compose.firewall.yml"
+	commonRoot          = "files"
+	firewallRoot        = "linux"
+	firewallGOOS        = "linux"
 )
 
 func newHex(chars int) (string, error) {
@@ -100,7 +105,7 @@ func badCharName(r rune) string {
 }
 
 func passwordError(pw string) error {
-	floor := fmt.Sprintf("want 16 to 128 characters of letters, digits, dot, underscore or dash (the BasicAuth line is unquoted, so anything else reaches the parser, and the same bytes go into settings.json): %d", minPassword)
+	floor := fmt.Sprintf("want %d to %d characters of letters, digits, dot, underscore or dash (the BasicAuth line is unquoted, so anything else reaches the parser, and the same bytes go into settings.json)", minPassword, maxPassword)
 	for _, r := range pw {
 		if !(r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' ||
 			r == '.' || r == '_' || r == '-') {

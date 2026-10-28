@@ -153,13 +153,13 @@ the Apple meta tags, safe-area insets).
   that are missing or differ, the services running, the settings' proxy
   without its password — from the `webtools.Tools` the root injects with
   `WithTools`; unwired, that is a 501 naming the root that should have
-  wired it (the spec says 503; the tests pinned 501 and the code follows
-  them). `POST /api/webtools/generate` (`{password, force}`), `/start` and
+  wired it (the build's wiring, not a passing outage, so not 503). `POST /api/webtools/generate` (`{password, force}`), `/start` and
   `/stop` cross to the three verbs, each replying `{"out": …}` in the leaf's
   voice; a body over the cap is a 400, an unknown verb a 404 naming the
   three, `POST /api/webtools` a 405 with `Allow: GET` (it is a read). The
-  page's panel is the same four verbs, and the refusals are JSON, like every
-  other reply here.
+  page's panel is the same four verbs, its password and `force` taken in
+  `promptRow`s like every other input on the page, and the refusals are JSON,
+  like every other reply here.
 - **The folder browser** (`browse.go`, SPEC_SERVE 13): `GET /api/fs`:
   directories only, rooted at `WithRoot` (the user's home by
   default), symlinks resolved before the root check, hidden entries off

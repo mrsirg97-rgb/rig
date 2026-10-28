@@ -2,6 +2,7 @@ package web
 
 import (
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"strings"
@@ -48,7 +49,7 @@ func (s *server) handleWebToolsVerb(w http.ResponseWriter, r *http.Request, verb
 	}
 	if r.Body != nil {
 		dec := json.NewDecoder(io.LimitReader(r.Body, webToolsBodyCap))
-		if err := dec.Decode(&in); err != nil && err.Error() != "EOF" {
+		if err := dec.Decode(&in); err != nil && !errors.Is(err, io.EOF) {
 			writeErr(w, http.StatusBadRequest, "webtools: the request body is not JSON: "+err.Error())
 			return
 		}

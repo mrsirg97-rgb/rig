@@ -10,13 +10,14 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 
 	webtool "github.com/mrsirg97-rgb/rig/v3/tool/web"
 )
 
-//go:embed files
+//go:embed files linux
 var bundleFS embed.FS
 
 const settingsKey = "webFetchProxy"
@@ -40,6 +41,7 @@ type options struct {
 	runner  Runner
 	setting Setting
 	version string
+	goos    string
 }
 
 func WithRunner(runner Runner) Option { return func(o *options) { o.runner = runner } }
@@ -49,9 +51,12 @@ func WithSetting(setting Setting) Option {
 func WithVersion(version string) Option {
 	return func(o *options) { o.version = version }
 }
+func WithGOOS(goos string) Option {
+	return func(o *options) { o.goos = goos }
+}
 
 func New(home string, opts ...Option) Tools {
-	var o options
+	o := options{goos: runtime.GOOS}
 	for _, opt := range opts {
 		opt(&o)
 	}
@@ -59,7 +64,7 @@ func New(home string, opts ...Option) Tools {
 	if home != "" {
 		dir = filepath.Join(home, dirName)
 	}
-	return &tools{home: home, dir: dir, runner: o.runner, setting: o.setting, version: o.version}
+	return &tools{home: home, dir: dir, runner: o.runner, setting: o.setting, version: o.version, goos: o.goos}
 }
 
 type Status struct {
@@ -102,11 +107,22 @@ type tools struct {
 	runner  Runner
 	setting Setting
 	version string
+	goos    string
 }
 
 func (t *tools) Dir() string { return t.dir }
 
-func (t *tools) composePath() string { return filepath.Join(t.dir, "docker-compose.yml") }
+func (t *tools) composePath() string { return filepath.Join(t.dir, composeFile) }
+
+func (t *tools) firewalled() bool { return t.goos == firewallGOOS }
+
+func (t *tools) compose(verb ...string) []string {
+	argv := []string{"compose", "-f", t.composePath()}
+	if t.firewalled() {
+		argv = append(argv, "-f", filepath.Join(t.dir, firewallComposeFile))
+	}
+	return append(argv, verb...)
+}
 
 func (t *tools) homeErr() error {
 	if t.home == "" {
@@ -129,30 +145,43 @@ func (t *tools) settingErr() error {
 	return nil
 }
 
-func bundleFiles() ([]string, error) {
+func (t *tools) roots() []string {
+	if t.firewalled() {
+		return []string{commonRoot, firewallRoot}
+	}
+	return []string{commonRoot}
+}
+
+func (t *tools) bundleFiles() ([]string, error) {
 	out := []string{}
-	err := fs.WalkDir(bundleFS, "files", func(p string, d fs.DirEntry, err error) error {
+	for _, root := range t.roots() {
+		err := fs.WalkDir(bundleFS, root, func(p string, d fs.DirEntry, err error) error {
+			if err != nil {
+				return err
+			}
+			if !d.IsDir() {
+				out = append(out, strings.TrimPrefix(p, root+"/"))
+			}
+			return nil
+		})
 		if err != nil {
-			return err
+			return nil, fmt.Errorf("webtools: the embedded bundle: %v", err)
 		}
-		if !d.IsDir() {
-			out = append(out, strings.TrimPrefix(p, "files/"))
-		}
-		return nil
-	})
-	if err != nil {
-		return nil, fmt.Errorf("webtools: the embedded bundle: %v", err)
 	}
 	sort.Strings(out)
 	return out, nil
 }
 
-func templateFor(rel string) (string, error) {
-	b, err := bundleFS.ReadFile("files/" + rel)
-	if err != nil {
-		return "", fmt.Errorf("webtools: the embedded %s: %v", rel, err)
+func (t *tools) templateFor(rel string) (string, error) {
+	var last error
+	for _, root := range t.roots() {
+		b, err := bundleFS.ReadFile(root + "/" + rel)
+		if err == nil {
+			return string(b), nil
+		}
+		last = err
 	}
-	return string(b), nil
+	return "", fmt.Errorf("webtools: the embedded %s: %v", rel, last)
 }
 
 func (t *tools) read(rel string) (string, bool, error) {
@@ -184,7 +213,7 @@ func (t *tools) values(explicit string, generate bool) (render, error) {
 		}
 		r.pw = pw
 	}
-	settings, ok, err := t.read(valkeyPath)
+	settings, ok, err := t.read(searxSettingsPath)
 	if err != nil {
 		return r, err
 	}
@@ -227,7 +256,7 @@ func sameProxyHost(a, b string) bool {
 func (t *tools) classify(files []string, r render) (missing, differ []string, err error) {
 	missing, differ = []string{}, []string{}
 	for _, rel := range files {
-		tmpl, terr := templateFor(rel)
+		tmpl, terr := t.templateFor(rel)
 		if terr != nil {
 			return nil, nil, terr
 		}
@@ -259,7 +288,7 @@ func (t *tools) Generate(ctx context.Context, password string, force bool) (stri
 	if err != nil {
 		return "", err
 	}
-	files, err := bundleFiles()
+	files, err := t.bundleFiles()
 	if err != nil {
 		return "", err
 	}
@@ -280,7 +309,7 @@ func (t *tools) Generate(ctx context.Context, password string, force bool) (stri
 	}
 	wrote := append(append([]string{}, missing...), differ...)
 	for _, rel := range wrote {
-		tmpl, err := templateFor(rel)
+		tmpl, err := t.templateFor(rel)
 		if err != nil {
 			return "", err
 		}
@@ -370,12 +399,16 @@ func (t *tools) Start(ctx context.Context) (string, error) {
 			return "", fmt.Errorf("webtools: docker %s failed: %s", strings.Join(step, " "), dockerVoice(err, out))
 		}
 	}
-	out, err := t.runner.Run(ctx, "docker", "compose", "-f", t.composePath(), "up", "-d", "--build")
+	out, err := t.runner.Run(ctx, "docker", t.compose("up", "-d", "--build")...)
 	if err != nil {
 		return "", fmt.Errorf("webtools: docker compose up refused: %s", dockerVoice(err, out))
 	}
-	return fmt.Sprintf("started the web-tools bundle in %s: search 127.0.0.1:%s, fetch egress through 127.0.0.1:%s",
-		t.dir, searxPort, proxyPort), nil
+	reply := fmt.Sprintf("started the web-tools bundle in %s: search 127.0.0.1:%s, fetch egress through 127.0.0.1:%s",
+		t.dir, searxPort, proxyPort)
+	if t.firewalled() {
+		reply += ", private destinations dropped in DOCKER-USER"
+	}
+	return reply, nil
 }
 
 func (t *tools) Stop(ctx context.Context) (string, error) {
@@ -394,7 +427,7 @@ func (t *tools) Stop(ctx context.Context) (string, error) {
 	if err := t.verified(ctx); err != nil {
 		return "", err
 	}
-	out, err := t.runner.Run(ctx, "docker", "compose", "-f", t.composePath(), "stop")
+	out, err := t.runner.Run(ctx, "docker", t.compose("stop")...)
 	if err != nil {
 		return "", fmt.Errorf("webtools: docker compose stop refused: %s", dockerVoice(err, out))
 	}
@@ -408,14 +441,15 @@ func (t *tools) Status(ctx context.Context) (Status, error) {
 	if err := t.runnerErr(); err != nil {
 		return Status{}, err
 	}
-	files, err := bundleFiles()
+	files, err := t.bundleFiles()
 	if err != nil {
 		return Status{}, err
 	}
 	st := Status{Dir: t.dir, Missing: []string{}, Differ: []string{}, Services: []string{}}
 	version, err := t.probe(ctx)
+	up := err == nil
 	switch {
-	case err == nil:
+	case up:
 		st.Docker = "ok " + version
 	case errors.Is(err, exec.ErrNotFound):
 		st.Docker = "docker is not on PATH: install Docker, then rig webtools setup"
@@ -431,10 +465,9 @@ func (t *tools) Status(ctx context.Context) (Status, error) {
 		return st, err
 	}
 	st.Missing, st.Differ = missing, differ
-	if strings.HasPrefix(st.Docker, "ok ") {
+	if up {
 		if _, err := os.Stat(t.composePath()); err == nil {
-			out, err := t.runner.Run(ctx, "docker", "compose", "-f", t.composePath(), "ps",
-				"--services", "--filter", "status=running")
+			out, err := t.runner.Run(ctx, "docker", t.compose("ps", "--services", "--filter", "status=running")...)
 			if err != nil {
 				st.Stack = dockerVoice(err, out)
 			} else {

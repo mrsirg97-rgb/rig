@@ -64,6 +64,9 @@ func SetKey(dir, key, value string) error {
 	} else if !os.IsNotExist(err) {
 		return readErr(path, err)
 	}
+	if doc == nil {
+		doc = map[string]any{}
+	}
 	doc[key] = value
 	out, err := json.MarshalIndent(doc, "", "  ")
 	if err != nil {
