@@ -80,10 +80,10 @@ gofmt -l .
 
 ## the binary's verbs
 
-`rig` takes flags, one positional door, and three subcommands. The flags
+`rig` takes flags, one positional door, and four subcommands. The flags
 are the four-layer knobs under "configure" (plus `-p`, `--resume`,
 `--session-id`, `--tui`, `--version`, `--update`). The subcommands
-(`cmd/rig/main.go:164-178`):
+(`cmd/rig/main.go:164-180`):
 
 - `rig serve [-addr 127.0.0.1:7777]` — the dashboard; the address must be
   loopback and the page is the prompt (`-p` refuses beside it).
@@ -92,13 +92,18 @@ are the four-layer knobs under "configure" (plus `-p`, `--resume`,
   this is its door.
 - `rig decision train <trainer>` — the train zone's runner, headless
   (`docs/PLUGINS.md`).
+- `rig webtools <verb>` — the egress bundle's door: `status`, `setup
+  [password] [force]`, `start`, `stop`; the same four verbs as `/webtools`
+  and the dashboard's web tools page (`specs/SPEC_WEBTOOLS.md`). It needs
+  `docker` on `PATH` and a daemon that answers; a machine with neither can
+  still `setup`, and `status` reports what it sees as facts, not faults.
 - `rig -exec <argv>` — the landlock door: it applies the in-kernel domain
   and `syscall.Exec`s the argv, and it is honored only when `RIG_LANDLOCK`
   names a profile. The `sandbox: "landlock"` fire reaches it as
   `rig -exec rig -p …`, so every thread of the worker inherits a wall an
   in-process call cannot put on threads that already exist.
 
-An unknown positional refuses, naming the three.
+An unknown positional refuses, naming the four.
 
 ## configure
 
@@ -156,8 +161,8 @@ creating session's.
 | python kernel |                | `RIG_PYTHON`           | `python`        | the default interpreter |
 | ffmpeg        |                | `RIG_FFMPEG`           | `ffmpeg`        | `ffmpeg` on `PATH`; `view`'s video frames need it, and a jailed worker gets it on the jail env with a read-only bind of its directory |
 | browser       |                | `RIG_BROWSER`          | `browser`       | none: `view`'s browser step needs a headless chromium named here (chrome-headless-shell works), refuses naming both knobs otherwise, and a jailed worker gets it the same way |
-| web search    |                | `RIG_SEARXNG_URL`      | `searxngUrl`    | `http://127.0.0.1:8888` (the web-tools compose) |
-| web fetch     |                | `RIG_WEB_FETCH_PROXY`  | `webFetchProxy` | `http://127.0.0.1:8889`; **presence key**: set empty = direct |
+| web search    |                | `RIG_SEARXNG_URL`      | `searxngUrl`    | `http://127.0.0.1:8888` (the web-tools bundle: `rig webtools setup`, then `rig webtools start`) |
+| web fetch     |                | `RIG_WEB_FETCH_PROXY`  | `webFetchProxy` | `http://127.0.0.1:8889`; **presence key**: set empty = direct; `rig webtools setup` writes it back with the bundle's credentials (the password lives in the conf and this file, and error text prints the URL without them) |
 | extraction    |                | `RIG_TRAFILATURA`      | `trafilatura`   | none (auto); **presence key**: set empty = the stdlib text pass |
 | session model |                | `RIG_MODEL`            | `model`          | no embedded default; the worker model resolves at claim time: the named one, else the resident model, else this |
 | swap endpoint |                | `RIG_SWAP_URL`         | `swapUrl`         | retired as a router at 3.0.0: the provider sends to the model row's port directly; the setting stays parsed for older configs |

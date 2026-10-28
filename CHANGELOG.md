@@ -1,4 +1,61 @@
 # Changelog
+## [3.5.0]: the egress bundle is generated — one command, three services, the machine's own secrets
+
+`rig webtools setup|start|stop|status` builds the bundle the `web` tool talks
+to — SearXNG, its valkey, and the tinyproxy that carries fetch's egress — in
+the rig home's `external/`, from templates embedded in the binary
+(`webtools/`, `specs/SPEC_WEBTOOLS.md`). The bytes are the hardened set the
+operator's hand-built bundle reached on 2026-10-26: BasicAuth on the proxy with
+the realm renamed so the 407 does not advertise the software, the destination
+deny-list, one fixed bridge subnet feeding the compose `ipam`, the proxy's
+`Allow` line and the limiter's `pass_ip`, `read_only` and `no-new-privileges`
+beside the memory and CPU caps, the log rotation and the non-root users, and
+the modes that travel together — the conf `0600` on the host and
+`COPY --chown=… --chmod=600` in the image, because a root-owned 600 copy is
+unreadable by uid 100 and reads as a crash-loop behind a `docker ps` that says
+`Up`. The password and the SearXNG secret key are generated once, from
+`crypto/rand`, and every later setup reuses them: a re-run writes nothing, and
+`start` never rotates a credential the containers already hold. A file that
+differs from what rig generates names itself and waits for `force`.
+
+The password is the machine's and it is generated, so it is not the operator's
+to copy: `setup` refuses anything outside `[A-Za-z0-9._-]{16,128}`, naming the
+rule, because the `BasicAuth` line is unquoted in tinyproxy's parser — a quote,
+a space or a hash there changes the parsed password — and the same bytes land in
+`settings.json`, where a quote would break the JSON. `settings.json` is written
+through `config.SetKey`, the one settings writer: a key `config` does not know
+refuses, naming the known ones, the rest of the document keeps its shape through
+the same marshal, and the file is written `0600` and renamed over. `SetTheme`
+is a call to it now: one writer, one shape.
+
+Docker is one argv seam (`Runner.Run`), and its refusals are docker's own voice
+carried back verbatim; `docker` missing, a daemon that does not answer, a stack
+that is down, a bundle not yet written, are fields on `Status` and not errors.
+Three surfaces, one behavior: `rig webtools <verb>`, `/webtools` in the command
+set, and the dashboard's web tools page, each a thin wire over the same `Tools`.
+The start order is fixed and named — the volumes, the chown helper for each
+bind-mounted path, then `compose up -d --build` — and no verb removes anything:
+`stop` stops, and the volumes keep the limiter's bans and the valkey dump.
+
+On Linux the bundle carries its own egress firewall. Fetch pins the address it
+checked only when it dials direct; through the proxy, tinyproxy resolves the name
+again and the deny-list matches strings, so a rebinding name could still reach
+the LAN. `firewall/` closes that the way the operator's hand-built bundle did, by
+the address a connection goes to: a host-network container with `NET_ADMIN`
+writes the drops into `DOCKER-USER` (the subnet's own traffic and established
+replies first), its healthcheck re-checks every rule, and tinyproxy and SearXNG
+wait for it, so the proxy never runs without them, and `restart: unless-stopped`
+brings them back after a reboot with no systemd unit and no sudo. A daemon with
+no such chain leaves the proxy down rather than open. Docker Desktop gets the
+seven common files and the deny-list's named limits.
+
+The tests came first, as usual: named cases over a fake `Runner`, no docker
+needed. `tool/web` grows one exported `ProxyDisplay`, so the dashboard's JSON
+and fetch's own unreachable-proxy error cannot disagree about what a redacted
+proxy URL looks like; the docs move with it (`README.md`, `docs/SETUP.md`,
+`docs/USAGE.md`, `command/PACKAGE.md`, `config/PACKAGE.md`,
+`frontend/web/PACKAGE.md`, and this file).
+
 ## [3.4.1]: the constructors build whole — options at the seams, read-only values on the wire
 
 `github.com/mrsirg97-rgb/evt` moved to 0.5.1, whose config is read-only:

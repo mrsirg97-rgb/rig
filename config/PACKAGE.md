@@ -53,9 +53,15 @@ no core, no store types (decision 1). JSON only, stdlib encoding/json.
   home); the root reads it at wire so it follows the session's
   workspace (2.11.8).
 - `ReadTheme`: the theme.json read (the `/theme custom` load reads it fresh).
+- `ReadKey` / `SetKey`: settings.json's two doors (3.5.0, SPEC_WEBTOOLS): a
+  key outside `knownSettings` refuses, naming the known ones; the write keeps
+  the rest of the document byte-shaped through the same marshal, writes `0600`
+  (the file holds the web-bundle password now), and renames over. `ReadKey`
+  answers `(value, ok, err)` so an unset key is a fact, not a fault.
 - `SetTheme`: the `theme` key's one writer (2.3.2): the file's other
   keys preserved, the write atomic (temp then rename), the value
-  verbatim; a malformed existing file refuses in the loader's voice.
+  verbatim; a malformed existing file refuses in the loader's voice; the
+  write itself is `SetKey` (3.5.0) — one writer, one shape.
 - The per-key decoders: `jsonString`, `jsonInt`, `jsonFloat`, `jsonAllow`,
   `jsonStringArray`, `gojson`, and the `readErr` voice.
 

@@ -231,7 +231,7 @@ the core is frozen.
 <!-- measured:begin (scripts/readme-measured; do not hand-edit) -->
 Numbers, not adjectives — and each one names its mechanism. The block is computed: `scripts/readme-measured` reads the stores and the tree, CI refuses drift, so it cannot go stale on you. One SQL read of the state store: the store is the receipt.
 
-**97.7% of 7.4 billion prompt tokens served from cache**, across 3,387 sessions and 66,545 recorded turns — the earliest on v0.2.0. The ratio is `cache_read / prompt`, the arithmetic `sessions summary` runs; the byte-stable prefix is why the provider can reuse so much of it. Cost per turn, era by era:
+**97.7% of 7.6 billion prompt tokens served from cache**, across 3,444 sessions and 67,699 recorded turns — the earliest on v0.2.0. The ratio is `cache_read / prompt`, the arithmetic `sessions summary` runs; the byte-stable prefix is why the provider can reuse so much of it. Cost per turn, era by era:
 
 | era | turns | new tokens / turn | completion / turn | cache |
 |---------|--------|------|------|--------|
@@ -245,7 +245,7 @@ The 2.1.x consolidation rethought the system prompt and the toolset and kept the
 
 **A few thousand bytes of preamble.** The system prompt and the tool schemas are lean, byte-stable, and carefully chosen, and the tests say so: `TestSystemPromptIsByteStableAcrossBuilds`, `TestWireMarshalingIsDeterministic`, `TestWireMessagesAreAppendOnly`. A stray timestamp cannot quietly kill the cache.
 
-**448 lines is the loop** — `loop.go` plus `batch.go`, stdlib only. **686 lines is the whole swarm** — claim, spawn, complete, verdict, reap, and the status throttle. **53,829 lines of Go, 88,433 of tests.** The one store dependency is pure-Go SQLite.
+**448 lines is the loop** — `loop.go` plus `batch.go`, stdlib only. **686 lines is the whole swarm** — claim, spawn, complete, verdict, reap, and the status throttle. **54,890 lines of Go, 90,015 of tests.** The one store dependency is pure-Go SQLite.
 
 <!-- measured:end -->
 
@@ -316,8 +316,8 @@ The contract, the zones, and the train zone: `docs/PLUGINS.md`.
 
 `rig serve` is rig with the page as its terminal: the live session
 streamed in the TUI's grammar, plus sessions, the queue, the jobs, the
-swarm, the models, and the plugin forge — loopback only, token-gated,
-installable to a phone home screen. `docs/SETUP.md` and
+swarm, the models, the plugin forge, and the web tools — loopback only,
+token-gated, installable to a phone home screen. `docs/SETUP.md` and
 `specs/SPEC_SERVE.md`.
 
 ## docs
@@ -367,7 +367,7 @@ cmd/rig        the binary and composition root; wires every seam once
 core           the seams, the wire types, the event vocabulary; types only
 kernel.go      the dependency bag the loop drives, assembled from options
 loop           the turn runtime: ordering, faults, cancellation
-command        the sixteen slash commands, dispatchable with fakes
+command        the seventeen slash commands, dispatchable with fakes
 provider       the model wires: openai-compatible SSE, anthropic Messages
 store          the SQLite stores: state, todo, rem, scheduler, graph, decision
 tool           the model's words (registry.json) and one leaf per tool
@@ -376,6 +376,8 @@ middleware/ policy/  the tool chain and the context/provider decorators,
 frontend       four frontends: tui, cli, oneshot (the -p worker), web
 room/ swarm/   the machine's room (SPEC_ROOM) and the drain controller
 stats/         the machine's vitals, read from /proc, /sys and nvidia-smi
+webtools/      the machine-local web-tools bundle: the bytes the binary
+             carries and the verbs that build and run it (SPEC_WEBTOOLS)
 decision/ plugins/  the decision seam (SPEC_DECISION) and the python zones
 config/ models/ pathguard/ imagemarker/  the four-layer knobs, the model
              table, and the two stdlib leaves the tools and the wires share

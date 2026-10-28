@@ -52,9 +52,10 @@ import (
 	todoapi "github.com/mrsirg97-rgb/rig/v3/tool/todo"
 	verdicttool "github.com/mrsirg97-rgb/rig/v3/tool/verdict"
 	webtool "github.com/mrsirg97-rgb/rig/v3/tool/web"
+	"github.com/mrsirg97-rgb/rig/v3/webtools"
 )
 
-const Version = "3.4.1"
+const Version = "3.5.0"
 
 func claimPriority(prompt string, served bool) (int, error) {
 	if v := os.Getenv("RIG_PRIORITY"); v != "" {
@@ -169,6 +170,10 @@ func rigMain() int {
 		os.Exit(decisionTrain(os.Args[2:], newTrainKernel))
 	}
 
+	if len(os.Args) > 1 && os.Args[1] == "webtools" {
+		os.Exit(runWebTools(os.Args[2:]))
+	}
+
 	serveAddr := ""
 	if len(os.Args) > 1 && os.Args[1] == "serve" {
 		addr, code := parseServe(os.Args[2:])
@@ -184,7 +189,7 @@ func rigMain() int {
 
 	if serveAddr == "" {
 		if rest := flag.Args(); len(rest) > 0 {
-			fmt.Fprintf(os.Stderr, "rig: %q is not a command (run-job, decision, serve)\n", rest[0])
+			fmt.Fprintf(os.Stderr, "rig: %q is not a command (run-job, decision, serve, webtools)\n", rest[0])
 			os.Exit(2)
 		}
 	}
@@ -581,6 +586,7 @@ func rigMain() int {
 	env := r.commandEnv(commandEnvInput{
 		decisionTrain: decisionTrainEnqueue(scdb, cfgDir, self, cwd, sched.RealCrontab(""), menus.stall),
 		trainers:      menus.names,
+		webTools:      func() webtools.Tools { return newWebTools(cfgDir) },
 	})
 
 	var fe core.Frontend
@@ -614,6 +620,7 @@ func rigMain() int {
 			web.WithCrontab(sched.RealCrontab("")), web.WithRunnerCmd(self+" run-job"), web.WithNatives(nativeToolNames...),
 			web.WithCommands(command.All()...), web.WithEnv(env), web.WithStatus(webStatus(r, sdb)),
 			web.WithStopWorkers(stopWorkers),
+			web.WithTools(newWebTools(cfgDir)),
 		)
 		if werr != nil {
 			fmt.Fprintln(os.Stderr, "rig serve:", werr)

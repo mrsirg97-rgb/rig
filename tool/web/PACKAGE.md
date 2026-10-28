@@ -39,6 +39,8 @@ client, no new venv.
 
 - Registered at the root as one native tool; `WebFetchProxy`/
   `Trafilatura` presence-aware settings feed the fetch engine.
+  `rig webtools setup` writes `webFetchProxy` with the bundle's
+  credentials (SPEC_WEBTOOLS); an empty `webFetchProxy` fetches direct.
 - One allow entry: the permission gate keys on `web`, and approval is
   per tool name, so fetch is allowed with search.
 
@@ -55,6 +57,13 @@ client, no new venv.
   (the request ctx carries them; the transport never re-resolves, so a
   DNS rebind between check and dial cannot reach a private listener).
   With a proxy the proxy resolves and dials; the proxy is not guarded.
+  A proxy URL may carry credentials (the `rig webtools` bundle puts
+  BasicAuth on the tinyproxy): the unreachable-proxy error prints the
+  proxy URL **without** its password (`ProxyDisplay` keeps the user and
+  the host, and it is exported so the dashboard's web tools page says the
+  same words about the same URL), because an error string reaches the tool
+  result, the context and the session log. Its fix-it names `rig webtools start`,
+  `rig webtools setup` and `webFetchProxy ""` (direct egress).
 - The DNS resolution rides the request ctx (the `LookupFn` seam takes
   it): a stalled resolver cannot outlive the fetch's own deadline, and a
   cancelled lookup surfaces the context error.

@@ -813,12 +813,15 @@ func TestTheEgressProxyIsUsedWhenSet(t *testing.T) {
 	}
 }
 
+const proxySecret = "c0ffee1deadbeef"
+
 func TestAnUnreachableProxyNamesItselfAndTheFix(t *testing.T) {
 	l, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
 	}
-	proxy := fmt.Sprintf("http://127.0.0.1:%d", l.Addr().(*net.TCPAddr).Port)
+	port := l.Addr().(*net.TCPAddr).Port
+	proxy := fmt.Sprintf("http://127.0.0.1:%d", port)
 	l.Close()
 
 	w := webTool(config{fetch: fetchConfig{Proxy: proxy, Lookup: publicLookup}})
@@ -826,9 +829,53 @@ func TestAnUnreachableProxyNamesItselfAndTheFix(t *testing.T) {
 	if err == nil {
 		t.Fatal("want the unreachable-proxy error")
 	}
-	want := "egress proxy " + proxy + " is unreachable. Start it: cd ~/docker/web-tools && docker compose up -d"
+	want := fmt.Sprintf("egress proxy http://127.0.0.1:%d is unreachable. Start it: rig webtools start", port)
 	if !strings.Contains(err.Error(), want) {
 		t.Fatalf("error = %q, want it to contain %q", err.Error(), want)
+	}
+	if !strings.Contains(err.Error(), "rig webtools setup") {
+		t.Fatalf("error = %q, want it to name rig webtools setup", err.Error())
+	}
+	if !strings.Contains(err.Error(), `webFetchProxy ""`) {
+		t.Fatalf("error = %q, want it to name the direct-fetch setting", err.Error())
+	}
+}
+
+func TestAnUnreachableProxyErrorKeepsThePasswordHome(t *testing.T) {
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	port := l.Addr().(*net.TCPAddr).Port
+	proxy := fmt.Sprintf("http://rig:%s@127.0.0.1:%d", proxySecret, port)
+	l.Close()
+
+	w := webTool(config{fetch: fetchConfig{Proxy: proxy, Lookup: publicLookup}})
+	_, err = execArgs(t, w, `{"action":"fetch","target":"http://example.example/"}`)
+	if err == nil {
+		t.Fatal("want the unreachable-proxy error")
+	}
+	if !strings.Contains(err.Error(), fmt.Sprintf("http://rig@127.0.0.1:%d", port)) {
+		t.Fatalf("error = %q, want the proxy host and its user", err.Error())
+	}
+	if strings.Contains(err.Error(), proxySecret) {
+		t.Fatalf("error = %q, want no proxy password", err.Error())
+	}
+}
+
+func TestProxyDisplayKeepsTheHostAndDropsThePassword(t *testing.T) {
+	cases := []struct {
+		raw, want string
+	}{
+		{"http://rig:" + proxySecret + "@127.0.0.1:8889", "http://rig@127.0.0.1:8889"},
+		{"http://127.0.0.1:8889", "http://127.0.0.1:8889"},
+		{"", ""},
+		{"://rig:" + proxySecret + "@127.0.0.1:8889", "127.0.0.1:8889"},
+	}
+	for _, c := range cases {
+		if got := ProxyDisplay(c.raw); got != c.want {
+			t.Errorf("ProxyDisplay(%q) = %q, want %q", c.raw, got, c.want)
+		}
 	}
 }
 

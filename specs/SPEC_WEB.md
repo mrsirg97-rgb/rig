@@ -2,9 +2,10 @@
 
 One leaf package, one tool: pane's web_search and web_fetch, ported,
 then folded in 1.7.3 behind the single `web` name. Search talks to the
-local SearXNG instance (the ~/docker/web-tools compose, :8888); fetch
+local SearXNG instance (:8888; the bundle that serves it is what
+`rig webtools` builds, SPEC_WEBTOOLS); fetch
 is a guarded HTTP reader (DNS re-check, redirect re-guard, byte/char
-caps, egress proxy through the compose's tinyproxy :8889) with HTML
+caps, egress proxy through the bundle's tinyproxy :8889) with HTML
 extraction via trafilatura and a stdlib fallback. Stdlib only: net/http,
 net, os/exec; no third-party Go client.
 
@@ -22,7 +23,9 @@ net, os/exec; no third-party Go client.
   Content-Length and streaming byte cap (5 MiB) with loud truncation,
   20 000-char cap with the named elision marker, 30 s default timeout,
   optional egress proxy from env (default http://127.0.0.1:8889, the
-  web-tools compose's tinyproxy) with the unreachable-proxy fix-it voice.
+  web-tools bundle's tinyproxy) with the unreachable-proxy fix-it,
+  which names `rig webtools` and keeps the proxy password out of the
+  error (3.5.0, SPEC_WEBTOOLS).
 - JSON replies are shaped (amended 2.1.6): a response whose content type
   is JSON, or whose body parses as JSON, comes back as one shape line
   (the top-level type, its keys, each array's length and its first
@@ -227,9 +230,18 @@ truncation markers) are unchanged.
   content type calls JSON but that does not parse (a truncated
   download) falls back to the raw text unchanged — fail closed, the
   shape must come from real bytes.
-- **Voices are pane's verbatim**, including the fix-it: an unreachable
-  proxy reads `egress proxy <url> is unreachable. Start it: cd
-  ~/docker/web-tools && docker compose up -d`. The search error is
+- **Voices are pane's verbatim**, with one named change (3.5.0): the
+  fix-it. pane pointed at its own install path (`cd ~/docker/web-tools
+  && docker compose up -d`), which a rig user does not have; the fix-it
+  now names what rig ships: `egress proxy <url> is unreachable. Start
+  it: rig webtools start, or rig webtools setup to build the bundle;
+  webFetchProxy "" in settings.json fetches direct instead`. The
+  `<url>` is the proxy URL **without its password**: credentials in
+  `webFetchProxy` are the normal shape once the bundle's BasicAuth
+  exists, and the raw URL printed the secret into every tool result,
+  the context and the session log (measured on the operator's box,
+  2026-10-26). `fetch` carries the display value beside the transport
+  URL, both whole at construction. The search error is
   `SearXNG search failed: HTTP <status>`. One named port difference:
   a refused connection is Go's voice (`dial tcp ...: connect:
   connection refused`), not Node's ECONNREFUSED; the named case asserts
@@ -295,7 +307,13 @@ rig-side named cases (the port's own surface):
 - the dial is pinned to the vetted addresses and never re-resolves
   (a loopback listener behind a lying resolver is not reached)
 - the egress proxy is used when set (the proxy sees the request)
-- an unreachable proxy names itself and the fix
+- an unreachable proxy names itself and the fix, naming `rig webtools
+  start`, `rig webtools setup` and the `webFetchProxy ""` way out
+- an unreachable proxy's error keeps the password home and still names
+  the user and the host (`http://rig@127.0.0.1:<port>`)
+- proxyDisplay drops the password and keeps the host, passes a
+  credential-less URL through unchanged, and an unparseable URL still
+  loses its credentials
 - the trafilatura fallback is announced in the content (rig over pane)
 - trafilatura resolution: shared venv first, then PATH, explicit wins
 - jsonShape names the top-level type, its keys, each array's length and

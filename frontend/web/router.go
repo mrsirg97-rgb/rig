@@ -83,6 +83,10 @@ func (s *server) allowed(path string) (map[string]bool, bool) {
 		return setOf("GET"), true
 	case path == "/api/update":
 		return setOf("GET", "POST"), true
+	case path == "/api/webtools":
+		return setOf("GET"), true
+	case strings.HasPrefix(path, "/api/webtools/"):
+		return setOf("POST"), true
 	}
 	return nil, false
 }
@@ -131,6 +135,10 @@ func (s *server) dispatch(w http.ResponseWriter, r *http.Request, path string) {
 		s.handleRoom(w, r)
 	case path == "/api/update":
 		s.handleUpdate(w, r)
+	case path == "/api/webtools" && r.Method == "GET":
+		s.handleWebTools(w, r)
+	case strings.HasPrefix(path, "/api/webtools/") && r.Method == "POST":
+		s.handleWebToolsVerb(w, r, webToolsVerbOf(path))
 	case path == "/api/plugins" && r.Method == "GET":
 		s.handlePlugins(w, r)
 	case path == "/api/plugins" && r.Method == "POST":

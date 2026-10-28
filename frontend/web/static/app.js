@@ -9,7 +9,7 @@ const browser = document.getElementById('browser');
 
 const VIEWS_KEY = 'rig.serve.view';
 const DEFAULT_VIEW = 'room';
-const KNOWN_VIEWS = ['room', 'chat', 'sessions', 'todos', 'scheduler', 'swarm', 'plugins', 'models', 'update', 'more'];
+const KNOWN_VIEWS = ['room', 'chat', 'sessions', 'todos', 'scheduler', 'swarm', 'plugins', 'models', 'update', 'webtools', 'more'];
 
 function rememberedView() {
   let v;
@@ -1653,6 +1653,49 @@ async function renderUpdate() {
   tb.body.appendChild(row);
 }
 
+async function renderWebTools() {
+  const data = await api('/api/webtools');
+  clear();
+  const tb = toolBlock('web tools', 'the bundle web fetch egress runs through');
+  main.appendChild(tb.el);
+  const st = data.status || {};
+  for (const l of st.lines || []) tb.body.appendChild(line('dim')).textContent = l;
+  const pw = textInput('blank generates 32 hex', false);
+  pw.type = 'password';
+  const force = el('select');
+  force.appendChild(new Option('keep files rig did not write', 'keep'));
+  force.appendChild(new Option('overwrite them', 'force'));
+  tb.body.appendChild(promptRow('password', pw, G.dot));
+  tb.body.appendChild(promptRow('files', force, G.dot));
+  const act = line();
+  const say = (text) => { tb.body.appendChild(line()).textContent = text; };
+  const fail = (e) => { tb.body.appendChild(line('dim')).textContent = e.message; };
+  act.appendChild(button('run rig webtools setup', 'rowact', async () => {
+    act.textContent = 'generating…';
+    const body = { password: pw.value, force: force.value === 'force' };
+    pw.value = '';
+    try {
+      const res = await api('/api/webtools/generate', { method: 'POST', body: JSON.stringify(body) });
+      say(res.out || 'done');
+    } catch (e) { fail(e); }
+  }));
+  act.appendChild(button('run rig webtools start', 'rowact', async () => {
+    act.textContent = 'starting…';
+    try {
+      const res = await api('/api/webtools/start', { method: 'POST', body: '{}' });
+      say(res.out || 'started');
+    } catch (e) { fail(e); }
+  }));
+  act.appendChild(button('run rig webtools stop', 'rowact', async () => {
+    act.textContent = 'stopping…';
+    try {
+      const res = await api('/api/webtools/stop', { method: 'POST', body: '{}' });
+      say(res.out || 'stopped');
+    } catch (e) { fail(e); }
+  }));
+  tb.body.appendChild(act);
+}
+
 const PY_KW = new Set(('False None True and as assert async await break class continue def del elif ' +
   'else except finally for from global if import in is lambda nonlocal not or pass raise return try ' +
   'while with yield').split(' '));
@@ -1895,6 +1938,7 @@ const MORE_VIEWS = [
   ['models', 'models ' + G.dot + ' switch, effort'],
   ['plugins', 'plugins ' + G.dot + ' the forge'],
   ['update', 'update ' + G.dot + ' this build, rig -update'],
+  ['webtools', 'web tools ' + G.dot + ' the bundle: status, setup, start, stop'],
 ];
 
 function renderMore() {
@@ -2104,6 +2148,7 @@ function render() {
     room: () => renderRoom(),
     update: () => renderUpdate(),
     plugins: () => renderPlugins(),
+    webtools: () => renderWebTools(),
   }[state.view];
   p().catch((e) => renderError(e.message));
 }

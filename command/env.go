@@ -7,6 +7,7 @@ import (
 
 	"github.com/mrsirg97-rgb/rig/v3/core"
 	"github.com/mrsirg97-rgb/rig/v3/models"
+	"github.com/mrsirg97-rgb/rig/v3/webtools"
 )
 
 type Steerer interface {
@@ -103,6 +104,7 @@ type Env struct {
 
 	DecisionTrain func(ctx context.Context, trainer string) (string, error)
 	Trainers      func() []string
+	WebTools      func() webtools.Tools
 }
 
 func envOf(env any) (*Env, error) {
