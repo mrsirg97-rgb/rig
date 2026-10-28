@@ -7,8 +7,6 @@ import (
 	"github.com/mrsirg97-rgb/rig/v3/testenv"
 )
 
-const operatorSecret = "4b1105cde10dbecbdbc5c02b61c996cb64d439d20f6f7cd11acba9eb5428a3ef"
-
 func TestMain(m *testing.M) {
 	testenv.Main(m)
 }

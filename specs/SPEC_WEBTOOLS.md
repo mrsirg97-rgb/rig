@@ -24,7 +24,8 @@ owns the bundle and the verbs that build and run it.
   log rotation plus non-root users, BasicAuth on the proxy, a
   destination deny-list, and the SearXNG limiter pinned to the
   network's gateway so host traffic is counted and relayed traffic
-  is not.
+  is not. On Linux, an egress firewall drops the subnet's traffic to
+  private address space by the address it goes to.
 - **Honest about the world.** `docker` absent refuses and names the
   install path; a present `docker` whose daemon does not answer
   refuses with the daemon's own voice; a claimed port or subnet
@@ -74,6 +75,8 @@ webtools/
   docker.go       the Runner seam: real docker argv, capped output
   files/          the embedded bundle (compose, tinyproxy conf/filter/
                   Dockerfile, searxng settings.yml + limiter.toml)
+  linux/          added on Linux: docker-compose.firewall.yml and
+                  firewall/ (Dockerfile, egress.sh)
   webtools_test.go  named cases over a fake Runner
   PACKAGE.md      the package's spec file, citing this spec
 command/webtools.go   the slash command over its own Env seams
@@ -203,8 +206,35 @@ about what a redacted proxy URL looks like.
   PATH, a missing bundle, a stack that is down, as fields; it errors
   only on real I/O failure. `Start` and `Stop` fail closed: `docker`
   present and unverified is refused, not assumed. A missing `Tools`
-  wiring answers `503` on the dashboard and an error on the command,
-  naming that the root did not wire it.
+  wiring answers `501` on the dashboard and an error on the command,
+  naming that the root did not wire it: it is the build's wiring, not
+  a passing outage, so it is not `503`.
+- **On Linux, the bundle carries the firewall.** Fetch pins the
+  address it checked only when it dials direct (`pinnedDial`); through
+  the proxy, tinyproxy resolves the name again, and the deny-list
+  matches strings, so a name that answers public to rig and private to
+  the proxy reaches the LAN (DNS rebinding), and a `CONNECT` tunnel
+  never meets a `://` rule. The operator's hand-built bundle closed
+  that with `DOCKER-USER` rules from a root systemd unit; the
+  generated one carries them as a service: `firewall/`, on the host
+  network with `NET_ADMIN` (every other capability dropped,
+  `read_only`, `no-new-privileges`), writes the drops at the top of
+  `DOCKER-USER` in order (the subnet's own traffic returns first — a
+  host with `br_netfilter` sends searxng-to-valkey through the chain —
+  then replies to established flows, then the private ranges), and
+  its healthcheck re-checks every rule. tinyproxy and searxng wait for
+  it to be healthy; `restart: unless-stopped` brings it back with the
+  daemon, so the rules return after a reboot with no unit and no
+  sudo. A daemon with no `DOCKER-USER` chain (Docker Desktop on Linux,
+  the nftables backend) leaves it unhealthy and the proxy down. The
+  file set is Linux only (`WithGOOS`, default `runtime.GOOS`): Docker
+  Desktop's daemon lives in a VM this is not measured against, so
+  there the deny-list's named limits stand. The compose override is a
+  second file, not a slot in the first, so the common bundle is the
+  same bytes everywhere and every compose call passes both on
+  Linux. The script was measured in an isolated network namespace
+  (no chain: refused; applied: ordered above Docker's `RETURN`;
+  re-applied: no duplicate; a rule deleted: unhealthy, then healed).
 - **No remove verb yet.** See non-goals: the destructive verb needs its
   own named cases, and `stop` covers the everyday need.
 
@@ -239,10 +269,17 @@ and no network beyond `httptest`:
   the fake answers, and names the daemon's voice when it does not
 - `Start` refuses when `docker` is absent and when the daemon does not
   answer, naming the reason, and never reaches compose
+- on Linux the bundle is ten files, the firewall's three among them,
+  and `up`, `ps` and `stop` all pass the override; a desktop bundle is
+  the seven common files and passes none
+- the firewall's script returns the subnet's own traffic before the
+  drops, names both iptables backends, and the override runs it on the
+  host network with `NET_ADMIN`, its healthcheck the gate tinyproxy and
+  searxng wait on
 - the runner caps its output loudly at the bound
 - `config.SetKey`: refuses an unknown key naming the known ones, keeps
-  the other keys, creates the file when absent, writes `0600`, keeps
-  `theme` working through it
+  the other keys, creates the file when absent, writes over a `null`
+  document, writes `0600`, keeps `theme` working through it
 - `/webtools` bare prints the status lines; `setup` writes and names
   the ports; `start` and `stop` cross to their seams; an unknown verb
   refuses naming the four; `setup force` crosses `force` to the seam;
@@ -250,7 +287,7 @@ and no network beyond `httptest`:
   should have wired it
 - the dashboard: `GET /api/webtools` answers the status JSON from a
   fake `Tools`; `POST /api/webtools/generate`, `/start`, `/stop` cross
-  to the verbs; unwired answers `503`; the same-origin and token gates
+  to the verbs; unwired answers `501`; the same-origin and token gates
   apply; an over-cap body answers `400`
 - `rig webtools` with no arguments prints usage naming the verbs;
   `rig webtools status` runs without a model row or an endpoint (the

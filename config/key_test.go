@@ -72,6 +72,18 @@ func TestSetKeyOnAMalformedFileRefuses(t *testing.T) {
 	}
 }
 
+func TestSetKeyOnANullDocumentWritesTheKey(t *testing.T) {
+	dir := t.TempDir()
+	writeSettings(t, dir, "null\n")
+	if err := config.SetKey(dir, "theme", "dark"); err != nil {
+		t.Fatal(err)
+	}
+	raw := read(t, filepath.Join(dir, "settings.json"))
+	if !strings.Contains(raw, `"theme": "dark"`) {
+		t.Fatalf("settings.json = %s, want the key written over the null", raw)
+	}
+}
+
 func TestSetKeyRefusesAnEmptyDir(t *testing.T) {
 	if err := config.SetKey("", "theme", "cool"); err == nil || !strings.Contains(err.Error(), "no config dir") {
 		t.Fatalf("err = %v, want the missing dir named", err)

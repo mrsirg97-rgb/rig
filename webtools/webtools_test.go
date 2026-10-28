@@ -91,7 +91,12 @@ func (s *settingStub) Put(key, value string) error {
 
 func bundleTools(t *testing.T, home string, r Runner, st Setting) Tools {
 	t.Helper()
-	return New(home, WithRunner(r), WithSetting(st))
+	return New(home, WithRunner(r), WithSetting(st), WithGOOS("linux"))
+}
+
+func desktopTools(t *testing.T, home string, r Runner, st Setting) Tools {
+	t.Helper()
+	return New(home, WithRunner(r), WithSetting(st), WithGOOS("darwin"))
 }
 
 func mustErr(t *testing.T, err error, want string) string {
@@ -273,13 +278,16 @@ func TestGenerateWritesTheWholeBundleAtTheRightModes(t *testing.T) {
 		filepath.Join("searxng", "settings.yml"),
 		filepath.Join("searxng", "limiter.toml"),
 		"README.md",
+		"docker-compose.firewall.yml",
+		filepath.Join("firewall", "Dockerfile"),
+		filepath.Join("firewall", "egress.sh"),
 	} {
 		if !files[want] {
 			t.Fatalf("the bundle lacks %s (%v)", want, keysOf(files))
 		}
 	}
-	if !strings.Contains(reply, "7 files") {
-		t.Fatalf("reply = %q, want the seven files named", reply)
+	if !strings.Contains(reply, "10 files") {
+		t.Fatalf("reply = %q, want the ten files named", reply)
 	}
 	confMode := mode(t, filepath.Join(home, "external", "tinyproxy", "tinyproxy.conf"))
 	if confMode&0o077 != 0 {
@@ -395,7 +403,10 @@ func TestAnExplicitPasswordOutsideTheRuleIsRefused(t *testing.T) {
 			continue
 		}
 		errtext := mustErr(t, err, c.why)
-		has(t, errtext, "16", "128")
+		has(t, errtext, "16 to 128")
+		if strings.HasSuffix(errtext, ": 16") {
+			t.Fatalf("the refusal ends in a stray number: %s", errtext)
+		}
 		if !strings.Contains(errtext, "letter") {
 			t.Fatalf("the refusal must name the accepted set: %s", errtext)
 		}
@@ -416,8 +427,12 @@ func TestAGeneratedPasswordIsThirtyHexAndTheSecretForty(t *testing.T) {
 	if len(secret) != 40 || !isHex(secret) {
 		t.Fatalf("secret_key %q, want 40 hex", secret)
 	}
-	if secret == operatorSecret {
-		t.Fatal("the template carries a fixed secret key")
+	other := t.TempDir()
+	if _, err := generate(bundleTools(t, other, &stub{}, newSetting(nil)), "", false); err != nil {
+		t.Fatal(err)
+	}
+	if secretLine(read(t, filepath.Join(other, "external", "searxng", "settings.yml"))) == secret {
+		t.Fatal("two machines got the same secret key: the template carries a fixed one")
 	}
 }
 
@@ -432,9 +447,6 @@ func TestNoTemplateSlotSurvivesInTheRenderedBundle(t *testing.T) {
 		}
 		if strings.Contains(read(t, path), "{{") {
 			t.Fatalf("%s still carries a template slot", path)
-		}
-		if strings.Contains(read(t, path), operatorSecret) {
-			t.Fatalf("%s carries the operator's own value", path)
 		}
 	})
 }
@@ -811,4 +823,86 @@ func keysOf(m map[string]bool) []string {
 		out = append(out, k)
 	}
 	return out
+}
+
+func TestADesktopBundleCarriesNoFirewall(t *testing.T) {
+	home := t.TempDir()
+	reply, err := generate(desktopTools(t, home, &stub{}, newSetting(nil)), "", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(reply, "7 files") {
+		t.Fatalf("reply = %q, want the seven common files", reply)
+	}
+	for _, rel := range []string{"docker-compose.firewall.yml", "firewall"} {
+		if _, err := os.Stat(filepath.Join(home, "external", rel)); !os.IsNotExist(err) {
+			t.Fatalf("a desktop bundle carries %s", rel)
+		}
+	}
+}
+
+func TestComposeRunsWithTheFirewallOverrideOnLinuxOnly(t *testing.T) {
+	for _, c := range []struct {
+		tools func(*testing.T, string, Runner, Setting) Tools
+		want  bool
+	}{{bundleTools, true}, {desktopTools, false}} {
+		home := t.TempDir()
+		s := &stub{services: "searxng\n"}
+		tools := c.tools(t, home, s, newSetting(nil))
+		if _, err := generate(tools, "", false); err != nil {
+			t.Fatal(err)
+		}
+		s.calls = nil
+		if _, err := tools.Start(context.Background()); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := tools.Status(context.Background()); err != nil {
+			t.Fatal(err)
+		}
+		if err := stopErr(tools); err != nil {
+			t.Fatal(err)
+		}
+		composed := 0
+		for _, call := range s.calls {
+			if !strings.Contains(call, " compose ") {
+				continue
+			}
+			composed++
+			if got := strings.Contains(call, "-f "+filepath.Join(home, "external", "docker-compose.firewall.yml")); got != c.want {
+				t.Fatalf("firewall override in %q = %v, want %v", call, got, c.want)
+			}
+		}
+		if composed != 3 {
+			t.Fatalf("calls = %v, want up, ps and stop through compose", s.calls)
+		}
+	}
+}
+
+func TestTheFirewallKeepsTheSubnetAndDropsPrivateDestinationsAfterIt(t *testing.T) {
+	home := t.TempDir()
+	if _, err := generate(bundleTools(t, home, &stub{}, newSetting(nil)), "", false); err != nil {
+		t.Fatal(err)
+	}
+	script := read(t, filepath.Join(home, "external", "firewall", "egress.sh"))
+	has(t, script, `SUBNET="172.30.30.0/24"`, "DOCKER-USER", "iptables-nft", "iptables-legacy",
+		"10.0.0.0/8", "100.64.0.0/10", "127.0.0.0/8", "169.254.0.0/16", "172.16.0.0/12", "192.168.0.0/16")
+	inside := strings.Index(script, `-d $SUBNET -j RETURN`)
+	drop := strings.Index(script, `-d $r -j DROP`)
+	if inside < 0 || drop < 0 || inside > drop {
+		t.Fatalf("the subnet's own traffic must return before the drops (inside %d, drop %d)", inside, drop)
+	}
+	if mode(t, filepath.Join(home, "external", "firewall", "egress.sh"))&0o077 != 0o044 {
+		t.Fatal("the script carries group or world write bits")
+	}
+	dockerfile := read(t, filepath.Join(home, "external", "firewall", "Dockerfile"))
+	has(t, dockerfile, "--chmod=755", "iptables")
+	override := read(t, filepath.Join(home, "external", "docker-compose.firewall.yml"))
+	has(t, override, "network_mode: host", "NET_ADMIN", "cap_drop", "no-new-privileges:true", "read_only: true",
+		`"/usr/local/bin/egress.sh", "check"`, "restart: unless-stopped")
+	for _, svc := range []string{"tinyproxy:", "searxng:"} {
+		at := strings.Index(override, "\n  "+svc)
+		if at < 0 || !strings.Contains(override[at:], "condition: service_healthy") {
+			t.Fatalf("%s must wait for the firewall's healthcheck", svc)
+		}
+	}
 }
