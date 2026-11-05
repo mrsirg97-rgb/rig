@@ -18,7 +18,9 @@ func (c *cli) Notify(ev evt.Signal) {
 		io.WriteString(c.out, e.Text)
 	case core.ReasoningDelta:
 		io.WriteString(c.out, e.Text)
-		c.reasoning = true
+		if e.Text != "" {
+			c.reasoning = true
+		}
 	case core.ToolStart:
 		c.reasoning = false
 		c.current = e.Call.Name

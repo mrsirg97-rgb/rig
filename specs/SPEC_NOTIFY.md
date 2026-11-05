@@ -33,11 +33,15 @@ two slots (SPEC_TUI decision 10); the piped reference does not.
 ### 1. The state is the last rendered text kind
 
 `cli` carries one fact: whether the last text it rendered was reasoning.
-`ReasoningDelta` writes its text and sets it; `TextDelta` writes one
-newline first when it is set, then its text, and clears it. A tool call
-clears it too: the execution bracket (`● name`, the result line) already
-separates the reasoning from the answer that follows the tool, so the
-transition across a tool is not a reasoning-to-answer switch.
+`ReasoningDelta` writes its text and sets it when the text is non-empty;
+`TextDelta` writes one newline first when it is set, then its text, and
+clears it. An empty reasoning piece renders nothing and sets nothing: the
+providers emit them (the one-shot suite carries one), and a turn whose
+only "reasoning" is empty must not print a stray newline before its
+answer. A tool call clears it too: the execution bracket (`● name`, the
+result line) already separates the reasoning from the answer that follows
+the tool, so the transition across a tool is not a reasoning-to-answer
+switch.
 
 `TurnEnd` clears it: the boundary is the turn's, and the next turn starts
 clean. `EmptyTurn` does not: the discarded attempt's reasoning was shown,
@@ -67,6 +71,8 @@ specs/SPEC_NOTIFY.md     this file
   verbatim, exactly one newline separates it from the answer, and the
   answer is verbatim.
 - A turn with no reasoning: the answer gets no extra newline.
+- A turn whose only reasoning is an empty piece: the answer gets no extra
+  newline.
 
 ## scope
 
