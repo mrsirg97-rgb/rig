@@ -11,11 +11,16 @@ import (
 func (c *cli) Notify(ev evt.Signal) {
 	switch e := ev.(type) {
 	case core.TextDelta:
+		if c.reasoning {
+			io.WriteString(c.out, "\n")
+			c.reasoning = false
+		}
 		io.WriteString(c.out, e.Text)
 	case core.ReasoningDelta:
-
 		io.WriteString(c.out, e.Text)
+		c.reasoning = true
 	case core.ToolStart:
+		c.reasoning = false
 		c.current = e.Call.Name
 		fmt.Fprintf(c.out, "\n● %s\n", e.Call.Name)
 	case core.ToolResult:
@@ -64,5 +69,6 @@ func (c *cli) Notify(ev evt.Signal) {
 		fmt.Fprintf(c.out, "↑%s ↓%s · cache %s %d%%\n",
 			core.FormatTokens(c.prompt), core.FormatTokens(c.completion), core.FormatTokens(c.cacheRead), hit)
 		c.prompt, c.completion, c.cacheRead = 0, 0, 0
+		c.reasoning = false
 	}
 }
