@@ -232,12 +232,21 @@ func TestNotifyRendersFailedExecutions(t *testing.T) {
 	}
 }
 
-func TestNotifyRendersReasoningVerbatim(t *testing.T) {
+func TestNotifySeparatesReasoningFromAnswer(t *testing.T) {
 	r := build(t)
 	r.fe.Notify(core.ReasoningDelta{Text: "thinking "})
+	r.fe.Notify(core.TextDelta{Text: "ans"})
+	r.fe.Notify(core.TextDelta{Text: "wer"})
+	if got := r.out.String(); got != "thinking \nanswer" {
+		t.Fatalf("one newline between reasoning and answer, both verbatim: %q", got)
+	}
+}
+
+func TestNotifyAnswerWithoutReasoningGetsNoSeparator(t *testing.T) {
+	r := build(t)
 	r.fe.Notify(core.TextDelta{Text: "answer"})
-	if got := r.out.String(); got != "thinking answer" {
-		t.Fatalf("reasoning must render verbatim: %q", got)
+	if got := r.out.String(); got != "answer" {
+		t.Fatalf("a turn with no reasoning gets no extra newline: %q", got)
 	}
 }
 
