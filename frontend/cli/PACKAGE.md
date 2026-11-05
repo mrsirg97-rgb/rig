@@ -25,7 +25,8 @@ seam (SPEC_HARDENING decision 4, SPEC_COMMANDS 2).
   blocking, the command dispatch consumed inside Input, blank lines as
   no-ops, EOF ending the REPL, a cancelled context surfacing its error.
 - **Notify**: the render of the named events: `TextDelta`/`ReasoningDelta`
-  verbatim, `ToolStart`/`ToolResult` as the `● name` bracket, `Done`,
+  verbatim, one newline at the reasoning-to-answer switch (3.5.1,
+  SPEC_NOTIFY), `ToolStart`/`ToolResult` as the `● name` bracket, `Done`,
   `Compacting`/`Compacted` (the loader line and the one-line compact
   event), `EmptyTurn` (the one-line resampling notice, its usage added to
   the turn totals), `Fault` as `[fault]`, and `TurnEnd`'s usage line.
@@ -70,4 +71,6 @@ seam (SPEC_HARDENING decision 4, SPEC_COMMANDS 2).
   bytes, and exactly one newline ends the line; a multi-line listing
   carries its own trailing one, and the frame is not a second.
 - The thinking is visible verbatim (the CLI does not style it): the TUI
-  styles it (SPEC_TUI decision 10).
+  styles it (SPEC_TUI decision 10). The one thing the CLI adds is the
+  boundary: one newline when the turn's text switches from reasoning to
+  answer, and none when it does not (SPEC_NOTIFY).

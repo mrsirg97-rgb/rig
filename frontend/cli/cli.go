@@ -39,6 +39,8 @@ type cli struct {
 	cacheRead  int
 
 	current string
+
+	reasoning bool
 }
 
 type Option func(*cli)

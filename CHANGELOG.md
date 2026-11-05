@@ -1,4 +1,19 @@
 # Changelog
+## [3.5.1]: the piped frontend separates the thinking from the answer
+
+`frontend/cli` renders `ReasoningDelta` and `TextDelta` verbatim, so a turn
+that thought and then answered printed `thinking answer` with no boundary.
+The CLI now writes one newline at the moment the turn's text switches from
+reasoning to answer (SPEC_NOTIFY): the reasoning and the answer stay
+verbatim otherwise, the newline is written once per switch however many
+deltas carry the answer, and a turn with no reasoning gets no extra
+newline. An empty reasoning piece sets nothing — the providers emit them,
+and a turn whose only "reasoning" is empty must not print a stray newline
+before its answer. A tool call clears the fact — the execution bracket
+already separates the two — and `TurnEnd` clears it, so the boundary is
+the turn's. The TUI, the web chat, the one-shot worker, the wire and the
+transcript are untouched.
+
 ## [3.5.0]: the egress bundle is generated — one command, three services, the machine's own secrets
 
 `rig webtools setup|start|stop|status` builds the bundle the `web` tool talks
