@@ -250,6 +250,15 @@ func TestNotifyAnswerWithoutReasoningGetsNoSeparator(t *testing.T) {
 	}
 }
 
+func TestNotifyEmptyReasoningGetsNoSeparator(t *testing.T) {
+	r := build(t)
+	r.fe.Notify(core.ReasoningDelta{Text: ""})
+	r.fe.Notify(core.TextDelta{Text: "answer"})
+	if got := r.out.String(); got != "answer" {
+		t.Fatalf("an empty reasoning piece gets no newline before the answer: %q", got)
+	}
+}
+
 func TestTurnEndPrintsTheUsageLine(t *testing.T) {
 	r := build(t)
 	r.fe.Notify(core.Done{StopReason: "stop", Usage: core.Usage{Prompt: 922, Completion: 10, CacheRead: 918}})
