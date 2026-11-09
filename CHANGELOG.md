@@ -1,4 +1,13 @@
 # Changelog
+## [3.5.3]: a local engine's mid-stream error is reported with its reason instead of "stream truncated"
+
+An OpenAI-compatible endpoint (osmos-api, OpenAI, OpenRouter) that fails after the stream has started sends one SSE
+event, `{"error": {"message": ..., "type": ...}}`, and closes without `[DONE]` or a finish reason. rig read the event
+as a chunk with no choices, skipped it, and faulted `openai: stream truncated: no finish marker`, so the engine's
+reason was lost. A chunk carrying an `error` with a message now faults at once with
+`openai: the endpoint's error: <message>` (e.g. "the model's tool call did not parse (...)"). A status error before
+the stream and its retry are unchanged; a failure after the first byte is still never retried.
+
 ## [3.5.2]: a model's reasoning stays its own; the same empty turn twice faults at once
 
 A session on 2026-11-08 switched from DeepSeek (osmos `deepseek-1017-ud-l`) to Qwen3.8 (`qwen3.8-flash-next-1m`)

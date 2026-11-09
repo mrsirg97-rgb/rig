@@ -170,6 +170,10 @@ func (p *provider) Stream(ctx context.Context, req core.Request) (<-chan evt.Sig
 					fault(fmt.Errorf("openai: malformed stream chunk: %s", payload))
 					return
 				}
+				if chunk.Error != nil && chunk.Error.Message != "" {
+					fault(fmt.Errorf("openai: the endpoint's error: %s", chunk.Error.Message))
+					return
+				}
 				if chunk.Model != "" {
 					model = chunk.Model
 				}

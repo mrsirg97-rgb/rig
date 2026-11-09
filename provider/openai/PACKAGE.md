@@ -67,6 +67,11 @@ adapter's problem; the loop sees `evt.Signal` only.
 - SSE comment lines (`":"`) are the server's keep-alive through a long
   prefill: ignored, never a fault. An unrecognized line or a malformed
   chunk is a `Fault`.
+- A chunk carrying an `error` object with a message (the shape osmos-api,
+  OpenAI and OpenRouter send for a failure mid-stream, closing without
+  `[DONE]`) is a `Fault` naming it as the endpoint's error, at once; it
+  is never retried, and the turn's partial output stays as streamed
+  (3.5.3).
 - `usage` is read from the usage chunk (the `stream_options.include_usage`
   request); cached tokens are a subset of `prompt` on this wire, and
   `total_tokens` is read and ignored. `usage.cost` (dollars, where the
