@@ -24,6 +24,7 @@ import (
 	"github.com/mrsirg97-rgb/rig/v3/policy/compact"
 	effort "github.com/mrsirg97-rgb/rig/v3/policy/effort"
 	"github.com/mrsirg97-rgb/rig/v3/policy/empty"
+	"github.com/mrsirg97-rgb/rig/v3/policy/lineage"
 	"github.com/mrsirg97-rgb/rig/v3/policy/operator"
 	"github.com/mrsirg97-rgb/rig/v3/provider/anthropic"
 	"github.com/mrsirg97-rgb/rig/v3/provider/openai"
@@ -93,6 +94,7 @@ type root struct {
 	session *core.Session
 	rec     *state.Recorder
 	tools   map[string]core.Tool
+	own     map[string]*lineage.Own // the session's reasoning by the row that wrote it (SPEC_LINEAGE)
 
 	swarm    *swarm.Controller
 	swarmWhy string
@@ -286,7 +288,29 @@ func (r *root) buildPair() (core.Provider, core.ContextPolicy) {
 
 	effInner := effort.Decorator(inner, r.effortForWire)
 
-	return toolset.Carry(r.live, compact.Decorator(empty.Decorator(effInner), pol), r.menuAllow()...), pol
+	return toolset.Carry(r.live, lineage.Decorator(compact.Decorator(empty.Decorator(effInner), pol), r.ownFor(r.row.ID)),
+		r.menuAllow()...), pol
+}
+
+// ownFor is the row's record of its own reasoning in this session, made on first use and kept across rebuilt pairs
+func (r *root) ownFor(row string) *lineage.Own {
+	if r.own == nil {
+		r.own = map[string]*lineage.Own{}
+	}
+	if r.own[row] == nil {
+		r.own[row] = lineage.NewOwn()
+	}
+	return r.own[row]
+}
+
+// ownResumed: a session taken up again, the row's record seeded from the store when the session was last on it
+func (r *root) ownResumed(ctx context.Context, sessionID string) error {
+	seed, err := state.TrailingReasoning(ctx, r.sdb, sessionID, r.row.ID)
+	if err != nil {
+		return err
+	}
+	r.own = map[string]*lineage.Own{r.row.ID: lineage.NewOwn(seed...)}
+	return nil
 }
 
 func (r *root) menuAllow() []string {

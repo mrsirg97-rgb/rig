@@ -1,4 +1,22 @@
 # Changelog
+## [3.5.2]: a model's reasoning stays its own; the same empty turn twice faults at once
+
+A session on 2026-11-08 switched from DeepSeek (osmos `deepseek-1017-ud-l`) to Qwen3.8 (`qwen3.8-flash-next-1m`)
+mid-conversation. rig sent DeepSeek's reasoning back with the history, and Qwen, which keeps prior thinking in its
+prompt, took it as its own: its next turn copied DeepSeek's "no task, keep it brief" and ended with no answer.
+osmos decodes greedily, so both resamples were the same empty turn, and the third faulted.
+
+- **A model sees only its own reasoning** (`policy/lineage`, SPEC_LINEAGE). Each model row keeps a record of the
+  reasoning it wrote in the session. A request carries a turn's reasoning only when the row it goes to wrote it;
+  another row's turns go with their text alone. The session and the store are never changed. A role switch keeps
+  the record, a switch back to a row finds its own again, and a resumed session seeds the row's record from the
+  store (the trailing turns of the model it was last on), so the first request after a resume is the one before it.
+  Turns with signed reasoning details (hosted providers) are sent unchanged.
+- **The same empty turn twice faults at once** (SPEC_EMPTY 5). When a resample returns exactly the empty turn the
+  first attempt did, the model answers that request the same way every time and a third attempt cannot differ:
+  rig faults then, saying so, instead of spending the third. A resample that differs is resampled as before, and
+  the fault stays loud.
+
 ## [3.5.1]: the piped frontend separates the thinking from the answer
 
 `frontend/cli` renders `ReasoningDelta` and `TextDelta` verbatim, so a turn
