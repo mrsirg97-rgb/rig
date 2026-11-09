@@ -97,6 +97,21 @@ existing behavior. A ctx cancel during an attempt or during a resample
 closes the relay cleanly: the loop reads the same interrupt path as a
 cancel during a normal turn, no Fault, no extra call.
 
+### 5. The same empty turn twice faults at once
+
+A deterministic model (osmos decodes greedily) answers the same request the same way every time, so its resample
+is the empty turn again, and the third attempt can only be a third copy (2026-11-08: three identical 18-token
+turns from Qwen3.8 on osmos). When a resample's empty turn equals the previous attempt's (its content and its
+reasoning), the decorator surfaces the fault then:
+
+```
+model returned the same empty turn twice (no content, no tool call): it answers this request the same way every time, so resampling cannot change it
+```
+
+with the tool-call clause on the same condition as decision 1's. A resample that differs is resampled as before.
+The guard stays a fault, loud, never a fix: decision 1's same request is kept, no nudge is added, and the cause
+belongs where it is (the model, its server, its prompt).
+
 ## layout
 
 ```

@@ -413,3 +413,51 @@ func (p passthrough) Assemble(ctx context.Context, s *core.Session) ([]core.Mess
 	}
 	return append(msgs, s.Messages...), nil
 }
+
+func TestTheSameEmptyTurnTwiceFaultsAtOnce(t *testing.T) {
+	same := scriptedTurn{events: []evt.Signal{core.ReasoningDelta{Text: "Still just chatting. Keep it light."}, core.Done{StopReason: "stop", Usage: core.Usage{Prompt: 5, Completion: 1}}}}
+	prov := &scriptedProvider{turns: []scriptedTurn{same, same, same}}
+	fe := &testFrontend{inputs: []string{"go"}}
+	k := run(t, prov, fe)
+
+	if prov.calls() != 2 {
+		t.Fatalf("provider calls = %d, want 2 (a deterministic model's resample is the same turn: no third)", prov.calls())
+	}
+	var notices int
+	var fault *core.Fault
+	for _, ev := range fe.snapshot() {
+		switch e := ev.(type) {
+		case core.EmptyTurn:
+			notices++
+		case core.Fault:
+			fault = &e
+		}
+	}
+	if notices != 1 {
+		t.Fatalf("EmptyTurn notices = %d, want 1", notices)
+	}
+	want := "model returned the same empty turn twice (no content, no tool call): it answers this request the same way every time, so resampling cannot change it"
+	if fault == nil || fault.Err.Error() != want {
+		t.Fatalf("fault = %v, want %q", fault, want)
+	}
+	if !reflect.DeepEqual(k.Session().Messages, []core.Message{{Role: core.RoleUser, Content: "go"}}) {
+		t.Fatalf("the transcript must be unchanged: %+v", k.Session().Messages)
+	}
+}
+
+func TestTheSameEmptyTurnTwiceNamesToolCallInsideThinking(t *testing.T) {
+	same := scriptedTurn{events: []evt.Signal{core.ReasoningDelta{Text: "buried\n<invoke name=\"edit\" old=\"a\" new=\"b\">"}, core.Done{StopReason: "stop"}}}
+	prov := &scriptedProvider{turns: []scriptedTurn{same, same}}
+	fe := &testFrontend{inputs: []string{"go"}}
+	run(t, prov, fe)
+	for _, ev := range fe.snapshot() {
+		if e, ok := ev.(core.Fault); ok {
+			if !strings.Contains(e.Err.Error(), "the same empty turn twice") ||
+				!strings.Contains(e.Err.Error(), "last reasoning ended with what looks like a tool call written inside its thinking") {
+				t.Fatalf("the identical fault must keep the marker clause: %v", e.Err)
+			}
+			return
+		}
+	}
+	t.Fatal("the second identical empty turn must fault")
+}

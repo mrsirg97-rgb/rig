@@ -21,6 +21,8 @@ identical request, at most twice, then a fault surfaces. Stdlib only.
   written inside its thinking" clause only when the last reasoning carries
   a tool-call marker (`<invoke name=`, `<tool_call>`, `<function=`).
 - `toolCallMarkers`, `maxResamples` (2): the clause set and the budget.
+- `sameMessage`: the fault when a resample's empty turn equals the previous attempt's (SPEC_EMPTY 5) - a
+  deterministic model, so no third attempt.
 
 ## How it is consumed
 

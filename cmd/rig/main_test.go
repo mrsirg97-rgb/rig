@@ -30,7 +30,7 @@ import (
 
 func TestVersionIsTheFreeze(t *testing.T) {
 
-	if Version != "3.5.1" {
+	if Version != "3.5.2" {
 		t.Fatalf("Version = %q, want 3.5.1", Version)
 	}
 

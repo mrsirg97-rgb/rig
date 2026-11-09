@@ -37,8 +37,9 @@ func (d *decorator) Stream(ctx context.Context, req core.Request) (<-chan evt.Si
 
 func (d *decorator) relay(ctx context.Context, out chan<- evt.Signal, req core.Request, ch <-chan evt.Signal) {
 	attempt := 1
+	var last *emptyTurn
 	for {
-		usage, model, reasoning, empty := d.relayOnce(out, ch)
+		usage, model, turn, empty := d.relayOnce(out, ch)
 		if !empty {
 			return
 		}
@@ -46,10 +47,15 @@ func (d *decorator) relay(ctx context.Context, out chan<- evt.Signal, req core.R
 			out <- core.Done{Usage: usage, Model: model}
 			return
 		}
-		if attempt > maxResamples {
-			out <- core.Fault{Err: errors.New(faultMessage(reasoning))}
+		if last != nil && *last == turn {
+			out <- core.Fault{Err: errors.New(sameMessage(turn.reasoning))}
 			return
 		}
+		if attempt > maxResamples {
+			out <- core.Fault{Err: errors.New(faultMessage(turn.reasoning))}
+			return
+		}
+		last = &turn
 		out <- core.EmptyTurn{Resample: attempt, Limit: maxResamples, Usage: usage, Model: model}
 		attempt++
 		ch2, err := d.inner.Stream(ctx, req)
@@ -65,7 +71,13 @@ func (d *decorator) relay(ctx context.Context, out chan<- evt.Signal, req core.R
 	}
 }
 
-func (d *decorator) relayOnce(out chan<- evt.Signal, ch <-chan evt.Signal) (core.Usage, string, string, bool) {
+// emptyTurn is what an empty attempt said: a resample that says it again came from a model that answers this
+// request the same way every time (greedy decoding), so a third attempt cannot differ
+type emptyTurn struct {
+	content, reasoning string
+}
+
+func (d *decorator) relayOnce(out chan<- evt.Signal, ch <-chan evt.Signal) (core.Usage, string, emptyTurn, bool) {
 	var (
 		content strings.Builder
 		reason  strings.Builder
@@ -81,15 +93,23 @@ func (d *decorator) relayOnce(out chan<- evt.Signal, ch <-chan evt.Signal) (core
 			calls++
 		}
 		if e, ok := ev.(core.Done); ok && e.StopReason == "stop" && strings.TrimSpace(content.String()) == "" && calls == 0 {
-			return e.Usage, e.Model, reason.String(), true
+			return e.Usage, e.Model, emptyTurn{content.String(), reason.String()}, true
 		}
 		out <- ev
 	}
-	return core.Usage{}, "", "", false
+	return core.Usage{}, "", emptyTurn{}, false
 }
 
 func faultMessage(reasoning string) string {
-	msg := fmt.Sprintf("model returned an empty turn %d times (no content, no tool call)", maxResamples+1)
+	return withMarker(fmt.Sprintf("model returned an empty turn %d times (no content, no tool call)", maxResamples+1), reasoning)
+}
+
+func sameMessage(reasoning string) string {
+	return withMarker("model returned the same empty turn twice (no content, no tool call): it answers this request "+
+		"the same way every time, so resampling cannot change it", reasoning)
+}
+
+func withMarker(msg, reasoning string) string {
 	for _, marker := range toolCallMarkers {
 		if strings.Contains(reasoning, marker) {
 			return msg + "; last reasoning ended with what looks like a tool call written inside its thinking"

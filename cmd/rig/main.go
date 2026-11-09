@@ -55,7 +55,7 @@ import (
 	"github.com/mrsirg97-rgb/rig/v3/webtools"
 )
 
-const Version = "3.5.1"
+const Version = "3.5.2"
 
 func claimPriority(prompt string, served bool) (int, error) {
 	if v := os.Getenv("RIG_PRIORITY"); v != "" {
@@ -741,6 +741,13 @@ func rigMain() int {
 	}
 	rec := state.NewRecorder(fe, sdb, cwd, modelID, Version, session.ID, session).Snapshot(file.SnapshotFiles)
 	r.rec = rec
+	if *resumeID != "" { // the resumed row's own reasoning, so the first request sends what the last one did
+		if err := r.ownResumed(context.Background(), *resumeID); err != nil {
+			closeFrontend()
+			fmt.Fprintln(os.Stderr, "rig: resume:", err)
+			return 1
+		}
+	}
 
 	k := wire(r)
 	if _, perr := r.swapPlugins(context.Background(), pluginReports); perr != nil {

@@ -67,6 +67,7 @@ func (r *root) newSession(ctx context.Context, dir string) (string, error) {
 	r.role = ""
 	r.approve = r.approveDefault
 	r.cwd = workspace
+	r.own = nil
 	r.swapIn(s2, rec2)
 	return s2.ID, nil
 }
@@ -113,6 +114,9 @@ func (r *root) sessionResume(ctx context.Context, id string) error {
 		return fmt.Errorf("sessions: %v", err)
 	}
 	rec2 := state.NewRecorder(r.fe, r.sdb, r.cwd, r.activeID, Version, s.ID, s).Snapshot(file.SnapshotFiles)
+	if err := r.ownResumed(ctx, s.ID); err != nil {
+		return fmt.Errorf("sessions: %v", err)
+	}
 	if err := rec2.Ensure(); err != nil {
 		return fmt.Errorf("sessions: %v", err)
 	}
