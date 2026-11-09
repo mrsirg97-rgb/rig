@@ -453,6 +453,32 @@ func TestTruncatedStreamFaults(t *testing.T) {
 	}
 }
 
+func TestAMidStreamErrorFaultsWithTheEndpointsReason(t *testing.T) {
+	const reason = "the model's tool call did not parse (x)"
+	body := strings.Join([]string{
+		`data: {"choices":[{"delta":{"content":"partial "}}]}`,
+		`data: {"error": {"message": "` + reason + `", "type": "server_error"}}`,
+		"",
+	}, "\n")
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		io.WriteString(w, body)
+	}))
+	defer srv.Close()
+
+	p := openai.New(srv.URL, "local")
+	events, err := drain(t, context.Background(), p, userReq())
+	if err != nil {
+		t.Fatalf("stream: %v", err)
+	}
+	if got := kinds(events); got != "delta,fault" {
+		t.Fatalf("a mid-stream error must end the stream in one Fault and no Done, got %s", got)
+	}
+	msg := lastFault(t, events).Err.Error()
+	if !strings.Contains(msg, "the endpoint's error: "+reason) {
+		t.Fatalf("the fault must carry the endpoint's reason, got %q", msg)
+	}
+}
+
 func TestNon200Faults(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)

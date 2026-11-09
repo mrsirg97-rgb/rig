@@ -68,6 +68,11 @@ type streamChunk struct {
 	Choices []wireChoice `json:"choices"`
 	Usage   *wireUsage   `json:"usage"`
 	Timings *wireTimings `json:"timings"`
+	Error   *wireError   `json:"error"`
+}
+
+type wireError struct {
+	Message string `json:"message"`
 }
 
 type wireTimings struct {
