@@ -125,7 +125,7 @@ func rigMain() int {
 	retries := flag.Int("retries", 0, "repetition bound on identical failing calls (cleared on success); precedence: flag > RIG_RETRIES > settings.json retries > the embedded default")
 	effort := flag.String("effort", "", "reasoning effort level for the session's requests; precedence: flag > RIG_EFFORT > the model row")
 	prompt := flag.String("p", "", "one-shot: run the single prompt and exit (the scheduler's worker path)")
-	resumeID := flag.String("resume", "", "resume the session with this id (the transcript, the file provenance, and the identity rebuild from the state rows)")
+	resumeID := flag.String("resume", "", "resume the session with this id (the transcript, the file provenance, and the identity rebuild from the state rows); with -p the prompt runs as the session's next turn")
 	sessionID := flag.String("session-id", "", "set the fresh session identity (worker use)")
 	tuiMode := flag.String("tui", "auto", "the terminal frontend: auto (default; when stdout is a terminal), true (force it), false (the piped CLI)")
 	showVersion := flag.Bool("version", false, "print the version and exit")
@@ -209,10 +209,6 @@ func rigMain() int {
 			os.Exit(2)
 		}
 		*prompt = string(text)
-	}
-	if err := checkOneShot(*prompt, *resumeID); err != nil {
-		fmt.Fprintln(os.Stderr, "rig:", err)
-		os.Exit(2)
 	}
 	if err := checkSessionID(*sessionID, *resumeID); err != nil {
 		fmt.Fprintln(os.Stderr, err)

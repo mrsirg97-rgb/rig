@@ -715,7 +715,7 @@ registered. One-shot's silence is unchanged (5): the worker's stdout
 stays the answer.
 
 The start contract, loud before any store is opened (the root's
-`checkOneShot`-style construction checks, kept): the active row resolves
+construction checks, kept): the active row resolves
 (2); a known row, an env synthesis, or a refusal that names the id, the
 known ids, and the env. A row that violates the invariants is refused at
 construction (`Check`), with the id and the fields in the message. This is

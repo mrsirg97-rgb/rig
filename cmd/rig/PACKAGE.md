@@ -145,7 +145,7 @@ sees core and models and nothing else.
   (`RemList`/`RemShow`/`RemForget` over `store/rem`).
 - **Resolution helpers**: `rigHome` (the migration), `resolveModel`,
   `tuiTrueColor`, `tuiStatusIn`, `tuiNews`, `sessionFor`,
-  `checkOneShot`, `splitCSV`, `firstNonEmpty`, `hasLevel`,
+  `splitCSV`, `firstNonEmpty`, `hasLevel`,
   `effortForWire`, `isMutating` (the widened call seam over
   `tool.Mutates`).
 
@@ -259,8 +259,10 @@ into a `Phase`. A notice with no recorder yet goes to stderr.
   SIGKILL'd session leaves its row open, so its claims age out through
   the todo store's Reap staleness arm. The note names what was freed;
   an idle reap returns "".
-- The `-p`/`-resume` conflict is refused loud before any store is
-  opened (`ErrResumeWithPrompt`: one-shot stays one-shot). `-p -` reads
+- `-p` with `-resume` composes: the prompt runs as the resumed session's
+  next turn, and the turn is recorded under the same id (the session is
+  rebuilt from the state store in one read-only transaction, exactly as
+  interactive `-resume` does). `-p -` reads
   stdin under the read tool's own ceiling (`file.ReadCap`, 1 MiB): a
   longer prompt refuses loud and names the ceiling — a prompt that long
   belongs in a file, and an unbounded read is a wedge an operator's pipe

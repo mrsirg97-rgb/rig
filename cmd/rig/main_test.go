@@ -309,22 +309,6 @@ func TestWireSystemPromptCarriesTheBase(t *testing.T) {
 	}
 }
 
-func TestOneShotAndResumeRefuseAtConstruction(t *testing.T) {
-	if err := checkOneShot("", ""); err != nil {
-		t.Fatalf("the bare REPL must pass: %v", err)
-	}
-	if err := checkOneShot("prompt", ""); err != nil {
-		t.Fatalf("one-shot alone must pass: %v", err)
-	}
-	if err := checkOneShot("", "res-1"); err != nil {
-		t.Fatalf("resume alone must pass: %v", err)
-	}
-	err := checkOneShot("prompt", "res-1")
-	if !errors.Is(err, ErrResumeWithPrompt) {
-		t.Fatalf("-p and -resume must refuse at construction, got %v", err)
-	}
-}
-
 func TestSessionIDAndResumeRefuseAtConstruction(t *testing.T) {
 	if err := checkSessionID("worker", ""); err != nil {
 		t.Fatalf("a worker identity alone must pass: %v", err)

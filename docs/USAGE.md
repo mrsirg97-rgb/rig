@@ -27,7 +27,8 @@ kept; an unknown id is loud). Per-process state — the guard's counts, the
 steering slot — starts fresh. The session's id is the one to look up in
 the `sessions` table of the state store (`~/.rig/sessions/*.sqlite` under
 the rig home; `$RIG_HOME` over `~/.rig`). `-p` one-shot and `--resume`
-refuse at construction: one-shot stays one-shot.
+compose: the prompt runs as the resumed session's next turn, and the turn
+is recorded under the same id.
 
 Sessions start at the model row's default effort. `-effort <level>`
 (flag over `$RIG_EFFORT` over the row) names the opening level, refused

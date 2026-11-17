@@ -395,8 +395,9 @@ func Resume(ctx context.Context, db store.DB, sessionID string) (*core.Session, 
 Root: a `-resume <id>` flag. The recorder adopts the existing session row
 (its `ensure()` is already idempotent: "a pre-existing session row is
 adopted, never re-inserted"), so the same id keeps its identity for todo's
-claims and rem's sources. `-p` with `-resume` is a construction error, loud:
-one-shot stays one-shot.
+claims and rem's sources. `-p` with `-resume` composes: the prompt runs as
+the resumed session's next turn, and the turn is recorded under the same
+id.
 
 The named gap this closes: `RecordFile` has no production caller today, so
 `files` rows are written by no one. The recorder gains the session
@@ -749,7 +750,8 @@ and `TestDriftingArgsEachGetAFreshStreak` plus
   calls + results, reasoning, files) byte-identical to what the loop built;
   a dangling call survives; an unknown id fails loud naming the id; the
   root `-resume` path (adopted session id, recorder reuse) and
-  `-p` + `-resume` refusing at construction.
+  `-p` + `-resume` composing (the prompt runs as the resumed session's
+  next turn, recorded under the same id).
 - Guard: identical retries cap and the corrected call executes (decision 7
   as amended; the first form's shared-bound case is superseded); the
   budget clears at the turn boundary; the bound-th failure carries pane's
