@@ -12,15 +12,7 @@ import (
 	"github.com/mrsirg97-rgb/rig/v3/tool"
 )
 
-var ErrResumeWithPrompt = errors.New("rig: -resume is not available with -p (one-shot stays one-shot)")
 var ErrSessionIDWithResume = errors.New("rig: -session-id and -resume cannot be combined")
-
-func checkOneShot(prompt, resumeID string) error {
-	if prompt != "" && resumeID != "" {
-		return ErrResumeWithPrompt
-	}
-	return nil
-}
 
 func checkSessionID(sessionID, resumeID string) error {
 	if sessionID != "" && resumeID != "" {

@@ -250,7 +250,7 @@ tmux new-session -d <span class="s">'rig --tui=true'</span> \; capture-pane -p</
       <div class="row" role="listitem"><span class="os">bwrap</span><p class="what">Missing bubblewrap refuses with both settings keys named. On Ubuntu 24.04 and friends, AppArmor blocks bwrap's user namespace: the fix is <code>kernel.apparmor_restrict_unprivileged_userns=0</code>, named in the refusal.</p></div>
       <div class="row" role="listitem"><span class="os">plugins.max</span><p class="what">The cap is read with the settings at startup; raising it takes a restart. An over-cap load is skipped, naming the cap — the first N files by name win.</p></div>
       <div class="row" role="listitem"><span class="os">allow</span><p class="what">A <code>settings.json</code> that writes its own <code>allow</code> key replaces the built-in default whole. It must carry <code>plugin</code>, or every door call is refused; a <code>plugins</code> entry is dropped with a notice.</p></div>
-      <div class="row" role="listitem"><span class="os">resume</span><p class="what"><code>--resume &lt;id&gt;</code> rebuilds the session from the state store in one read-only transaction. It refuses beside <code>-p</code>: a one-shot stays one-shot.</p></div>
+      <div class="row" role="listitem"><span class="os">resume</span><p class="what"><code>--resume &lt;id&gt;</code> rebuilds the session from the state store in one read-only transaction. It composes with <code>-p</code>: the prompt runs as the resumed session's next turn.</p></div>
     </div>
   </section>
 

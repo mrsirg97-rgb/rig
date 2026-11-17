@@ -512,3 +512,132 @@ func TestWithADecisionUrlTheBinaryStillReachesTheModelServer(t *testing.T) {
 		t.Fatalf("the answer must land on stdout: %q", stdout.String())
 	}
 }
+
+func seedSession(t *testing.T, scratch, workDir, sid, first string) string {
+	t.Helper()
+	cfgDir := filepath.Join(scratch, ".rig")
+	dbPath := state.StorePath(cfgDir, workDir)
+	if err := os.MkdirAll(filepath.Dir(dbPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	db, _, _, err := store.Open(dbPath, state.Statements(), state.SchemaVersion, state.Migration())
+	if err != nil {
+		t.Fatalf("open the state store: %v", err)
+	}
+	defer db.DB.Close()
+	ctx := context.Background()
+	if err := state.RecordSession(ctx, db, sid, workDir, "local", Version); err != nil {
+		t.Fatalf("record the session: %v", err)
+	}
+	if _, err := state.RecordMessage(ctx, db, sid, "user", first, nil, nil, nil); err != nil {
+		t.Fatalf("record the seed message: %v", err)
+	}
+	return dbPath
+}
+
+func sessionMessages(t *testing.T, dbPath, sid string) []string {
+	t.Helper()
+	db, _, _, err := store.Open(dbPath, state.Statements(), state.SchemaVersion, state.Migration())
+	if err != nil {
+		t.Fatalf("reopen the state store: %v", err)
+	}
+	defer db.DB.Close()
+	rows, err := db.DB.QueryContext(context.Background(),
+		`SELECT "role" || ': ' || "content" FROM "messages" WHERE "session_id" = $1 ORDER BY "seq"`, sid)
+	if err != nil {
+		t.Fatalf("read the messages: %v", err)
+	}
+	defer rows.Close()
+	var out []string
+	for rows.Next() {
+		var m string
+		if err := rows.Scan(&m); err != nil {
+			t.Fatal(err)
+		}
+		out = append(out, m)
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatal(err)
+	}
+	return out
+}
+
+func TestOneShotResumeAppendsTurnToTheSession(t *testing.T) {
+	root, err := filepath.Abs("../..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	scratch := shortTemp(t)
+	workDir := realTemp(t)
+	dbPath := seedSession(t, scratch, workDir, "resume-me", "before the kill")
+
+	s := &bodySrv{}
+	srv := newBodySrv(t, s)
+	bin := buildBinAt(t, t.TempDir(), root)
+	cmd := exec.Command(bin, "-p", "after the kill", "-resume", "resume-me", "-base-url", srv.URL+"/v1")
+	cmd.Dir = workDir
+	cmd.Env = rigEnv(t, scratch, "")
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("the resumed one-shot must succeed: %v\n%s", err, out)
+	}
+
+	got := sessionMessages(t, dbPath, "resume-me")
+	want := []string{"user: before the kill", "user: after the kill", "assistant: pong"}
+	if len(got) != len(want) {
+		t.Fatalf("the resumed session must carry the seed, the new turn, and the reply: %v", got)
+	}
+	for i, w := range want {
+		if got[i] != w {
+			t.Fatalf("message %d = %q, want %q (all: %v)", i, got[i], w, got)
+		}
+	}
+}
+
+func TestOneShotResumeUnknownIDFailsLoud(t *testing.T) {
+	root, err := filepath.Abs("../..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	scratch := shortTemp(t)
+	workDir := realTemp(t)
+	seedSession(t, scratch, workDir, "resume-me", "before the kill")
+
+	s := &bodySrv{}
+	srv := newBodySrv(t, s)
+	bin := buildBinAt(t, t.TempDir(), root)
+	cmd := exec.Command(bin, "-p", "after the kill", "-resume", "nope", "-base-url", srv.URL+"/v1")
+	cmd.Dir = workDir
+	cmd.Env = rigEnv(t, scratch, "")
+	out, err := cmd.CombinedOutput()
+	if err == nil {
+		t.Fatalf("an unknown id must fail, got success:\n%s", out)
+	}
+	if !strings.Contains(string(out), "no such session") || !strings.Contains(string(out), "nope") {
+		t.Fatalf("the failure must name the missing id, got:\n%s", out)
+	}
+}
+
+func TestOneShotAloneLeavesSeededSessionsAlone(t *testing.T) {
+	root, err := filepath.Abs("../..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	scratch := shortTemp(t)
+	workDir := realTemp(t)
+	dbPath := seedSession(t, scratch, workDir, "resume-me", "before the kill")
+
+	s := &bodySrv{}
+	srv := newBodySrv(t, s)
+	bin := buildBinAt(t, t.TempDir(), root)
+	cmd := exec.Command(bin, "-p", "a fresh turn", "-base-url", srv.URL+"/v1")
+	cmd.Dir = workDir
+	cmd.Env = rigEnv(t, scratch, "")
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("a plain one-shot must succeed: %v\n%s", err, out)
+	}
+
+	got := sessionMessages(t, dbPath, "resume-me")
+	if len(got) != 1 || got[0] != "user: before the kill" {
+		t.Fatalf("a plain -p must not touch the seeded session, got: %v", got)
+	}
+}

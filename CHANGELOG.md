@@ -1,4 +1,10 @@
 # Changelog
+## [3.5.4]: `-p` with `-resume` runs the prompt as the resumed session's next turn
+
+`rig -p "<prompt>" -resume <id>` no longer refuses at construction. The session is rebuilt from the state store in one
+read-only transaction — the same path interactive `-resume` uses — the prompt is appended as the next user turn, and
+the turn is recorded under the same session id. An unknown id fails loud naming the id; plain `-p` is unchanged.
+
 ## [3.5.3]: a local engine's mid-stream error is reported with its reason instead of "stream truncated"
 
 An OpenAI-compatible endpoint (osmos-api, OpenAI, OpenRouter) that fails after the stream has started sends one SSE

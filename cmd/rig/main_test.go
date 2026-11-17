@@ -30,8 +30,8 @@ import (
 
 func TestVersionIsTheFreeze(t *testing.T) {
 
-	if Version != "3.5.3" {
-		t.Fatalf("Version = %q, want 3.5.3", Version)
+	if Version != "3.5.4" {
+		t.Fatalf("Version = %q, want 3.5.4", Version)
 	}
 
 	if !regexp.MustCompile(`^\d+\.\d+\.\d+$`).MatchString(Version) {
@@ -306,22 +306,6 @@ func TestWireSystemPromptCarriesTheBase(t *testing.T) {
 	}
 	if len(msgs) == 0 || msgs[0].Role != core.RoleSystem || msgs[0].Content != r.fullSystem {
 		t.Fatalf("the base system prompt must ride the policy verbatim: %+v", msgs)
-	}
-}
-
-func TestOneShotAndResumeRefuseAtConstruction(t *testing.T) {
-	if err := checkOneShot("", ""); err != nil {
-		t.Fatalf("the bare REPL must pass: %v", err)
-	}
-	if err := checkOneShot("prompt", ""); err != nil {
-		t.Fatalf("one-shot alone must pass: %v", err)
-	}
-	if err := checkOneShot("", "res-1"); err != nil {
-		t.Fatalf("resume alone must pass: %v", err)
-	}
-	err := checkOneShot("prompt", "res-1")
-	if !errors.Is(err, ErrResumeWithPrompt) {
-		t.Fatalf("-p and -resume must refuse at construction, got %v", err)
 	}
 }
 
